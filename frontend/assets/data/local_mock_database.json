@@ -1,0 +1,354 @@
+{
+  "meta": {
+    "version": "1.0",
+    "source": "local-assets",
+    "generatedAt": "2026-05-27"
+  },
+  "users": [
+    {
+      "id": "user_1001",
+      "name": "Amina Kariuki",
+      "email": "amina.kariuki@example.com",
+      "phone": "+254 712 345 678",
+      "avatar": "assets/images/profile.jpg",
+      "location": "Nairobi, Kenya",
+      "verified": true,
+      "bio": "Landlord • Property enthusiast • Available for viewings",
+      "linkedProperties": ["prop_001", "prop_002"]
+    },
+    {
+      "id": "user_1002",
+      "name": "James Okoth",
+      "email": "james.okoth@example.com",
+      "phone": "+254 721 882 344",
+      "avatar": "assets/images/hero3.jpg",
+      "location": "Nakuru, Kenya",
+      "verified": false,
+      "bio": "Property seeker • Testing onboarding and verification flows",
+      "linkedProperties": ["prop_003"]
+    }
+  ],
+  "auth": {
+    "signupDrafts": [
+      {
+        "fullName": "Amina Kariuki",
+        "phoneNumber": "+254 712 345 678",
+        "email": "amina.kariuki@example.com",
+        "password": "Staynest@2026",
+        "agreedToTerms": true,
+        "emailVerified": true,
+        "phoneVerified": true,
+        "linkedPropertyIds": ["prop_001", "prop_002"]
+      },
+      {
+        "fullName": "James Okoth",
+        "phoneNumber": "+254 721 882 344",
+        "email": "james.okoth@example.com",
+        "password": "SecurePass123",
+        "agreedToTerms": true,
+        "emailVerified": false,
+        "phoneVerified": false,
+        "linkedPropertyIds": ["prop_003"]
+      },
+      {
+        "fullName": "Sofia Mwai",
+        "phoneNumber": "+254 733 450 891",
+        "email": "sofia.mwai@example.com",
+        "password": "HelloWorld!2026",
+        "agreedToTerms": true,
+        "emailVerified": true,
+        "phoneVerified": true,
+        "linkedPropertyIds": ["prop_004"]
+      }
+    ],
+    "otp": {
+      "defaultCode": "624108",
+      "expiresInSeconds": 60,
+      "verificationMessage": "Code verified successfully"
+    },
+    "loginFallbacks": [
+      {
+        "email": "amina.kariuki@example.com",
+        "password": "Staynest@2026",
+        "role": "host"
+      },
+      {
+        "email": "james.okoth@example.com",
+        "password": "SecurePass123",
+        "role": "tenant"
+      }
+    ]
+  },
+  "verification": [
+    {
+      "label": "Phone verification",
+      "value": "+254 712 345 678",
+      "status": "verified",
+      "message": "Phone number has been verified successfully.",
+      "image": "assets/images/hero.jpg",
+      "attemptsLeft": 3,
+      "linkedPropertyId": "prop_001"
+    },
+    {
+      "label": "Email verification",
+      "value": "amina.kariuki@example.com",
+      "status": "pending",
+      "message": "Enter the 6-digit code sent to your email to finish verification.",
+      "image": "assets/images/hero1.jpg",
+      "attemptsLeft": 2,
+      "linkedPropertyId": "prop_002"
+    },
+    {
+      "label": "ID verification",
+      "value": "Passport • Verified",
+      "status": "reviewing",
+      "message": "Your document review is in progress. We will update you shortly.",
+      "image": "assets/images/apertment1.jpg",
+      "attemptsLeft": 1,
+      "linkedPropertyId": "prop_003"
+    }
+  ],
+  "settings": [
+    {
+      "title": "Notifications",
+      "subtitle": "Manage push, email, and SMS alerts",
+      "icon": "assets/images/hero2.jpg",
+      "enabled": true,
+      "route": "/settings/notifications",
+      "linkedPropertyId": "prop_001"
+    },
+    {
+      "title": "Privacy & Security",
+      "subtitle": "Two-factor authentication, device history, and privacy controls",
+      "icon": "assets/images/apertment2.jpg",
+      "enabled": true,
+      "route": "/settings/privacy",
+      "linkedPropertyId": "prop_002"
+    },
+    {
+      "title": "Payment Methods",
+      "subtitle": "Saved cards and wallet preferences",
+      "icon": "assets/images/apertment3.jpg",
+      "enabled": true,
+      "route": "/settings/payments",
+      "linkedPropertyId": "prop_003"
+    },
+    {
+      "title": "Help & Support",
+      "subtitle": "FAQs, chat support, and contact centre",
+      "icon": "assets/images/rec1.jpg",
+      "enabled": true,
+      "route": "/settings/help",
+      "linkedPropertyId": "prop_004"
+    },
+    {
+      "title": "About StayNest",
+      "subtitle": "Version info, legal notices, and app updates",
+      "icon": "assets/images/rec2.jpg",
+      "enabled": true,
+      "route": "/settings/about",
+      "linkedPropertyId": "prop_004"
+    }
+  ],
+  "properties": {
+    "categories": {
+      "Apertments": [
+        {
+          "id": "prop_001",
+          "name": "11 Green Bank",
+          "location": "Kilifi, Kenya",
+          "lat": 42.3601,
+          "lng": -71.0589,
+          "price": 14500,
+          "rating": 4.8,
+          "reviews": 124,
+          "category": "Apartment",
+          "image": "assets/images/hero.jpg",
+          "images": [
+            "assets/images/hero.jpg",
+            "assets/images/apertment1.jpg",
+            "assets/images/apertment2.jpg",
+            "assets/images/apertment3.jpg"
+          ],
+          "features": {"beds": 2, "rooms": 4, "baths": 2, "furnished": true},
+          "amenities": ["wifi", "water", "parking", "security"],
+          "description": "Modern luxury home with great access to amenities and transport. Clean finishes and a comfortable layout.",
+          "agent": {"name": "John Kamau", "avatar": "assets/images/profile.jpg"}
+        },
+        {
+          "id": "prop_002",
+          "name": "Azure Heights",
+          "location": "Mombasa, Kenya",
+          "lat": 40.7128,
+          "lng": -74.006,
+          "price": 12000,
+          "rating": 4.6,
+          "reviews": 88,
+          "category": "Apartment",
+          "image": "assets/images/hero1.jpg",
+          "images": [
+            "assets/images/hero1.jpg",
+            "assets/images/apertment2.jpg",
+            "assets/images/apertment3.jpg",
+            "assets/images/hero2.jpg"
+          ],
+          "features": {"beds": 3, "rooms": 3, "baths": 2, "furnished": true},
+          "amenities": ["wifi", "water", "security"],
+          "description": "Stylish apartment with spacious rooms and a calm neighborhood vibe. Perfect for long stays.",
+          "agent": {"name": "Mary Wanjiku", "avatar": "assets/images/profile.jpg"}
+        }
+      ],
+      "Bedsitter": [
+        {
+          "id": "prop_003",
+          "name": "Modern Studio",
+          "location": "Nairobi, Kenya",
+          "lat": 40.6782,
+          "lng": -73.9442,
+          "price": 8000,
+          "rating": 4.5,
+          "reviews": 90,
+          "category": "Studio",
+          "image": "assets/images/apertment1.jpg",
+          "images": [
+            "assets/images/apertment1.jpg",
+            "assets/images/hero3.jpg",
+            "assets/images/rec1.jpg",
+            "assets/images/rec2.jpg"
+          ],
+          "features": {"beds": 1, "rooms": 1, "baths": 1, "furnished": false},
+          "amenities": ["wifi", "water"],
+          "description": "A compact studio with modern touches and a clean environment.",
+          "agent": {"name": "David Ochieng", "avatar": "assets/images/profile.jpg"}
+        }
+      ],
+      "Single Room": [
+        {
+          "id": "prop_004",
+          "name": "Skyline Loft",
+          "location": "Westlands, Nairobi",
+          "lat": 40.7,
+          "lng": -74.0,
+          "price": 18000,
+          "rating": 4.9,
+          "reviews": 201,
+          "category": "Penthouse",
+          "image": "assets/images/hero2.jpg",
+          "images": [
+            "assets/images/hero2.jpg",
+            "assets/images/hero3.jpg",
+            "assets/images/rec3.jpg",
+            "assets/images/apertment3.jpg"
+          ],
+          "features": {"beds": 2, "rooms": 3, "baths": 2, "furnished": true},
+          "amenities": ["wifi", "parking", "security", "water"],
+          "description": "A premium penthouse setup with rich interiors and curated visual assets for UI testing.",
+          "agent": {"name": "Aisha Njeri", "avatar": "assets/images/profile.jpg"}
+        }
+      ]
+    },
+    "all": [
+      {
+        "id": "prop_001",
+        "name": "11 Green Bank",
+        "location": "Kilifi, Kenya",
+        "lat": 42.3601,
+        "lng": -71.0589,
+        "price": 14500,
+        "rating": 4.8,
+        "reviews": 124,
+        "category": "Apartment",
+        "image": "assets/images/hero.jpg",
+        "images": [
+          "assets/images/hero.jpg",
+          "assets/images/apertment1.jpg",
+          "assets/images/apertment2.jpg",
+          "assets/images/apertment3.jpg"
+        ],
+        "features": {"beds": 2, "rooms": 4, "baths": 2, "furnished": true},
+        "amenities": ["wifi", "water", "parking", "security"],
+        "description": "Modern luxury home with great access to amenities and transport. Clean finishes and a comfortable layout.",
+        "agent": {"name": "John Kamau", "avatar": "assets/images/profile.jpg"}
+      },
+      {
+        "id": "prop_002",
+        "name": "Azure Heights",
+        "location": "Mombasa, Kenya",
+        "lat": 40.7128,
+        "lng": -74.006,
+        "price": 12000,
+        "rating": 4.6,
+        "reviews": 88,
+        "category": "Apartment",
+        "image": "assets/images/hero1.jpg",
+        "images": [
+          "assets/images/hero1.jpg",
+          "assets/images/apertment2.jpg",
+          "assets/images/apertment3.jpg",
+          "assets/images/hero2.jpg"
+        ],
+        "features": {"beds": 3, "rooms": 3, "baths": 2, "furnished": true},
+        "amenities": ["wifi", "water", "security"],
+        "description": "Stylish apartment with spacious rooms and a calm neighborhood vibe. Perfect for long stays.",
+        "agent": {"name": "Mary Wanjiku", "avatar": "assets/images/profile.jpg"}
+      },
+      {
+        "id": "prop_003",
+        "name": "Modern Studio",
+        "location": "Nairobi, Kenya",
+        "lat": 40.6782,
+        "lng": -73.9442,
+        "price": 8000,
+        "rating": 4.5,
+        "reviews": 90,
+        "category": "Studio",
+        "image": "assets/images/apertment1.jpg",
+        "images": [
+          "assets/images/apertment1.jpg",
+          "assets/images/hero3.jpg",
+          "assets/images/rec1.jpg",
+          "assets/images/rec2.jpg"
+        ],
+        "features": {"beds": 1, "rooms": 1, "baths": 1, "furnished": false},
+        "amenities": ["wifi", "water"],
+        "description": "A compact studio with modern touches and a clean environment.",
+        "agent": {"name": "David Ochieng", "avatar": "assets/images/profile.jpg"}
+      },
+      {
+        "id": "prop_004",
+        "name": "Skyline Loft",
+        "location": "Westlands, Nairobi",
+        "lat": 40.7,
+        "lng": -74.0,
+        "price": 18000,
+        "rating": 4.9,
+        "reviews": 201,
+        "category": "Penthouse",
+        "image": "assets/images/hero2.jpg",
+        "images": [
+          "assets/images/hero2.jpg",
+          "assets/images/hero3.jpg",
+          "assets/images/rec3.jpg",
+          "assets/images/apertment3.jpg"
+        ],
+        "features": {"beds": 2, "rooms": 3, "baths": 2, "furnished": true},
+        "amenities": ["wifi", "parking", "security", "water"],
+        "description": "A premium penthouse setup with rich interiors and curated visual assets for UI testing.",
+        "agent": {"name": "Aisha Njeri", "avatar": "assets/images/profile.jpg"}
+      }
+    ]
+  },
+  "assets": [
+    "assets/images/hero.jpg",
+    "assets/images/hero1.jpg",
+    "assets/images/hero2.jpg",
+    "assets/images/hero3.jpg",
+    "assets/images/apertment1.jpg",
+    "assets/images/apertment2.jpg",
+    "assets/images/apertment3.jpg",
+    "assets/images/profile.jpg",
+    "assets/images/rec1.jpg",
+    "assets/images/rec2.jpg",
+    "assets/images/rec3.jpg"
+  ]
+}

@@ -1,0 +1,36 @@
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import { env } from './config.js';
+import { apiRateLimiter } from './middleware/rateLimiter.js';
+import { requestLogger } from './middleware/logger.js';
+import { errorHandler } from './middleware/errorHandler.js';
+import authRouter from './routes/auth.js';
+import propertiesRouter from './routes/properties.js';
+import usersRouter from './routes/users.js';
+import uploadsRouter from './routes/uploads.js';
+import verificationsRouter from './routes/verifications.js';
+import tenantProfilesRouter from './routes/tenant_profiles.js';
+import privacyRouter from './routes/privacy.js';
+import messagesRouter from './routes/messages.js';
+const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(cors({ origin: env.corsOrigin, allowedHeaders: ['Content-Type', 'Authorization'] }));
+app.use(requestLogger);
+app.use(apiRateLimiter);
+app.use('/api/auth', authRouter);
+app.use('/api/properties', propertiesRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/uploads', uploadsRouter);
+app.use('/api/verifications', verificationsRouter);
+app.use('/api/tenant_profiles', tenantProfilesRouter);
+app.use('/api/privacy', privacyRouter);
+app.use('/api/messages', messagesRouter);
+app.use('/uploads', express.static(path.resolve(process.cwd(), env.storagePath)));
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', environment: process.env.NODE_ENV || 'development' });
+});
+app.use(errorHandler);
+export default app;
+//# sourceMappingURL=app.js.map

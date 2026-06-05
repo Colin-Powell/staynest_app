@@ -1,0 +1,207 @@
+{
+  "Apertments": [
+    {
+      "id": "1",
+      "name": "11 Green bank",
+      "location": "Kilifi, Kenya",
+      "lat": 42.3601,
+      "lng": -71.0589,
+      "price": 14500,
+      "rating": 4.8,
+      "reviews": 124,
+      "category": "Apartment",
+      "image": "assets/images/hero.jpg",
+      "images": [
+        "assets/images/hero.jpg",
+        "assets/images/apertment1.jpg",
+        "assets/images/apertment2.jpg",
+        "assets/images/apertment3.jpg"
+      ],
+      "features": {"beds": 2, "rooms": 4, "baths": 2, "furnished": true},
+      "amenities": ["wifi", "water", "parking", "security"],
+      "description": "Modern luxury home with great access to amenities and transport. Clean finishes and a comfortable layout.",
+      "agent": {"name": "John Kamau", "avatar": "https://i.pravatar.cc/150?img=11"}
+    },
+    {
+      "id": "2",
+      "name": "Azure Heights",
+      "location": "Mombasa, Kenya",
+      "lat": 40.7128,
+      "lng": -74.0060,
+      "price": 12000,
+      "rating": 4.6,
+      "reviews": 88,
+      "category": "Apartment",
+      "image": "assets/images/hero1.jpg",
+      "images": [
+        "assets/images/hero1.jpg",
+        "assets/images/apertment2.jpg",
+        "assets/images/apertment3.jpg",
+        "assets/images/hero2.jpg"
+      ],
+      "features": {"beds": 3, "rooms": 3, "baths": 2, "furnished": true},
+      "amenities": ["wifi", "water", "security"],
+      "description": "Stylish apartment with spacious rooms and a calm neighborhood vibe. Perfect for long stays.",
+      "agent": {"name": "Mary Wanjiku", "avatar": "https://i.pravatar.cc/150?img=32"}
+    },
+    {
+      "id": "8",
+      "name": "Modern Living",
+      "location": "Kilimani, Nairobi",
+      "lat": 41.0,
+      "lng": -71.0,
+      "price": 20000,
+      "rating": 4.7,
+      "reviews": 102,
+      "category": "Apartment",
+      "image": "assets/images/apertment1.jpg",
+      "images": [
+        "assets/images/apertment1.jpg",
+        "assets/images/apertment2.jpg",
+        "assets/images/apertment3.jpg",
+        "assets/images/hero2.jpg"
+      ],
+      "features": {"beds": 2, "rooms": 3, "baths": 2, "furnished": true},
+      "amenities": ["wifi", "water", "security"],
+      "description": "A modern living space with a clean layout and excellent finishing.",
+      "agent": {"name": "Leah Odhiambo", "avatar": "https://i.pravatar.cc/150?img=44"}
+    }
+  ],
+  "Bedsitter": [
+    {
+      "id": "3",
+      "name": "Cozy Studio",
+      "location": "Nairobi, Kenya",
+      "lat": 40.6782,
+      "lng": -73.9442,
+      "price": 8000,
+      "rating": 4.5,
+      "reviews": 90,
+      "category": "Studio",
+      "image": "assets/images/hero3.jpg",
+      "images": [
+        "assets/images/hero3.jpg",
+        "assets/images/apertment1.jpg",
+        "assets/images/apertment3.jpg",
+        "assets/images/hero.jpg"
+      ],
+      "features": {"beds": 1, "rooms": 1, "baths": 1, "furnished": false},
+      "amenities": ["wifi", "water"],
+      "description": "A compact studio with modern touches and a clean environment.",
+      "agent": {"name": "David Ochieng", "avatar": "https://i.pravatar.cc/150?img=68"}
+    },
+    {
+      "id": "9",
+      "name": "Luxury Bedsitter",
+      "location": "Westlands, Nairobi",
+      "lat": 40.7,
+      "lng": -74.0,
+      "price": 15000,
+      "rating": 4.9,
+      "reviews": 201,
+      "category": "Apartment",
+      "image": "assets/images/apertment2.jpg",
+      "images": [
+        "assets/images/apertment2.jpg",
+        "assets/images/apertment3.jpg",
+        "assets/images/hero2.jpg",
+        "assets/images/rec2.jpg"
+      ],
+      "features": {"beds": 2, "rooms": 2, "baths": 1, "furnished": true},
+      "amenities": ["wifi", "water", "security", "parking"],
+      "description": "Premium bedsitter with modern finishes and excellent security.",
+      "agent": {"name": "Aisha Njeri", "avatar": "https://i.pravatar.cc/150?img=20"}
+    },
+    {
+      "id": "10",
+      "name": "Comfy Corner",
+      "location": "Lavington, Nairobi",
+      "lat": 40.73,
+      "lng": -74.01,
+      "price": 10000,
+      "rating": 4.4,
+      "reviews": 77,
+      "category": "Apartment",
+      "image": "assets/images/apertment3.jpg",
+      "images": [
+        "assets/images/apertment3.jpg",
+        "assets/images/hero1.jpg",
+        "assets/images/hero3.jpg",
+        "assets/images/rec3.jpg"
+      ],
+      "features": {"beds": 1, "rooms": 2, "baths": 1, "furnished": true},
+      "amenities": ["wifi", "water", "security"],
+      "description": "A comfortable corner designed for peaceful everyday living.",
+      "agent": {"name": "Brian Otieno", "avatar": "https://i.pravatar.cc/150?img=28"}
+    }
+  ],
+  "Single Room": [
+    {
+      "id": "4",
+      "name": "Minimal Space",
+      "location": "Nakuru, Kenya",
+      "lat": 42.3601,
+      "lng": -71.0589,
+      "price": 5000,
+      "rating": 4.2,
+      "reviews": 45,
+      "category": "Studio",
+      "image": "assets/images/apertment1.jpg",
+      "images": [
+        "assets/images/apertment1.jpg",
+        "assets/images/apertment2.jpg",
+        "assets/images/apertment3.jpg",
+        "assets/images/rec1.jpg"
+      ],
+      "features": {"beds": 1, "rooms": 1, "baths": 1, "furnished": true},
+      "amenities": ["wifi", "water"],
+      "description": "A simple and affordable space designed for comfort and convenience.",
+      "agent": {"name": "Leah Odhiambo", "avatar": "https://i.pravatar.cc/150?img=44"}
+    },
+    {
+      "id": "11",
+      "name": "Student Room",
+      "location": "Juja, Kenya",
+      "lat": 41.2,
+      "lng": -70.9,
+      "price": 4000,
+      "rating": 4.3,
+      "reviews": 67,
+      "category": "Studio",
+      "image": "assets/images/rec1.jpg",
+      "images": [
+        "assets/images/rec1.jpg",
+        "assets/images/rec2.jpg",
+        "assets/images/hero2.jpg",
+        "assets/images/apertment2.jpg"
+      ],
+      "features": {"beds": 1, "rooms": 1, "baths": 1, "furnished": false},
+      "amenities": ["wifi", "water"],
+      "description": "A student-friendly room with a calm environment.",
+      "agent": {"name": "John Kamau", "avatar": "https://i.pravatar.cc/150?img=11"}
+    },
+    {
+      "id": "12",
+      "name": "Quiet Retreat",
+      "location": "Thika, Kenya",
+      "lat": 41.1,
+      "lng": -71.1,
+      "price": 3800,
+      "rating": 4.1,
+      "reviews": 39,
+      "category": "Studio",
+      "image": "assets/images/rec2.jpg",
+      "images": [
+        "assets/images/rec2.jpg",
+        "assets/images/rec3.jpg",
+        "assets/images/hero3.jpg",
+        "assets/images/apertment3.jpg"
+      ],
+      "features": {"beds": 1, "rooms": 1, "baths": 1, "furnished": false},
+      "amenities": ["wifi", "water", "security"],
+      "description": "A quiet retreat focused on comfort and privacy.",
+      "agent": {"name": "Mary Wanjiku", "avatar": "https://i.pravatar.cc/150?img=32"}
+    }
+  ]
+}
+

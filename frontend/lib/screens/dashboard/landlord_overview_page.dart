@@ -1,0 +1,397 @@
+// lib/screens/dashboard/landlord_overview_page.dart
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:property_app/screens/dashboard/landlord_bookings_page.dart';
+import 'package:property_app/screens/dashboard/landlord_notifications_page.dart';
+import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/services/properties_api.dart';
+import 'package:intl/intl.dart';
+
+import 'dashboard_widgets.dart';
+import 'landlord_analytics_page.dart';
+
+class LandlordOverviewPage extends StatefulWidget {
+  const LandlordOverviewPage({super.key});
+
+  @override
+  State<LandlordOverviewPage> createState() => _LandlordOverviewPageState();
+}
+
+class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
+  static const Color textDark = Color(0xFF111827);
+  static const Color textLight = Color(0xFF4B5563);
+  static const Color textGreen = Color(0xFF059669);
+
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<Map<String, dynamic>> _properties = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      final properties = await PropertiesApi.getLandlordProperties();
+      
+      setState(() {
+        _properties = properties;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load properties: ${e.toString()}';
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: textGreen),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(PhosphorIcons.warning(PhosphorIconsStyle.fill),
+                size: 48, color: Colors.red),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 14, color: textDark),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _loadData,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SafeArea(
+      bottom: false,
+      child: SingleChildScrollView(
+        // Padding prevents overlap with the glass nav bar at the bottom
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 130),
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // --- HEADER (GREETINGS & BELL) ---
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Good Morning,',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: textLight,
+                      ),
+                    ),
+                    Text(
+                      'Landlord 👋',
+                      style: GoogleFonts.poppins(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        color: textDark,
+                      ),
+                    ),
+                  ],
+                ),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const LandlordNotificationsPage(),
+                      ),
+                    );
+                  },
+                  child: GlassContainer(
+                    padding: const EdgeInsets.all(10),
+                    borderRadius: BorderRadius.circular(50),
+                    child: Stack(
+                      children: [
+                        Icon(PhosphorIcons.bell(), color: textDark, size: 24),
+                        Positioned(
+                          top: 0,
+                          right: 2,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEF4444), // Red notification dot
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+
+            // --- INTRO TEXT ---
+            Text(
+              'Here\'s what\'s happening\nwith your properties',
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: textDark,
+                height: 1.3,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // --- STATS GRID ---
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 1.25,
+              children: [
+                _buildStatCard('Properties', _properties.length.toString(), '+0', true),
+                _buildStatCard('Bookings', '0', '+0', true),
+                _buildStatCard('Views', '0', '-0%', false),
+                _buildStatCard('Occupancy', '0%', '+0', true),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // --- VIEW ANALYTICS BUTTON (Clean & Minimal) ---
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const LandlordAnalyticsPage(),
+                  ),
+                );
+              },
+              child: GlassContainer(
+                borderRadius: BorderRadius.circular(16),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: Text(
+                    'View Analytics',
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: textDark, // Clean text color matching theme
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 40),
+
+            // --- RECENT PROPERTIES ---
+            Text(
+              _properties.isEmpty ? 'No Properties Yet' : 'Your Properties',
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: textDark,
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (_properties.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 32.0),
+                  child: Column(
+                    children: [
+                      Icon(PhosphorIcons.house(PhosphorIconsStyle.regular),
+                          size: 48, color: const Color(0xFFD1D5DB)),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No properties listed yet',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: textLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ..._properties.take(3).map((property) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: _buildPropertyCard(property),
+                );
+              }),
+            const SizedBox(height: 16),
+
+            // --- VIEW ALL PROPERTIES BUTTON ---
+            GlassContainer(
+              borderRadius: BorderRadius.circular(20),
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Text(
+                  'View All Properties',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: textLight,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatCard(
+      String title, String value, String change, bool isPositive) {
+    return GlassContainer(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: textLight,
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                value,
+                style: GoogleFonts.poppins(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  color: textDark,
+                  height: 1.0,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4.0),
+                child: Text(
+                  change,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: isPositive ? textGreen : textDark,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPropertyCard(Map<String, dynamic> property) {
+    final imageUrl = property['image_url'] as String? ?? '';
+    final title = property['title'] as String? ?? 'Untitled';
+    final city = property['city'] as String? ?? 'Unknown';
+    final priceValue = property['price'];
+    final price = priceValue is String 
+        ? double.tryParse(priceValue) ?? 0 
+        : (priceValue as num? ?? 0);
+
+    return GlassContainer(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: buildPropertyImage(
+              imageUrl,
+              width: 64,
+              height: 64,
+              fit: BoxFit.cover,
+              errorPlaceholder: Container(
+                width: 64,
+                height: 64,
+                color: const Color(0xFFE5E7EB),
+                child: Icon(
+                  PhosphorIcons.image(PhosphorIconsStyle.regular),
+                  color: const Color(0xFF9CA3AF),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: textDark,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  city,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: textLight,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'KES ${price.toStringAsFixed(0)}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: textGreen,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: const Color(0xFF9CA3AF),
+            size: 24,
+          ),
+        ],
+      ),
+    );
+  }
+}
