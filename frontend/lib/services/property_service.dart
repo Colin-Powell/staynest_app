@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/models/property.dart';
+import 'package:property_app/utils/property_mapper.dart';
 
 class PropertyService {
   static final PropertyService instance = PropertyService._internal();
@@ -23,9 +24,13 @@ class PropertyService {
   }) async {
     try {
       final queryParams = <String, String>{};
-      if (category != null && category.isNotEmpty) queryParams['category'] = category;
+      if (category != null && category.isNotEmpty) {
+        queryParams['category'] = category;
+      }
       if (city != null && city.isNotEmpty) queryParams['city'] = city;
-      if (landlordId != null && landlordId.isNotEmpty) queryParams['landlordId'] = landlordId;
+      if (landlordId != null && landlordId.isNotEmpty) {
+        queryParams['landlordId'] = landlordId;
+      }
       if (lat != null && lng != null) {
         queryParams['lat'] = lat.toString();
         queryParams['lng'] = lng.toString();
@@ -34,7 +39,8 @@ class PropertyService {
         queryParams['history'] = history.join(',');
       }
 
-      final uri = Uri.parse('$baseUrl/properties').replace(queryParameters: queryParams);
+      final uri = Uri.parse('$baseUrl/properties')
+          .replace(queryParameters: queryParams);
 
       final headers = <String, String>{'Content-Type': 'application/json'};
       final token = AppSession.apiToken;
@@ -48,9 +54,15 @@ class PropertyService {
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body) as Map<String, dynamic>;
-        final propertiesList = (data['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-        
-        return propertiesList.map((p) => _parseProperty(p)).toList();
+        final propertiesList =
+            (data['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+        final props = propertiesList.map(mapApiProperty).toList();
+        for (final p in props) {
+          print(
+              'PROPERTY: ${p.name} | image: ${p.image} | images: ${p.images}');
+        }
+        return props;
       }
 
       throw Exception('Failed to fetch properties: ${res.statusCode}');
@@ -111,7 +123,7 @@ class PropertyService {
         final data = json.decode(res.body) as Map<String, dynamic>;
         final payload = data['data'] as Map<String, dynamic>?;
         if (payload != null) {
-          return _parseProperty(payload);
+          return mapApiProperty(payload);
         }
       }
       return null;
@@ -120,50 +132,6 @@ class PropertyService {
       print('Error fetching property by id: $e');
       return null;
     }
-  }
-
-  /// Parse property from API response with landlord info
-  Property _parseProperty(Map<String, dynamic> json) {
-    return Property(
-      id: json['id']?.toString() ?? '',
-      name: json['title']?.toString() ?? 'Unknown',
-      location: json['city']?.toString() ?? 'Unknown',
-      lat: _toDouble(json['lat']),
-      lng: _toDouble(json['lng']),
-      price: _toInt(json['price']),
-      rating: 4.5, // Could come from reviews API
-      reviews: 0,  // Could come from reviews API
-      category: json['category']?.toString() ?? 'Apartment',
-      image: json['image_url']?.toString() ?? '',
-      images: [json['image_url']?.toString() ?? ''],
-      features: PropertyFeatures(
-        beds: _toInt(json['bedrooms']),
-        rooms: _toInt(json['bedrooms']) + 1,
-        baths: _toInt(json['bathrooms']),
-        furnished: false,
-      ),
-      amenities: [],
-      description: json['description']?.toString() ?? '',
-      agent: Agent(
-        userId: json['landlord_id']?.toString() ?? '',
-        name: json['landlord_name']?.toString() ?? 'Agent',
-        avatar: 'https://i.pravatar.cc/150?img=1',
-      ),
-    );
-  }
-
-  double _toDouble(dynamic value) {
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
-    return 0.0;
-  }
-
-  int _toInt(dynamic value) {
-    if (value is int) return value;
-    if (value is double) return value.toInt();
-    if (value is String) return int.tryParse(value) ?? 0;
-    return 0;
   }
 
   Future<Position?> getCurrentLocation() async {

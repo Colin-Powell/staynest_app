@@ -7,3 +7,6 @@
 - [ ] Ensure `frontend/lib/screens/home/search_view.dart` loads remote first (currently still relies on `FallbackPropertiesLoader`).
 - [ ] Run Flutter analyze for `frontend`. 
 
+## Maintenance
+- [ ] Run `node backend/scripts/delete-all-properties-with-images.js` to wipe all property data (including images in Cloudinary)
+

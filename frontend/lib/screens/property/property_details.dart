@@ -121,27 +121,39 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                         const Icon(Icons.star_rounded,
                             color: Color(0xFFFBBF24), size: 24),
                         const SizedBox(width: 6),
-                        Text(
-                          '${widget.property.rating}',
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.black,
+                        if (widget.property.reviews > 0 &&
+                            widget.property.rating > 0) ...[
+                          Text(
+                            widget.property.rating.toStringAsFixed(1),
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () => Navigator.pushNamed(context, '/reviews'),
-                          behavior: HitTestBehavior.opaque,
-                          child: const Text(
-                            '(200 Reviews)',
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () =>
+                                Navigator.pushNamed(context, '/reviews'),
+                            behavior: HitTestBehavior.opaque,
+                            child: Text(
+                              '(${widget.property.reviews} Reviews)',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                color: Color(0xFF9CA3AF),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ] else
+                          const Text(
+                            'No reviews yet',
                             style: TextStyle(
                               fontSize: 15,
                               color: Color(0xFF9CA3AF),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                        ),
                         const Spacer(),
                         Text(
                           widget.property.location,
@@ -186,11 +198,15 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                       spacing: 12,
                       runSpacing: 12,
                       children: [
-                        _buildTag(Icons.apartment_rounded, 'Apartment', true),
-                        _buildTag(
-                            Icons.door_front_door_rounded, '4 Room', false),
-                        _buildTag(Icons.bed_rounded, '2 beds', false),
-                        _buildTag(Icons.weekend_rounded, 'Furnished', false),
+                        _buildTag(Icons.apartment_rounded,
+                            widget.property.category, true),
+                        _buildTag(Icons.door_front_door_rounded,
+                            '${widget.property.features.rooms} Room', false),
+                        _buildTag(Icons.bed_rounded,
+                            '${widget.property.features.beds} beds', false),
+                        if (widget.property.features.furnished)
+                          _buildTag(
+                              Icons.weekend_rounded, 'Furnished', false),
                       ],
                     ),
 
@@ -208,10 +224,10 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                         children: [
                           Row(
                             children: [
-                              _buildWhiteCircleIcon(Icons.wifi),
+                              _buildWhiteCircleIcon(Icons.photo_library_outlined),
                               const SizedBox(width: 16),
                               const Text(
-                                'Spacious Rooms',
+                                'Property Photos',
                                 style: TextStyle(
                                   fontSize: 16.5,
                                   fontWeight: FontWeight.w600,
@@ -224,15 +240,30 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Column(
-                                children: [
-                                  _buildWhiteCircleIcon(
-                                      Icons.water_drop_outlined),
-                                  const SizedBox(height: 12),
-                                  _buildWhiteCircleIcon(
-                                      Icons.local_parking_rounded),
-                                ],
-                              ),
+                              if (widget.property.amenities.isNotEmpty)
+                                Column(
+                                  children: widget.property.amenities
+                                      .take(2)
+                                      .map((a) => Padding(
+                                            padding: const EdgeInsets.only(
+                                                bottom: 12),
+                                            child: _buildWhiteCircleIcon(
+                                                Icons.check_circle_outline),
+                                          ))
+                                      .toList(),
+                                )
+                              else
+                                Column(
+                                  children: [
+                                    _buildWhiteCircleIcon(
+                                        Icons.water_drop_outlined),
+                                    const SizedBox(height: 12),
+                                    _buildWhiteCircleIcon(
+                                        Icons.local_parking_rounded),
+                                  ],
+                                ),
+                              if (widget.property.amenities.isNotEmpty)
+                                const SizedBox(width: 16),
                               const SizedBox(width: 16),
                               Expanded(
                                 child: GestureDetector(
@@ -276,8 +307,9 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      widget.property.description ??
-                          'Modern luxury apartment in the heart of Boston.\nClose to public transport, schools, and markets.',
+                      widget.property.description.isNotEmpty
+                          ? widget.property.description
+                          : 'No description provided for this property.',
                       style: const TextStyle(
                         fontSize: 15.5,
                         height: 1.6,

@@ -11,7 +11,6 @@ interface ExtendedSocket extends Socket {
   };
 }
 
-
 export function initSocket(server: import('http').Server) {
   const io = new IOServer(server, {
     cors: {
@@ -66,9 +65,15 @@ export function initSocket(server: import('http').Server) {
 
         const payload = result.rows[0];
 
-        // Emit to recipient room and back to sender for echo
-        if (msg.to) io.to(`user:${msg.to}`).emit('message', payload);
-        socket.emit('message', payload);
+        // FIX: only emit to the RECIPIENT — never echo back to sender.
+        // The sender already appended the message optimistically in the UI.
+        if (msg.to) {
+          io.to(`user:${msg.to}`).emit('message', payload);
+        }
+
+        // Emit a delivery confirmation to sender (no message content echo)
+        // so the client can update message status if needed.
+        socket.emit('message:sent', { id: payload.id });
       } catch (err) {
         console.error('Message save failed:', err);
         socket.emit('error', { message: 'Failed to save message' });

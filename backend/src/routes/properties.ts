@@ -7,6 +7,69 @@ import { env } from '../config.js';
 
 const router = Router();
 
+function normalizePropertyRow(property: Record<string, unknown>): Record<string, unknown> {
+  let images = property.images;
+
+  // FIX 1: null guard — pg returns null for empty jsonb, not undefined
+  if (images === null) images = undefined;
+
+  if (typeof images === 'string') {
+    try {
+      images = JSON.parse(images);
+    } catch {
+      images = [];
+    }
+  }
+  if (!Array.isArray(images) || images.length === 0) {
+    if (property.image_url) {
+      property.images = [property.image_url];
+    } else {
+      property.images = [];
+    }
+  } else {
+    property.images = images;
+  }
+
+  let amenities = property.amenities;
+  if (amenities === null) amenities = undefined;
+  if (typeof amenities === 'string') {
+    try {
+      amenities = JSON.parse(amenities);
+    } catch {
+      amenities = [];
+    }
+  }
+  if (!Array.isArray(amenities)) {
+    property.amenities = [];
+  }
+
+  return property;
+}
+
+const PROPERTY_SELECT = `p.id,
+              p.title,
+              p.description,
+              p.category,
+              p.city,
+              p.address,
+              p.price,
+              p.bedrooms,
+              p.bathrooms,
+              p.area,
+              p.image_url,
+              p.images,
+              p.amenities,
+              p.lat,
+              p.lng,
+              u.id AS landlord_id,
+              u.name AS landlord_name,
+              u.email AS landlord_email,
+              u.avatar AS landlord_avatar,
+              u.verified AS landlord_verified,
+              u.business_name AS landlord_business_name,
+              u.business_description AS landlord_business_description,
+              u.created_at AS landlord_member_since`;
+
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
@@ -41,16 +104,13 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    // Build ordering - prefer history categories, then proximity if lat/lng provided, then recent
     const orderParts: string[] = [];
     if (history.length > 0) {
-      // param will be added below as array
       params.push(history);
       orderParts.push(`(CASE WHEN p.category = ANY($${params.length}) THEN 0 ELSE 1 END)`);
     }
     if (lat != null && lng != null) {
       params.push(lat, lng);
-      // prefer rows with lat/lng populated, then by simple Manhattan distance
       orderParts.push(`(CASE WHEN p.lat IS NULL OR p.lng IS NULL THEN 1 ELSE 0 END)`);
       orderParts.push(`(ABS(COALESCE(p.lat,0) - $${params.length - 1}) + ABS(COALESCE(p.lng,0) - $${params.length}))`);
     }
@@ -58,21 +118,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const orderClause = orderParts.length > 0 ? `${orderParts.join(', ')}, p.created_at DESC` : 'p.created_at DESC';
 
     const result = await query(
-      `SELECT p.id,
-              p.title,
-              p.description,
-              p.category,
-              p.city,
-              p.price,
-              p.bedrooms,
-              p.bathrooms,
-              p.area,
-              p.image_url,
-              p.lat,
-              p.lng,
-              u.id AS landlord_id,
-              u.name AS landlord_name,
-              u.email AS landlord_email
+      `SELECT ${PROPERTY_SELECT}
        FROM properties p
        LEFT JOIN users u ON u.id = p.landlord_id
        ${whereClause}
@@ -80,18 +126,20 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       params,
     );
 
+    const rows = result.rows.map((row) => normalizePropertyRow(row as Record<string, unknown>));
+
     if (conditions.length === 0) {
-      setCache(cacheKey, result.rows, 60_000);
+      setCache(cacheKey, rows, 60_000);
     }
 
     res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
-    res.json({ data: result.rows });
+    res.json({ data: rows });
   } catch (error) {
     next(error);
   }
 });
 
-// Recommendations endpoint: prioritizes search history, tenant profile and proximity when available
+// Recommendations endpoint
 router.get('/recommendations', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const lat = typeof req.query.lat === 'string' ? Number(req.query.lat) : undefined;
@@ -99,7 +147,6 @@ router.get('/recommendations', async (req: Request, res: Response, next: NextFun
     const historyRaw = typeof req.query.history === 'string' ? req.query.history.trim() : undefined;
     const history = historyRaw ? historyRaw.split(',').map((s) => s.trim()).filter(Boolean) : [];
 
-    // Try to extract user id from Authorization header (optional)
     let userId: string | undefined;
     const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined;
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -107,22 +154,18 @@ router.get('/recommendations', async (req: Request, res: Response, next: NextFun
       try {
         const payload = jwt.verify(token, env.jwtSecret) as any;
         userId = payload?.id;
-      } catch (_) {
-        // ignore invalid token for recommendations; proceed unauthenticated
-      }
+      } catch (_) {}
     }
 
     const cacheKey = `properties.recommendations|lat=${lat ?? ''}|lng=${lng ?? ''}|history=${history.join('|')}|user=${userId ?? ''}`;
     const cached = getCache<any[]>(cacheKey);
     if (cached) return res.json({ data: cached, cached: true });
 
-    // Optionally load tenant profile
     let profile: any = null;
     if (userId) {
       try {
         const pRes = await query('SELECT * FROM tenant_profiles WHERE user_id = $1 LIMIT 1', [userId]);
         if (typeof pRes.rowCount === 'number' && pRes.rowCount > 0) profile = pRes.rows[0];
-
       } catch (_) {
         profile = null;
       }
@@ -132,7 +175,6 @@ router.get('/recommendations', async (req: Request, res: Response, next: NextFun
     const orderParts: string[] = [];
     const whereParts: string[] = [];
 
-    // If profile opted in and provided budget, filter by budget
     if (profile && profile.opt_in_personalized) {
       if (profile.budget_min != null) {
         params.push(Number(profile.budget_min));
@@ -166,16 +208,18 @@ router.get('/recommendations', async (req: Request, res: Response, next: NextFun
     const orderClause = orderParts.length > 0 ? `${orderParts.join(', ')}, p.created_at DESC` : 'p.created_at DESC';
 
     const result = await query(
-      `SELECT p.id, p.title, p.description, p.category, p.city, p.price, p.bedrooms, p.bathrooms, p.area, p.image_url, p.lat, p.lng
+      `SELECT ${PROPERTY_SELECT}
        FROM properties p
+       LEFT JOIN users u ON u.id = p.landlord_id
        ${whereClause}
        ORDER BY ${orderClause}
        LIMIT 12`,
       params,
     );
 
-    setCache(cacheKey, result.rows, 30_000);
-    res.json({ data: result.rows });
+    const rows = result.rows.map((row) => normalizePropertyRow(row as Record<string, unknown>));
+    setCache(cacheKey, rows, 30_000);
+    res.json({ data: rows });
   } catch (error) {
     next(error);
   }
@@ -185,23 +229,9 @@ router.get('/recommendations', async (req: Request, res: Response, next: NextFun
 router.get('/me', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await query(
-      `SELECT p.id,
-              p.title,
-              p.description,
-              p.category,
-              p.city,
-              p.price,
-              p.bedrooms,
-              p.bathrooms,
-              p.area,
-              p.image_url,
-              p.lat,
-              p.lng,
+      `SELECT ${PROPERTY_SELECT},
               p.created_at,
-              p.created_at AS updated_at,
-              u.id AS landlord_id,
-              u.name AS landlord_name,
-              u.email AS landlord_email
+              p.created_at AS updated_at
        FROM properties p
        LEFT JOIN users u ON u.id = p.landlord_id
        WHERE p.landlord_id = $1
@@ -209,80 +239,16 @@ router.get('/me', requireAuth, authorize('landlord', 'host'), async (req: Reques
       [req.auth?.id],
     );
 
-    res.json({ data: result.rows });
+    res.json({
+      data: result.rows.map((row) => normalizePropertyRow(row as Record<string, unknown>)),
+    });
   } catch (error) {
     next(error);
   }
 });
 
-router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const result = await query(
-      `SELECT p.id,
-              p.title,
-              p.description,
-              p.category,
-              p.city,
-              p.price,
-              p.bedrooms,
-              p.bathrooms,
-              p.area,
-              p.image_url,
-              p.lat,
-              p.lng,
-              u.id AS landlord_id,
-              u.name AS landlord_name,
-              u.email AS landlord_email
-       FROM properties p
-       LEFT JOIN users u ON u.id = p.landlord_id
-       WHERE p.id = $1
-       LIMIT 1`,
-      [req.params.id],
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Property not found.' });
-    }
-
-    res.json({ data: result.rows[0] });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post('/', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { title, description, category, city, price, bedrooms, bathrooms, area, image_url, lat, lng } = req.body as Record<string, unknown>;
-    if (!title || !description || !category || !city || price == null || bedrooms == null || bathrooms == null || area == null || !image_url) {
-      return res.status(400).json({ error: 'All property fields are required.' });
-    }
-
-    const result = await query(
-      `INSERT INTO properties (title, description, category, city, price, bedrooms, bathrooms, area, image_url, lat, lng, landlord_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       RETURNING id, title, description, category, city, price, bedrooms, bathrooms, area, image_url, lat, lng`,
-      [
-        title,
-        description,
-        category,
-        city,
-        Number(price),
-        Number(bedrooms),
-        Number(bathrooms),
-        Number(area),
-        image_url,
-        lat != null ? Number(lat) : null,
-        lng != null ? Number(lng) : null,
-        req.auth?.id,
-      ],
-    );
-
-    res.status(201).json({ data: result.rows[0] });
-  } catch (error) {
-    next(error);
-  }
-});
-
+// FIX 2: /categories MUST be before /:id — otherwise Express matches
+// GET /properties/categories as /:id with id="categories" and returns 404.
 router.get('/categories', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const cacheKey = 'properties.categories';
@@ -316,6 +282,113 @@ router.get('/categories', async (_req: Request, res: Response, next: NextFunctio
     setCache(cacheKey, categories, 60_000);
     res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
     res.json({ data: categories });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// /:id must be last among GET routes
+router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await query(
+      `SELECT ${PROPERTY_SELECT}
+       FROM properties p
+       LEFT JOIN users u ON u.id = p.landlord_id
+       WHERE p.id = $1
+       LIMIT 1`,
+      [req.params.id],
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Property not found.' });
+    }
+
+    const property = result.rows[0] as Record<string, unknown>;
+    const images = property.images;
+    const hasImages = Array.isArray(images) && images.length > 0;
+
+    if (!hasImages && property.landlord_id) {
+      try {
+        const vRes = await query(
+          `SELECT property_data
+           FROM verifications
+           WHERE user_id = $1
+             AND property_data->>'title' = $2
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [property.landlord_id, property.title],
+        );
+        const propertyData = vRes.rows[0]?.property_data as Record<string, unknown> | undefined;
+        const photos = propertyData?.photos;
+        if (Array.isArray(photos) && photos.length > 0) {
+          property.images = photos;
+        }
+        if (
+          (!property.amenities || (Array.isArray(property.amenities) && property.amenities.length === 0)) &&
+          Array.isArray(propertyData?.amenities)
+        ) {
+          property.amenities = propertyData!.amenities;
+        }
+      } catch (_) {}
+    }
+
+    res.json({ data: normalizePropertyRow(property) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const {
+      title,
+      description,
+      category,
+      city,
+      address,
+      price,
+      bedrooms,
+      bathrooms,
+      area,
+      image_url,
+      images,
+      amenities,
+      lat,
+      lng,
+    } = req.body as Record<string, unknown>;
+    if (!title || !description || !category || !city || price == null || bedrooms == null || bathrooms == null || area == null || !image_url) {
+      return res.status(400).json({ error: 'All property fields are required.' });
+    }
+
+    const imageList = Array.isArray(images) && images.length > 0
+      ? images
+      : [image_url];
+    const amenityList = Array.isArray(amenities) ? amenities : [];
+
+    const result = await query(
+      `INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, landlord_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, $15)
+       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng`,
+      [
+        title,
+        description,
+        category,
+        city,
+        typeof address === 'string' ? address : null,
+        Number(price),
+        Number(bedrooms),
+        Number(bathrooms),
+        Number(area),
+        image_url,
+        JSON.stringify(imageList),
+        JSON.stringify(amenityList),
+        lat != null ? Number(lat) : null,
+        lng != null ? Number(lng) : null,
+        req.auth?.id,
+      ],
+    );
+
+    res.status(201).json({ data: result.rows[0] });
   } catch (error) {
     next(error);
   }

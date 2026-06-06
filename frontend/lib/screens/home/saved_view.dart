@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'package:property_app/data.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
-import 'package:property_app/data_loader/fallback_properties_loader.dart';
+import 'package:property_app/services/property_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/widgets/property_image.dart';
 
@@ -19,10 +18,8 @@ class SavedView extends StatefulWidget {
 
 class _SavedViewState extends State<SavedView>
     with SingleTickerProviderStateMixin {
-  final _loader = FallbackPropertiesLoader(
-    remoteRepository: RemoteDatabaseRepository(),
-  );
-  List<Property> _all = properties;
+  final _propertyService = PropertyService.instance;
+  List<Property> _all = [];
   bool _loading = true;
 
   late final AnimationController _animController;
@@ -60,7 +57,7 @@ class _SavedViewState extends State<SavedView>
   }
 
   Future<void> _load() async {
-    final loaded = await _loader.loadAll();
+    final loaded = await _propertyService.fetchProperties();
     if (!mounted) return;
     setState(() {
       _all = loaded;

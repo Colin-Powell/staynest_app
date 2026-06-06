@@ -38,9 +38,8 @@ class UploadsService {
     }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    final url = decoded['data'] != null
-        ? (decoded['data']['url'] ?? decoded['data']['url'])
-        : decoded['url'];
+    final data = decoded['data'];
+    final url = (data is Map ? data['url'] : null) ?? decoded['url'];
 
     if (url == null) throw Exception('Upload returned no URL');
     return url as String;
@@ -88,9 +87,9 @@ class UploadsService {
         }
 
         final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        final url = decoded['data'] != null
-            ? (decoded['data']['url'] ?? decoded['data']['url'])
-            : decoded['url'];
+        final data = decoded['data'];
+        final url = (data is Map ? data['url'] : null) ?? decoded['url'];
+
         if (url == null) throw Exception('Upload returned no URL');
         try {
           onProgress(1.0);

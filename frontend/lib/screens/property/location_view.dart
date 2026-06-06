@@ -7,8 +7,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:property_app/data.dart' show properties;
 import 'package:property_app/models/property.dart';
+import 'package:property_app/services/property_service.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:latlong2/latlong.dart';
@@ -43,6 +43,7 @@ class _LocationViewState extends State<LocationView> {
 
   List<dynamic> nearbyPlaces = [];
   Property? _activeProperty;
+  List<Property> _allProperties = [];
 
   /// GOOGLE API KEY - Leave empty or 'YOUR_GOOGLE_API_KEY' to use OpenStreetMap fallback
   static const String googleApiKey = 'YOUR_GOOGLE_API_KEY';
@@ -83,6 +84,7 @@ class _LocationViewState extends State<LocationView> {
     _fetchingLocation = true;
 
     try {
+      _allProperties = await PropertyService.instance.fetchProperties();
       await _getCurrentLocation();
 
       final targetLocation = _currentLocation ??
@@ -297,7 +299,9 @@ class _LocationViewState extends State<LocationView> {
   }
 
   List<Map<String, dynamic>> _localNearbyPlaces(LatLng origin) {
-    final results = properties.map((prop) {
+    final results = _allProperties
+        .where((prop) => prop.lat != 0 || prop.lng != 0)
+        .map((prop) {
       final dist = Geolocator.distanceBetween(
         origin.latitude,
         origin.longitude,
@@ -306,7 +310,7 @@ class _LocationViewState extends State<LocationView> {
       );
       return {
         'name': prop.name,
-        'mock_id': prop.id,
+        'property_id': prop.id,
         'types': ['property'],
         'dist': '${(dist / 1000).toStringAsFixed(1)} km',
         'geometry': {
@@ -355,15 +359,18 @@ class _LocationViewState extends State<LocationView> {
   // ─────────────────────────────────────────────
 
   Color getPlaceColor(dynamic place) {
-    String name = (place['name'] ?? '').toString().toLowerCase();
-    String mockId = (place['mock_id'] ?? '').toString();
-
-    if (mockId == 'yaya' || name.contains('yaya')) return const Color(0xFF3F37C9);
-    if (mockId == 'adams' || name.contains('adams')) return const Color(0xFFF59E0B);
-    if (mockId == 'junction' || name.contains('junction')) {
+    final types = place['types'];
+    if (types is List && types.contains('property')) {
+      return const Color(0xFF3F37C9);
+    }
+    final name = (place['name'] ?? '').toString().toLowerCase();
+    if (name.contains('school') || name.contains('university')) {
+      return const Color(0xFFF59E0B);
+    }
+    if (name.contains('hospital') || name.contains('clinic')) {
       return const Color(0xFFEF4444);
     }
-    if (mockId == 'police' || name.contains('police')) {
+    if (name.contains('police') || name.contains('security')) {
       return const Color(0xFF3F37C9);
     }
     return const Color(0xFF6B7280);
@@ -491,7 +498,10 @@ class _LocationViewState extends State<LocationView> {
                                 ),
                                 MarkerLayer(
                                   markers: [
-                                    ...properties.map((prop) {
+                                    ..._allProperties
+                                        .where((prop) =>
+                                            prop.lat != 0 || prop.lng != 0)
+                                        .map((prop) {
                                       final isActive =
                                           _activeProperty?.id == prop.id;
                                       return Marker(
@@ -634,19 +644,29 @@ class _LocationViewState extends State<LocationView> {
                                                     place.hashCode.toString()),
                                                 onTap: () {
                                                   // Center map and activate property drawer if it's a property
-                                                  final mockId = place['mock_id'];
-                                                  final pLat = place['geometry']['location']['lat'];
-                                                  final pLng = place['geometry']['location']['lng'];
+                                                  final propertyId =
+                                                      place['property_id'];
+                                                  final pLat = place['geometry']
+                                                      ['location']['lat'];
+                                                  final pLng = place['geometry']
+                                                      ['location']['lng'];
 
-                                                  _mapController.move(LatLng(pLat, pLng), 15.5);
+                                                  _mapController.move(
+                                                      LatLng(pLat, pLng), 15.5);
 
-                                                  if (mockId != null) {
+                                                  if (propertyId != null) {
                                                     try {
-                                                      final prop = properties.firstWhere((p) => p.id == mockId);
+                                                      final prop =
+                                                          _allProperties
+                                                              .firstWhere((p) =>
+                                                                  p.id ==
+                                                                  propertyId
+                                                                      .toString());
                                                       setState(() {
                                                         _activeProperty = prop;
                                                       });
-                                                      _showPropertyDrawer(context, prop);
+                                                      _showPropertyDrawer(
+                                                          context, prop);
                                                     } catch (_) {}
                                                   }
                                                 },

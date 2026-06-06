@@ -6,6 +6,7 @@ import 'package:property_app/screens/dashboard/landlord_bookings_page.dart';
 import 'package:property_app/screens/dashboard/landlord_notifications_page.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/properties_api.dart';
+import 'package:property_app/utils/property_mapper.dart';
 import 'package:intl/intl.dart';
 
 import 'dashboard_widgets.dart';
@@ -319,7 +320,7 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
   }
 
   Widget _buildPropertyCard(Map<String, dynamic> property) {
-    final imageUrl = property['image_url'] as String? ?? '';
+    final imageUrl = mapApiProperty(property).image;
     final title = property['title'] as String? ?? 'Untitled';
     final city = property['city'] as String? ?? 'Unknown';
     final priceValue = property['price'];
@@ -385,9 +386,9 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
               ],
             ),
           ),
-          Icon(
+          const Icon(
             Icons.chevron_right_rounded,
-            color: const Color(0xFF9CA3AF),
+            color: Color(0xFF9CA3AF),
             size: 24,
           ),
         ],

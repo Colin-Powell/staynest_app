@@ -15,20 +15,28 @@ export interface UploadResult {
 }
 
 /**
- * Upload file to Cloudinary using unsigned upload
- * Returns the secure URL for the uploaded image
+ * Upload file to Cloudinary.
+ * public_id must NOT include the file extension — Cloudinary appends the
+ * format automatically. Including it causes the asset to be stored with
+ * the extension baked into the public_id, resulting in double-extension
+ * URLs like "photo.jpg.jpg" that return 404.
  */
 export async function uploadToCloudinary(
   fileBuffer: Buffer,
   fileName: string,
   folder: string = 'staynest'
 ): Promise<UploadResult> {
+  // Strip extension from fileName before using it as public_id
+  const baseName = fileName
+    .replace(/\.[^/.]+$/, '')           // remove extension e.g. ".jpg"
+    .replace(/[^a-zA-Z0-9-]/g, '-');   // sanitize to url-safe chars
+
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
-        folder: folder,
+        folder,
         resource_type: 'auto',
-        public_id: `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.-]/g, '-')}`,
+        public_id: `${Date.now()}-${baseName}`,
       },
       (error, result) => {
         if (error) {
@@ -59,8 +67,6 @@ export async function deleteFromCloudinary(publicId: string): Promise<void> {
       }
       resolve();
     });
-
-
   });
 }
 

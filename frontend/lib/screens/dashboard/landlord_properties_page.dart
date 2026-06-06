@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/properties_api.dart';
+import 'package:property_app/utils/property_mapper.dart';
 import 'package:property_app/widgets/property_image.dart';
 
 class LandlordPropertiesPage extends StatefulWidget {
@@ -100,7 +101,8 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage> {
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Property removed from your portfolio.')),
+            const SnackBar(
+                content: Text('Property removed from your portfolio.')),
           );
         }
       } else if (action == 'confirm_rented' && id != null) {
@@ -112,7 +114,7 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage> {
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Property marked as rented.')),
+            const SnackBar(content: Text('Property marked as rented.')),
           );
         }
       }
@@ -290,7 +292,7 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
               const SizedBox(height: 18),
               Text(
                 _errorMessage!,
@@ -304,7 +306,7 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _loadProperties,
-                child: Text('Retry'),
+                child: const Text('Retry'),
               ),
             ],
           ),
@@ -337,8 +339,8 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.home_outlined,
-                  size: 48, color: const Color(0xFF9CA3AF)),
+              const Icon(Icons.home_outlined,
+                  size: 48, color: Color(0xFF9CA3AF)),
               const SizedBox(height: 18),
               Text(
                 'No properties yet.',
@@ -460,7 +462,7 @@ class _PropertyCard extends StatelessWidget {
                 borderRadius:
                     const BorderRadius.horizontal(left: Radius.circular(28)),
                 child: buildPropertyImage(
-                  (data['image_url'] ?? data['image'] ?? '') as String,
+                  mapApiProperty(data).image,
                   width: 115,
                   height: 140,
                   fit: BoxFit.cover,

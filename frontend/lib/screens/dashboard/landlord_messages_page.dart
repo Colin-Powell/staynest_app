@@ -2,9 +2,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/session/app_session.dart';
+import 'package:property_app/services/message_service.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
-const Color _landlordPrimary = Color(0xFF059669); // Landlord Green Theme
+const Color _landlordPrimary = Color(0xFF059669);
 const Color _textDark = Color(0xFF111827);
 const Color _textLight = Color(0xFF9CA3AF);
 
@@ -23,14 +25,13 @@ class LandlordMessagesPage extends StatefulWidget {
 }
 
 class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
-  String? _selectedChatName;
+  ConversationModel? _selectedConversation;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   bool _isLoading = true;
   String? _errorMessage;
 
-  List<Map<String, dynamic>> _conversations = [];
-  List<Map<String, dynamic>> _contacts = [];
+  List<ConversationModel> _conversations = [];
 
   @override
   void initState() {
@@ -45,11 +46,9 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
     });
 
     try {
-      // TODO: Implement API call to fetch conversations
-      // For now, show empty state
+      final conversations = await MessageService.instance.fetchConversations();
       setState(() {
-        _conversations = [];
-        _contacts = [];
+        _conversations = conversations;
         _isLoading = false;
       });
     } catch (e) {
@@ -66,136 +65,28 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
     super.dispose();
   }
 
-  List<Map<String, dynamic>> get _filteredConversations {
+  List<ConversationModel> get _filteredConversations {
     if (_searchQuery.isEmpty) return _conversations;
     return _conversations
         .where((conv) =>
-            conv['name'].toLowerCase().contains(_searchQuery.toLowerCase()))
+            conv.userName.toLowerCase().contains(_searchQuery.toLowerCase()))
         .toList();
   }
 
-  void _showNewChatSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      isScrollControlled: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Start a new chat',
-                      style: GoogleFonts.poppins(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: _textDark,
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).pop(),
-                      child:
-                          const Icon(Icons.close, size: 28, color: _textLight),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Choose a contact to begin messaging.',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: _textLight,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _contacts.length,
-                  itemBuilder: (context, index) {
-                    final contact = _contacts[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: ClipOval(
-                          child: buildPropertyImage(
-                            contact['avatar'],
-                            width: 52,
-                            height: 52,
-                            fit: BoxFit.cover,
-                            errorPlaceholder: Container(
-                              width: 52,
-                              height: 52,
-                              color: const Color(0xFFF3F4F6),
-                              child:
-                                  const Icon(Icons.person, color: _textLight),
-                            ),
-                          ),
-                        ),
-                        title: Text(
-                          contact['name'],
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: _textDark,
-                          ),
-                        ),
-                        subtitle: Text(
-                          contact['subtitle'],
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: _textLight,
-                          ),
-                        ),
-                        trailing: contact['isOnline'] == true
-                            ? Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF10B981),
-                                  shape: BoxShape.circle,
-                                ),
-                              )
-                            : null,
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          final alreadyExists = _conversations
-                              .any((conv) => conv['name'] == contact['name']);
-                          if (!alreadyExists) {
-                            _conversations.insert(0, {
-                              'name': contact['name'],
-                              'avatar': contact['avatar'],
-                              'lastMessage': 'New conversation started',
-                              'time': 'Now',
-                              'unread': 0,
-                              'isOnline': contact['isOnline'] ?? false,
-                            });
-                          }
-                          widget.onChatOpen();
-                          setState(() => _selectedChatName = contact['name']);
-                        },
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  String _formatTime(DateTime? dt) {
+    if (dt == null) return '';
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+
+    if (diff.inMinutes < 1) return 'Now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) {
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      return days[dt.weekday - 1];
+    }
+    return '${dt.day}/${dt.month}';
   }
 
   Widget _buildConversationsList() {
@@ -210,17 +101,17 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, color: Colors.red, size: 48),
+            const Icon(Icons.error_outline, color: Colors.red, size: 48),
             const SizedBox(height: 16),
             Text(
               _errorMessage!,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.red),
+              style: const TextStyle(color: Colors.red),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadConversations,
-              child: Text('Retry'),
+              child: const Text('Retry'),
             ),
           ],
         ),
@@ -232,7 +123,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.mail_outline, size: 48, color: _textLight),
+            const Icon(Icons.mail_outline, size: 48, color: _textLight),
             const SizedBox(height: 16),
             Text(
               'No messages yet',
@@ -246,67 +137,57 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
             Text(
               'Messages will appear here',
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: _textLight,
-              ),
+              style: GoogleFonts.poppins(fontSize: 13, color: _textLight),
             ),
           ],
         ),
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 160),
-      itemCount: _filteredConversations.length,
-      itemBuilder: (context, index) {
-        final conv = _filteredConversations[index];
-        return _ConversationTile(
-          name: conv['name'],
-          avatar: conv['avatar'],
-          lastMessage: conv['lastMessage'],
-          time: conv['time'],
-          unread: conv['unread'],
-          isOnline: conv['isOnline'],
-          onTap: () {
-            widget.onChatOpen();
-            setState(() => _selectedChatName = conv['name']);
-          },
-        );
-      },
+    return RefreshIndicator(
+      color: _landlordPrimary,
+      onRefresh: _loadConversations,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 160),
+        itemCount: _filteredConversations.length,
+        itemBuilder: (context, index) {
+          final conv = _filteredConversations[index];
+          return _ConversationTile(
+            name: conv.userName,
+            avatarUrl: conv.userAvatar,
+            lastMessage: conv.lastMessage ?? 'No messages yet',
+            time: _formatTime(conv.lastMessageAt),
+            unread: 0, // unread count not in ConversationModel yet
+            isOnline: false,
+            onTap: () {
+              widget.onChatOpen();
+              setState(() => _selectedConversation = conv);
+            },
+          );
+        },
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_selectedChatName != null) {
-      final chat =
-          _conversations.firstWhere((c) => c['name'] == _selectedChatName);
+    if (_selectedConversation != null) {
+      final conv = _selectedConversation!;
       return LandlordChatView(
         onBack: () {
           widget.onChatClose();
-          setState(() => _selectedChatName = null);
+          setState(() => _selectedConversation = null);
         },
-        name: chat['name']!,
-        avatar: chat['avatar']!,
+        name: conv.userName,
+        avatarUrl: conv.userAvatar,
+        otherUserId: conv.userId,
       );
     }
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 100),
-        child: FloatingActionButton(
-          onPressed: () => _showNewChatSheet(context),
-          backgroundColor: _landlordPrimary,
-          shape: const CircleBorder(),
-          elevation: 4,
-          child: const Icon(Icons.add, color: Colors.white, size: 32),
-        ),
-      ),
       body: Stack(
         children: [
-          // Background Gradient matching the PDF look
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -341,8 +222,6 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                   ),
                 ),
               ),
-
-              // Search Bar - Frosted Glass Effect
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -396,10 +275,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                   ),
                 ),
               ),
-
-              Expanded(
-                child: _buildConversationsList(),
-              ),
+              Expanded(child: _buildConversationsList()),
             ],
           ),
         ],
@@ -408,9 +284,11 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
   }
 }
 
+// ─── Conversation Tile ───────────────────────────────────────────────────────
+
 class _ConversationTile extends StatelessWidget {
   final String name;
-  final String avatar;
+  final String? avatarUrl;
   final String lastMessage;
   final String time;
   final int unread;
@@ -419,7 +297,7 @@ class _ConversationTile extends StatelessWidget {
 
   const _ConversationTile({
     required this.name,
-    required this.avatar,
+    required this.avatarUrl,
     required this.lastMessage,
     required this.time,
     required this.unread,
@@ -494,8 +372,7 @@ class _ConversationTile extends StatelessWidget {
                     ),
                   )
                 else
-                  const SizedBox(
-                      height: 22), // Placeholder to keep layout stable
+                  const SizedBox(height: 22),
               ],
             ),
           ],
@@ -505,26 +382,15 @@ class _ConversationTile extends StatelessWidget {
   }
 
   Widget _buildAvatar() {
-    Widget avatarWidget;
-
-    if (avatar == 'logo_home') {
-      avatarWidget = Container(
-        color: const Color(0xFFE8F6EF),
-        child:
-            const Icon(Icons.home_rounded, color: _landlordPrimary, size: 32),
-      );
-    } else if (avatar == 'logo_support') {
-      avatarWidget = Container(
-        color: const Color(0xFFEEF2FF),
-        child:
-            const Icon(Icons.home_filled, color: Color(0xFF3F37C9), size: 32),
-      );
-    } else {
-      avatarWidget = buildPropertyImage(
-        avatar,
-        fit: BoxFit.cover,
-      );
-    }
+    final Widget avatarWidget = avatarUrl != null && avatarUrl!.isNotEmpty
+        ? buildPropertyImage(
+            avatarUrl!,
+            fit: BoxFit.cover,
+          )
+        : Container(
+            color: const Color(0xFFF3F4F6),
+            child: const Icon(Icons.person, color: _textLight, size: 32),
+          );
 
     return Stack(
       clipBehavior: Clip.none,
@@ -563,8 +429,7 @@ class _ConversationTile extends StatelessWidget {
   }
 }
 
-// ─── Data model & Chat View remain consistent with your logic ───────────────
-// (Keeping the Sender enum and ChatMessage class as they are)
+// ─── Data model ──────────────────────────────────────────────────────────────
 
 enum _Sender { me, them }
 
@@ -572,6 +437,7 @@ class _ChatMessage {
   final _Sender sender;
   final String text;
   final String time;
+
   const _ChatMessage({
     required this.sender,
     required this.text,
@@ -579,17 +445,23 @@ class _ChatMessage {
   });
 }
 
+// ─── Chat View ───────────────────────────────────────────────────────────────
+
 class LandlordChatView extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback? onCall;
   final String name;
-  final String avatar;
+  final String? avatarUrl;
+
+  /// The other participant's userId — used for fetch & send
+  final String otherUserId;
 
   const LandlordChatView({
     super.key,
     required this.onBack,
     required this.name,
-    required this.avatar,
+    required this.otherUserId,
+    this.avatarUrl,
     this.onCall,
   });
 
@@ -608,28 +480,16 @@ class _LandlordChatViewState extends State<LandlordChatView>
   late final Animation<double> _fadeAnim;
 
   bool _isTyping = false;
+  bool _isLoadingMessages = true;
+  bool _isSending = false;
+  String? _loadError;
 
-  late final List<_ChatMessage> _messages = [
-    const _ChatMessage(
-        sender: _Sender.them,
-        text: 'Hi, is the room still available?',
-        time: '10:45 AM'),
-    const _ChatMessage(
-        sender: _Sender.me,
-        text:
-            'Yes, it is available. When would you\nlike to come for a viewing?',
-        time: '10:49 AM'),
-    const _ChatMessage(
-        sender: _Sender.them,
-        text: 'Tomorrow at 11 AM works for\nme.',
-        time: '10:50 AM'),
-    const _ChatMessage(
-        sender: _Sender.me, text: 'Great! See you tomorrow.', time: '10:52 AM'),
-  ];
+  final List<_ChatMessage> _messages = [];
 
   @override
   void initState() {
     super.initState();
+
     _pageController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
@@ -637,7 +497,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
     _slideAnim = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
         .animate(CurvedAnimation(
             parent: _pageController, curve: Curves.easeOutCubic));
-    _fadeAnim = CurvedAnimation(parent: _pageController, curve: Curves.easeIn);
+    _fadeAnim =
+        CurvedAnimation(parent: _pageController, curve: Curves.easeIn);
 
     _listController = AnimationController(
       vsync: this,
@@ -645,12 +506,46 @@ class _LandlordChatViewState extends State<LandlordChatView>
     );
 
     _msgController.addListener(() {
-      setState(() {
-        _isTyping = _msgController.text.trim().isNotEmpty;
-      });
+      setState(() => _isTyping = _msgController.text.trim().isNotEmpty);
     });
 
-    _pageController.forward().then((_) => _listController.forward());
+    _pageController
+        .forward()
+        .then((_) => _listController.forward());
+
+    _loadMessages();
+  }
+
+  Future<void> _loadMessages() async {
+    setState(() {
+      _isLoadingMessages = true;
+      _loadError = null;
+    });
+
+    try {
+      final fetched = await MessageService.instance
+          .fetchConversation(widget.otherUserId);
+
+      final currentUserId = AppSession.currentUserId;
+
+      setState(() {
+        _messages.clear();
+        _messages.addAll(fetched.map((m) => _ChatMessage(
+              sender:
+                  m.fromUserId == currentUserId ? _Sender.me : _Sender.them,
+              text: m.text,
+              time: _formatTime(m.createdAt),
+            )));
+        _isLoadingMessages = false;
+      });
+
+      _scrollToBottom(immediate: true);
+    } catch (e) {
+      setState(() {
+        _loadError = 'Could not load messages. Tap to retry.';
+        _isLoadingMessages = false;
+      });
+    }
   }
 
   @override
@@ -662,21 +557,17 @@ class _LandlordChatViewState extends State<LandlordChatView>
     super.dispose();
   }
 
-  void _sendMessage() {
-    final text = _msgController.text.trim();
-    if (text.isEmpty) return;
+  String _formatTime(DateTime dt) {
+    final hour = dt.hour;
+    final minute = dt.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    return '$displayHour:$minute $period';
+  }
 
-    setState(() {
-      _messages.add(_ChatMessage(
-        sender: _Sender.me,
-        text: text,
-        time: _getFormattedTime(),
-      ));
-      _msgController.clear();
-      _isTyping = false;
-    });
-
-    Future.delayed(const Duration(milliseconds: 300), () {
+  void _scrollToBottom({bool immediate = false}) {
+    final delay = immediate ? 0 : 300;
+    Future.delayed(Duration(milliseconds: delay), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
@@ -687,9 +578,46 @@ class _LandlordChatViewState extends State<LandlordChatView>
     });
   }
 
-  String _getFormattedTime() {
-    final now = DateTime.now();
-    return '${now.hour}:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}';
+  Future<void> _sendMessage() async {
+    final text = _msgController.text.trim();
+    if (text.isEmpty || _isSending) return;
+
+    // Optimistic UI: add to list immediately
+    final optimisticMsg = _ChatMessage(
+      sender: _Sender.me,
+      text: text,
+      time: _formatTime(DateTime.now()),
+    );
+
+    setState(() {
+      _messages.add(optimisticMsg);
+      _msgController.clear();
+      _isTyping = false;
+      _isSending = true;
+    });
+
+    _scrollToBottom();
+
+    try {
+      await MessageService.instance.saveMessage(
+        toUserId: widget.otherUserId,
+        text: text,
+      );
+    } catch (e) {
+      // Roll back optimistic message on failure
+      if (mounted) {
+        setState(() => _messages.remove(optimisticMsg));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to send message. Please try again.'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
   }
 
   @override
@@ -749,16 +677,20 @@ class _LandlordChatViewState extends State<LandlordChatView>
                 Row(
                   children: [
                     Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                            color: Color(0xFF10B981), shape: BoxShape.circle)),
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                          color: Color(0xFF10B981), shape: BoxShape.circle),
+                    ),
                     const SizedBox(width: 6),
-                    Text('Online',
-                        style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: _textLight)),
+                    Text(
+                      'Online',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: _textLight,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -774,28 +706,70 @@ class _LandlordChatViewState extends State<LandlordChatView>
   }
 
   Widget _buildChatAvatar() {
-    if (widget.avatar == 'logo_home' || widget.avatar == 'logo_support') {
+    if (widget.avatarUrl == null || widget.avatarUrl!.isEmpty) {
       return Container(
         width: 48,
         height: 48,
-        decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: widget.avatar == 'logo_home'
-                ? const Color(0xFFE8F6EF)
-                : const Color(0xFFEEF2FF)),
-        child: Icon(Icons.home,
-            color: widget.avatar == 'logo_home'
-                ? _landlordPrimary
-                : const Color(0xFF3F37C9),
-            size: 24),
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: Color(0xFFF3F4F6),
+        ),
+        child: const Icon(Icons.person, color: _textLight, size: 24),
       );
     }
     return ClipOval(
-        child: buildPropertyImage(widget.avatar,
-            width: 48, height: 48, fit: BoxFit.cover));
+      child: buildPropertyImage(
+        widget.avatarUrl!,
+        width: 48,
+        height: 48,
+        fit: BoxFit.cover,
+        errorPlaceholder: Container(
+          width: 48,
+          height: 48,
+          color: const Color(0xFFF3F4F6),
+          child: const Icon(Icons.person, color: _textLight, size: 24),
+        ),
+      ),
+    );
   }
 
   Widget _buildChatArea() {
+    if (_isLoadingMessages) {
+      return const Center(
+        child: CircularProgressIndicator(color: _landlordPrimary),
+      );
+    }
+
+    if (_loadError != null) {
+      return Center(
+        child: GestureDetector(
+          onTap: _loadMessages,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.refresh, color: _textLight, size: 40),
+              const SizedBox(height: 12),
+              Text(
+                _loadError!,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                    fontSize: 14, color: _textLight),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_messages.isEmpty) {
+      return Center(
+        child: Text(
+          'Say hello 👋',
+          style: GoogleFonts.poppins(fontSize: 16, color: _textLight),
+        ),
+      );
+    }
+
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(24),
@@ -806,7 +780,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
           padding: const EdgeInsets.only(bottom: 24),
           child: msg.sender == _Sender.me
               ? _MyBubble(message: msg)
-              : _TheirBubble(message: msg, avatar: widget.avatar),
+              : _TheirBubble(message: msg),
         );
       },
     );
@@ -815,19 +789,21 @@ class _LandlordChatViewState extends State<LandlordChatView>
   Widget _buildInputArea(BuildContext context) {
     return Container(
       padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 16,
-          bottom: MediaQuery.of(context).padding.bottom + 16),
+        left: 24,
+        right: 24,
+        top: 16,
+        bottom: MediaQuery.of(context).padding.bottom + 16,
+      ),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _msgController,
               decoration: InputDecoration(
-                  hintText: 'Type a message..',
-                  border: InputBorder.none,
-                  hintStyle: GoogleFonts.poppins(color: _textLight)),
+                hintText: 'Type a message..',
+                border: InputBorder.none,
+                hintStyle: GoogleFonts.poppins(color: _textLight),
+              ),
               onSubmitted: (_) => _sendMessage(),
             ),
           ),
@@ -836,12 +812,24 @@ class _LandlordChatViewState extends State<LandlordChatView>
           const SizedBox(width: 16),
           GestureDetector(
             onTap: _sendMessage,
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
               padding: const EdgeInsets.all(10),
-              decoration: const BoxDecoration(
-                  color: _landlordPrimary, shape: BoxShape.circle),
-              child:
-                  const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              decoration: BoxDecoration(
+                color: _isTyping ? _landlordPrimary : _textLight,
+                shape: BoxShape.circle,
+              ),
+              child: _isSending
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.send_rounded,
+                      color: Colors.white, size: 20),
             ),
           ),
         ],
@@ -850,48 +838,69 @@ class _LandlordChatViewState extends State<LandlordChatView>
   }
 }
 
+// ─── Bubbles ─────────────────────────────────────────────────────────────────
+
 class _TheirBubble extends StatelessWidget {
   final _ChatMessage message;
-  final String avatar;
-  const _TheirBubble({required this.message, required this.avatar});
+  const _TheirBubble({required this.message});
+
   @override
   Widget build(BuildContext context) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      ClipOval(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipOval(
           child: Container(
-              width: 44,
-              height: 44,
-              color: const Color(0xFFF3F4F6),
-              child: const Icon(Icons.person, color: _textLight))),
-      const SizedBox(width: 12),
-      Flexible(
+            width: 44,
+            height: 44,
+            color: const Color(0xFFF3F4F6),
+            child: const Icon(Icons.person, color: _textLight),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
           child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFE5E7EB))),
-              child: Text(message.text,
-                  style: GoogleFonts.poppins(fontSize: 14, color: _textDark)))),
-    ]);
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: Text(
+              message.text,
+              style: GoogleFonts.poppins(fontSize: 14, color: _textDark),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
 class _MyBubble extends StatelessWidget {
   final _ChatMessage message;
   const _MyBubble({required this.message});
+
   @override
   Widget build(BuildContext context) {
-    return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-      Flexible(
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Flexible(
           child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                  color: _landlordPrimary,
-                  borderRadius: BorderRadius.circular(20)),
-              child: Text(message.text,
-                  style:
-                      GoogleFonts.poppins(fontSize: 14, color: Colors.white)))),
-    ]);
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _landlordPrimary,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              message.text,
+              style:
+                  GoogleFonts.poppins(fontSize: 14, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

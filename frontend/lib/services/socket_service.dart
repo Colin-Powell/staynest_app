@@ -8,16 +8,36 @@ class SocketMessage {
   final String text;
   final int ts;
 
-  SocketMessage({required this.from, required this.to, required this.text, required this.ts});
+  SocketMessage(
+      {required this.from,
+      required this.to,
+      required this.text,
+      required this.ts});
 
   factory SocketMessage.fromJson(Map<String, dynamic> json) {
+    // Backend emits DB row:
+    // { id, from_user_id, to_user_id, text, created_at }
     return SocketMessage(
-      from: json['from']?.toString() ?? '',
-      to: json['to']?.toString() ?? '',
+      from: json['from_user_id']?.toString() ?? json['from']?.toString() ?? '',
+      to: json['to_user_id']?.toString() ?? json['to']?.toString() ?? '',
       text: json['text']?.toString() ?? '',
-      ts: (json['ts'] is int) ? json['ts'] as int : int.tryParse(json['ts']?.toString() ?? '') ?? 0,
+      ts: _parseCreatedAtToEpochMillis(json['created_at'] ?? json['ts']),
     );
   }
+}
+
+int _parseCreatedAtToEpochMillis(Object? v) {
+  if (v == null) return 0;
+  if (v is int) return v;
+  if (v is double) return v.toInt();
+  if (v is String) {
+    final trimmed = v.trim();
+    final asInt = int.tryParse(trimmed);
+    if (asInt != null) return asInt;
+    final dt = DateTime.tryParse(trimmed);
+    if (dt != null) return dt.millisecondsSinceEpoch;
+  }
+  return 0;
 }
 
 class SocketService {
@@ -25,23 +45,29 @@ class SocketService {
   SocketService._internal();
 
   IO.Socket? _socket;
-  final StreamController<SocketMessage> _msgController = StreamController.broadcast();
+  final StreamController<SocketMessage> _msgController =
+      StreamController.broadcast();
   Stream<SocketMessage> get messages => _msgController.stream;
 
-  final StreamController<Map<String, dynamic>> _signalController = StreamController.broadcast();
+  final StreamController<Map<String, dynamic>> _signalController =
+      StreamController.broadcast();
   Stream<Map<String, dynamic>> get signals => _signalController.stream;
 
   void connect({String? url, String? token}) {
     final base = url ?? AppSession.apiBaseUrl;
     // socket.io server runs at the host root (remove /api if present)
-    final uri = base.replaceAll(RegExp(r'/api\/?\$'), '').replaceAll('/api', '');
+    final uri =
+        base.replaceAll(RegExp(r'/api\/?\$'), '').replaceAll('/api', '');
 
-    _socket = IO.io(uri, IO.OptionBuilder()
-        .setTransports(['websocket'])
-        .setExtraHeaders({'Authorization': token != null ? 'Bearer $token' : ''})
-        .setAuth({'token': token})
-        .enableAutoConnect()
-        .build());
+    _socket = IO.io(
+        uri,
+        IO.OptionBuilder()
+            .setTransports(['websocket'])
+            .setExtraHeaders(
+                {'Authorization': token != null ? 'Bearer $token' : ''})
+            .setAuth({'token': token})
+            .enableAutoConnect()
+            .build());
 
     _socket?.onConnect((_) {
       // ignore

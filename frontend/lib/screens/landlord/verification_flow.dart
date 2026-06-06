@@ -157,8 +157,8 @@ class _VerificationCenterState extends State<VerificationCenter> {
                   ),
                   if (kDebugMode)
                     TextButton(
-                      onPressed: () => Navigator.pushReplacementNamed(
-                          context, '/portal'),
+                      onPressed: () =>
+                          Navigator.pushReplacementNamed(context, '/portal'),
                       child: Text('Skip Verification (Debug)',
                           style: GoogleFonts.poppins(
                               color: AppColors.primary,

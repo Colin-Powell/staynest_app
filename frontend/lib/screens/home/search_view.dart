@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:property_app/data.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
-import 'package:property_app/data_loader/fallback_properties_loader.dart';
+import 'package:property_app/services/property_service.dart';
 import 'package:property_app/widgets/property_image.dart';
 import '../../widgets/phosphor_icons.dart';
 
@@ -32,10 +31,8 @@ class _SearchViewState extends State<SearchView> {
       'recommended'; // recommended, price_low, price_high, rating, name
   Map<String, dynamic> _activeFilters = {};
 
-  final _loader = FallbackPropertiesLoader(
-    remoteRepository: RemoteDatabaseRepository(),
-  );
-  List<Property> _all = properties;
+  final _propertyService = PropertyService.instance;
+  List<Property> _all = [];
   bool _loading = true;
 
   // ==================== SVG ICONS ====================
@@ -68,21 +65,13 @@ class _SearchViewState extends State<SearchView> {
   }
 
   Future<void> _load() async {
-    // Let FallbackPropertiesLoader do the correct parsing/mapping.
-    // It already prefers remote when available, and falls back only when remote fails.
-    final loaded = await _loader.loadAll();
+    final loaded = await _propertyService.fetchProperties();
     if (!mounted) return;
     setState(() {
       _all = loaded;
       _loading = false;
     });
   }
-
-  // Convert the remote payload into the app's `Property` model.
-  // We rely on the existing mapping code inside `FallbackPropertiesLoader`.
-  // (If mapping fails, the catch in `_load()` will safely fall back.)
-  // We don't bypass the loader mapping anymore; we only use remote payloads
-  // as a full replacement for `_all`. The loader handles the correct mapping.
 
   Future<void> _toggleSave(String propertyId) async {
     final isCurrentlySaved = AppSession.isSaved(propertyId);

@@ -83,7 +83,6 @@ class _PropertyAppState extends State<PropertyApp> {
         '/': (context) => const SplashView(),
         '/login': (context) => LoginView(
               onLogin: () {
-                // If user is not verified, send them to OTP verification first
                 if (!AppSession.currentUserVerified) {
                   Navigator.pushReplacementNamed(context, '/otp');
                 } else if (AppSession.isLandlord) {
@@ -98,7 +97,6 @@ class _PropertyAppState extends State<PropertyApp> {
             onBack: () => Navigator.pop(context),
             onSelect: (r) {
               AppSession.setRole(r);
-              // Route to registration with selected role
               Navigator.pushReplacementNamed(context, '/register_form');
             }),
         '/register_form': (context) => const RegisterView(),
@@ -158,8 +156,6 @@ class _PropertyAppState extends State<PropertyApp> {
             onBack: () => Navigator.pushReplacementNamed(context, '/'),
             onSelect: (r) {
               AppSession.setRole(r);
-              // After selecting role, this path should not be used anymore
-              // Navigation now happens through /register flow above
             }),
         '/portal': (context) => LandlordPortalView(
               onAddProperty: () =>
@@ -250,9 +246,13 @@ class _PropertyAppState extends State<PropertyApp> {
                 Navigator.pushNamed(context, '/commute');
               });
             }),
-        '/landlord_info': (context) => LandlordInfoView(
-              onClose: () => Navigator.pop(context),
-            ),
+        '/landlord_info': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          return LandlordInfoView(
+            onClose: () => Navigator.pop(context),
+            property: args is Property ? args : null,
+          );
+        },
         '/commute': (context) => CommuteMethodsView(
               onClose: () => Navigator.pop(context),
               onStartNavigation: () {
@@ -313,14 +313,10 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    // Connect websocket service so messaging & call signaling works app-wide
     try {
       SocketService.instance
           .connect(url: AppSession.apiBaseUrl, token: AppSession.apiToken);
       SocketService.instance.messages.listen((msg) {
-        // Optionally show a brief notification for incoming messages
-        // For now, just print to debug console
-        // You can hook this into state to update message lists in real-time
         // ignore: avoid_print
         print('Incoming socket message from ${msg.from}: ${msg.text}');
       });
@@ -335,7 +331,7 @@ class _AppShellState extends State<AppShell> {
   bool _loadingPropertyDetails = false;
   String? _selectedChatId;
   String? _selectedChatName;
-  String? _selectedChatAvatar;
+  String? _selectedChatAvatar; // nullable — API avatars may be absent
   bool _showPhotoGallery = false;
   bool _showAmenities = false;
   bool _showLocation = false;
@@ -389,7 +385,8 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  void _openChat(String userId, String name, String avatar) {
+  // FIX: avatar is now String? to match MessagesViewScreen.onSelectChat
+  void _openChat(String userId, String name, String? avatar) {
     setState(() {
       _selectedChatId = userId;
       _selectedChatName = name;
@@ -436,8 +433,7 @@ class _AppShellState extends State<AppShell> {
           if (_showLocation) _buildLocationOverlay(),
           if (_showLandlordInfo) _buildLandlordInfoOverlay(),
           if (_showBooking) _buildBookingOverlay(),
-          if (_selectedChatName != null && _selectedChatAvatar != null)
-            _buildChatOverlay(),
+          if (_selectedChatName != null) _buildChatOverlay(),
           Positioned(
             bottom: MediaQuery.of(context).padding.bottom + 16,
             left: 24,
@@ -569,17 +565,41 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  Property? get _activeProperty {
+    if (_selectedProperty != null) return _selectedProperty;
+    if (_selectedPropertyId == null) return null;
+    try {
+      return properties.firstWhere((p) => p.id == _selectedPropertyId);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Widget _buildPhotoGalleryOverlay() {
+    final property = _activeProperty;
+    final photos = property?.images?.isNotEmpty == true
+        ? property!.images!
+        : (property != null && property.image.isNotEmpty
+            ? [property.image]
+            : null);
+
     return Material(
       color: Colors.transparent,
-      child: PhotoGalleryView(onClose: _closePhotoGallery),
+      child: PhotoGalleryView(
+        onClose: _closePhotoGallery,
+        photos: photos,
+      ),
     );
   }
 
   Widget _buildAmenitiesOverlay() {
+    final property = _activeProperty;
     return Material(
       color: Colors.transparent,
-      child: AmenitiesView(onClose: _closeAmenities),
+      child: AmenitiesView(
+        onClose: _closeAmenities,
+        amenities: property?.amenities ?? const [],
+      ),
     );
   }
 
@@ -619,9 +639,13 @@ class _AppShellState extends State<AppShell> {
   }
 
   Widget _buildLandlordInfoOverlay() {
+    final property = _activeProperty;
     return Material(
       color: Colors.transparent,
-      child: LandlordInfoView(onClose: _closeLandlordInfo),
+      child: LandlordInfoView(
+        onClose: _closeLandlordInfo,
+        property: property,
+      ),
     );
   }
 
@@ -640,21 +664,20 @@ class _AppShellState extends State<AppShell> {
       child: BookingView(
         propertyId: id,
         onBack: _closeBooking,
-        onComplete: () {
-          _closeBooking();
-        },
+        onComplete: _closeBooking,
       ),
     );
   }
 
   Widget _buildChatOverlay() {
+    // FIX: use ?? '' fallback since _selectedChatAvatar is now String?
     return Material(
       color: Colors.transparent,
       child: ChatView(
         onBack: _closeChat,
         userId: _selectedChatId!,
         name: _selectedChatName!,
-        avatar: _selectedChatAvatar!,
+        avatar: _selectedChatAvatar ?? '',
         onCall: () {
           Navigator.push(
             context,
@@ -662,7 +685,7 @@ class _AppShellState extends State<AppShell> {
               builder: (_) => CallingView(
                 userId: _selectedChatId!,
                 name: _selectedChatName!,
-                avatar: _selectedChatAvatar!,
+                avatar: _selectedChatAvatar ?? '',
                 onEndCall: () => Navigator.pop(context),
               ),
             ),

@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS properties (
   bathrooms integer NOT NULL DEFAULT 1,
   area integer NOT NULL DEFAULT 0,
   image_url text NOT NULL,
+  images jsonb DEFAULT '[]'::jsonb,
+  amenities jsonb DEFAULT '[]'::jsonb,
+  address text,
   lat numeric,
   lng numeric,
   landlord_id uuid REFERENCES users(id) ON DELETE SET NULL,
@@ -41,6 +44,9 @@ CREATE TABLE IF NOT EXISTS properties (
 -- Ensure lat/lng columns exist for older databases
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS lat numeric;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS lng numeric;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS images jsonb DEFAULT '[]'::jsonb;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS amenities jsonb DEFAULT '[]'::jsonb;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS address text;
 
 CREATE TABLE IF NOT EXISTS verifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

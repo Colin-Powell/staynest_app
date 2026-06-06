@@ -207,6 +207,14 @@ class RemoteDatabaseRepository {
     return _extractList(response);
   }
 
+  Future<Map<String, dynamic>?> loadUserById(String userId) async {
+    final response = await apiClient.getJson('/users/$userId');
+    final payload = response['data'];
+    return payload is Map<String, dynamic>
+        ? Map<String, dynamic>.from(payload)
+        : null;
+  }
+
   /// Load a full property record by id.
   /// Used for PropertyDetails/BookingView so we do not rely on local mock data.
   Future<Map<String, dynamic>?> loadPropertyById(String propertyId) async {

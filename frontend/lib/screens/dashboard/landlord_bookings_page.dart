@@ -81,10 +81,39 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
     });
 
     try {
-      // TODO: Implement API call to fetch bookings
-      // For now, show empty state
+      // TODO: Replace mock with real API call.
+      // The UI expects booking['image'] to be a resolvable URL.
+      // For now we keep a small mock so images actually render.
       setState(() {
-        _allBookings = [];
+        _allBookings = [
+          {
+            'title': '11 Green bank',
+            'location': 'Kilifi, Kenya',
+            'date': 'Sat, 24 May 2026',
+            'time': '10.00 AM',
+            'status': 'Upcoming',
+            'image':
+                'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
+          },
+          {
+            'title': 'Smart Apartment',
+            'location': 'Kilifi, Kenya',
+            'date': 'Sun, 27 May 2026',
+            'time': '10.00 AM',
+            'status': 'Completed',
+            'image':
+                'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
+          },
+          {
+            'title': 'Cozy Bedsitter',
+            'location': 'Kilifi, Kenya',
+            'date': 'Wed, 30 May 2026',
+            'time': '10.00 AM',
+            'status': 'Cancelled',
+            'image':
+                'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
+          },
+        ];
         _isLoading = false;
       });
     } catch (e) {
@@ -175,7 +204,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.error_outline,
+                          const Icon(Icons.error_outline,
                               color: Colors.red, size: 48),
                           const SizedBox(height: 16),
                           Text(
@@ -222,7 +251,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.calendar_today_outlined,
+                          const Icon(Icons.calendar_today_outlined,
                               color: textLight, size: 48),
                           const SizedBox(height: 16),
                           Text(
@@ -487,10 +516,10 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
             Container(
               width: 115,
               height: 140,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE5E7EB),
+              decoration: const BoxDecoration(
+                color: Color(0xFFE5E7EB),
                 borderRadius:
-                    const BorderRadius.horizontal(left: Radius.circular(28)),
+                    BorderRadius.horizontal(left: Radius.circular(28)),
               ),
             ),
             const SizedBox(width: 12),
@@ -560,9 +589,9 @@ class _GlassContainer extends StatelessWidget {
     required this.child,
     required this.padding,
     this.borderRadius,
-    this.blur = 15.0,
-    this.opacity = 0.55,
-    this.borderWidth = 1.0,
+    this.blur = 12,
+    this.opacity = 0.18,
+    this.borderWidth = 1,
   });
 
   @override

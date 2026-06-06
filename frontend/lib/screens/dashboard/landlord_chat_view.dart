@@ -1,10 +1,12 @@
-// lib/screens/dashboard/landlord_chat_view.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/services/socket_service.dart';
+import 'package:property_app/services/message_service.dart';
+import 'package:property_app/session/app_session.dart';
 
-const Color _landlordPrimary = Color(0xFF059669); // Landlord Green Theme
+const Color _landlordPrimary = Color(0xFF059669);
 
 // ─── Data model ───────────────────────────────────────────────────────────────
 
@@ -26,12 +28,14 @@ class _ChatMessage {
 class LandlordChatView extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback? onCall;
+  final String userId;
   final String name;
   final String avatar;
 
   const LandlordChatView({
     super.key,
     required this.onBack,
+    required this.userId,
     required this.name,
     required this.avatar,
     this.onCall,
@@ -41,7 +45,8 @@ class LandlordChatView extends StatefulWidget {
   State<LandlordChatView> createState() => _LandlordChatViewState();
 }
 
-class _LandlordChatViewState extends State<LandlordChatView> with TickerProviderStateMixin {
+class _LandlordChatViewState extends State<LandlordChatView>
+    with TickerProviderStateMixin {
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -51,49 +56,50 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
   late final Animation<double> _fadeAnim;
 
   bool _isTyping = false;
+  bool _isLoading = true;
 
-  final List<_ChatMessage> _messages = const [
-    _ChatMessage(
-        sender: _Sender.them,
-        text: 'Hi, is the room still available?',
-        time: '10:45 AM'),
-    _ChatMessage(
-        sender: _Sender.me,
-        text: 'Yes, it is available. When would you\nlike to come for a viewing?',
-        time: '10:49 AM'),
-    _ChatMessage(
-        sender: _Sender.them,
-        text: 'Tomorrow at 11 AM works for\nme.',
-        time: '10:50 AM'),
-    _ChatMessage(
-        sender: _Sender.me, text: 'Great! See you tomorrow.', time: '10:52 AM'),
-  ];
+  final List<_ChatMessage> _messages = [];
 
   @override
   void initState() {
     super.initState();
-    // Page Entrance Animation
+
     _pageController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
     _slideAnim = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _pageController, curve: Curves.easeOutCubic));
-    _fadeAnim = CurvedAnimation(parent: _pageController, curve: Curves.easeIn);
+        .animate(CurvedAnimation(
+            parent: _pageController, curve: Curves.easeOutCubic));
+    _fadeAnim =
+        CurvedAnimation(parent: _pageController, curve: Curves.easeIn);
 
-    // List Staggered Animation
     _listController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
 
     _msgController.addListener(() {
-      setState(() {
-        _isTyping = _msgController.text.trim().isNotEmpty;
-      });
+      setState(() => _isTyping = _msgController.text.trim().isNotEmpty);
     });
 
     _pageController.forward().then((_) => _listController.forward());
+
+    _fetchMessages();
+
+    // Only handle messages FROM the other person — our own are added optimistically
+    SocketService.instance.messages.listen((msg) {
+      if (msg.from == widget.userId) {
+        setState(() {
+          _messages.add(_ChatMessage(
+            sender: _Sender.them,
+            text: msg.text,
+            time: _formatTime(msg.ts),
+          ));
+        });
+        _scrollToBottom();
+      }
+    });
   }
 
   @override
@@ -105,29 +111,89 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
     super.dispose();
   }
 
+  Future<void> _fetchMessages() async {
+    try {
+      final messages =
+          await MessageService.instance.fetchConversation(widget.userId);
+      final currentUserId = AppSession.currentUserId ?? '';
+      setState(() {
+        _messages.clear();
+        for (final msg in messages) {
+          _messages.add(_ChatMessage(
+            sender: msg.fromUserId == currentUserId
+                ? _Sender.me
+                : _Sender.them,
+            text: msg.text,
+            time: _formatTime(msg.createdAt.millisecondsSinceEpoch),
+          ));
+        }
+        _isLoading = false;
+      });
+      _scrollToBottom();
+    } catch (err) {
+      setState(() => _isLoading = false);
+      // ignore: avoid_print
+      print('Failed to fetch messages: $err');
+    }
+  }
+
   void _sendMessage() {
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
     _msgController.clear();
-    // Hook into your message-sending logic here
+
+    // Optimistic local append
+    setState(() {
+      _messages.add(_ChatMessage(
+        sender: _Sender.me,
+        text: text,
+        time: _formatTime(DateTime.now().millisecondsSinceEpoch),
+      ));
+    });
+    _scrollToBottom();
+
+    // Send over socket
+    SocketService.instance.sendMessage(to: widget.userId, text: text);
+
+    // Persist to backend
+    MessageService.instance
+        .saveMessage(toUserId: widget.userId, text: text)
+        .catchError((err) {
+      // ignore: avoid_print
+      print('Failed to save message: $err');
+    });
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  String _formatTime(int ms) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+    return '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
   Widget _buildStaggered({required Widget child, required int index}) {
     final double start = (index * 0.15).clamp(0.0, 1.0);
     final double end = (start + 0.4).clamp(0.0, 1.0);
-
     final animation = CurvedAnimation(
       parent: _listController,
       curve: Interval(start, end, curve: Curves.easeOutCubic),
     );
-
     return FadeTransition(
       opacity: animation,
       child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 0.2),
-          end: Offset.zero,
-        ).animate(animation),
+        position:
+            Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
+                .animate(animation),
         child: child,
       ),
     );
@@ -144,7 +210,11 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
           body: Column(
             children: [
               _buildHeader(context),
-              Expanded(child: _buildChatArea()),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _buildChatArea(),
+              ),
               _buildInputArea(context),
             ],
           ),
@@ -153,7 +223,7 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
     );
   }
 
-  // ─── Header ─────────────────────────────────────────────────────────────────
+  // ─── Header ──────────────────────────────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context) {
     return Container(
@@ -169,14 +239,12 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
       ),
       child: Row(
         children: [
-          // Back
           GestureDetector(
             onTap: widget.onBack,
             behavior: HitTestBehavior.opaque,
             child: const Icon(Icons.arrow_back, size: 28, color: Colors.black),
           ),
           const SizedBox(width: 16),
-          // Avatar
           ClipOval(
             child: buildPropertyImage(
               widget.avatar,
@@ -184,13 +252,14 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
               height: 48,
               fit: BoxFit.cover,
               errorPlaceholder: Container(
-                width: 48, height: 48, color: const Color(0xFFF3F4F6),
+                width: 48,
+                height: 48,
+                color: const Color(0xFFF3F4F6),
                 child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
               ),
             ),
           ),
           const SizedBox(width: 16),
-          // Name + status
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -211,7 +280,7 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
                       width: 8,
                       height: 8,
                       decoration: const BoxDecoration(
-                        color: Color(0xFF10B981), // Green dot
+                        color: Color(0xFF10B981),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -229,7 +298,6 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
               ],
             ),
           ),
-          // Call button (PhosphorIcons used as a function to prevent error)
           GestureDetector(
             onTap: widget.onCall,
             child: Icon(PhosphorIcons.phone(), color: Colors.black, size: 28),
@@ -239,33 +307,40 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
     );
   }
 
-  // ─── Chat Area ──────────────────────────────────────────────────────────────
+  // ─── Chat Area ───────────────────────────────────────────────────────────────
 
   Widget _buildChatArea() {
+    if (_messages.isEmpty) {
+      return Center(
+        child: Text(
+          'No messages yet.\nSay hello!',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.poppins(
+            fontSize: 15,
+            color: const Color(0xFF9CA3AF),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
+    }
+
     return ListView.builder(
       controller: _scrollController,
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      itemCount: _messages.length + 1, // +1 for date divider
+      itemCount: _messages.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) {
           return _buildStaggered(
-            index: index,
-            child: _buildDateDivider('Today'),
-          );
+              index: index, child: _buildDateDivider('Today'));
         }
-
         final msg = _messages[index - 1];
         final Widget bubble = msg.sender == _Sender.me
             ? _MyBubble(message: msg)
             : _TheirBubble(message: msg, avatar: widget.avatar);
-
         return _buildStaggered(
           index: index,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 24),
-            child: bubble,
-          ),
+          child: Padding(padding: const EdgeInsets.only(bottom: 24), child: bubble),
         );
       },
     );
@@ -281,20 +356,17 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
             color: const Color(0xFFE5E7EB),
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Text(
-            label,
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Colors.black,
-            ),
-          ),
+          child: Text(label,
+              style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black)),
         ),
       ),
     );
   }
 
-  // ─── Input Area ─────────────────────────────────────────────────────────────
+  // ─── Input Area ──────────────────────────────────────────────────────────────
 
   Widget _buildInputArea(BuildContext context) {
     return Container(
@@ -304,27 +376,22 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
         top: 16,
         bottom: MediaQuery.of(context).padding.bottom + 16,
       ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-      ),
+      decoration: const BoxDecoration(color: Colors.white),
       child: Row(
         children: [
-          // Text input
           Expanded(
             child: TextField(
               controller: _msgController,
               style: GoogleFonts.poppins(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: Colors.black,
-              ),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black),
               decoration: InputDecoration(
                 hintText: 'Type a message..',
                 hintStyle: GoogleFonts.poppins(
-                  color: const Color(0xFF9CA3AF),
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                ),
+                    color: const Color(0xFF9CA3AF),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -332,25 +399,19 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
               onSubmitted: (_) => _sendMessage(),
             ),
           ),
-          // Action Icons
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               GestureDetector(
                 onTap: () {},
-                child: const Icon(
-                  Icons.sentiment_satisfied_alt_rounded,
-                  color: Color(0xFF9CA3AF),
-                  size: 28,
-                ),
+                child: const Icon(Icons.sentiment_satisfied_alt_rounded,
+                    color: Color(0xFF9CA3AF), size: 28),
               ),
               const SizedBox(width: 16),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
-                transitionBuilder: (child, animation) => ScaleTransition(
-                  scale: animation,
-                  child: child,
-                ),
+                transitionBuilder: (child, animation) =>
+                    ScaleTransition(scale: animation, child: child),
                 child: _isTyping
                     ? GestureDetector(
                         key: const ValueKey('send'),
@@ -358,24 +419,16 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
                         child: Container(
                           padding: const EdgeInsets.all(10),
                           decoration: const BoxDecoration(
-                            color: _landlordPrimary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.send_rounded,
-                            color: Colors.white,
-                            size: 20,
-                          ),
+                              color: _landlordPrimary, shape: BoxShape.circle),
+                          child: const Icon(Icons.send_rounded,
+                              color: Colors.white, size: 20),
                         ),
                       )
                     : GestureDetector(
                         key: const ValueKey('camera'),
                         onTap: () {},
-                        child: const Icon(
-                          Icons.camera_alt_outlined,
-                          color: Color(0xFF9CA3AF),
-                          size: 28,
-                        ),
+                        child: const Icon(Icons.camera_alt_outlined,
+                            color: Color(0xFF9CA3AF), size: 28),
                       ),
               ),
             ],
@@ -391,7 +444,6 @@ class _LandlordChatViewState extends State<LandlordChatView> with TickerProvider
 class _TheirBubble extends StatelessWidget {
   final _ChatMessage message;
   final String avatar;
-
   const _TheirBubble({required this.message, required this.avatar});
 
   @override
@@ -400,16 +452,16 @@ class _TheirBubble extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ClipOval(
-          child: buildPropertyImage(
-            avatar,
-            width: 44,
-            height: 44,
-            fit: BoxFit.cover,
-            errorPlaceholder: Container(
-              width: 44, height: 44, color: const Color(0xFFF3F4F6),
-              child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
-            ),
-          ),
+          child: buildPropertyImage(avatar,
+              width: 44,
+              height: 44,
+              fit: BoxFit.cover,
+              errorPlaceholder: Container(
+                width: 44,
+                height: 44,
+                color: const Color(0xFFF3F4F6),
+                child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
+              )),
         ),
         const SizedBox(width: 12),
         Flexible(
@@ -426,41 +478,34 @@ class _TheirBubble extends StatelessWidget {
               border: Border.all(color: const Color(0xFFE5E7EB)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                )
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4))
               ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  message.text,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black,
-                    height: 1.4,
-                  ),
-                ),
+                Text(message.text,
+                    style: GoogleFonts.poppins(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black,
+                        height: 1.4)),
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: Text(
-                    message.time,
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF9CA3AF),
-                    ),
-                  ),
+                  child: Text(message.time,
+                      style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF9CA3AF))),
                 ),
               ],
             ),
           ),
         ),
-        const SizedBox(width: 48), // Padding on right to constrain width
+        const SizedBox(width: 48),
       ],
     );
   }
@@ -468,7 +513,6 @@ class _TheirBubble extends StatelessWidget {
 
 class _MyBubble extends StatelessWidget {
   final _ChatMessage message;
-
   const _MyBubble({required this.message});
 
   @override
@@ -477,7 +521,7 @@ class _MyBubble extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.end,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        const SizedBox(width: 60), // Padding on left to constrain width
+        const SizedBox(width: 60),
         Flexible(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -491,35 +535,28 @@ class _MyBubble extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: _landlordPrimary.withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
+                    color: _landlordPrimary.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6))
               ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  message.text,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    height: 1.4,
-                  ),
-                ),
+                Text(message.text,
+                    style: GoogleFonts.poppins(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                        height: 1.4)),
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: Text(
-                    message.time,
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white.withOpacity(0.8),
-                    ),
-                  ),
+                  child: Text(message.time,
+                      style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white.withOpacity(0.8))),
                 ),
               ],
             ),

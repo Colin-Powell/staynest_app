@@ -88,11 +88,11 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
     // Listen to socket messages
     SocketService.instance.messages.listen((msg) {
-      if (msg.from == widget.userId || msg.to == widget.userId) {
-        final isMe = msg.from == msg.from; // From current user
+      if (msg.from == widget.userId) {
+        // only them, not us
         setState(() {
           _messages.add(_ChatMessage(
-            sender: isMe ? _Sender.me : _Sender.them,
+            sender: _Sender.them,
             text: msg.text,
             time: _formatTime(msg.ts),
           ));
@@ -143,8 +143,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
         _messages.clear();
         for (final msg in messages) {
           _messages.add(_ChatMessage(
-            sender:
-                msg.fromUserId == msg.fromUserId ? _Sender.me : _Sender.them,
+            sender: msg.fromUserId == widget.userId ? _Sender.them : _Sender.me,
             text: msg.text,
             time: _formatTime(msg.createdAt.millisecondsSinceEpoch),
           ));

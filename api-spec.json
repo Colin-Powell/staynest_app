@@ -1,0 +1,222 @@
+{
+  "baseUrl": "/api",
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "auth": "none",
+      "description": "Health check"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "auth": "none",
+      "description": "Register new user"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/verify",
+      "auth": "bearer",
+      "description": "Verify user with code (requires auth)"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "auth": "none",
+      "description": "Login"
+    },
+    {
+      "method": "GET",
+      "path": "/api/properties",
+      "auth": "none",
+      "description": "Search/list properties (supports query params: category, city, landlordId, lat, lng, history)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/properties/recommendations",
+      "auth": "bearer (optional)",
+      "description": "Get recommendations (uses optional Authorization header)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/properties/me",
+      "auth": "bearer",
+      "description": "Get current landlord/host properties (requires landlord/host role)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/properties/:id",
+      "auth": "none",
+      "description": "Get property by id"
+    },
+    {
+      "method": "POST",
+      "path": "/api/properties",
+      "auth": "bearer",
+      "description": "Create property (requires landlord/host role)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/properties/categories",
+      "auth": "none",
+      "description": "Get properties grouped by category"
+    },
+    {
+      "method": "POST",
+      "path": "/api/uploads",
+      "auth": "bearer",
+      "description": "Upload file (multipart/form-data field: file)"
+    },
+    {
+      "method": "POST",
+      "path": "/api/verifications",
+      "auth": "bearer",
+      "description": "Submit verification documents (requires auth)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/verifications/me",
+      "auth": "bearer",
+      "description": "Get current user's latest verification"
+    },
+    {
+      "method": "GET",
+      "path": "/api/verifications/admin/all",
+      "auth": "bearer",
+      "description": "Admin: list verifications (query: status, offset, limit)"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/verifications/:id",
+      "auth": "bearer",
+      "description": "Admin: approve or reject verification (body: status, admin_notes)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tenant_profiles/me",
+      "auth": "bearer",
+      "description": "Get current user's tenant profile"
+    },
+    {
+      "method": "POST",
+      "path": "/api/tenant_profiles",
+      "auth": "bearer",
+      "description": "Upsert tenant profile for current user"
+    },
+    {
+      "method": "GET",
+      "path": "/api/privacy",
+      "auth": "none",
+      "description": "Get privacy policy text (from PRIVACY.md if present)"
+    },
+    {
+      "method": "POST",
+      "path": "/api/privacy/delete-request",
+      "auth": "bearer",
+      "description": "Submit authenticated user's account deletion request (body: reason optional)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users",
+      "auth": "none",
+      "description": "List users (admin/role checks not present here)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/me",
+      "auth": "bearer",
+      "description": "Get current user"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/users/me",
+      "auth": "bearer",
+      "description": "Update current user's profile (body: name, email, phone, avatar)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/:id/properties",
+      "auth": "none",
+      "description": "List properties owned by the landlord with user id (:id)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/:id/favorites",
+      "auth": "bearer",
+      "description": "List favorites for the user (:id) (requires current user == :id or admin)"
+    },
+    {
+      "method": "POST",
+      "path": "/api/users/:id/favorites",
+      "auth": "bearer",
+      "description": "Add favorite (body: propertyId)"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/users/:id/favorites/:propertyId",
+      "auth": "bearer",
+      "description": "Remove favorite"
+    },
+    {
+      "method": "POST",
+      "path": "/api/messages",
+      "auth": "bearer",
+      "description": "Send/save a message (body: to_user_id, text)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/messages/conversation/:userId",
+      "auth": "bearer",
+      "description": "Fetch conversation history between current user and :userId (query: limit, offset)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/messages/conversations",
+      "auth": "bearer",
+      "description": "Fetch list of conversations for current user"
+    },
+    {
+      "method": "POST",
+      "path": "/api/bookings",
+      "auth": "bearer",
+      "description": "Create a new booking (body: propertyId, checkInDate, checkOutDate, totalPrice, notes optional)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bookings/tenant",
+      "auth": "bearer",
+      "description": "Get bookings for current user as tenant"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bookings/landlord",
+      "auth": "bearer",
+      "description": "Get bookings for current user as landlord"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/bookings/:id/confirm",
+      "auth": "bearer",
+      "description": "Landlord confirms booking"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/bookings/:id/cancel",
+      "auth": "bearer",
+      "description": "Cancel booking (body: reason optional)"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bookings/:id",
+      "auth": "bearer",
+      "description": "Get booking by id (requires current user to be landlord or tenant for that booking)"
+    },
+    {
+      "method": "POST",
+      "path": "/uploads",
+      "auth": "bearer (static serving; upload endpoint is /api/uploads)",
+      "description": "Static uploads directory served from backend (exact path depends on env.storagePath)"
+    }
+  ]
+}
+

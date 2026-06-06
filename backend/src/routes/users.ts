@@ -111,6 +111,37 @@ router.patch('/me', requireAuth, async (req: Request, res: Response, next: NextF
   }
 });
 
+router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await query(
+      `SELECT id, name, email, phone, role, avatar, verified,
+              business_name, business_description, years_in_business, created_at
+       FROM users
+       WHERE id = $1
+       LIMIT 1`,
+      [req.params.id],
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const propertyCount = await query(
+      'SELECT COUNT(*)::int AS count FROM properties WHERE landlord_id = $1',
+      [req.params.id],
+    );
+
+    res.json({
+      data: {
+        ...result.rows[0],
+        property_count: propertyCount.rows[0]?.count ?? 0,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/:id/properties', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.params.id;
@@ -120,21 +151,35 @@ router.get('/:id/properties', async (req: Request, res: Response, next: NextFunc
               p.description,
               p.category,
               p.city,
+              p.address,
               p.price,
               p.bedrooms,
               p.bathrooms,
               p.area,
               p.image_url,
+              p.images,
+              p.amenities,
+              p.lat,
+              p.lng,
               u.id AS landlord_id,
               u.name AS landlord_name,
-              u.email AS landlord_email
+              u.email AS landlord_email,
+              u.avatar AS landlord_avatar,
+              u.verified AS landlord_verified
        FROM properties p
        LEFT JOIN users u ON u.id = p.landlord_id
        WHERE p.landlord_id = $1
        ORDER BY p.created_at DESC`,
       [userId],
     );
-    res.json({ data: result.rows });
+    const rows = result.rows.map((row: Record<string, unknown>) => {
+      let images = row.images;
+      if (!Array.isArray(images) || images.length === 0) {
+        if (row.image_url) row.images = [row.image_url];
+      }
+      return row;
+    });
+    res.json({ data: rows });
   } catch (error) {
     next(error);
   }

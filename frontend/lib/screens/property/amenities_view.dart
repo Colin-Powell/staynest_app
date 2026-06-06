@@ -2,28 +2,102 @@ import 'package:flutter/material.dart';
 
 const Color _bgColor = Color(0xFFF8F9FA);
 
-// ─── Data models ──────────────────────────────────────────────────────────────
-
-class _EssentialAmenity {
+class _AmenityDisplay {
   final IconData icon;
   final String title;
   final Color iconColor;
   final Color bgColor;
-  const _EssentialAmenity(this.icon, this.title, this.iconColor, this.bgColor);
+
+  const _AmenityDisplay(
+    this.icon,
+    this.title, {
+    this.iconColor = const Color(0xFF3B82F6),
+    this.bgColor = const Color(0xFFEFF6FF),
+  });
 }
 
-class _AdditionalAmenity {
-  final IconData icon;
-  final String title;
-  const _AdditionalAmenity(this.icon, this.title);
+const _essentialKeys = {
+  'wifi',
+  'water',
+  'parking',
+  'security',
+  'electricity',
+  'cctv',
+  'heating',
+  'air conditioning',
+  'hot water',
+};
+
+_AmenityDisplay _amenityDisplayFor(String name) {
+  final lower = name.toLowerCase();
+  if (lower.contains('wifi')) {
+    return _AmenityDisplay(Icons.wifi, name,
+        iconColor: const Color(0xFF3B82F6), bgColor: const Color(0xFFEFF6FF));
+  }
+  if (lower.contains('water')) {
+    return _AmenityDisplay(Icons.water_drop_outlined, name,
+        iconColor: const Color(0xFF3B82F6), bgColor: const Color(0xFFEFF6FF));
+  }
+  if (lower.contains('parking') || lower.contains('car')) {
+    return _AmenityDisplay(Icons.local_parking_outlined, name,
+        iconColor: const Color(0xFF22C55E), bgColor: const Color(0xFFF0FDF4));
+  }
+  if (lower.contains('security') || lower.contains('guard')) {
+    return _AmenityDisplay(Icons.lock_outline, name,
+        iconColor: const Color(0xFF3B82F6), bgColor: const Color(0xFFEFF6FF));
+  }
+  if (lower.contains('electric')) {
+    return _AmenityDisplay(Icons.bolt, name,
+        iconColor: const Color(0xFFF59E0B), bgColor: const Color(0xFFFFFBEB));
+  }
+  if (lower.contains('cctv') || lower.contains('camera')) {
+    return _AmenityDisplay(Icons.videocam_outlined, name,
+        iconColor: const Color(0xFFEF4444), bgColor: const Color(0xFFFEF2F2));
+  }
+  if (lower.contains('gym') || lower.contains('fitness')) {
+    return _AmenityDisplay(Icons.fitness_center, name);
+  }
+  if (lower.contains('pool') || lower.contains('swim')) {
+    return _AmenityDisplay(Icons.pool, name);
+  }
+  if (lower.contains('furnish')) {
+    return _AmenityDisplay(Icons.weekend_outlined, name);
+  }
+  if (lower.contains('laundry') || lower.contains('washer')) {
+    return _AmenityDisplay(Icons.local_laundry_service_outlined, name);
+  }
+  if (lower.contains('balcony') || lower.contains('patio')) {
+    return _AmenityDisplay(Icons.balcony, name);
+  }
+  if (lower.contains('kitchen')) {
+    return _AmenityDisplay(Icons.kitchen, name);
+  }
+  if (lower.contains('pet')) {
+    return _AmenityDisplay(Icons.pets, name);
+  }
+  if (lower.contains('elevator')) {
+    return _AmenityDisplay(Icons.elevator, name);
+  }
+  if (lower.contains('generator') || lower.contains('backup')) {
+    return _AmenityDisplay(Icons.battery_charging_full, name);
+  }
+  return _AmenityDisplay(Icons.check_circle_outline, name);
 }
 
-// ─── Main Widget ──────────────────────────────────────────────────────────────
+bool _isEssential(String name) {
+  final lower = name.toLowerCase();
+  return _essentialKeys.any((key) => lower.contains(key));
+}
 
 class AmenitiesView extends StatefulWidget {
   final VoidCallback onClose;
+  final List<String> amenities;
 
-  const AmenitiesView({super.key, required this.onClose});
+  const AmenitiesView({
+    super.key,
+    required this.onClose,
+    this.amenities = const [],
+  });
 
   @override
   State<AmenitiesView> createState() => _AmenitiesViewState();
@@ -35,41 +109,24 @@ class _AmenitiesViewState extends State<AmenitiesView>
   late final Animation<Offset> _pageSlideAnim;
   late final Animation<double> _pageFadeAnim;
 
-  static const _essentialItems = [
-    _EssentialAmenity(
-        Icons.wifi, 'WIFI', Color(0xFF3B82F6), Color(0xFFEFF6FF)),
-    _EssentialAmenity(
-        Icons.water_drop_outlined, 'water', Color(0xFF3B82F6), Color(0xFFEFF6FF)),
-    _EssentialAmenity(
-        Icons.local_parking_outlined, 'Parking', Color(0xFF22C55E), Color(0xFFF0FDF4)),
-    _EssentialAmenity(
-        Icons.lock_outline, 'Security', Color(0xFF3B82F6), Color(0xFFEFF6FF)),
-    _EssentialAmenity(
-        Icons.bolt, 'Electricity\nincluded', Color(0xFFF59E0B), Color(0xFFFFFBEB)),
-    _EssentialAmenity(
-        Icons.videocam_outlined, 'CCTV', Color(0xFFEF4444), Color(0xFFFEF2F2)),
-  ];
+  List<_AmenityDisplay> get _essentialItems => widget.amenities
+      .where(_isEssential)
+      .map(_amenityDisplayFor)
+      .toList();
 
-  static const _additionalItems = [
-    _AdditionalAmenity(Icons.balcony, 'Balcony'),
-    _AdditionalAmenity(Icons.kitchen, 'Shared Kitchen'),
-    _AdditionalAmenity(Icons.bathtub_outlined, 'Ensuit Bathroom'),
-    _AdditionalAmenity(Icons.waves, 'Borehole Water'),
-    _AdditionalAmenity(Icons.local_laundry_service_outlined, 'Laundry Area'),
-    _AdditionalAmenity(Icons.fitness_center, 'Gym Access'),
-    _AdditionalAmenity(Icons.shield_outlined, 'Security Guards'),
-  ];
+  List<_AmenityDisplay> get _additionalItems => widget.amenities
+      .where((a) => !_isEssential(a))
+      .map(_amenityDisplayFor)
+      .toList();
 
   @override
   void initState() {
     super.initState();
-    // Extended duration to allow all nested staggered animations to play out beautifully
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
 
-    // The primary page slide animation
     _pageSlideAnim = Tween<Offset>(
       begin: const Offset(1, 0),
       end: Offset.zero,
@@ -78,7 +135,6 @@ class _AmenitiesViewState extends State<AmenitiesView>
       curve: const Interval(0.0, 0.5, curve: Curves.easeOutQuart),
     ));
 
-    // The primary page fade animation
     _pageFadeAnim = CurvedAnimation(
       parent: _controller,
       curve: const Interval(0.0, 0.4, curve: Curves.easeIn),
@@ -93,13 +149,11 @@ class _AmenitiesViewState extends State<AmenitiesView>
     super.dispose();
   }
 
-  /// Helper to create a smooth staggered fade and upward slide for list items
   Widget _buildStaggeredChild({
     required Widget child,
     required int index,
     required double startInterval,
   }) {
-    // Calculates a delayed start time based on the index position
     final double start = (startInterval + (index * 0.05)).clamp(0.0, 1.0);
     final double end = (start + 0.4).clamp(0.0, 1.0);
 
@@ -112,7 +166,7 @@ class _AmenitiesViewState extends State<AmenitiesView>
       opacity: animation,
       child: SlideTransition(
         position: Tween<Offset>(
-          begin: const Offset(0, 0.15), // Slight upward slide
+          begin: const Offset(0, 0.15),
           end: Offset.zero,
         ).animate(animation),
         child: child,
@@ -122,6 +176,8 @@ class _AmenitiesViewState extends State<AmenitiesView>
 
   @override
   Widget build(BuildContext context) {
+    final hasAmenities = widget.amenities.isNotEmpty;
+
     return SlideTransition(
       position: _pageSlideAnim,
       child: FadeTransition(
@@ -137,35 +193,46 @@ class _AmenitiesViewState extends State<AmenitiesView>
                 child: _buildHeader(context),
               ),
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.only(bottom: 112),
-                  physics: const BouncingScrollPhysics(), // Smoother scrolling behavior
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 8),
-                      
-                      _buildStaggeredChild(
-                        index: 0,
-                        startInterval: 0.15,
-                        child: _buildSectionTitle('Essentials'),
+                child: !hasAmenities
+                    ? const Center(
+                        child: Text(
+                          'No amenities listed for this property.',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.only(bottom: 112),
+                        physics: const BouncingScrollPhysics(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 8),
+                            if (_essentialItems.isNotEmpty) ...[
+                              _buildStaggeredChild(
+                                index: 0,
+                                startInterval: 0.15,
+                                child: _buildSectionTitle('Essentials'),
+                              ),
+                              const SizedBox(height: 24),
+                              _buildEssentialGrid(),
+                              const SizedBox(height: 48),
+                            ],
+                            if (_additionalItems.isNotEmpty) ...[
+                              _buildStaggeredChild(
+                                index: 0,
+                                startInterval: 0.4,
+                                child: _buildSectionTitle('Additional'),
+                              ),
+                              const SizedBox(height: 32),
+                              _buildAdditionalList(),
+                            ],
+                          ],
+                        ),
                       ),
-                      
-                      const SizedBox(height: 24),
-                      _buildEssentialGrid(),
-                      const SizedBox(height: 48),
-                      
-                      _buildStaggeredChild(
-                        index: 0,
-                        startInterval: 0.4,
-                        child: _buildSectionTitle('Additional'),
-                      ),
-                      
-                      const SizedBox(height: 32),
-                      _buildAdditionalList(),
-                    ],
-                  ),
-                ),
               ),
             ],
           ),
@@ -174,14 +241,12 @@ class _AmenitiesViewState extends State<AmenitiesView>
     );
   }
 
-  // ─── Header ─────────────────────────────────────────────────────────────────
-
   Widget _buildHeader(BuildContext context) {
     return Container(
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 24,
         bottom: 24,
-        left: 16, // Adjusted slightly for the icon button padding
+        left: 16,
         right: 24,
       ),
       child: Row(
@@ -212,8 +277,6 @@ class _AmenitiesViewState extends State<AmenitiesView>
     );
   }
 
-  // ─── Section Title ──────────────────────────────────────────────────────────
-
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -229,8 +292,6 @@ class _AmenitiesViewState extends State<AmenitiesView>
     );
   }
 
-  // ─── Essential Grid ─────────────────────────────────────────────────────────
-
   Widget _buildEssentialGrid() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -239,11 +300,11 @@ class _AmenitiesViewState extends State<AmenitiesView>
         runSpacing: 28,
         children: _essentialItems.asMap().entries.map((entry) {
           final int index = entry.key;
-          final _EssentialAmenity item = entry.value;
-          
+          final _AmenityDisplay item = entry.value;
+
           return _buildStaggeredChild(
             index: index,
-            startInterval: 0.2, // Essentials cascade start time
+            startInterval: 0.2,
             child: SizedBox(
               width: (MediaQuery.of(context).size.width - 32) / 4,
               child: Column(
@@ -278,31 +339,31 @@ class _AmenitiesViewState extends State<AmenitiesView>
     );
   }
 
-  // ─── Additional List ────────────────────────────────────────────────────────
-
   Widget _buildAdditionalList() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: _additionalItems.asMap().entries.map((entry) {
           final int index = entry.key;
-          final _AdditionalAmenity item = entry.value;
-          
+          final _AmenityDisplay item = entry.value;
+
           return _buildStaggeredChild(
             index: index,
-            startInterval: 0.45, // Additional list cascade start time
+            startInterval: 0.45,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 28),
               child: Row(
                 children: [
                   Icon(item.icon, color: const Color(0xFF9CA3AF), size: 30),
                   const SizedBox(width: 20),
-                  Text(
-                    item.title,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black,
+                  Expanded(
+                    child: Text(
+                      item.title,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black,
+                      ),
                     ),
                   ),
                 ],
