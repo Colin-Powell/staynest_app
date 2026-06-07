@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { query, withAppUser } from '../db.js';
+import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
