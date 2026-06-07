@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   landlord_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   check_in_date date NOT NULL,
   check_out_date date NOT NULL,
-  status text NOT NULL DEFAULT 'pending', -- pending | confirmed | cancelled | completed
+  status text NOT NULL DEFAULT 'pending', -- pending | confirmed | cancelled | rejected | completed
   total_price numeric NOT NULL,
   notes text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -154,3 +154,110 @@ CREATE INDEX IF NOT EXISTS idx_bookings_tenant ON bookings(tenant_id, created_at
 CREATE INDEX IF NOT EXISTS idx_bookings_landlord ON bookings(landlord_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bookings_property ON bookings(property_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
+
+-- Property Availability blocks (for manual landlord blocks)
+CREATE TABLE IF NOT EXISTS property_availability (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  property_id uuid NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  block_date date NOT NULL,
+  available boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(property_id, block_date)
+);
+CREATE INDEX IF NOT EXISTS idx_availability_property_date ON property_availability(property_id, block_date);
+
+-- StayNest Engagement Analytics Tables
+
+-- 1. Event Tracking Table (Foundation Layer)
+CREATE TABLE IF NOT EXISTS engagement_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  property_id uuid REFERENCES properties(id) ON DELETE CASCADE,
+  event_type text NOT NULL, -- property_view, property_click, property_impression, property_save, property_share, etc.
+  session_id text,
+  duration_ms integer DEFAULT 0, -- For time-based tracking
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Ensure session_id exists for legacy tables before index creation
+ALTER TABLE engagement_events ADD COLUMN IF NOT EXISTS session_id text;
+
+CREATE INDEX IF NOT EXISTS idx_events_property_type ON engagement_events(property_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_events_user_type ON engagement_events(user_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_events_created_at ON engagement_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_events_session ON engagement_events(session_id);
+
+-- 2. Engagement Aggregation Layer
+CREATE TABLE IF NOT EXISTS property_analytics (
+  property_id uuid PRIMARY KEY REFERENCES properties(id) ON DELETE CASCADE,
+  views integer DEFAULT 0,
+  unique_views integer DEFAULT 0,
+  impressions integer DEFAULT 0,
+  clicks integer DEFAULT 0,
+  saves integer DEFAULT 0,
+  shares integer DEFAULT 0,
+  chats integer DEFAULT 0,
+  bookings_completed integer DEFAULT 0,
+  booking_requested integer DEFAULT 0,
+  avg_time_spent_ms numeric DEFAULT 0,
+  engagement_score numeric DEFAULT 0,
+  velocity_score numeric DEFAULT 0, -- For Trend Detection
+  last_event_at timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- 3. User Behavioral Profiles
+CREATE TABLE IF NOT EXISTS user_engagement_profiles (
+  user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  total_sessions integer DEFAULT 0,
+  search_count integer DEFAULT 0,
+  last_active_at timestamptz DEFAULT now(),
+  intent_score numeric DEFAULT 0, -- High intent users detection
+  browsing_patterns jsonb DEFAULT '[]'::jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- 4. Search Events Table (Demand Prediction)
+CREATE TABLE IF NOT EXISTS search_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  session_id text,
+  query text,
+  filters jsonb DEFAULT '{}'::jsonb,
+  location_intent text,
+  results_count integer,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Ensure session_id exists for legacy search_events tables
+ALTER TABLE search_events ADD COLUMN IF NOT EXISTS session_id text;
+
+-- 5. Promotion System Table (Monetization)
+CREATE TABLE IF NOT EXISTS promotion_campaigns (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  property_id uuid NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  landlord_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  package_type text NOT NULL, -- basic, premium, elite
+  boost_score integer DEFAULT 0,
+  start_date timestamptz NOT NULL,
+  end_date timestamptz NOT NULL,
+  active boolean DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_promotions_active ON promotion_campaigns(property_id) WHERE active = true;
+
+-- 6. Unique View Tracking (Anti-Inflation)
+CREATE TABLE IF NOT EXISTS property_unique_views (
+  property_id uuid REFERENCES properties(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+  viewed_date date NOT NULL DEFAULT CURRENT_DATE,
+  PRIMARY KEY (property_id, user_id, viewed_date)
+);
+
+-- Update property_analytics with missing columns for upgraded ranking
+ALTER TABLE property_analytics ADD COLUMN IF NOT EXISTS impressions integer DEFAULT 0;
+ALTER TABLE property_analytics ADD COLUMN IF NOT EXISTS clicks integer DEFAULT 0;
+ALTER TABLE property_analytics ADD COLUMN IF NOT EXISTS bookings_confirmed integer DEFAULT 0;

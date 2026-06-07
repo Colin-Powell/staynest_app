@@ -122,9 +122,9 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
               Container(
                 width: 80,
                 height: 80,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFD1FAE5),
+                  color: Color(0xFFD1FAE5),
                 ),
                 child: Icon(
                   PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),

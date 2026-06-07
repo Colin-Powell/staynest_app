@@ -12,7 +12,6 @@ class PropertyDetails extends StatefulWidget {
   final VoidCallback? onViewLocation;
   final VoidCallback? onViewLandlord;
   final Function(String userId, String name, String avatar)? onMessage;
-  final VoidCallback? onBook;
 
   const PropertyDetails({
     super.key,
@@ -23,7 +22,6 @@ class PropertyDetails extends StatefulWidget {
     this.onViewLocation,
     this.onViewLandlord,
     this.onMessage,
-    this.onBook,
   });
 
   @override
@@ -34,9 +32,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   @override
   Widget build(BuildContext context) {
     // Ensure we have at least 3 images for the spacious rooms preview
-    final photos = widget.property.images != null &&
-            widget.property.images!.isNotEmpty
-        ? widget.property.images!
+    final photos = widget.property.images.isNotEmpty
+        ? widget.property.images
         : [widget.property.image, widget.property.image, widget.property.image];
 
     final previewPhotos = List<String>.from(photos);
@@ -205,8 +202,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                         _buildTag(Icons.bed_rounded,
                             '${widget.property.features.beds} beds', false),
                         if (widget.property.features.furnished)
-                          _buildTag(
-                              Icons.weekend_rounded, 'Furnished', false),
+                          _buildTag(Icons.weekend_rounded, 'Furnished', false),
                       ],
                     ),
 
@@ -224,7 +220,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                         children: [
                           Row(
                             children: [
-                              _buildWhiteCircleIcon(Icons.photo_library_outlined),
+                              _buildWhiteCircleIcon(
+                                  Icons.photo_library_outlined),
                               const SizedBox(width: 16),
                               const Text(
                                 'Property Photos',
@@ -339,10 +336,17 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                       children: [
                         Expanded(
                           child: InkWell(
-                            onTap: () => widget.onMessage?.call(
-                                widget.property.agent.userId,
-                                widget.property.agent.name,
-                                widget.property.agent.avatar),
+                            onTap: () {
+                              Navigator.pushNamed(
+                                context,
+                                '/chat',
+                                arguments: <String, String>{
+                                  'userId': widget.property.agent.userId,
+                                  'name': widget.property.agent.name,
+                                  'avatar': widget.property.agent.avatar,
+                                },
+                              );
+                            },
                             borderRadius: BorderRadius.circular(16),
                             child: Container(
                               height: 56,
@@ -365,16 +369,14 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                         const SizedBox(width: 16),
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => BookingView(
-                                    propertyId: widget.property.id,
-                                  ),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BookingView(
+                                  propertyId: widget.property.id,
                                 ),
-                              );
-                            },
+                              ),
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF3F37C9),
                               padding: const EdgeInsets.symmetric(vertical: 16),

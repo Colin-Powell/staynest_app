@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:property_app/app_theme.dart';
-import 'package:property_app/repository/remote_database_repository.dart';
+import 'package:property_app/services/booking_service.dart';
 
 class TenantBookingsView extends StatefulWidget {
   final VoidCallback? onBack;
@@ -12,10 +11,12 @@ class TenantBookingsView extends StatefulWidget {
 }
 
 class _TenantBookingsViewState extends State<TenantBookingsView> {
-  final _repository = RemoteDatabaseRepository();
   List<Map<String, dynamic>> _bookings = [];
   List<Map<String, dynamic>> _filteredBookings = [];
   bool _loading = true;
+
+  static const Color tenantPrimary = Color(0xFF3F37C9);
+
   String _selectedStatus = 'All';
 
   static const List<String> _statusFilters = [
@@ -34,10 +35,10 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
 
   Future<void> _loadBookings() async {
     try {
-      final bookings = await _repository.getTenantBookings();
+      final data = await BookingService.fetchBookings(isLandlord: false);
       if (mounted) {
         setState(() {
-          _bookings = bookings;
+          _bookings = data.map((b) => b as Map<String, dynamic>).toList();
           _filterBookings();
           _loading = false;
         });
@@ -71,7 +72,7 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
     if (reason == null) return;
 
     try {
-      await _repository.cancelBooking(bookingId, reason: reason);
+      await BookingService.updateStatus(bookingId, 'cancel', reason: reason);
       _loadBookings();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -119,7 +120,7 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [
@@ -185,7 +186,7 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
                             horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
                           color: isActive
-                              ? const Color(0xFF75C797)
+                              ? tenantPrimary
                               : const Color(0xFFF3F4F6),
                           borderRadius: BorderRadius.circular(20),
                           border: isActive
@@ -215,7 +216,7 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
               child: _loading
                   ? const Center(
                       child:
-                          CircularProgressIndicator(color: Color(0xFF75C797)),
+                          CircularProgressIndicator(color: tenantPrimary),
                     )
                   : _filteredBookings.isEmpty
                       ? Center(
@@ -235,7 +236,7 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
                             final booking = _filteredBookings[index];
                             return _BookingCard(
                               booking: booking,
-                              onCancel: () => _cancelBooking(booking['id']),
+                              onCancel: () => _cancelBooking(booking['id'].toString()),
                             );
                           },
                         ),
@@ -256,6 +257,8 @@ class _BookingCard extends StatelessWidget {
     this.onCancel,
   });
 
+  static const Color tenantPrimary = Color(0xFF3F37C9);
+
   String _formatDate(String dateStr) {
     try {
       final date = DateTime.parse(dateStr);
@@ -270,11 +273,11 @@ class _BookingCard extends StatelessWidget {
       case 'pending':
         return const Color(0xFFFB923C);
       case 'confirmed':
-        return const Color(0xFF75C797);
+        return tenantPrimary;
       case 'cancelled':
         return const Color(0xFFEF4444);
       case 'completed':
-        return const Color(0xFF6366F1);
+        return tenantPrimary;
       default:
         return const Color(0xFF9CA3AF);
     }
@@ -372,9 +375,44 @@ class _BookingCard extends StatelessWidget {
           const SizedBox(height: 16),
 
           // Action buttons
-          if ((booking['status'] ?? 'pending').toString().toLowerCase() !=
-                  'completed' &&
-              (booking['status'] ?? '').toString().toLowerCase() != 'cancelled')
+          if ((booking['status'] ?? 'pending').toString().toLowerCase() ==
+              'completed')
+            GestureDetector(
+              onTap: () {
+                // Placeholder for receipt functionality
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Generating receipt...')),
+                );
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: tenantPrimary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: tenantPrimary),
+                ),
+                child: const Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.receipt_long_rounded,
+                          color: tenantPrimary, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'View Receipt',
+                        style: TextStyle(
+                          color: tenantPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else if ((booking['status'] ?? '').toString().toLowerCase() !=
+              'cancelled')
             GestureDetector(
               onTap: onCancel,
               child: Container(

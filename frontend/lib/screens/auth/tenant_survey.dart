@@ -17,7 +17,7 @@ class _TenantSurveyViewState extends State<TenantSurveyView> {
   String _status = 'student';
   int _household = 1;
   bool _pets = false;
-  List<String> _preferredCategories = [];
+  final List<String> _preferredCategories = [];
   final _preferredCities = TextEditingController();
   bool _optIn = true;
     bool _consentGiven = false;
@@ -116,7 +116,7 @@ class _TenantSurveyViewState extends State<TenantSurveyView> {
                       fontSize: 14, fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                  value: _status,
+                  initialValue: _status,
                   items: const [
                     DropdownMenuItem(value: 'student', child: Text('Student')),
                     DropdownMenuItem(
@@ -162,10 +162,11 @@ class _TenantSurveyViewState extends State<TenantSurveyView> {
                         label: Text(c),
                         selected: active,
                         onSelected: (s) => setState(() {
-                              if (s)
+                              if (s) {
                                 _preferredCategories.add(c);
-                              else
+                              } else {
                                 _preferredCategories.remove(c);
+                              }
                             }));
                   }).toList()),
               const SizedBox(height: 16),

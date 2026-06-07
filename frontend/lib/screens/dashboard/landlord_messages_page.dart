@@ -91,7 +91,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
 
   Widget _buildConversationsList() {
     if (_isLoading) {
-      return Center(
+      return const Center(
         child: CircularProgressIndicator(color: _landlordPrimary),
       );
     }
@@ -190,15 +190,16 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
         children: [
           Positioned.fill(
             child: Container(
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                   colors: [
-                    Colors.white,
-                    const Color(0xFFE8F6EF).withOpacity(0.3),
-                    const Color(0xFFE8F6EF).withOpacity(0.6),
+                    Color(0xFFF7FDF9),
+                    Color(0xFFE8F6EF),
+                    Color(0xFFD4EFE1),
                   ],
+                  stops: [0.0, 0.5, 1.0],
                 ),
               ),
             ),

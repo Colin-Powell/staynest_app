@@ -287,6 +287,44 @@ router.get('/categories', async (_req: Request, res: Response, next: NextFunctio
   }
 });
 
+router.get('/:id/availability-check', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { start, end } = req.query;
+    const propertyId = req.params.id;
+
+    if (!start || !end) {
+      return res.status(400).json({ error: 'start and end dates are required.' });
+    }
+
+    // 1. Check for overlapping confirmed bookings
+    const bookingCheck = await query(
+      `SELECT id FROM bookings 
+       WHERE property_id = $1 
+       AND status = 'confirmed' 
+       AND (check_in_date, check_out_date) OVERLAPS ($2::date, $3::date)`,
+      [propertyId, start, end]
+    );
+
+    if (bookingCheck.rowCount! > 0) {
+      return res.json({ available: false });
+    }
+
+    // 2. Check for manual blocks in property_availability table
+    const blockCheck = await query(
+      `SELECT id FROM property_availability 
+       WHERE property_id = $1 
+       AND available = false 
+       AND block_date >= $2::date 
+       AND block_date < $3::date`,
+      [propertyId, start, end]
+    );
+
+    res.json({ available: blockCheck.rowCount === 0 });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // /:id must be last among GET routes
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -333,6 +371,39 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     res.json({ data: normalizePropertyRow(property) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/:id/availability', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const propertyId = req.params.id;
+    const { date, available } = req.body as { date?: string; available?: boolean };
+
+    if (!date || available === undefined) {
+      return res.status(400).json({ error: 'date and available status are required.' });
+    }
+
+    // Verify ownership
+    const propCheck = await query(
+      'SELECT id FROM properties WHERE id = $1 AND landlord_id = $2',
+      [propertyId, req.auth?.id]
+    );
+
+    if (propCheck.rowCount === 0) {
+      return res.status(403).json({ error: 'Property not found or access denied.' });
+    }
+
+    await query(
+      `INSERT INTO property_availability (property_id, block_date, available)
+       VALUES ($1, $2::date, $3)
+       ON CONFLICT (property_id, block_date) 
+       DO UPDATE SET available = EXCLUDED.available, updated_at = now()`,
+      [propertyId, date, available]
+    );
+
+    res.json({ success: true });
   } catch (error) {
     next(error);
   }

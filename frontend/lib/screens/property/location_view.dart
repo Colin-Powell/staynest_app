@@ -818,8 +818,8 @@ class _PropertyDrawerState extends State<_PropertyDrawer> {
   @override
   Widget build(BuildContext context) {
     final prop = widget.property;
-    final images = (prop.images != null && prop.images!.isNotEmpty)
-        ? prop.images!
+    final images = (prop.images.isNotEmpty)
+        ? prop.images
         : [prop.image];
 
     return TweenAnimationBuilder<double>(

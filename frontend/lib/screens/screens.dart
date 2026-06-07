@@ -27,7 +27,6 @@ export 'my_bookings_view.dart' hide Property, properties, AppScrollBehavior;
 export 'property/property_details.dart';
 export 'property/filter_view.dart';
 export 'property/booking_view.dart';
-export 'property/booking_creation_dialog.dart';
 export 'property/payment_methods_view.dart' hide AppScrollBehavior;
 export 'property/photo_gallery_view.dart';
 export 'property/amenities_view.dart';

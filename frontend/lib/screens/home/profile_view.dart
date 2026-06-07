@@ -151,13 +151,6 @@ class _ProfileViewState extends State<ProfileView>
                     padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                     child: Row(
                       children: [
-                        GestureDetector(
-                          onTap: widget.onBack ?? () => Navigator.pop(context),
-                          behavior: HitTestBehavior.opaque,
-                          child: const Icon(Icons.arrow_back,
-                              size: 28, color: Colors.black),
-                        ),
-                        const SizedBox(width: 16),
                         const Text(
                           'Profile',
                           style: TextStyle(

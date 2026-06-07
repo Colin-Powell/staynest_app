@@ -69,7 +69,7 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
       case 'approved':
         return AppColors.green600;
       case 'rejected':
-        return Color(0xFFE53935);
+        return const Color(0xFFE53935);
       case 'submitted':
         return StayNestColors.warning;
       default:
@@ -126,7 +126,7 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
                               color: AppColors.gray900,
                             ),
                           ),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           Text(
                             'Manage your properties and inquiries',
                             style: GoogleFonts.poppins(
@@ -140,7 +140,7 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
 
                     // Verification Status Card
                     _buildVerificationCard(),
-                    SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
                     // Quick Actions
                     Text(
@@ -151,14 +151,14 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
                         color: AppColors.gray900,
                       ),
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     _buildActionButton(
                       icon: PhosphorIcons.house(PhosphorIconsStyle.fill),
                       title: 'Add New Property',
                       subtitle: 'List a property for rent',
                       onTap: widget.onAddProperty,
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     _buildActionButton(
                       icon: PhosphorIcons.chatDots(PhosphorIconsStyle.fill),
                       title: 'Messages',
@@ -167,7 +167,7 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
                         Navigator.pushNamed(context, '/messages');
                       },
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     _buildActionButton(
                       icon: PhosphorIcons.listChecks(PhosphorIconsStyle.fill),
                       title: 'My Properties',
@@ -176,7 +176,7 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
                         Navigator.pushNamed(context, '/landlord_properties');
                       },
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     _buildActionButton(
                       icon: PhosphorIcons.bell(PhosphorIconsStyle.fill),
                       title: 'Inquiries',
@@ -185,7 +185,7 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
                         Navigator.pushNamed(context, '/landlord_tenants');
                       },
                     ),
-                    SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
                     // Stats Section
                     Text(
@@ -196,25 +196,25 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
                         color: AppColors.gray900,
                       ),
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
                           child: _buildStatCard('Properties', '0', AppColors.primary),
                         ),
-                        SizedBox(width: 12),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: _buildStatCard('Inquiries', '0', AppColors.primary),
                         ),
                       ],
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
                           child: _buildStatCard('Bookings', '0', AppColors.green600),
                         ),
-                        SizedBox(width: 12),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: _buildStatCard('Messages', '0', StayNestColors.warning),
                         ),
@@ -267,7 +267,7 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
                   size: 20,
                 ),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -291,7 +291,7 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
                   ],
                 ),
               ),
-              Icon(
+              const Icon(
                 Icons.arrow_forward_ios,
                 size: 16,
                 color: AppColors.gray400,
@@ -299,23 +299,23 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
             ],
           ),
           if (isRejected) ...[
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Color(0xFFE53935).withOpacity(0.1),
+                color: const Color(0xFFE53935).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
                 _verificationStatus?['admin_notes'] ?? 'Your verification was rejected. Please resubmit.',
                 style: GoogleFonts.poppins(
                   fontSize: 12,
-                  color: Color(0xFFE53935),
+                  color: const Color(0xFFE53935),
                 ),
               ),
             ),
           ],
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           if (!isVerified)
             GestureDetector(
               onTap: widget.onViewVerification,
@@ -359,7 +359,7 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
               ),
               child: Icon(icon, color: AppColors.primary, size: 20),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,7 +382,7 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.gray400),
+            const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.gray400),
           ],
         ),
       ),
@@ -408,7 +408,7 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
               color: color,
             ),
           ),
-          SizedBox(height: 4),
+          const SizedBox(height: 4),
           Text(
             label,
             style: GoogleFonts.poppins(

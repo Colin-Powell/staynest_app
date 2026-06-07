@@ -152,8 +152,7 @@ class _RegisterViewState extends State<RegisterView>
                     _businessDescriptionController.text.trim(),
                 'tax_id': _taxIdController.text.trim(),
                 'years_in_business': int.tryParse(
-                        _yearsInBusinessController.text.trim()) ??
-                    null,
+                        _yearsInBusinessController.text.trim()),
               }
             : null,
       );
@@ -500,7 +499,7 @@ class _RegisterViewState extends State<RegisterView>
                   opacity: _bottomFade,
                   child: Row(
                     children: [
-                      Expanded(
+                      const Expanded(
                           child: Divider(
                               color: _border, thickness: 1, endIndent: 12)),
                       Text(
@@ -508,7 +507,7 @@ class _RegisterViewState extends State<RegisterView>
                         style:
                             GoogleFonts.poppins(fontSize: 13, color: _subtext),
                       ),
-                      Expanded(
+                      const Expanded(
                           child: Divider(
                               color: _border, thickness: 1, indent: 12)),
                     ],

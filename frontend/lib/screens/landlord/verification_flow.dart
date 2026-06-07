@@ -10,7 +10,6 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:iconify_flutter/iconify_flutter.dart';
 import 'package:iconify_flutter/icons/mdi.dart';
 
-import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/services/uploads.dart';

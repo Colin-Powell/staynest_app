@@ -2,12 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:property_app/screens/dashboard/landlord_bookings_page.dart';
 import 'package:property_app/screens/dashboard/landlord_notifications_page.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/utils/property_mapper.dart';
-import 'package:intl/intl.dart';
 
 import 'dashboard_widgets.dart';
 import 'landlord_analytics_page.dart';

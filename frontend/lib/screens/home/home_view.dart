@@ -10,6 +10,8 @@ import 'package:property_app/services/property_service.dart';
 import 'package:property_app/utils/category_utils.dart';
 import 'package:property_app/utils/property_mapper.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/screens/dashboard/analytics_service.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 // ─── Theme colors ─────────────────────────────────────────────────────────────
 const _primaryText = Color(0xFF4F70F8);
@@ -276,6 +278,7 @@ class _HomeViewState extends State<HomeView> {
                       fontWeight: FontWeight.w500,
                     ),
                     onSubmitted: (v) async {
+                      AnalyticsService.resetSessionImpressions();
                       await PropertyService.instance.saveSearchTerm(v);
                       await _loadData();
                     },
@@ -315,7 +318,10 @@ class _HomeViewState extends State<HomeView> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: GestureDetector(
-                    onTap: () => setState(() => _activeFilter = e.key),
+                    onTap: () {
+                      AnalyticsService.resetSessionImpressions();
+                      setState(() => _activeFilter = e.key);
+                    },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       padding: const EdgeInsets.symmetric(
@@ -407,15 +413,27 @@ class _HomeViewState extends State<HomeView> {
               clipBehavior: Clip.none,
               physics: const BouncingScrollPhysics(),
               itemCount: _filteredNearby.length,
-              itemBuilder: (context, i) => Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: _NearbyCard(
-                  property: _filteredNearby[i],
-                  onTap: () => widget.onSelectProperty?.call(
-                    _filteredNearby[i].id,
+              itemBuilder: (context, i) {
+                final property = _filteredNearby[i];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: VisibilityDetector(
+                    key: Key('nearby_impression_${property.id}'),
+                    onVisibilityChanged: (info) {
+                      if (info.visibleFraction > 0.5) {
+                        AnalyticsService.trackFeaturedPropertyImpression(
+                          property.id,
+                          position: i,
+                        );
+                      }
+                    },
+                    child: _NearbyCard(
+                      property: property,
+                      onTap: () => widget.onSelectProperty?.call(property.id),
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
       ],
@@ -460,15 +478,29 @@ class _HomeViewState extends State<HomeView> {
               ),
             )
           else
-            ..._filteredRecommended.map(
-              (p) => Padding(
+            ..._filteredRecommended.asMap().entries.map((entry) {
+              final i = entry.key;
+              final p = entry.value;
+              return Padding(
                 padding: const EdgeInsets.only(bottom: 14),
-                child: _RecommendedCard(
-                  property: p,
-                  onTap: () => widget.onSelectProperty?.call(p.id),
+                child: VisibilityDetector(
+                  key: Key('recommended_impression_${p.id}'),
+                  onVisibilityChanged: (info) {
+                    if (info.visibleFraction > 0.5) {
+                      AnalyticsService.trackPropertyImpression(
+                        p.id,
+                        source: 'home_recommended',
+                        position: i,
+                      );
+                    }
+                  },
+                  child: _RecommendedCard(
+                    property: p,
+                    onTap: () => widget.onSelectProperty?.call(p.id),
+                  ),
                 ),
-              ),
-            ),
+              );
+            }),
         ],
       ),
     );

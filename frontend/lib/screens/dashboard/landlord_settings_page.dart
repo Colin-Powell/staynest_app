@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'landlord_analytics_page.dart';
 
 // --- MAIN SETTINGS PAGE ---
 
@@ -23,7 +24,8 @@ class LandlordSettingsPage extends StatelessWidget {
           const end = Offset.zero;
           const curve = Curves.easeOutCubic;
 
-          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+          var tween =
+              Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
           var offsetAnimation = animation.drive(tween);
 
           return SlideTransition(
@@ -120,6 +122,12 @@ class LandlordSettingsPage extends StatelessWidget {
 
               // --- SETTINGS LIST ---
               _buildSettingRow(
+                title: 'Performance & Insights',
+                icon: PhosphorIcons.chartLineUp(PhosphorIconsStyle.fill),
+                onTap: () =>
+                    _navigateTo(context, const LandlordAnalyticsPage()),
+              ),
+              _buildSettingRow(
                 title: 'Personal Information',
                 icon: PhosphorIcons.user(PhosphorIconsStyle.fill),
                 onTap: () => _navigateTo(context, const PersonalInfoPage()),
@@ -132,7 +140,8 @@ class LandlordSettingsPage extends StatelessWidget {
               _buildSettingRow(
                 title: 'Notification Settings',
                 icon: PhosphorIcons.bell(PhosphorIconsStyle.fill),
-                onTap: () => _navigateTo(context, const NotificationSettingsPage()),
+                onTap: () =>
+                    _navigateTo(context, const NotificationSettingsPage()),
               ),
               _buildSettingRow(
                 title: 'Bank Details',
@@ -281,7 +290,7 @@ class SettingsPageLayout extends StatelessWidget {
               ),
             ),
           ),
-          
+
           SafeArea(
             bottom: false,
             child: Column(
@@ -325,7 +334,8 @@ class SettingsPageLayout extends StatelessWidget {
 }
 
 // Shared UI helper for Input Fields
-Widget _buildTextField(String label, {String? hintText, bool isPassword = false, IconData? prefixIcon}) {
+Widget _buildTextField(String label,
+    {String? hintText, bool isPassword = false, IconData? prefixIcon}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 24),
     child: Column(
@@ -345,11 +355,15 @@ Widget _buildTextField(String label, {String? hintText, bool isPassword = false,
           style: GoogleFonts.poppins(fontSize: 15),
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: GoogleFonts.poppins(color: const Color(0xFF9CA3AF), fontSize: 15),
-            prefixIcon: prefixIcon != null ? Icon(prefixIcon, color: const Color(0xFF9CA3AF), size: 22) : null,
+            hintStyle: GoogleFonts.poppins(
+                color: const Color(0xFF9CA3AF), fontSize: 15),
+            prefixIcon: prefixIcon != null
+                ? Icon(prefixIcon, color: const Color(0xFF9CA3AF), size: 22)
+                : null,
             filled: true,
             fillColor: Colors.white.withOpacity(0.8),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -360,7 +374,8 @@ Widget _buildTextField(String label, {String? hintText, bool isPassword = false,
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF059669), width: 1.5),
+              borderSide:
+                  const BorderSide(color: Color(0xFF059669), width: 1.5),
             ),
           ),
         ),
@@ -372,7 +387,8 @@ Widget _buildTextField(String label, {String? hintText, bool isPassword = false,
 // Shared UI helper for Save Buttons
 Widget _buildSaveButton(BuildContext context, {String text = "Save Changes"}) {
   return Container(
-    padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
+    padding: EdgeInsets.fromLTRB(
+        24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
     decoration: BoxDecoration(
       color: Colors.white.withOpacity(0.6),
       border: Border(top: BorderSide(color: Colors.black.withOpacity(0.05))),
@@ -430,7 +446,8 @@ class PersonalInfoPage extends StatelessWidget {
                       )
                     ],
                     image: const DecorationImage(
-                      image: NetworkImage('https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-4.0.3&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'),
+                      image: NetworkImage(
+                          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-4.0.3&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'),
                       fit: BoxFit.cover,
                     ),
                   ),
@@ -441,14 +458,19 @@ class PersonalInfoPage extends StatelessWidget {
                     color: Color(0xFF059669),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
+                  child: const Icon(Icons.camera_alt,
+                      color: Colors.white, size: 18),
                 )
               ],
             ),
             const SizedBox(height: 40),
             _buildTextField('Full Name', hintText: 'Jomison'),
-            _buildTextField('Email Address', hintText: 'jomison@example.com', prefixIcon: PhosphorIcons.envelopeSimple()),
-            _buildTextField('Phone Number', hintText: '+1 (555) 000-0000', prefixIcon: PhosphorIcons.phone()),
+            _buildTextField('Email Address',
+                hintText: 'jomison@example.com',
+                prefixIcon: PhosphorIcons.envelopeSimple()),
+            _buildTextField('Phone Number',
+                hintText: '+1 (555) 000-0000',
+                prefixIcon: PhosphorIcons.phone()),
             const SizedBox(height: 24),
           ],
         ),
@@ -472,10 +494,16 @@ class BusinessInfoPage extends StatelessWidget {
         child: Column(
           children: [
             const SizedBox(height: 16),
-            _buildTextField('Company / Agency Name', hintText: 'StayNest Properties LLC', prefixIcon: PhosphorIcons.buildings()),
-            _buildTextField('Business Registration Number', hintText: 'RC-123456789'),
-            _buildTextField('Business Address', hintText: '123 Real Estate Ave, Suite 100', prefixIcon: PhosphorIcons.mapPin()),
-            _buildTextField('Tax Identification Number (TIN)', hintText: 'XXX-XX-XXXX'),
+            _buildTextField('Company / Agency Name',
+                hintText: 'StayNest Properties LLC',
+                prefixIcon: PhosphorIcons.buildings()),
+            _buildTextField('Business Registration Number',
+                hintText: 'RC-123456789'),
+            _buildTextField('Business Address',
+                hintText: '123 Real Estate Ave, Suite 100',
+                prefixIcon: PhosphorIcons.mapPin()),
+            _buildTextField('Tax Identification Number (TIN)',
+                hintText: 'XXX-XX-XXXX'),
             const SizedBox(height: 24),
           ],
         ),
@@ -489,7 +517,8 @@ class NotificationSettingsPage extends StatefulWidget {
   const NotificationSettingsPage({super.key});
 
   @override
-  State<NotificationSettingsPage> createState() => _NotificationSettingsPageState();
+  State<NotificationSettingsPage> createState() =>
+      _NotificationSettingsPageState();
 }
 
 class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
@@ -508,17 +537,29 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 24),
         children: [
           _buildSectionHeader('Email Notifications'),
-          _buildSwitchTile('New Bookings', 'Get notified when a new booking is made', emailNewBooking, (v) => setState(() => emailNewBooking = v)),
-          _buildSwitchTile('New Messages', 'Get notified of new tenant messages', emailMessages, (v) => setState(() => emailMessages = v)),
-          
+          _buildSwitchTile(
+              'New Bookings',
+              'Get notified when a new booking is made',
+              emailNewBooking,
+              (v) => setState(() => emailNewBooking = v)),
+          _buildSwitchTile(
+              'New Messages',
+              'Get notified of new tenant messages',
+              emailMessages,
+              (v) => setState(() => emailMessages = v)),
           const SizedBox(height: 24),
           _buildSectionHeader('Push Notifications'),
-          _buildSwitchTile('New Bookings', 'Push alerts for new bookings', pushNewBooking, (v) => setState(() => pushNewBooking = v)),
-          _buildSwitchTile('New Messages', 'Push alerts for new messages', pushMessages, (v) => setState(() => pushMessages = v)),
-          
+          _buildSwitchTile('New Bookings', 'Push alerts for new bookings',
+              pushNewBooking, (v) => setState(() => pushNewBooking = v)),
+          _buildSwitchTile('New Messages', 'Push alerts for new messages',
+              pushMessages, (v) => setState(() => pushMessages = v)),
           const SizedBox(height: 24),
           _buildSectionHeader('SMS Notifications'),
-          _buildSwitchTile('Critical Alerts', 'Important account or booking updates via SMS', smsAlerts, (v) => setState(() => smsAlerts = v)),
+          _buildSwitchTile(
+              'Critical Alerts',
+              'Important account or booking updates via SMS',
+              smsAlerts,
+              (v) => setState(() => smsAlerts = v)),
         ],
       ),
     );
@@ -539,7 +580,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     );
   }
 
-  Widget _buildSwitchTile(String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
+  Widget _buildSwitchTile(
+      String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -575,7 +617,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           ),
           CupertinoSwitch(
             value: value,
-            activeColor: const Color(0xFF059669),
+            activeTrackColor: const Color(0xFF059669),
             onChanged: onChanged,
           ),
         ],
@@ -604,23 +646,28 @@ class BankDetailsPage extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFF059669).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF059669).withOpacity(0.3)),
+                border:
+                    Border.all(color: const Color(0xFF059669).withOpacity(0.3)),
               ),
               child: Row(
                 children: [
-                  Icon(PhosphorIcons.info(PhosphorIconsStyle.fill), color: const Color(0xFF059669)),
+                  Icon(PhosphorIcons.info(PhosphorIconsStyle.fill),
+                      color: const Color(0xFF059669)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       'These details will be used to process your rental payouts.',
-                      style: GoogleFonts.poppins(fontSize: 13, color: const Color(0xFF064E3B)),
+                      style: GoogleFonts.poppins(
+                          fontSize: 13, color: const Color(0xFF064E3B)),
                     ),
                   ),
                 ],
               ),
             ),
-            _buildTextField('Bank Name', hintText: 'e.g. Chase Bank', prefixIcon: PhosphorIcons.bank()),
-            _buildTextField('Account Holder Name', hintText: 'Jomison Real Estate'),
+            _buildTextField('Bank Name',
+                hintText: 'e.g. Chase Bank', prefixIcon: PhosphorIcons.bank()),
+            _buildTextField('Account Holder Name',
+                hintText: 'Jomison Real Estate'),
             _buildTextField('Account Number', hintText: '1234567890'),
             _buildTextField('Routing Number', hintText: '098765432'),
             const SizedBox(height: 24),
@@ -654,27 +701,38 @@ class PrivacyPolicyPage extends StatelessWidget {
             children: [
               Text(
                 'Data Collection & Usage',
-                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF111827)),
+                style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF111827)),
               ),
               const SizedBox(height: 12),
               Text(
                 'We collect information to provide better services to all our users. Information collected includes your name, email address, phone number, and properties managed.\n\nYour data is securely stored and never shared with third parties without your explicit consent.',
-                style: GoogleFonts.poppins(fontSize: 14, color: const Color(0xFF4B5563), height: 1.6),
+                style: GoogleFonts.poppins(
+                    fontSize: 14, color: const Color(0xFF4B5563), height: 1.6),
               ),
               const SizedBox(height: 24),
               Text(
                 'Your Rights',
-                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF111827)),
+                style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF111827)),
               ),
               const SizedBox(height: 12),
               Text(
                 'You have the right to request access to the data we hold about you. You can also request deletion of your account and associated data at any time from the account settings.',
-                style: GoogleFonts.poppins(fontSize: 14, color: const Color(0xFF4B5563), height: 1.6),
+                style: GoogleFonts.poppins(
+                    fontSize: 14, color: const Color(0xFF4B5563), height: 1.6),
               ),
               const SizedBox(height: 24),
               Text(
                 'Last updated: October 2024',
-                style: GoogleFonts.poppins(fontSize: 12, fontStyle: FontStyle.italic, color: const Color(0xFF9CA3AF)),
+                style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                    color: const Color(0xFF9CA3AF)),
               ),
             ],
           ),
@@ -699,10 +757,19 @@ class ChangePasswordPage extends StatelessWidget {
         child: Column(
           children: [
             const SizedBox(height: 16),
-            _buildTextField('Current Password', hintText: '••••••••', isPassword: true, prefixIcon: PhosphorIcons.lock()),
+            _buildTextField('Current Password',
+                hintText: '••••••••',
+                isPassword: true,
+                prefixIcon: PhosphorIcons.lock()),
             const SizedBox(height: 8),
-            _buildTextField('New Password', hintText: '••••••••', isPassword: true, prefixIcon: PhosphorIcons.lockKey()),
-            _buildTextField('Confirm New Password', hintText: '••••••••', isPassword: true, prefixIcon: PhosphorIcons.lockKey()),
+            _buildTextField('New Password',
+                hintText: '••••••••',
+                isPassword: true,
+                prefixIcon: PhosphorIcons.lockKey()),
+            _buildTextField('Confirm New Password',
+                hintText: '••••••••',
+                isPassword: true,
+                prefixIcon: PhosphorIcons.lockKey()),
           ],
         ),
       ),
@@ -743,11 +810,15 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
                   Icon(
                     PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill),
                     size: 64,
-                    color: is2faEnabled ? const Color(0xFF059669) : const Color(0xFF9CA3AF),
+                    color: is2faEnabled
+                        ? const Color(0xFF059669)
+                        : const Color(0xFF9CA3AF),
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    is2faEnabled ? '2FA is currently Enabled' : '2FA is currently Disabled',
+                    is2faEnabled
+                        ? '2FA is currently Enabled'
+                        : '2FA is currently Disabled',
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
@@ -778,7 +849,7 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
                       ),
                       CupertinoSwitch(
                         value: is2faEnabled,
-                        activeColor: const Color(0xFF059669),
+                        activeTrackColor: const Color(0xFF059669),
                         onChanged: (v) {
                           setState(() => is2faEnabled = v);
                         },

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/data_loader/fallback_properties_loader.dart';
+import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/widgets/property_image.dart';
 
 /// A wrapper to attach booking-specific mock data (Date & Status) to standard properties
@@ -52,31 +53,33 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
   }
 
   Future<void> _loadData() async {
-    final loaded = await _loader.loadAll();
+    setState(() => _loading = true);
+    final bookings = await BookingService.fetchBookings(isLandlord: false);
     if (!mounted) return;
 
-    // Mapping loaded properties to mock booking statuses to populate the UI
-    final mockStatuses = [
-      'Upcoming',
-      'Completed',
-      'Cancelled',
-      'Upcoming',
-      'Completed'
-    ];
-    final mockDates = [
-      'Sat, 24 May 2026 | 10.00 AM',
-      'Sun, 27 May 2026 | 10.00 AM',
-      'Wed, 30 May 2026 | 10.00 AM',
-      'Fri, 02 Jun 2026 | 02.00 PM',
-      'Mon, 05 Jun 2026 | 09.00 AM',
-    ];
-
     setState(() {
-      _allBookings = loaded.asMap().entries.map((e) {
+      _allBookings = bookings.map((b) {
+        String uiStatus = 'Upcoming';
+        if (b['status'] == 'confirmed' || b['status'] == 'pending') uiStatus = 'Upcoming';
+        if (b['status'] == 'completed') uiStatus = 'Completed';
+        if (b['status'] == 'cancelled' || b['status'] == 'rejected') uiStatus = 'Cancelled';
+
+        final checkIn = DateTime.parse(b['check_in_date']);
+        final dateStr = "${checkIn.day}/${checkIn.month}/${checkIn.year}";
+
         return BookingWrapper(
-          property: e.value,
-          dateTime: mockDates[e.key % mockDates.length],
-          status: mockStatuses[e.key % mockStatuses.length],
+          property: Property(
+            id: b['property_id']?.toString() ?? '',
+            name: b['title']?.toString() ?? 'Property',
+            location: b['city']?.toString() ?? '',
+            image: b['image_url']?.toString() ?? '',
+            price: (b['total_price'] as num?)?.toInt() ?? 0,
+            lat: 0, lng: 0, rating: 0, reviews: 0, category: '', images: [],
+            features: const PropertyFeatures(beds: 0, rooms: 0, baths: 0, furnished: false),
+            amenities: [], agent: const Agent(userId: '', name: '', avatar: ''), description: '',
+          ),
+          dateTime: dateStr,
+          status: uiStatus,
         );
       }).toList();
       _loading = false;

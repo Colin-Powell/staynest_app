@@ -21,6 +21,31 @@ router.post('/', requireAuth, async (req: Request, res: Response, next: NextFunc
       });
     }
 
+    // Availability Engine: Check for overlapping confirmed bookings
+    const overlapCheck = await query(
+      `SELECT id FROM bookings 
+       WHERE property_id = $1 
+       AND status = 'confirmed'
+       AND (check_in_date, check_out_date) OVERLAPS ($2::date, $3::date)`,
+      [propertyId, checkInDate, checkOutDate]
+    );
+
+    if (overlapCheck.rowCount! > 0) {
+      return res.status(409).json({ error: 'Property is already booked for these dates.' });
+    }
+
+    // Strict Idempotency Check: Prevent the same tenant from having multiple 
+    // active (pending or confirmed) bookings for the same property.
+    const existingBooking = await query(
+      `SELECT id FROM bookings 
+       WHERE property_id = $1 AND tenant_id = $2 AND status IN ('pending', 'confirmed')`,
+      [propertyId, req.auth!.id]
+    );
+
+    if (existingBooking.rowCount! > 0) {
+      return res.status(400).json({ error: 'You already have an active booking or request for this property.' });
+    }
+
     // Get property and landlord info
     const propResult = await query(
       'SELECT id, landlord_id, price FROM properties WHERE id = $1 LIMIT 1',
@@ -53,6 +78,14 @@ router.post('/', requireAuth, async (req: Request, res: Response, next: NextFunc
 // Get bookings for tenant
 router.get('/tenant', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Auto-complete confirmed bookings that have passed their check-out date
+    await query(
+      `UPDATE bookings 
+       SET status = 'completed', updated_at = now() 
+       WHERE status = 'confirmed' AND check_out_date < CURRENT_DATE`,
+      []
+    );
+
     const result = await query(
       `SELECT b.id,
               b.property_id,
@@ -86,6 +119,14 @@ router.get('/tenant', requireAuth, async (req: Request, res: Response, next: Nex
 // Get bookings for landlord
 router.get('/landlord', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Auto-complete confirmed bookings that have passed their check-out date
+    await query(
+      `UPDATE bookings 
+       SET status = 'completed', updated_at = now() 
+       WHERE status = 'confirmed' AND check_out_date < CURRENT_DATE`,
+      []
+    );
+
     const result = await query(
       `SELECT b.id,
               b.property_id,
@@ -146,6 +187,43 @@ router.patch('/:id/confirm', requireAuth, async (req: Request, res: Response, ne
   }
 });
 
+// Reject booking (landlord rejects)
+router.patch('/:id/reject', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const bookingId = req.params.id;
+    const { reason } = req.body as { reason?: string };
+
+    // Verify the landlord owns this booking
+    const checkResult = await query('SELECT landlord_id FROM bookings WHERE id = $1 LIMIT 1', [
+      bookingId,
+    ]);
+
+    if (checkResult.rowCount === 0) {
+      return res.status(404).json({ error: 'Booking not found.' });
+    }
+
+    if (checkResult.rows[0].landlord_id !== req.auth!.id) {
+      return res.status(403).json({ error: 'Only the landlord can reject this booking.' });
+    }
+
+    const notesUpdate = reason ? `Rejected by landlord: ${reason}` : 'Rejected by landlord';
+
+    const result = await query(
+      `UPDATE bookings 
+       SET status = $1, 
+           notes = CASE WHEN notes IS NULL OR notes = '' THEN $2 ELSE notes || ' | ' || $2 END, 
+           updated_at = now() 
+       WHERE id = $3 
+       RETURNING *`,
+      ['rejected', notesUpdate, bookingId],
+    );
+
+    res.json({ data: result.rows[0] });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Cancel booking (landlord or tenant can cancel)
 router.patch('/:id/cancel', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -191,6 +269,14 @@ router.patch('/:id/cancel', requireAuth, async (req: Request, res: Response, nex
 // Get booking by ID
 router.get('/:id', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Auto-complete this specific booking if check-out date has passed
+    await query(
+      `UPDATE bookings 
+       SET status = 'completed', updated_at = now() 
+       WHERE id = $1 AND status = 'confirmed' AND check_out_date < CURRENT_DATE`,
+      [req.params.id]
+    );
+
     const bookingId = req.params.id;
 
     const result = await query(

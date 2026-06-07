@@ -68,7 +68,7 @@ class CallService {
     try {
       _peerConnection = await createPeerConnection(
         RTCConfig.rtcConfiguration,
-      ) as RTCPeerConnection;
+      );
 
       if (_localStream != null) {
         for (final track in _localStream!.getTracks()) {

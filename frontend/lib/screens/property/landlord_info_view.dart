@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -62,8 +63,7 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
       if (!mounted) return;
       setState(() {
         _landlordProfile = profile;
-        _landlordProperties =
-            rawProperties.map(mapApiProperty).toList();
+        _landlordProperties = rawProperties.map(mapApiProperty).toList();
         _loading = false;
       });
     } catch (_) {
@@ -128,8 +128,7 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
   }
 
   int get _propertyCount =>
-      _landlordProfile?['property_count'] as int? ??
-      _landlordProperties.length;
+      _landlordProfile?['property_count'] as int? ?? _landlordProperties.length;
 
   String get _memberSince {
     final created = _landlordProfile?['created_at']?.toString() ??
@@ -138,8 +137,18 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
     final date = DateTime.tryParse(created);
     if (date == null) return '—';
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[date.month - 1]} ${date.year}';
   }
@@ -168,31 +177,48 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return Scaffold(
-        backgroundColor: StayNestColors.surfaceVariantLight,
-        body: const Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(
+          backgroundColor: Colors.white,
+          body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
-      backgroundColor: StayNestColors.surfaceVariantLight,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 400),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (Widget child, Animation<double> animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0.05, 0),
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white,
+                  Color(0xFFF9FAFB),
+                  Color(0xFFF3F4F6),
+                ],
+                stops: [0.0, 0.5, 1.0],
+              ),
             ),
-          );
-        },
-        child: _showProperties ? _buildPropertiesView() : _buildInfoView(),
+          ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.05, 0),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: _showProperties ? _buildPropertiesView() : _buildInfoView(),
+          ),
+        ],
       ),
     );
   }
@@ -216,19 +242,47 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 16),
-                    _buildStaggered(index: 1, child: _buildLandlordProfile()),
-                    const SizedBox(height: 24),
-                    _buildStaggered(index: 2, child: _buildDivider()),
-                    const SizedBox(height: 20),
-                    _buildStaggered(index: 3, child: _buildStatsRow()),
-                    const SizedBox(height: 20),
-                    _buildStaggered(index: 4, child: _buildDivider()),
+                    _buildStaggered(
+                      index: 1,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: _GlassContainer(
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          child: Column(
+                            children: [
+                              _buildLandlordProfile(),
+                              const SizedBox(height: 24),
+                              _buildDivider(),
+                              const SizedBox(height: 20),
+                              _buildStatsRow(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 32),
-                    _buildStaggered(index: 5, child: _buildAboutSection()),
+                    _buildStaggered(
+                      index: 5,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: _GlassContainer(
+                          padding: const EdgeInsets.all(24),
+                          child: _buildAboutSectionContent(),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 32),
                     if (_isVerified)
                       _buildStaggered(
-                          index: 6, child: _buildDocumentsSection()),
+                        index: 6,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: _GlassContainer(
+                            padding: const EdgeInsets.all(24),
+                            child: _buildDocumentsSectionContent(),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -287,80 +341,69 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
   }
 
   Widget _buildLandlordProfile() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFE5E7EB),
-              border: Border.all(
-                color: _isVerified
-                    ? const Color(0xFF22C55E)
-                    : const Color(0xFFE5E7EB),
-                width: 2.5,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const SizedBox(width: 24),
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFFE5E7EB),
+            border: Border.all(
+              color: _isVerified
+                  ? const Color(0xFF22C55E)
+                  : const Color(0xFFE5E7EB),
+              width: 2.5,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: _landlordAvatar.isNotEmpty
+              ? buildPropertyImage(_landlordAvatar,
+                  width: 80, height: 80, fit: BoxFit.cover)
+              : const Icon(Icons.person, size: 40, color: Color(0xFF9CA3AF)),
+        ),
+        const SizedBox(width: 20),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _landlordName,
+                style: GoogleFonts.poppins(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: StayNestColors.textPrimaryLight,
+                  letterSpacing: -0.3,
+                ),
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: _landlordAvatar.isNotEmpty
-                ? buildPropertyImage(_landlordAvatar,
-                    width: 80, height: 80, fit: BoxFit.cover)
-                : const Icon(Icons.person, size: 40, color: Color(0xFF9CA3AF)),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _landlordName,
-                  style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: StayNestColors.textPrimaryLight,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                if (_businessSubtitle != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    _businessSubtitle!,
+              if (_businessSubtitle != null) ...[
+                const SizedBox(height: 4),
+                Text(_businessSubtitle!,
                     style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: StayNestColors.textSecondaryLight,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 6),
-                Text(
-                  _isVerified ? 'Verified Landlord' : 'Landlord',
-                  style: GoogleFonts.poppins(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: _isVerified
-                        ? StayNestColors.success
-                        : StayNestColors.textSecondaryLight,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _buildLandlordReviewsSummary(),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: StayNestColors.textSecondaryLight)),
               ],
-            ),
+              const SizedBox(height: 6),
+              Text(
+                _isVerified ? 'Verified Landlord' : 'Landlord',
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: _isVerified
+                      ? StayNestColors.success
+                      : StayNestColors.textSecondaryLight,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildLandlordReviewsSummary(),
+            ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 24),
+      ],
     );
   }
 
@@ -463,7 +506,7 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
           const SizedBox(width: 16),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+              padding: const EdgeInsets.fromLTRB(0, 10, 16, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -524,7 +567,7 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                       ),
                     ],
                   ),
-                  const Spacer(),
+                  const SizedBox(height: 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -591,13 +634,16 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
             child: const Icon(Icons.arrow_back, size: 28, color: Colors.black),
           ),
           const SizedBox(width: 16),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              color: Colors.black,
-              letterSpacing: -0.5,
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: Colors.black,
+                letterSpacing: -0.5,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -630,77 +676,99 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
     );
   }
 
-  Widget _buildAboutSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'About',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: Colors.black,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _aboutText,
-            style: const TextStyle(
+  Widget _buildAboutSectionContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'About',
+          style: TextStyle(
+              fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          _aboutText,
+          style: const TextStyle(
               fontSize: 15.5,
               fontWeight: FontWeight.w500,
               color: Color(0xFF4B5563),
-              height: 1.6,
-            ),
-          ),
-        ],
-      ),
+              height: 1.6),
+        ),
+      ],
     );
   }
 
-  Widget _buildDocumentsSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Verified Documents',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: Colors.black,
-            ),
-          ),
-          const SizedBox(height: 20),
-          ...List.generate(_documents.length, (i) {
-            return _buildStaggered(
-              index: 7 + i,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 20),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.verified_outlined,
-                      color: Color(0xFF22C55E),
-                      size: 28,
-                    ),
-                    const SizedBox(width: 16),
-                    Text(
-                      _documents[i],
-                      style: const TextStyle(
+  Widget _buildDocumentsSectionContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Verified Documents',
+          style: TextStyle(
+              fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black),
+        ),
+        const SizedBox(height: 20),
+        ...List.generate(_documents.length, (i) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 20),
+            child: Row(
+              children: [
+                const Icon(Icons.verified_outlined,
+                    color: Color(0xFF22C55E), size: 28),
+                const SizedBox(width: 16),
+                Text(_documents[i],
+                    style: const TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ],
-                ),
+                        color: Colors.black)),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _GlassContainer extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double blur = 20.0;
+  final double opacity = 0.55;
+  final double borderWidth = 1.5;
+
+  const _GlassContainer({
+    required this.child,
+    required this.padding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(24);
+
+    return ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: opacity),
+            borderRadius: radius,
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.8),
+              width: borderWidth,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
               ),
-            );
-          }),
-        ],
+            ],
+          ),
+          child: child,
+        ),
       ),
     );
   }

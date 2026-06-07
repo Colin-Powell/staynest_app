@@ -9,10 +9,12 @@ import 'models/property.dart';
 import 'screens/screens.dart'
     hide LandlordVerificationEntry, VerificationCenter;
 import 'screens/dashboard/landlord_property_management_page.dart';
+import 'screens/dashboard/analytics_service.dart';
 import 'screens/dashboard/landlord_tenants_page.dart';
 import 'screens/landlord/verification_flow.dart' show VerificationCenter;
 import 'app_theme.dart';
 import 'session/app_session.dart';
+import 'screens/dashboard/landlord_bookings_page.dart';
 import 'screens/privacy_policy.dart';
 import 'screens/auth/tenant_survey.dart';
 import 'services/property_service.dart';
@@ -199,9 +201,7 @@ class _PropertyAppState extends State<PropertyApp> {
         '/tenant_bookings': (context) => TenantBookingsView(
               onBack: () => Navigator.pop(context),
             ),
-        '/landlord_bookings': (context) => LandlordBookingsView(
-              onBack: () => Navigator.pop(context),
-            ),
+        '/landlord_bookings': (context) => const LandlordBookingsPage(),
         '/help_support': (context) =>
             HelpSupportView(onBack: () => Navigator.pop(context)),
         '/settings': (context) => SettingView(
@@ -336,12 +336,16 @@ class _AppShellState extends State<AppShell> {
   bool _showAmenities = false;
   bool _showLocation = false;
   bool _showLandlordInfo = false;
-  bool _showBooking = false;
   bool _showFilter = false;
   bool _isMessageSelectionMode = false;
   Map<String, dynamic> _activeFilters = {};
 
-  void _goTo(_AppScreen s) => setState(() => _screen = s);
+  void _goTo(_AppScreen s) {
+    if (s == _AppScreen.search || s == _AppScreen.home) {
+      AnalyticsService.resetSessionImpressions();
+    }
+    setState(() => _screen = s);
+  }
 
   void _openFilter() => setState(() => _showFilter = true);
   void _closeFilter() => setState(() => _showFilter = false);
@@ -358,9 +362,6 @@ class _AppShellState extends State<AppShell> {
   void _openLandlordInfo() => setState(() => _showLandlordInfo = true);
   void _closeLandlordInfo() => setState(() => _showLandlordInfo = false);
 
-  void _openBooking() => setState(() => _showBooking = true);
-  void _closeBooking() => setState(() => _showBooking = false);
-
   Future<void> _openProperty(String id) async {
     setState(() {
       _selectedPropertyId = id;
@@ -368,6 +369,9 @@ class _AppShellState extends State<AppShell> {
       _loadingPropertyDetails = true;
     });
 
+    AnalyticsService.trackPropertyClick(id, source: 'app_shell');
+    AnalyticsService.trackPropertyView(id, source: 'app_shell');
+    AnalyticsService.trackPropertyDetailView(id);
     final property = await _propertyService.fetchPropertyById(id);
     if (!mounted) return;
 
@@ -387,6 +391,9 @@ class _AppShellState extends State<AppShell> {
 
   // FIX: avatar is now String? to match MessagesViewScreen.onSelectChat
   void _openChat(String userId, String name, String? avatar) {
+    if (_selectedPropertyId != null) {
+      AnalyticsService.trackChatInitiated(_selectedPropertyId!);
+    }
     setState(() {
       _selectedChatId = userId;
       _selectedChatName = name;
@@ -409,8 +416,7 @@ class _AppShellState extends State<AppShell> {
       _showPhotoGallery ||
       _showAmenities ||
       _showLocation ||
-      _showLandlordInfo ||
-      _showBooking;
+      _showLandlordInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -432,7 +438,6 @@ class _AppShellState extends State<AppShell> {
           if (_showAmenities) _buildAmenitiesOverlay(),
           if (_showLocation) _buildLocationOverlay(),
           if (_showLandlordInfo) _buildLandlordInfoOverlay(),
-          if (_showBooking) _buildBookingOverlay(),
           if (_selectedChatName != null) _buildChatOverlay(),
           Positioned(
             bottom: MediaQuery.of(context).padding.bottom + 16,
@@ -531,7 +536,10 @@ class _AppShellState extends State<AppShell> {
       color: Colors.black38,
       child: FilterView(
         onClose: _closeFilter,
-        onApplyFilters: (filters) => setState(() => _activeFilters = filters),
+        onApplyFilters: (filters) {
+          AnalyticsService.resetSessionImpressions();
+          setState(() => _activeFilters = filters);
+        },
       ),
     );
   }
@@ -560,7 +568,6 @@ class _AppShellState extends State<AppShell> {
         onViewLocation: _openLocation,
         onViewLandlord: _openLandlordInfo,
         onMessage: (userId, name, avatar) => _openChat(userId, name, avatar),
-        onBook: _openBooking,
       ),
     );
   }
@@ -577,8 +584,8 @@ class _AppShellState extends State<AppShell> {
 
   Widget _buildPhotoGalleryOverlay() {
     final property = _activeProperty;
-    final photos = property?.images?.isNotEmpty == true
-        ? property!.images!
+    final photos = property?.images.isNotEmpty == true
+        ? property!.images
         : (property != null && property.image.isNotEmpty
             ? [property.image]
             : null);
@@ -645,26 +652,6 @@ class _AppShellState extends State<AppShell> {
       child: LandlordInfoView(
         onClose: _closeLandlordInfo,
         property: property,
-      ),
-    );
-  }
-
-  Widget _buildBookingOverlay() {
-    if (_loadingPropertyDetails) {
-      return const Material(
-        color: Colors.transparent,
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    final id =
-        _selectedProperty?.id ?? _selectedPropertyId ?? properties.first.id;
-    return Material(
-      color: Colors.transparent,
-      child: BookingView(
-        propertyId: id,
-        onBack: _closeBooking,
-        onComplete: _closeBooking,
       ),
     );
   }

@@ -213,18 +213,18 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
         _MiniStat(
             value: _pendingVerifications.length.toString(),
             label: 'Awaiting',
-            valueColor: Color(0xFF111827)),
-        SizedBox(width: 12),
+            valueColor: const Color(0xFF111827)),
+        const SizedBox(width: 12),
         _MiniStat(
             value: _totalVerifications.toString(),
             label: 'All Time',
-            valueColor: Color(0xFF111827)),
-        SizedBox(width: 12),
+            valueColor: const Color(0xFF111827)),
+        const SizedBox(width: 12),
         _MiniStat(
             value: _isLoading ? '-' : 'OK',
             label: 'System',
             valueColor:
-                _isLoading ? Color(0xFF9CA3AF) : Color(0xFF22C55E)),
+                _isLoading ? const Color(0xFF9CA3AF) : const Color(0xFF22C55E)),
       ],
     );
   }
@@ -247,9 +247,9 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
 
   Widget _buildPendingVerificationsSection() {
     if (_isLoading) {
-      return Center(
+      return const Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 32),
+          padding: EdgeInsets.symmetric(vertical: 32),
           child: CircularProgressIndicator(color: _primary),
         ),
       );
@@ -261,17 +261,17 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
           padding: const EdgeInsets.symmetric(vertical: 32),
           child: Column(
             children: [
-              Icon(Icons.error_outline, color: Colors.red, size: 48),
-              SizedBox(height: 16),
+              const Icon(Icons.error_outline, color: Colors.red, size: 48),
+              const SizedBox(height: 16),
               Text(
                 _errorMessage!,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.red),
+                style: const TextStyle(color: Colors.red),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _loadPendingVerifications,
-                child: Text('Retry'),
+                child: const Text('Retry'),
               ),
             ],
           ),
@@ -283,12 +283,12 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
         alignment: Alignment.center,
-        child: Column(
+        child: const Column(
           children: [
             Icon(Icons.inbox_outlined,
                 color: Color(0xFFC4B5FD), size: 64),
-            const SizedBox(height: 16),
-            const Text(
+            SizedBox(height: 16),
+            Text(
               'No Pending Verifications',
               style: TextStyle(
                 fontSize: 16,
@@ -296,8 +296,8 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                 color: Color(0xFF111827),
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
+            SizedBox(height: 8),
+            Text(
               'All verifications have been reviewed',
               style: TextStyle(
                 fontSize: 13,
@@ -321,7 +321,7 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                 const SizedBox(height: 12),
             ],
           );
-        }).toList(),
+        }),
         if (_pendingVerifications.isNotEmpty) ...[
           const SizedBox(height: 12),
           _buildViewAllButton(),
@@ -360,7 +360,7 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
           CircleAvatar(
             radius: 28,
             backgroundColor: _primary.withOpacity(0.1),
-            child: Icon(Icons.person, color: _primary, size: 28),
+            child: const Icon(Icons.person, color: _primary, size: 28),
           ),
           const SizedBox(width: 12),
           // Info

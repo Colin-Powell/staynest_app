@@ -76,7 +76,7 @@ class _LandlordTenantsPageState extends State<LandlordTenantsPage> {
 
   Widget _buildTenantsList() {
     if (_isLoading) {
-      return Center(
+      return const Center(
         child: CircularProgressIndicator(color: _landlordPrimary),
       );
     }
@@ -86,17 +86,17 @@ class _LandlordTenantsPageState extends State<LandlordTenantsPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, color: Colors.red, size: 48),
+            const Icon(Icons.error_outline, color: Colors.red, size: 48),
             const SizedBox(height: 16),
             Text(
               _errorMessage!,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.red),
+              style: const TextStyle(color: Colors.red),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadTenants,
-              child: Text('Retry'),
+              child: const Text('Retry'),
             ),
           ],
         ),
@@ -108,7 +108,7 @@ class _LandlordTenantsPageState extends State<LandlordTenantsPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.people_outline, size: 48, color: _textLight),
+            const Icon(Icons.people_outline, size: 48, color: _textLight),
             const SizedBox(height: 16),
             Text(
               'No tenants yet',

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:property_app/screens/dashboard/analytics_service.dart';
 
 class AppSession {
   static String currentRole = 'tenant';
@@ -53,6 +54,7 @@ class AppSession {
       savedPropertyIds.remove(id);
     } else {
       savedPropertyIds.add(id);
+      AnalyticsService.trackPropertySave(id);
     }
   }
 

@@ -1,10 +1,13 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
-import 'property_details.dart';
+import 'package:property_app/screens/dashboard/analytics_service.dart';
+import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/services/booking_service.dart';
 
 class MyBookingsView extends StatefulWidget {
   final VoidCallback onBack;
@@ -46,37 +49,13 @@ class _MyBookingsViewState extends State<MyBookingsView>
     },
   };
 
-  // Mock data perfectly matching the PDF content
-  final List<Map<String, dynamic>> _allBookings = [
-    {
-      'title': '11 Green bank',
-      'location': 'Kilifi, Kenya',
-      'date': 'Sat, 24 May 2026   |   10.00 AM',
-      'status': 'Upcoming',
-      'image':
-          'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      'title': 'Smart Apartment',
-      'location': 'Kilifi, Kenya',
-      'date': 'Sun, 27 May 2026   |   10.00 AM',
-      'status': 'Completed',
-      'image':
-          'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-    },
-    {
-      'title': 'Cozy Bedsitter',
-      'location': 'Kilifi, Kenya',
-      'date': 'Wed, 30 May 2026   |   10.00 AM',
-      'status': 'Cancelled',
-      'image':
-          'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-    },
-  ];
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _allBookings = [];
 
   @override
   void initState() {
     super.initState();
+    _loadBookings();
     _entryController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 400));
     _fadeAnim =
@@ -93,11 +72,40 @@ class _MyBookingsViewState extends State<MyBookingsView>
     super.dispose();
   }
 
+  Future<void> _loadBookings() async {
+    setState(() => _isLoading = true);
+    try {
+      final data = await BookingService.fetchBookings(isLandlord: false);
+      if (!mounted) return;
+      setState(() {
+        _allBookings = data
+            .map((b) => {
+                  'id': b['id']?.toString() ?? '',
+                  'title': b['title']?.toString() ?? 'Property',
+                  'location': b['city']?.toString() ?? '',
+                  'date': b['check_in_date']?.toString().split('T')[0] ?? '',
+                  'time': '10:00 AM',
+                  'status': _mapStatus(b['status']?.toString() ?? ''),
+                  'image': b['image_url']?.toString() ?? '',
+                })
+            .toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  String _mapStatus(String apiStatus) {
+    final s = apiStatus.toLowerCase();
+    if (s == 'confirmed' || s == 'pending') return 'Upcoming';
+    if (s == 'completed') return 'Completed';
+    if (s == 'cancelled' || s == 'rejected') return 'Cancelled';
+    return 'Upcoming';
+  }
+
   List<Map<String, dynamic>> get _filteredBookings {
-    // In a real app, you would filter based on _selectedTab here:
-    // return _allBookings.where((b) => b['status'] == _selectedTab).toList();
-    // For this 100% visual match of the PDF, we will show all 3 items to match the screenshot.
-    return _allBookings;
+    return _allBookings.where((b) => b['status'] == _selectedTab).toList();
   }
 
   @override
@@ -136,18 +144,12 @@ class _MyBookingsViewState extends State<MyBookingsView>
                     child: Padding(
                       padding: EdgeInsets.only(
                         top: MediaQuery.of(context).padding.top + 16,
-                        left: 20,
+                        left: 24,
                         right: 24,
                         bottom: 24,
                       ),
                       child: Row(
                         children: [
-                          GestureDetector(
-                            onTap: widget.onBack,
-                            child: const Icon(Icons.arrow_back,
-                                color: textDark, size: 28),
-                          ),
-                          const SizedBox(width: 16),
                           Text(
                             'My Bookings',
                             style: GoogleFonts.poppins(
@@ -177,19 +179,40 @@ class _MyBookingsViewState extends State<MyBookingsView>
 
                   // Booking Cards List
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24,
-                        200), // Heavy bottom padding to clear buttons & nav
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 24),
-                            child: _buildBookingCard(_filteredBookings[index]),
-                          );
-                        },
-                        childCount: _filteredBookings.length,
-                      ),
-                    ),
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 200),
+                    sliver: _isLoading
+                        ? const SliverToBoxAdapter(
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                  color: navActiveGreen),
+                            ),
+                          )
+                        : _filteredBookings.isEmpty
+                            ? SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 100),
+                                  child: Center(
+                                    child: Text(
+                                      'No $_selectedTab bookings found.',
+                                      style:
+                                          GoogleFonts.poppins(color: textLight),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : SliverList(
+                                delegate: SliverChildBuilderDelegate(
+                                  (context, index) {
+                                    return Padding(
+                                      padding:
+                                          const EdgeInsets.only(bottom: 24),
+                                      child: _buildBookingCard(
+                                          _filteredBookings[index]),
+                                    );
+                                  },
+                                  childCount: _filteredBookings.length,
+                                ),
+                              ),
                   ),
                 ],
               ),
@@ -240,7 +263,6 @@ class _MyBookingsViewState extends State<MyBookingsView>
   Widget _buildTab(String label) {
     bool isActive = _selectedTab == label;
 
-    // Dynamic styling based on PDF
     Color bgColor = isActive ? statusColors[label]!['bg']! : Colors.transparent;
     Color textColor = isActive ? statusColors[label]!['text']! : textLight;
     Color borderColor = isActive ? Colors.transparent : const Color(0xFFD1D5DB);
@@ -271,35 +293,31 @@ class _MyBookingsViewState extends State<MyBookingsView>
     final status = booking['status'];
 
     return _GlassContainer(
-      padding:
-          EdgeInsets.zero, // Padding handled internally to let image flush left
+      padding: EdgeInsets.zero,
       borderRadius: BorderRadius.circular(24),
       child: SizedBox(
         height: 140,
         child: Row(
           children: [
-            // Left Side: Image (Flushed to the left edges)
             ClipRRect(
               borderRadius:
                   const BorderRadius.horizontal(left: Radius.circular(24)),
-              child: Image.network(
-                booking['image'],
+              child: buildPropertyImage(
+                booking['image'] ?? '',
                 width: 130,
                 height: 140,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorPlaceholder: Container(
                     width: 130, height: 140, color: const Color(0xFFE8F6EF)),
               ),
             ),
-
-            // Right Side: Details
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0, vertical: 10.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Title and Heart Row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -317,12 +335,10 @@ class _MyBookingsViewState extends State<MyBookingsView>
                           ),
                         ),
                         const Icon(Icons.favorite,
-                            color: Color(0xFFEC4899), size: 22), // Pink Heart
+                            color: Color(0xFFEC4899), size: 22),
                       ],
                     ),
                     const SizedBox(height: 2),
-
-                    // Location
                     Text(
                       booking['location'],
                       style: GoogleFonts.poppins(
@@ -331,10 +347,7 @@ class _MyBookingsViewState extends State<MyBookingsView>
                         color: textLight,
                       ),
                     ),
-
                     const Spacer(),
-
-                    // Date & Time
                     Text(
                       booking['date'],
                       style: GoogleFonts.poppins(
@@ -343,10 +356,7 @@ class _MyBookingsViewState extends State<MyBookingsView>
                         color: textMedium,
                       ),
                     ),
-
-                    const SizedBox(height: 12),
-
-                    // Status Pill
+                    const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 4),
@@ -393,7 +403,7 @@ class _MyBookingsViewState extends State<MyBookingsView>
           _buildNavItem(PhosphorIcons.buildings(PhosphorIconsStyle.fill),
               'Properties', false),
           _buildNavItem(PhosphorIcons.bookmarkSimple(PhosphorIconsStyle.fill),
-              'Bookings', true), // Bookings is Active!
+              'Bookings', true),
           _buildNavItem(PhosphorIcons.chatTeardrop(PhosphorIconsStyle.fill),
               'Messages', false),
           _buildNavItem(PhosphorIcons.userCircle(PhosphorIconsStyle.fill),
@@ -425,8 +435,6 @@ class _MyBookingsViewState extends State<MyBookingsView>
     );
   }
 }
-
-// ─── Glassmorphism Core Utility ──────────────────────────────────────────────
 
 class _GlassContainer extends StatelessWidget {
   final Widget child;
@@ -478,6 +486,7 @@ class _GlassContainer extends StatelessWidget {
 }
 
 /// Lightweight booking entry view used by routes that pass a `propertyId`.
+/// Completely redesigned to match the "Book a Visit" PDF while keeping original methods intact.
 class BookingView extends StatefulWidget {
   final String propertyId;
   final VoidCallback? onBack;
@@ -495,17 +504,44 @@ class BookingView extends StatefulWidget {
 }
 
 class _BookingViewState extends State<BookingView> {
+  // Existing Data Logic / State Variables Maintained
   final _repo = RemoteDatabaseRepository();
+  final _notesController = TextEditingController();
   bool _loading = true;
   String? _error;
   Property? _property;
+  DateTimeRange? _selectedRange;
+  bool _isSubmitting = false;
+
+  // New Variables matching PDF visual states
+  late DateTime _currentMonth;
+  String _selectedTime = '10.00 AM';
+  final List<String> _times = [
+    '09.00 AM',
+    '10.00 AM',
+    '02.00 PM',
+    '04.00 PM',
+    '04.00PM' // Matching exact typo/spacing in the PDF
+  ];
 
   @override
   void initState() {
     super.initState();
+    _currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
+    // Initialize _selectedRange implicitly so logic holds true.
+    _selectedRange = DateTimeRange(
+        start: DateTime.now(),
+        end: DateTime.now().add(const Duration(days: 1)));
     _load();
   }
 
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  // LOGIC INTACT: Existing Data Load Method
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -529,18 +565,20 @@ class _BookingViewState extends State<BookingView> {
         id: raw['id']?.toString() ?? widget.propertyId,
         name: raw['title']?.toString() ?? '',
         location: (raw['city']?.toString() ?? ''),
-        lat: (raw['lat'] as num?)?.toDouble() ?? 0,
-        lng: (raw['lng'] as num?)?.toDouble() ?? 0,
-        price: (raw['price'] as num?)?.toInt() ?? 0,
+        lat: double.tryParse(raw['lat']?.toString() ?? '') ?? 0.0,
+        lng: double.tryParse(raw['lng']?.toString() ?? '') ?? 0.0,
+        price: (double.tryParse(raw['price']?.toString() ?? '') ?? 0).toInt(),
         rating: 0,
         reviews: 0,
         category: raw['category']?.toString() ?? 'Apartment',
         image: raw['image_url']?.toString() ?? '',
         images: <String>[],
         features: PropertyFeatures(
-          beds: (raw['bedrooms'] as num?)?.toInt() ?? 0,
+          beds:
+              (double.tryParse(raw['bedrooms']?.toString() ?? '') ?? 0).toInt(),
           rooms: 0,
-          baths: (raw['bathrooms'] as num?)?.toInt() ?? 0,
+          baths: (double.tryParse(raw['bathrooms']?.toString() ?? '') ?? 0)
+              .toInt(),
           furnished: false,
         ),
         amenities: <String>[],
@@ -556,6 +594,9 @@ class _BookingViewState extends State<BookingView> {
         _property = property;
         _loading = false;
       });
+
+      AnalyticsService.trackPropertyView(widget.propertyId,
+          source: 'booking_view');
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -565,38 +606,527 @@ class _BookingViewState extends State<BookingView> {
     }
   }
 
+  // LOGIC INTACT: Submitting Logic exactly as originally written
+  Future<void> _submitBooking() async {
+    if (_selectedRange == null || _isSubmitting) return;
+
+    setState(() => _isSubmitting = true);
+
+    final nights = _selectedRange!.end.difference(_selectedRange!.start).inDays;
+    final totalPrice = (nights > 0 ? nights : 1) * _property!.price.toDouble();
+
+    final success = await BookingService.createBooking(
+      propertyId: widget.propertyId,
+      checkIn: _selectedRange!.start,
+      checkOut: _selectedRange!.end,
+      totalPrice: totalPrice,
+      notes: _notesController.text.trim().isEmpty
+          ? null
+          : _notesController.text.trim(),
+    );
+
+    if (mounted) {
+      setState(() => _isSubmitting = false);
+      if (success) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BookingConfirmedPage(
+              property: _property!,
+              selectedDate: _selectedRange!.start,
+              selectedTime: _selectedTime, // Pass the newly added time logic
+            ),
+          ),
+        ).then((_) => widget.onComplete?.call());
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Failed to submit booking. Please try different dates.')),
+        );
+      }
+    }
+  }
+
+  // --- NEW UI MATCHING PDF ---
+
+  Widget _buildDayCell(int day,
+      {bool isCurrentMonth = true,
+      bool isSelected = false,
+      bool isBlue = false}) {
+    return Container(
+      margin: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFF3B41E1) : Colors.transparent,
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          '$day',
+          style: GoogleFonts.poppins(
+            color: isSelected
+                ? Colors.white
+                : (isCurrentMonth
+                    ? const Color(0xFF111827)
+                    : (isBlue
+                        ? const Color(0xFF3B41E1)
+                        : const Color(0xFF111827))),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+            fontSize: 16,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalendar() {
+    int daysInMonth =
+        DateUtils.getDaysInMonth(_currentMonth.year, _currentMonth.month);
+    DateTime firstDayOfMonth =
+        DateTime(_currentMonth.year, _currentMonth.month, 1);
+    int firstWeekday = firstDayOfMonth.weekday; // 1 (Mon) to 7 (Sun)
+    int offset = firstWeekday == 7 ? 0 : firstWeekday;
+
+    DateTime prevMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
+    int daysInPrevMonth =
+        DateUtils.getDaysInMonth(prevMonth.year, prevMonth.month);
+
+    List<Widget> dayWidgets = [];
+    const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+    for (var day in weekdays) {
+      dayWidgets.add(
+        Center(
+          child: Text(
+            day,
+            style: GoogleFonts.poppins(
+              color: const Color(0xFF9CA3AF),
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
+        ),
+      );
+    }
+
+    int totalCells = 42;
+    for (int i = 0; i < totalCells; i++) {
+      if (i < offset) {
+        int day = daysInPrevMonth - offset + i + 1;
+        dayWidgets.add(_buildDayCell(day, isCurrentMonth: false, isBlue: true));
+      } else if (i >= offset + daysInMonth) {
+        int day = i - (offset + daysInMonth) + 1;
+        dayWidgets
+            .add(_buildDayCell(day, isCurrentMonth: false, isBlue: false));
+      } else {
+        int day = i - offset + 1;
+        DateTime thisDate =
+            DateTime(_currentMonth.year, _currentMonth.month, day);
+        bool isSelected = _selectedRange?.start.year == thisDate.year &&
+            _selectedRange?.start.month == thisDate.month &&
+            _selectedRange?.start.day == thisDate.day;
+
+        dayWidgets.add(
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                // Update _selectedRange to keep logic intact with the submit method
+                _selectedRange = DateTimeRange(
+                    start: thisDate,
+                    end: thisDate.add(const Duration(days: 1)));
+              });
+            },
+            child: _buildDayCell(day,
+                isCurrentMonth: true, isSelected: isSelected),
+          ),
+        );
+      }
+    }
+
+    return GridView.count(
+      crossAxisCount: 7,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: dayWidgets,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new),
-            onPressed: widget.onBack ?? () => Navigator.pop(context),
-          ),
-        ),
-        body: const Center(child: CircularProgressIndicator()),
+      return const Scaffold(
+        backgroundColor: Color(0xFFF7F8FA),
+        body:
+            Center(child: CircularProgressIndicator(color: Color(0xFF3B41E1))),
       );
     }
 
     if (_error != null || _property == null) {
       return Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new),
-            onPressed: widget.onBack ?? () => Navigator.pop(context),
-          ),
-        ),
+        backgroundColor: const Color(0xFFF7F8FA),
         body: Center(
-          child: Text(_error ?? 'Failed to load property'),
+          child: Text(_error ?? 'Failed to load property',
+              style: GoogleFonts.poppins(color: Colors.black)),
         ),
       );
     }
 
-    return PropertyDetails(
-      property: _property!,
-      onBack: widget.onBack ?? () => Navigator.pop(context),
-      onBook: widget.onComplete ?? () => Navigator.pop(context),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F8FA),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black, size: 28),
+          onPressed: widget.onBack ?? () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Book a Visit',
+          style: GoogleFonts.poppins(
+            color: Colors.black,
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        centerTitle: false,
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Month Selector Header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back_ios_new,
+                              color: Color(0xFF9CA3AF), size: 20),
+                          onPressed: () {
+                            setState(() {
+                              _currentMonth = DateTime(
+                                  _currentMonth.year, _currentMonth.month - 1);
+                            });
+                          },
+                        ),
+                        Text(
+                          DateFormat('MMMM yyyy').format(_currentMonth),
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.arrow_forward_ios,
+                              color: Colors.black, size: 20),
+                          onPressed: () {
+                            setState(() {
+                              _currentMonth = DateTime(
+                                  _currentMonth.year, _currentMonth.month + 1);
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Calendar Widget
+                    _buildCalendar(),
+                    const SizedBox(height: 24),
+
+                    // Selected Date Text matching PDF
+                    Text(
+                      'Selected Date',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _selectedRange != null
+                          ? DateFormat('E, d MMM yyyy')
+                              .format(_selectedRange!.start)
+                          : 'No date selected',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Selected Time Pills matching PDF
+                    Text(
+                      'Selected Time',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: _times.map((time) {
+                        bool isSelected = _selectedTime == time;
+                        return GestureDetector(
+                          onTap: () => setState(() => _selectedTime = time),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 18, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? const Color(0xFFF0F1FF)
+                                  : Colors.transparent,
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFF3B41E1)
+                                    : const Color(0xFFE5E7EB),
+                              ),
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Text(
+                              time,
+                              style: GoogleFonts.poppins(
+                                color: isSelected
+                                    ? const Color(0xFF3B41E1)
+                                    : Colors.black,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+                ),
+              ),
+            ),
+
+            // Booking Status and Confirm Button
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_selectedRange != null && !_isSubmitting)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Text(
+                        'Ready to schedule your visit for ${DateFormat('MMMM d').format(_selectedRange!.start)} at $_selectedTime',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF3B41E1),
+                        ),
+                      ),
+                    ),
+                  GestureDetector(
+                    onTap: (_selectedRange == null || _isSubmitting)
+                        ? null
+                        : _submitBooking,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3B41E1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Center(
+                        child: _isSubmitting
+                            ? const SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : Text(
+                                'Confirm Booking',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Confirmation Screen exactly matching the 'Booking Confirmed!' PDF
+class BookingConfirmedPage extends StatelessWidget {
+  final Property property;
+  final DateTime selectedDate;
+  final String selectedTime;
+
+  const BookingConfirmedPage({
+    super.key,
+    required this.property,
+    required this.selectedDate,
+    required this.selectedTime,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F8FA),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Spacer(),
+              // Circular Green Checkmark
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF34A853),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check,
+                  color: Colors.white,
+                  size: 48,
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Main Confirmation Text
+              Text(
+                'Booking Confirmed!',
+                style: GoogleFonts.poppins(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Your visit has been scheduled\nSuccessfully.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  color: const Color(0xFF6B7280),
+                  height: 1.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Custom Property Details Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: buildPropertyImage(
+                        property.image,
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            property.name,
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${DateFormat('E, d MMM yyyy').format(selectedDate)}  |  $selectedTime',
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: Colors.black,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Bottom Subtitle Text
+              Text(
+                'You will receive a reminder\nbefore your visit.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  color: const Color(0xFF9CA3AF),
+                  height: 1.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+
+              const Spacer(),
+
+              // View My Booking Blue Button
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).pop();
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  decoration: BoxDecoration(
+                    color: const Color(
+                        0xFF3B41E1), // Matched precisely to PDF blue
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'View My Booking',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

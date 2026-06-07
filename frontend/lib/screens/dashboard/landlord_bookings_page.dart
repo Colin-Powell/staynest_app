@@ -1,7 +1,10 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
+
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/widgets/property_image.dart';
 
 import 'landlord_booking_detail_page.dart';
@@ -44,30 +47,6 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
   String? _errorMessage;
   List<Map<String, dynamic>> _allBookings = [];
 
-  static const List<String> _weekdayNames = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun'
-  ];
-  static const List<String> _monthNames = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec'
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -81,39 +60,30 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
     });
 
     try {
-      // TODO: Replace mock with real API call.
-      // The UI expects booking['image'] to be a resolvable URL.
-      // For now we keep a small mock so images actually render.
+      final data = await BookingService.fetchBookings(isLandlord: true);
+
+      if (!mounted) return;
+
       setState(() {
-        _allBookings = [
-          {
-            'title': '11 Green bank',
-            'location': 'Kilifi, Kenya',
-            'date': 'Sat, 24 May 2026',
-            'time': '10.00 AM',
-            'status': 'Upcoming',
-            'image':
-                'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-          },
-          {
-            'title': 'Smart Apartment',
-            'location': 'Kilifi, Kenya',
-            'date': 'Sun, 27 May 2026',
-            'time': '10.00 AM',
-            'status': 'Completed',
-            'image':
-                'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-          },
-          {
-            'title': 'Cozy Bedsitter',
-            'location': 'Kilifi, Kenya',
-            'date': 'Wed, 30 May 2026',
-            'time': '10.00 AM',
-            'status': 'Cancelled',
-            'image':
-                'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-          },
-        ];
+        _allBookings = data.map((b) {
+          return {
+            'id': b['id']?.toString() ?? '',
+            'title':
+                b['title']?.toString() ?? b['property_title']?.toString() ??
+                    'Property',
+            'location': b['city']?.toString() ?? '',
+            'tenant_id': b['tenant_id']?.toString() ?? '',
+            'tenant_name': b['tenant_name']?.toString() ?? 'Tenant',
+            'date': b['check_in_date']?.toString().split('T')[0] ?? '',
+            'time': '10:00 AM',
+            'rawStatus': b['status']?.toString().toLowerCase() ?? '',
+            'status': _mapStatus(b['status']?.toString() ?? ''),
+            'image': b['image_url']?.toString() ?? '',
+            'price': (double.tryParse(b['total_price']?.toString() ?? '0') ??
+                    0)
+                .toInt(),
+          };
+        }).toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -124,6 +94,14 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
     }
   }
 
+  String _mapStatus(String apiStatus) {
+    final s = apiStatus.toLowerCase();
+    if (s == 'confirmed' || s == 'pending') return 'Upcoming';
+    if (s == 'completed') return 'Completed';
+    if (s == 'cancelled' || s == 'rejected') return 'Cancelled';
+    return 'Upcoming';
+  }
+
   List<Map<String, dynamic>> get _filteredBookings {
     return _allBookings.where((booking) {
       final status = booking['status'] as String? ?? '';
@@ -131,235 +109,256 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
     }).toList();
   }
 
-  String _formatBookingDate(Map<String, dynamic> booking) {
-    final dateStr = booking['date'] as String? ?? '';
-    final timeStr = booking['time'] as String? ?? '';
-    return '$dateStr   |   $timeStr';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: const Color(0xFFE8F6EF),
       extendBody: true,
-      body: SafeArea(
-        bottom: false,
-        child: Stack(
-          children: [
-            // Main Scrolling Content
-            CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                // Header (Back Arrow + Title)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.only(
-                      top: 16,
-                      left: 20,
-                      right: 24,
-                      bottom: 24,
-                    ),
-                    child: Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => Navigator.pop(context),
-                          child: const Icon(Icons.arrow_back,
-                              color: textDark, size: 28),
-                        ),
-                        const SizedBox(width: 16),
-                        Text(
-                          'My Bookings',
-                          style: GoogleFonts.poppins(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w700,
-                            color: textDark,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Filter Tabs
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: _tabs.map((tab) {
-                        return _buildTab(tab);
-                      }).toList(),
-                    ),
-                  ),
-                ),
-
-                const SliverToBoxAdapter(child: SizedBox(height: 32)),
-
-                // Booking Cards List or Error/Empty State
-                if (_errorMessage != null)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.error_outline,
-                              color: Colors.red, size: 48),
-                          const SizedBox(height: 16),
-                          Text(
-                            _errorMessage!,
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.poppins(
-                              color: Colors.red,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _loadBookings,
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                else if (_isLoading)
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(
-                      24,
-                      0,
-                      24,
-                      MediaQuery.of(context).padding.bottom + 160,
-                    ),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 32),
-                            child: _buildBookingSkeletonCard(),
-                          );
-                        },
-                        childCount: 3,
-                      ),
-                    ),
-                  )
-                else if (_filteredBookings.isEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.calendar_today_outlined,
-                              color: textLight, size: 48),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No bookings yet',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: textDark,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Bookings will appear here when you receive reservations',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.poppins(
-                              fontSize: 13,
-                              color: textLight,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                else
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(
-                      24,
-                      0,
-                      24,
-                      MediaQuery.of(context).padding.bottom + 160,
-                    ),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final booking = _filteredBookings[index];
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 32),
-                            child: GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => LandlordBookingDetailPage(
-                                      booking: booking,
-                                    ),
-                                  ),
-                                );
-                              },
-                              child: _buildBookingCard(booking),
-                            ),
-                          );
-                        },
-                        childCount: _filteredBookings.length,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-
-            // Floating "View Calendar" Button
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).padding.bottom + 120,
-                  left: 24,
-                  right: 24,
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 60,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.of(context)
-                        .push(LandlordCalendarPage.route()),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(
-                          0xFF8DCBAA), // Match the soft Green from PDF
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
-                      elevation: 0,
-                    ),
-                    child: Text(
-                      'View Calendar',
-                      style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFF7FDF9),
+                  Color(0xFFE8F6EF),
+                  Color(0xFFD4EFE1),
+                ],
+                stops: [0.0, 0.5, 1.0],
               ),
             ),
-          ],
-        ),
+          ),
+          SafeArea(
+            bottom: false,
+            child: Stack(
+              children: [
+                CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    // Header
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.only(
+                          top: 16,
+                          left: 24,
+                          right: 24,
+                          bottom: 24,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'My Bookings',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w700,
+                                  color: textDark,
+                                  letterSpacing: -0.5,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Tabs
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: _tabs
+                              .map((tab) => _buildTab(tab))
+                              .toList(),
+                        ),
+                      ),
+                    ),
+
+                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
+
+                    // Body
+                    if (_errorMessage != null)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.error_outline,
+                                color: Colors.red,
+                                size: 48,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _errorMessage!,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                  color: Colors.red,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: _loadBookings,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (_isLoading)
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          24,
+                          0,
+                          24,
+                          MediaQuery.of(context).padding.bottom + 160,
+                        ),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.only(bottom: 32),
+                                child: _buildBookingSkeletonCard(),
+                              );
+                            },
+                            childCount: 3,
+                          ),
+                        ),
+                      )
+                    else if (_filteredBookings.isEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.calendar_today_outlined,
+                                color: textLight,
+                                size: 48,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No bookings yet',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: textDark,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Bookings will appear here when you receive reservations',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: textLight,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          24,
+                          0,
+                          24,
+                          MediaQuery.of(context).padding.bottom + 160,
+                        ),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final booking = _filteredBookings[index];
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.only(bottom: 32),
+                                child: GestureDetector(
+                                  onTap: () async {
+                                    final result = await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            LandlordBookingDetailPage(
+                                          booking: booking,
+                                        ),
+                                      ),
+                                    );
+                                    if (result == true) {
+                                      _loadBookings();
+                                    }
+                                  },
+                                  child: _buildBookingCard(booking),
+                                ),
+                              );
+                            },
+                            childCount: _filteredBookings.length,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+
+                // Floating "View Calendar" Button
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).padding.bottom + 120,
+                      left: 24,
+                      right: 24,
+                    ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 60,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(context)
+                            .push(LandlordCalendarPage.route()),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              const Color(0xFF8DCBAA),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: Text(
+                          'View Calendar',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // ─── Component Builders ──────────────────────────────────────────────────
-
   Widget _buildTab(String label) {
-    bool isActive = _selectedTab == label;
+    final bool isActive = _selectedTab == label;
 
-    // Dynamic styling based exactly on the PDF
-    Color bgColor = isActive ? statusColors[label]!['bg']! : Colors.transparent;
-    Color textColor = isActive ? statusColors[label]!['text']! : textLight;
-    Color borderColor = isActive ? Colors.transparent : const Color(0xFFD1D5DB);
+    final Color bgColor =
+        isActive ? statusColors[label]!['bg']! : Colors.transparent;
+    final Color textColor =
+        isActive ? statusColors[label]!['text']! : textLight;
+    final Color borderColor =
+        isActive ? Colors.transparent : const Color(0xFFD1D5DB);
 
     return GestureDetector(
       onTap: () {
@@ -398,14 +397,12 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
     final status = booking['status'] as String? ?? 'Upcoming';
 
     return _GlassContainer(
-      padding:
-          EdgeInsets.zero, // Padding handled internally to let image flush left
+      padding: EdgeInsets.zero,
       borderRadius: BorderRadius.circular(28),
       child: SizedBox(
         height: 140,
         child: Row(
           children: [
-            // Left Side: Image (Flushed to the left edge)
             ClipRRect(
               borderRadius:
                   const BorderRadius.horizontal(left: Radius.circular(28)),
@@ -415,18 +412,18 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                 height: 140,
                 fit: BoxFit.cover,
                 errorPlaceholder: Container(
-                    width: 115, height: 140, color: const Color(0xFFE8F6EF)),
+                  width: 115,
+                  height: 140,
+                  color: const Color(0xFFE8F6EF),
+                ),
               ),
             ),
-
-            // Right Side: Details
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 16, 16, 16),
+                padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Title and Heart Row
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -445,8 +442,6 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                       ],
                     ),
                     const SizedBox(height: 2),
-
-                    // Location
                     Text(
                       booking['location'] ?? 'Unknown location',
                       maxLines: 1,
@@ -457,10 +452,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                         color: textLight,
                       ),
                     ),
-
                     const Spacer(),
-
-                    // Date & Time
                     Text(
                       '${booking['date'] ?? 'TBD'}   |   ${booking['time'] ?? 'TBD'}',
                       maxLines: 1,
@@ -471,10 +463,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                         color: textMedium,
                       ),
                     ),
-
-                    const SizedBox(height: 10),
-
-                    // Status Pill
+                    const SizedBox(height: 4),
                     Row(
                       children: [
                         Container(
@@ -589,9 +578,9 @@ class _GlassContainer extends StatelessWidget {
     required this.child,
     required this.padding,
     this.borderRadius,
-    this.blur = 12,
-    this.opacity = 0.18,
-    this.borderWidth = 1,
+    this.blur = 20.0,
+    this.opacity = 0.55,
+    this.borderWidth = 1.5,
   });
 
   @override

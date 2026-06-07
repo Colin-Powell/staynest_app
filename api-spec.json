@@ -50,6 +50,18 @@
       "description": "Get property by id"
     },
     {
+      "method": "GET",
+      "path": "/api/properties/:id/availability-check",
+      "auth": "none",
+      "description": "Check if property is available for a date range (query: start, end)"
+    },
+    {
+      "method": "POST",
+      "path": "/api/properties/:id/availability",
+      "auth": "bearer",
+      "description": "Landlord: Toggle availability for a specific date (body: date, available)"
+    },
+    {
       "method": "POST",
       "path": "/api/properties",
       "auth": "bearer",
@@ -219,4 +231,3 @@
     }
   ]
 }
-

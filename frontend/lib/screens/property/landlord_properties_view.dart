@@ -7,6 +7,7 @@ import 'package:property_app/models/property.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/data_loader/fallback_properties_loader.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/services/analytics_service.dart';
 import 'package:property_app/widgets/shared.dart';
 
 class LandlordPropertiesView extends StatefulWidget {
@@ -317,7 +318,15 @@ class _PropertyCardState extends State<_PropertyCard>
     _slideAnim = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
         .animate(CurvedAnimation(
             parent: _entryController, curve: Curves.easeOutCubic));
+    
     Future.delayed(widget.delay, () {
+      if (mounted) {
+        // Track Property Impression
+        AnalyticsService.logEvent(
+          eventType: 'property_impression',
+          propertyId: widget.property.id,
+        );
+      }
       if (mounted) _entryController.forward();
     });
   }
@@ -356,9 +365,14 @@ class _PropertyCardState extends State<_PropertyCard>
           onTapUp: (_) => setState(() => _pressed = false),
           onTapCancel: () => setState(() => _pressed = false),
           onTap: () {
+            // Track Property Click
+            AnalyticsService.logEvent(
+              eventType: 'property_click',
+              propertyId: widget.property.id,
+            );
             // Open property details / booking view
             Navigator.pushNamed(context, '/booking',
-                arguments: {'propertyId': widget.property.id});
+               arguments: <String, String>{'propertyId': widget.property.id});
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),

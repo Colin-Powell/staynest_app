@@ -6,6 +6,8 @@ import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/property_service.dart';
 import 'package:property_app/widgets/property_image.dart';
 import '../../widgets/phosphor_icons.dart';
+import 'package:property_app/screens/dashboard/analytics_service.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 class SearchView extends StatefulWidget {
   final ValueChanged<String>? onSelectProperty;
@@ -86,6 +88,7 @@ class _SearchViewState extends State<SearchView> {
           await repository.savePropertyForUser(
               AppSession.currentUserId!, propertyId);
           AppSession.savedPropertyIds.add(propertyId);
+          AnalyticsService.trackPropertySave(propertyId);
         }
         return;
       } catch (_) {
@@ -263,7 +266,10 @@ class _SearchViewState extends State<SearchView> {
                             color: const Color(0xFF9CA3AF))),
                     Expanded(
                       child: TextField(
-                        onChanged: (value) => setState(() => query = value),
+                        onChanged: (value) {
+                          AnalyticsService.resetSessionImpressions();
+                          setState(() => query = value);
+                        },
                         style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -369,14 +375,31 @@ class _SearchViewState extends State<SearchView> {
                           curve: Curves.easeOutCubic,
                           builder: (context, value, child) {
                             return Transform.translate(
-                                offset: Offset(0, 30 * (1 - value)),
-                                child: Opacity(opacity: value, child: child));
+                              offset: Offset(0, 30 * (1 - value)),
+                              child: Opacity(
+                                opacity: value,
+                                child: child,
+                              ),
+                            );
                           },
-                          child: GestureDetector(
-                            onTap: () =>
-                                widget.onSelectProperty?.call(property.id),
-                            child: Container(
-                              height: 138,
+                          child: VisibilityDetector(
+                            key: Key('search_impression_${property.id}'),
+                            onVisibilityChanged: (info) {
+                              if (info.visibleFraction > 0.5) {
+                                AnalyticsService.trackPropertyImpression(
+                                  property.id,
+                                  source: 'search',
+                                  position: index,
+                                  query: query,
+                                  filters: _activeFilters,
+                                );
+                              }
+                            },
+                            child: GestureDetector(
+                              onTap: () =>
+                                  widget.onSelectProperty?.call(property.id),
+                              child: Container(
+                                height: 138,
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(24),
@@ -516,6 +539,7 @@ class _SearchViewState extends State<SearchView> {
                               ),
                             ),
                           ),
+                          )
                         );
                       },
                     ),
