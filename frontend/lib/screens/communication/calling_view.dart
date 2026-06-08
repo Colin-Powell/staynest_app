@@ -35,6 +35,7 @@ class _CallingViewState extends State<CallingView>
   // Ping pulse animation
   late final AnimationController _pingController;
 
+  StreamSubscription? _signalSubscription;
   // Call timer
   late final Timer _timer;
   int _seconds = 0;
@@ -74,7 +75,7 @@ class _CallingViewState extends State<CallingView>
     _initializeCall();
 
     // Listen to socket signals
-    SocketService.instance.signals.listen((signal) {
+    _signalSubscription = SocketService.instance.signals.listen((signal) {
       if (signal['type'] == 'answer' && signal['from'] == widget.userId) {
         _handleRemoteAnswer(signal);
       } else if (signal['type'] == 'ice' && signal['from'] == widget.userId) {
@@ -87,6 +88,7 @@ class _CallingViewState extends State<CallingView>
   void dispose() {
     _entryController.dispose();
     _pingController.dispose();
+    _signalSubscription?.cancel();
     _timer.cancel();
     CallService.instance.close();
     super.dispose();

@@ -80,7 +80,7 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
               ),
             ),
           ),
-          
+
           SafeArea(
             bottom: false,
             child: SingleChildScrollView(
@@ -110,7 +110,8 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFD1FAE5),
                                   borderRadius: BorderRadius.circular(8),
@@ -139,7 +140,8 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                               const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  const Icon(Icons.location_on, size: 14, color: Color(0xFF6B7280)),
+                                  const Icon(Icons.location_on,
+                                      size: 14, color: Color(0xFF6B7280)),
                                   const SizedBox(width: 4),
                                   Expanded(
                                     child: Text(
@@ -179,8 +181,10 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                       children: [
                         CircleAvatar(
                           radius: 24,
-                          backgroundColor: const Color(0xFF059669).withOpacity(0.1),
-                          child: const Icon(Icons.person, color: Color(0xFF059669), size: 28),
+                          backgroundColor:
+                              const Color(0xFF059669).withOpacity(0.1),
+                          child: const Icon(Icons.person,
+                              color: Color(0xFF059669), size: 28),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -213,13 +217,18 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                           ),
                           child: IconButton(
                             onPressed: () {
-                              Navigator.pushNamed(context, '/chat', arguments: <String, String>{
-                                'userId': booking['tenant_id']?.toString() ?? '',
-                                'name': booking['tenant_name']?.toString() ?? 'Tenant',
-                                'avatar': '',
-                              });
+                              Navigator.pushNamed(context, '/landlord_chat',
+                                  arguments: <String, String>{
+                                    'userId':
+                                        booking['tenant_id']?.toString() ?? '',
+                                    'name':
+                                        booking['tenant_name']?.toString() ??
+                                            'Tenant',
+                                    'avatar': '',
+                                  });
                             },
-                            icon: const Icon(Icons.chat_bubble_rounded, color: Color(0xFF3F37C9), size: 22),
+                            icon: const Icon(Icons.chat_bubble_rounded,
+                                color: Color(0xFF3F37C9), size: 22),
                           ),
                         ),
                       ],
@@ -278,7 +287,8 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                                 children: [
                                   Row(
                                     children: [
-                                      const Icon(Icons.info_rounded, size: 16, color: Color(0xFF059669)),
+                                      const Icon(Icons.info_rounded,
+                                          size: 16, color: Color(0xFF059669)),
                                       const SizedBox(width: 6),
                                       Text(
                                         'Status',
@@ -292,9 +302,11 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                                   ),
                                   const SizedBox(height: 8),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
                                     decoration: BoxDecoration(
-                                      color: _getStatusColor(status).withOpacity(0.15),
+                                      color: _getStatusColor(status)
+                                          .withOpacity(0.15),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
@@ -321,7 +333,8 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                     const Center(
                       child: Padding(
                         padding: EdgeInsets.all(24.0),
-                        child: CircularProgressIndicator(color: Color(0xFF059669)),
+                        child:
+                            CircularProgressIndicator(color: Color(0xFF059669)),
                       ),
                     )
                   else ...[
@@ -333,13 +346,17 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                               onPressed: () => _handleAction('Rejected'),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: const Color(0xFFEF4444),
-                                side: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                padding: const EdgeInsets.symmetric(vertical: 18),
+                                side: const BorderSide(
+                                    color: Color(0xFFEF4444), width: 1.5),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 18),
                               ),
                               child: Text(
                                 'Reject',
-                                style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 16),
+                                style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w700, fontSize: 16),
                               ),
                             ),
                           ),
@@ -349,21 +366,25 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                               onPressed: () => _handleAction('Accepted'),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF059669),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                padding: const EdgeInsets.symmetric(vertical: 18),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 18),
                                 elevation: 0,
                               ),
                               child: Text(
                                 'Accept',
-                                style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 16, color: Colors.white),
+                                style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                    color: Colors.white),
                               ),
                             ),
                           ),
                         ],
                       ),
-                    
-                    if (isPending && status == 'Upcoming') const SizedBox(height: 16),
-
+                    if (isPending && status == 'Upcoming')
+                      const SizedBox(height: 16),
                     if (status == 'Upcoming')
                       GestureDetector(
                         onTap: () async {
@@ -371,11 +392,14 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                             context: context,
                             initialDate: DateTime.now(),
                             firstDate: DateTime.now(),
-                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                            lastDate:
+                                DateTime.now().add(const Duration(days: 365)),
                           );
                           if (picked != null && mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Rescheduling request for ${picked.toLocal().toString().split(' ')[0]} sent to tenant.')),
+                              SnackBar(
+                                  content: Text(
+                                      'Rescheduling request for ${picked.toLocal().toString().split(' ')[0]} sent to tenant.')),
                             );
                           }
                         },
@@ -383,32 +407,38 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(vertical: 18),
                           decoration: BoxDecoration(
-                            color: isPending ? Colors.white : const Color(0xFF059669),
-                            border: isPending ? Border.all(color: const Color(0xFF059669), width: 1.5) : null,
+                            color: isPending
+                                ? Colors.white
+                                : const Color(0xFF059669),
+                            border: isPending
+                                ? Border.all(
+                                    color: const Color(0xFF059669), width: 1.5)
+                                : null,
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
-                                Icons.event_repeat_rounded,
-                                color: isPending ? const Color(0xFF059669) : Colors.white, 
-                                size: 22
-                              ),
+                              Icon(Icons.event_repeat_rounded,
+                                  color: isPending
+                                      ? const Color(0xFF059669)
+                                      : Colors.white,
+                                  size: 22),
                               const SizedBox(width: 12),
                               Text(
                                 'Reschedule Visit',
                                 style: GoogleFonts.poppins(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
-                                  color: isPending ? const Color(0xFF059669) : Colors.white,
+                                  color: isPending
+                                      ? const Color(0xFF059669)
+                                      : Colors.white,
                                 ),
                               ),
                             ],
                           ),
                         ),
                       ),
-
                     if (!isPending && status != 'Upcoming')
                       Center(
                         child: Text(
@@ -430,7 +460,8 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
   }
 
   // Helper Widget for the new Grid Layout
-  Widget _buildGridItem({required IconData icon, required String label, required String value}) {
+  Widget _buildGridItem(
+      {required IconData icon, required String label, required String value}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -479,7 +510,7 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
   }
 }
 
-// THEME INTACT: Glass Container 
+// THEME INTACT: Glass Container
 class _GlassContainer extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;

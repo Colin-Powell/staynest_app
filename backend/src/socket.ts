@@ -67,7 +67,8 @@ export function initSocket(server: import('http').Server) {
 
         // FIX: only emit to the RECIPIENT — never echo back to sender.
         // The sender already appended the message optimistically in the UI.
-        if (msg.to) {
+        // Ensure we don't emit if the recipient is the sender
+        if (msg.to && msg.to !== from) {
           io.to(`user:${msg.to}`).emit('message', payload);
         }
 

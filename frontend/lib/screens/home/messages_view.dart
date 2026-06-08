@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/services/message_service.dart';
+import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'dart:ui';
 
@@ -55,6 +57,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
   Set<String> _selectedIds = {};
 
   List<_ChatItem> _chats = [];
+  StreamSubscription? _messageSubscription;
 
   @override
   void initState() {
@@ -63,11 +66,19 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
       setState(() => _searchQuery = _searchController.text.toLowerCase());
     });
     _loadConversations();
+    _setupSocketListener();
+  }
+
+  void _setupSocketListener() {
+    _messageSubscription = SocketService.instance.messages.listen((_) {
+      _loadConversations();
+    });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _messageSubscription?.cancel();
     super.dispose();
   }
 
@@ -89,6 +100,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                   avatarUrl: c.userAvatar,
                   msg: c.lastMessage ?? 'No messages yet',
                   time: _formatTime(c.lastMessageAt),
+                  unread: c.unreadCount,
                 ))
             .toList();
         _isLoading = false;
@@ -167,13 +179,23 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
     });
   }
 
-  void _markSelectedAsRead() {
-    setState(() {
-      for (final c in _chats) {
-        if (_selectedIds.contains(c.id)) c.unread = 0;
-      }
-      _exitSelectionMode();
-    });
+  Future<void> _markSelectedAsRead() async {
+    try {
+      final idsToMark = _selectedIds.toList();
+      // Call backend via service
+      await MessageService.instance.markAsRead(idsToMark);
+
+      setState(() {
+        for (final c in _chats) {
+          if (idsToMark.contains(c.id)) c.unread = 0;
+        }
+        _exitSelectionMode();
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to mark as read: ${e.toString()}')),
+      );
+    }
   }
 
   // ── Build ───────────────────────────────────────────────────────────────────
@@ -582,9 +604,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                   allSelected
                       ? Icons.radio_button_checked
                       : Icons.radio_button_unchecked,
-                  color: allSelected
-                      ? _tenantPrimary
-                      : const Color(0xFF9CA3AF),
+                  color: allSelected ? _tenantPrimary : const Color(0xFF9CA3AF),
                   size: 20,
                 ),
                 const SizedBox(width: 8),
@@ -593,9 +613,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: allSelected
-                        ? _tenantPrimary
-                        : const Color(0xFF6B7280),
+                    color:
+                        allSelected ? _tenantPrimary : const Color(0xFF6B7280),
                   ),
                 ),
               ],
@@ -965,8 +984,8 @@ class _UnreadBadge extends StatelessWidget {
     return Container(
       width: 24,
       height: 24,
-      decoration: const BoxDecoration(
-          color: _tenantPrimary, shape: BoxShape.circle),
+      decoration:
+          const BoxDecoration(color: _tenantPrimary, shape: BoxShape.circle),
       child: Center(
         child: Text(
           '$count',

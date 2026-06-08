@@ -7,7 +7,10 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'adminpass';
 const ADMIN_NAME = process.env.ADMIN_NAME || 'Admin User';
 
 async function main() {
-  const pool = new Pool({ connectionString: DATABASE_URL });
+  const pool = new Pool({ 
+    connectionString: DATABASE_URL,
+    ssl: DATABASE_URL.includes('render.com') || DATABASE_URL.includes('sslmode=require') ? { rejectUnauthorized: false } : false
+  });
   const client = await pool.connect();
   try {
     const hashed = await bcrypt.hash(ADMIN_PASSWORD, 10);

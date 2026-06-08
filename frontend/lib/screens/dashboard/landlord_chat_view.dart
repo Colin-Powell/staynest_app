@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -5,23 +6,10 @@ import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/services/message_service.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:uuid/uuid.dart';
+import 'package:property_app/models/communication_models.dart';
 
 const Color _landlordPrimary = Color(0xFF059669);
-
-// ─── Data model ───────────────────────────────────────────────────────────────
-
-enum _Sender { me, them }
-
-class _ChatMessage {
-  final _Sender sender;
-  final String text;
-  final String time;
-  const _ChatMessage({
-    required this.sender,
-    required this.text,
-    required this.time,
-  });
-}
 
 // ─── Main Widget ──────────────────────────────────────────────────────────────
 
@@ -30,14 +18,14 @@ class LandlordChatView extends StatefulWidget {
   final VoidCallback? onCall;
   final String userId;
   final String name;
-  final String avatar;
+  final String? avatar;
 
   const LandlordChatView({
     super.key,
     required this.onBack,
     required this.userId,
     required this.name,
-    required this.avatar,
+    this.avatar,
     this.onCall,
   });
 
@@ -55,10 +43,11 @@ class _LandlordChatViewState extends State<LandlordChatView>
   late final Animation<Offset> _slideAnim;
   late final Animation<double> _fadeAnim;
 
+  StreamSubscription? _socketSubscription;
   bool _isTyping = false;
   bool _isLoading = true;
 
-  final List<_ChatMessage> _messages = [];
+  final List<ChatMessage> _messages = [];
 
   @override
   void initState() {
@@ -71,8 +60,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
     _slideAnim = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
         .animate(CurvedAnimation(
             parent: _pageController, curve: Curves.easeOutCubic));
-    _fadeAnim =
-        CurvedAnimation(parent: _pageController, curve: Curves.easeIn);
+    _fadeAnim = CurvedAnimation(parent: _pageController, curve: Curves.easeIn);
 
     _listController = AnimationController(
       vsync: this,
@@ -88,22 +76,22 @@ class _LandlordChatViewState extends State<LandlordChatView>
     _fetchMessages();
 
     // Only handle messages FROM the other person — our own are added optimistically
-    SocketService.instance.messages.listen((msg) {
+    _socketSubscription = SocketService.instance.messages.listen((msg) {
       if (msg.from == widget.userId) {
-        setState(() {
-          _messages.add(_ChatMessage(
-            sender: _Sender.them,
-            text: msg.text,
-            time: _formatTime(msg.ts),
-          ));
-        });
-        _scrollToBottom();
+        // Deduplicate incoming socket events using a stable ID
+        _addMessage(ChatMessage(
+          id: 'socket_${msg.ts}',
+          sender: ChatSender.them,
+          text: msg.text,
+          time: _formatTime(DateTime.fromMillisecondsSinceEpoch(msg.ts)),
+        ));
       }
     });
   }
 
   @override
   void dispose() {
+    _socketSubscription?.cancel();
     _pageController.dispose();
     _listController.dispose();
     _msgController.dispose();
@@ -111,25 +99,33 @@ class _LandlordChatViewState extends State<LandlordChatView>
     super.dispose();
   }
 
+  void _addMessage(ChatMessage msg) {
+    // Global ID check to prevent duplicates
+    if (_messages.any((m) => m.id == msg.id)) return;
+
+    setState(() {
+      _messages.add(msg);
+    });
+    _scrollToBottom();
+  }
+
   Future<void> _fetchMessages() async {
     try {
       final messages =
           await MessageService.instance.fetchConversation(widget.userId);
       final currentUserId = AppSession.currentUserId ?? '';
+      _messages.clear();
+      for (final msg in messages) {
+        _addMessage(ChatMessage(
+          id: msg.id,
+          sender: msg.fromUserId == currentUserId ? ChatSender.me : ChatSender.them,
+          text: msg.text,
+          time: _formatTime(msg.createdAt),
+        ));
+      }
       setState(() {
-        _messages.clear();
-        for (final msg in messages) {
-          _messages.add(_ChatMessage(
-            sender: msg.fromUserId == currentUserId
-                ? _Sender.me
-                : _Sender.them,
-            text: msg.text,
-            time: _formatTime(msg.createdAt.millisecondsSinceEpoch),
-          ));
-        }
         _isLoading = false;
       });
-      _scrollToBottom();
     } catch (err) {
       setState(() => _isLoading = false);
       // ignore: avoid_print
@@ -142,26 +138,53 @@ class _LandlordChatViewState extends State<LandlordChatView>
     if (text.isEmpty) return;
     _msgController.clear();
 
+    final messageId = const Uuid().v4();
     // Optimistic local append
-    setState(() {
-      _messages.add(_ChatMessage(
-        sender: _Sender.me,
-        text: text,
-        time: _formatTime(DateTime.now().millisecondsSinceEpoch),
-      ));
-    });
-    _scrollToBottom();
+    _addMessage(ChatMessage(
+      id: messageId,
+      sender: ChatSender.me,
+      text: text,
+      time: _formatTime(DateTime.now()),
+      status: MessageStatus.sending,
+    ));
 
     // Send over socket
     SocketService.instance.sendMessage(to: widget.userId, text: text);
 
-    // Persist to backend
-    MessageService.instance
-        .saveMessage(toUserId: widget.userId, text: text)
-        .catchError((err) {
-      // ignore: avoid_print
+    _performSave(messageId, text);
+  }
+
+  Future<void> _performSave(String messageId, String text) async {
+    try {
+      await MessageService.instance.saveMessage(toUserId: widget.userId, text: text);
+      if (!mounted) return;
+      final idx = _messages.indexWhere((m) => m.id == messageId);
+      if (idx != -1) {
+        setState(() {
+          _messages[idx] = _messages[idx].copyWith(status: MessageStatus.sent);
+        });
+      }
+    } catch (err) {
+      if (!mounted) return;
+      final idx = _messages.indexWhere((m) => m.id == messageId);
+      if (idx != -1) {
+        setState(() {
+          _messages[idx] = _messages[idx].copyWith(status: MessageStatus.failed);
+        });
+      }
       print('Failed to save message: $err');
+    }
+  }
+
+  void _retryMessage(ChatMessage msg) {
+    if (msg.status != MessageStatus.failed) return;
+    setState(() {
+      final idx = _messages.indexOf(msg);
+      if (idx != -1) {
+        _messages[idx] = msg.copyWith(status: MessageStatus.sending);
+      }
     });
+    _performSave(msg.id, msg.text);
   }
 
   void _scrollToBottom() {
@@ -176,14 +199,17 @@ class _LandlordChatViewState extends State<LandlordChatView>
     });
   }
 
-  String _formatTime(int ms) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
-    return '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+  String _formatTime(DateTime dt) {
+    final hour = dt.hour;
+    final minute = dt.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    return '$displayHour:$minute $period';
   }
 
   Widget _buildStaggered({required Widget child, required int index}) {
-    final double start = (index * 0.15).clamp(0.0, 1.0);
-    final double end = (start + 0.4).clamp(0.0, 1.0);
+    final double start = (index * 0.05).clamp(0.0, 1.0);
+    final double end = (start + 0.6).clamp(0.0, 1.0);
     final animation = CurvedAnimation(
       parent: _listController,
       curve: Interval(start, end, curve: Curves.easeOutCubic),
@@ -191,9 +217,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
     return FadeTransition(
       opacity: animation,
       child: SlideTransition(
-        position:
-            Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
-                .animate(animation),
+        position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
+            .animate(animation),
         child: child,
       ),
     );
@@ -247,7 +272,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
           const SizedBox(width: 16),
           ClipOval(
             child: buildPropertyImage(
-              widget.avatar,
+              widget.avatar ?? '',
               width: 48,
               height: 48,
               fit: BoxFit.cover,
@@ -335,12 +360,16 @@ class _LandlordChatViewState extends State<LandlordChatView>
               index: index, child: _buildDateDivider('Today'));
         }
         final msg = _messages[index - 1];
-        final Widget bubble = msg.sender == _Sender.me
-            ? _MyBubble(message: msg)
-            : _TheirBubble(message: msg, avatar: widget.avatar);
+        final Widget bubble = msg.sender == ChatSender.me
+            ? _MyBubble(
+                message: msg,
+                onRetry: () => _retryMessage(msg),
+              )
+            : _TheirBubble(message: msg, avatar: widget.avatar ?? '');
         return _buildStaggered(
           index: index,
-          child: Padding(padding: const EdgeInsets.only(bottom: 24), child: bubble),
+          child: Padding(
+              padding: const EdgeInsets.only(bottom: 24), child: bubble),
         );
       },
     );
@@ -442,7 +471,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
 // ─── Bubble Widgets ───────────────────────────────────────────────────────────
 
 class _TheirBubble extends StatelessWidget {
-  final _ChatMessage message;
+  final ChatMessage message;
   final String avatar;
   const _TheirBubble({required this.message, required this.avatar});
 
@@ -512,8 +541,36 @@ class _TheirBubble extends StatelessWidget {
 }
 
 class _MyBubble extends StatelessWidget {
-  final _ChatMessage message;
-  const _MyBubble({required this.message});
+  final ChatMessage message;
+  final VoidCallback? onRetry;
+
+  const _MyBubble({required this.message, this.onRetry});
+
+  Widget _buildStatusIcon() {
+    switch (message.status) {
+      case MessageStatus.sending:
+        return const SizedBox(
+          width: 12,
+          height: 12,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            color: Colors.white70,
+          ),
+        );
+      case MessageStatus.sent:
+        return const Icon(Icons.done_all, size: 14, color: Colors.white70);
+      case MessageStatus.failed:
+        return GestureDetector(
+          onTap: onRetry,
+          behavior: HitTestBehavior.opaque,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 2),
+            child: Icon(Icons.error_outline,
+                size: 16, color: Color(0xFFFCA5A5)),
+          ),
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -552,11 +609,18 @@ class _MyBubble extends StatelessWidget {
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: Text(message.time,
-                      style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white.withOpacity(0.8))),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(message.time,
+                          style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withOpacity(0.8))),
+                      const SizedBox(width: 4),
+                      _buildStatusIcon(),
+                    ],
+                  ),
                 ),
               ],
             ),

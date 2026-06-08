@@ -35,6 +35,7 @@ class ConversationModel {
   final String? userAvatar;
   final String? lastMessage;
   final DateTime? lastMessageAt;
+  final int unreadCount;
 
   ConversationModel({
     required this.userId,
@@ -42,9 +43,14 @@ class ConversationModel {
     this.userAvatar,
     this.lastMessage,
     this.lastMessageAt,
+    this.unreadCount = 0,
   });
 
   factory ConversationModel.fromJson(Map<String, dynamic> json) {
+    final unreadRaw = json['unread_count'] ?? json['unreadCount'];
+    final unreadCount =
+        unreadRaw == null ? 0 : int.tryParse(unreadRaw.toString()) ?? 0;
+
     return ConversationModel(
       userId: json['user_id']?.toString() ?? '',
       userName: json['user_name']?.toString() ?? 'Unknown',
@@ -52,6 +58,7 @@ class ConversationModel {
       lastMessage: json['last_message']?.toString(),
       lastMessageAt:
           DateTime.tryParse(json['last_message_at']?.toString() ?? ''),
+      unreadCount: unreadCount,
     );
   }
 }
@@ -133,6 +140,23 @@ class MessageService {
       return conversations;
     } catch (err) {
       rethrow;
+    }
+  }
+
+  Future<void> markAsRead(List<String> userIds) async {
+    if (userIds.isEmpty) return;
+
+    final response = await http.post(
+      Uri.parse('$_baseUrl/messages/mark-read'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${AppSession.apiToken}',
+      },
+      body: jsonEncode({'user_ids': userIds}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to mark as read: ${response.body}');
     }
   }
 }

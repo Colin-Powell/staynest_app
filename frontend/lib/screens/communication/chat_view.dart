@@ -1,24 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/services/message_service.dart';
+import 'package:uuid/uuid.dart';
+import 'package:property_app/models/communication_models.dart';
 
 const Color _primary = Color(0xFF3F37C9);
-
-// ─── Data model ───────────────────────────────────────────────────────────────
-
-enum _Sender { me, them }
-
-class _ChatMessage {
-  final _Sender sender;
-  final String text;
-  final String time;
-  const _ChatMessage({
-    required this.sender,
-    required this.text,
-    required this.time,
-  });
-}
 
 // ─── Main Widget ──────────────────────────────────────────────────────────────
 
@@ -51,10 +39,11 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   late final Animation<Offset> _slideAnim;
   late final Animation<double> _fadeAnim;
 
+  StreamSubscription? _socketSubscription;
   bool _isTyping = false;
   bool _isLoading = true;
 
-  final List<_ChatMessage> _messages = [];
+  final List<ChatMessage> _messages = [];
 
   @override
   void initState() {
@@ -87,23 +76,22 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     _fetchMessages();
 
     // Listen to socket messages
-    SocketService.instance.messages.listen((msg) {
+    _socketSubscription = SocketService.instance.messages.listen((msg) {
       if (msg.from == widget.userId) {
-        // only them, not us
-        setState(() {
-          _messages.add(_ChatMessage(
-            sender: _Sender.them,
-            text: msg.text,
-            time: _formatTime(msg.ts),
-          ));
-        });
-        _scrollToBottom();
+        // Use a stable identifier for socket deduplication
+        _addMessage(ChatMessage(
+          id: 'socket_${msg.ts}',
+          sender: ChatSender.them,
+          text: msg.text,
+          time: _formatTime(msg.ts),
+        ));
       }
     });
   }
 
   @override
   void dispose() {
+    _socketSubscription?.cancel();
     _pageController.dispose();
     _listController.dispose();
     _msgController.dispose();
@@ -111,46 +99,86 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  void _addMessage(ChatMessage msg) {
+    // Global ID check to prevent duplicates
+    if (_messages.any((m) => m.id == msg.id)) return;
+
+    setState(() {
+      _messages.add(msg);
+    });
+    _scrollToBottom();
+  }
+
   void _sendMessage() {
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
     _msgController.clear();
 
+    final messageId = const Uuid().v4();
     // Append message locally immediately for UX
-    setState(() {
-      _messages.add(_ChatMessage(sender: _Sender.me, text: text, time: 'Now'));
-    });
-    _scrollToBottom();
+    _addMessage(ChatMessage(
+      id: messageId,
+      sender: ChatSender.me,
+      text: text,
+      time: 'Now',
+      status: MessageStatus.sending,
+    ));
 
     // Send over socket
     SocketService.instance.sendMessage(to: widget.userId, text: text);
 
-    // Save to backend via REST API
-    MessageService.instance
-        .saveMessage(toUserId: widget.userId, text: text)
-        .catchError((err) {
-      // Handle error silently or show toast
-      // ignore: avoid_print
+    _performSave(messageId, text);
+  }
+
+  Future<void> _performSave(String messageId, String text) async {
+    try {
+      await MessageService.instance.saveMessage(toUserId: widget.userId, text: text);
+      if (!mounted) return;
+      final idx = _messages.indexWhere((m) => m.id == messageId);
+      if (idx != -1) {
+        setState(() {
+          _messages[idx] = _messages[idx].copyWith(status: MessageStatus.sent);
+        });
+      }
+    } catch (err) {
+      if (!mounted) return;
+      final idx = _messages.indexWhere((m) => m.id == messageId);
+      if (idx != -1) {
+        setState(() {
+          _messages[idx] =
+              _messages[idx].copyWith(status: MessageStatus.failed);
+        });
+      }
       print('Failed to save message: $err');
+    }
+  }
+
+  void _retryMessage(ChatMessage msg) {
+    if (msg.status != MessageStatus.failed) return;
+    setState(() {
+      final idx = _messages.indexOf(msg);
+      if (idx != -1) {
+        _messages[idx] = msg.copyWith(status: MessageStatus.sending);
+      }
     });
+    _performSave(msg.id, msg.text);
   }
 
   Future<void> _fetchMessages() async {
     try {
       final messages =
           await MessageService.instance.fetchConversation(widget.userId);
-      setState(() {
-        _messages.clear();
-        for (final msg in messages) {
-          _messages.add(_ChatMessage(
-            sender: msg.fromUserId == widget.userId ? _Sender.them : _Sender.me,
-            text: msg.text,
-            time: _formatTime(msg.createdAt.millisecondsSinceEpoch),
-          ));
-        }
-        _isLoading = false;
-      });
-      _scrollToBottom();
+      _messages.clear();
+      for (final msg in messages) {
+        _addMessage(ChatMessage(
+          id: msg.id, // Use actual DB ID
+          sender:
+              msg.fromUserId == widget.userId ? ChatSender.them : ChatSender.me,
+          text: msg.text,
+          time: _formatTime(msg.createdAt.millisecondsSinceEpoch),
+        ));
+      }
+      setState(() => _isLoading = false);
     } catch (err) {
       setState(() {
         _isLoading = false;
@@ -317,8 +345,11 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
         }
 
         final msg = _messages[index - 1];
-        final Widget bubble = msg.sender == _Sender.me
-            ? _MyBubble(message: msg)
+        final Widget bubble = msg.sender == ChatSender.me
+            ? _MyBubble(
+                message: msg,
+                onRetry: () => _retryMessage(msg),
+              )
             : _TheirBubble(message: msg, avatar: widget.avatar);
 
         return _buildStaggered(
@@ -450,7 +481,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 // ─── Bubble Widgets ───────────────────────────────────────────────────────────
 
 class _TheirBubble extends StatelessWidget {
-  final _ChatMessage message;
+  final ChatMessage message;
   final String avatar;
 
   const _TheirBubble({required this.message, required this.avatar});
@@ -524,9 +555,36 @@ class _TheirBubble extends StatelessWidget {
 }
 
 class _MyBubble extends StatelessWidget {
-  final _ChatMessage message;
+  final ChatMessage message;
+  final VoidCallback? onRetry;
 
-  const _MyBubble({required this.message});
+  const _MyBubble({required this.message, this.onRetry});
+
+  Widget _buildStatusIcon() {
+    switch (message.status) {
+      case MessageStatus.sending:
+        return const SizedBox(
+          width: 12,
+          height: 12,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            color: Colors.white70,
+          ),
+        );
+      case MessageStatus.sent:
+        return const Icon(Icons.done_all, size: 14, color: Colors.white70);
+      case MessageStatus.failed:
+        return GestureDetector(
+          onTap: onRetry,
+          behavior: HitTestBehavior.opaque,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 2),
+            child: Icon(Icons.error_outline,
+                size: 16, color: Colors.redAccent),
+          ),
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -569,13 +627,20 @@ class _MyBubble extends StatelessWidget {
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: Text(
-                    message.time,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withOpacity(0.8),
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        message.time,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withOpacity(0.8),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      _buildStatusIcon(),
+                    ],
                   ),
                 ),
               ],

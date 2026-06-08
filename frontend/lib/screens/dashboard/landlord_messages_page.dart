@@ -1,10 +1,14 @@
 import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/message_service.dart';
+import 'package:property_app/services/socket_service.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'landlord_chat_view.dart';
+import 'package:uuid/uuid.dart';
 
 const Color _landlordPrimary = Color(0xFF059669);
 const Color _textDark = Color(0xFF111827);
@@ -30,13 +34,27 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
   final TextEditingController _searchController = TextEditingController();
   bool _isLoading = true;
   String? _errorMessage;
+  bool _isSelectionMode = false;
+  Set<String> _selectedIds = {};
 
   List<ConversationModel> _conversations = [];
+  StreamSubscription? _messageSubscription;
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(() {
+      setState(() => _searchQuery = _searchController.text.toLowerCase());
+    });
     _loadConversations();
+    _setupSocketListener();
+  }
+
+  void _setupSocketListener() {
+    _messageSubscription = SocketService.instance.messages.listen((_) {
+      // Refresh list when any new message arrives to update last message/unread count
+      _loadConversations();
+    });
   }
 
   Future<void> _loadConversations() async {
@@ -62,6 +80,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _messageSubscription?.cancel();
     super.dispose();
   }
 
@@ -144,29 +163,116 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       );
     }
 
+    final filtered = _filteredConversations;
+
     return RefreshIndicator(
       color: _landlordPrimary,
       onRefresh: _loadConversations,
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 160),
-        itemCount: _filteredConversations.length,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 160),
+        itemCount: filtered.length,
         itemBuilder: (context, index) {
-          final conv = _filteredConversations[index];
-          return _ConversationTile(
-            name: conv.userName,
-            avatarUrl: conv.userAvatar,
-            lastMessage: conv.lastMessage ?? 'No messages yet',
-            time: _formatTime(conv.lastMessageAt),
-            unread: 0, // unread count not in ConversationModel yet
-            isOnline: false,
-            onTap: () {
-              widget.onChatOpen();
-              setState(() => _selectedConversation = conv);
+          final conv = filtered[index];
+          final isSelected = _selectedIds.contains(conv.userId);
+
+          return Dismissible(
+            key: ValueKey(conv.userId),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              alignment: Alignment.centerRight,
+              child: const Icon(Icons.delete_outline, color: Colors.white, size: 32),
+            ),
+            onDismissed: (_) {
+              setState(() {
+                _conversations.removeWhere((c) => c.userId == conv.userId);
+                _selectedIds.remove(conv.userId);
+                if (_selectedIds.isEmpty) _isSelectionMode = false;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Chat with ${conv.userName} deleted'), behavior: SnackBarBehavior.floating),
+              );
             },
+            child: _ConversationTile(
+              name: conv.userName,
+              avatarUrl: conv.userAvatar,
+              lastMessage: conv.lastMessage ?? 'No messages yet',
+              time: _formatTime(conv.lastMessageAt),
+              unread: conv.unreadCount,
+              isOnline: false,
+              isSelected: isSelected,
+              isSelectionMode: _isSelectionMode,
+              onTap: () {
+                if (_isSelectionMode) {
+                  _toggleSelection(conv.userId);
+                } else {
+                  widget.onChatOpen();
+                  setState(() => _selectedConversation = conv);
+                }
+              },
+              onLongPress: () {
+                if (!_isSelectionMode) {
+                  setState(() {
+                    _isSelectionMode = true;
+                    _selectedIds.add(conv.userId);
+                  });
+                }
+              },
+            ),
           );
         },
       ),
     );
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        if (_selectedIds.isEmpty) _isSelectionMode = false;
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _isSelectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _selectAll() {
+    setState(() {
+      if (_selectedIds.length == _filteredConversations.length) {
+        _exitSelectionMode();
+      } else {
+        _selectedIds = _filteredConversations.map((c) => c.userId).toSet();
+      }
+    });
+  }
+
+  Future<void> _markSelectedAsRead() async {
+    try {
+      final idsToMark = _selectedIds.toList();
+      await MessageService.instance.markAsRead(idsToMark);
+      
+      setState(() {
+        _loadConversations(); // Refresh list to get updated counts from DB
+        _exitSelectionMode();
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to mark as read: $e')),
+      );
+    }
   }
 
   @override
@@ -179,8 +285,8 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
           setState(() => _selectedConversation = null);
         },
         name: conv.userName,
-        avatarUrl: conv.userAvatar,
-        otherUserId: conv.userId,
+        avatar: conv.userAvatar,
+        userId: conv.userId,
       );
     }
 
@@ -214,13 +320,11 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                   right: 32,
                   bottom: 24,
                 ),
-                child: Text(
-                  'Messages',
-                  style: GoogleFonts.poppins(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
-                    color: _textDark,
-                  ),
+                child: AnimatedCrossFade(
+                  duration: const Duration(milliseconds: 250),
+                  crossFadeState: _isSelectionMode ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                  firstChild: _buildNormalHeader(),
+                  secondChild: _buildSelectionHeader(),
                 ),
               ),
               Padding(
@@ -279,11 +383,175 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
               Expanded(child: _buildConversationsList()),
             ],
           ),
+          _buildBottomSelectionBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNormalHeader() {
+    return Text(
+      'Messages',
+      style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w800, color: _textDark),
+    );
+  }
+
+  Widget _buildSelectionHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.close, color: _textDark),
+              onPressed: _exitSelectionMode,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '${_selectedIds.length} Selected',
+              style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: _textDark),
+            ),
+          ],
+        ),
+        TextButton(
+          onPressed: _selectAll,
+          child: Text(_selectedIds.length == _filteredConversations.length ? 'Unselect All' : 'Select All'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBottomSelectionBar() {
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: AnimatedSlide(
+        offset: _isSelectionMode ? Offset.zero : const Offset(0, 1.2),
+        duration: const Duration(milliseconds: 250),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).padding.bottom + 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20)],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _BottomBarIcon(icon: Icons.notifications_off_outlined, label: 'Mute', onTap: _exitSelectionMode),
+              _BottomBarIcon(
+                icon: Icons.delete_outline,
+                label: 'Delete',
+                color: Colors.red,
+                onTap: () {
+                  setState(() {
+                    _conversations.removeWhere((c) => _selectedIds.contains(c.userId));
+                    _exitSelectionMode();
+                  });
+                },
+              ),
+              PopupMenuButton<String>(
+                offset: const Offset(0, -120),
+                onSelected: (value) {
+                  if (value == 'read') _markSelectedAsRead();
+                },
+                icon: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.more_horiz, color: _textDark, size: 28),
+                    const SizedBox(height: 4),
+                    Text(
+                      'More',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _textDark,
+                      ),
+                    ),
+                  ],
+                ),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'read',
+                    child: Row(
+                      children: [
+                        Icon(Icons.mark_chat_read_outlined, size: 20),
+                        SizedBox(width: 12),
+                        Text('Mark as read'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Shared Glass Container ──────────────────────────────────────────────────
+
+class _GlassContainer extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final BorderRadius? borderRadius;
+  final double opacity;
+  final double borderWidth;
+
+  const _GlassContainer({
+    required this.child,
+    required this.padding,
+    this.borderRadius,
+    this.opacity = 0.55,
+    this.borderWidth = 1.5,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = borderRadius ?? BorderRadius.circular(24);
+    return ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(opacity),
+            borderRadius: radius,
+            border: Border.all(color: Colors.white.withOpacity(0.4), width: borderWidth),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomBarIcon extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _BottomBarIcon({required this.icon, required this.label, this.color = _textDark, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(height: 4),
+          Text(label, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
         ],
       ),
     );
   }
 }
+
 
 // ─── Conversation Tile ───────────────────────────────────────────────────────
 
@@ -294,7 +562,10 @@ class _ConversationTile extends StatelessWidget {
   final String time;
   final int unread;
   final bool isOnline;
+  final bool isSelected;
+  final bool isSelectionMode;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   const _ConversationTile({
     required this.name,
@@ -303,18 +574,32 @@ class _ConversationTile extends StatelessWidget {
     required this.time,
     required this.unread,
     required this.isOnline,
+    required this.isSelected,
+    required this.isSelectionMode,
     required this.onTap,
+    required this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+      child: _GlassContainer(
+        padding: const EdgeInsets.all(16),
+        opacity: isSelected ? 0.8 : 0.4,
+        borderRadius: BorderRadius.circular(28),
         child: Row(
           children: [
+            if (isSelectionMode)
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Icon(
+                  isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+                  color: isSelected ? _landlordPrimary : _textLight,
+                ),
+              ),
             _buildAvatar(),
             const SizedBox(width: 20),
             Expanded(
@@ -425,482 +710,6 @@ class _ConversationTile extends StatelessWidget {
               ),
             ),
           ),
-      ],
-    );
-  }
-}
-
-// ─── Data model ──────────────────────────────────────────────────────────────
-
-enum _Sender { me, them }
-
-class _ChatMessage {
-  final _Sender sender;
-  final String text;
-  final String time;
-
-  const _ChatMessage({
-    required this.sender,
-    required this.text,
-    required this.time,
-  });
-}
-
-// ─── Chat View ───────────────────────────────────────────────────────────────
-
-class LandlordChatView extends StatefulWidget {
-  final VoidCallback onBack;
-  final VoidCallback? onCall;
-  final String name;
-  final String? avatarUrl;
-
-  /// The other participant's userId — used for fetch & send
-  final String otherUserId;
-
-  const LandlordChatView({
-    super.key,
-    required this.onBack,
-    required this.name,
-    required this.otherUserId,
-    this.avatarUrl,
-    this.onCall,
-  });
-
-  @override
-  State<LandlordChatView> createState() => _LandlordChatViewState();
-}
-
-class _LandlordChatViewState extends State<LandlordChatView>
-    with TickerProviderStateMixin {
-  final TextEditingController _msgController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-
-  late final AnimationController _pageController;
-  late final AnimationController _listController;
-  late final Animation<Offset> _slideAnim;
-  late final Animation<double> _fadeAnim;
-
-  bool _isTyping = false;
-  bool _isLoadingMessages = true;
-  bool _isSending = false;
-  String? _loadError;
-
-  final List<_ChatMessage> _messages = [];
-
-  @override
-  void initState() {
-    super.initState();
-
-    _pageController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 350),
-    );
-    _slideAnim = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-        .animate(CurvedAnimation(
-            parent: _pageController, curve: Curves.easeOutCubic));
-    _fadeAnim =
-        CurvedAnimation(parent: _pageController, curve: Curves.easeIn);
-
-    _listController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-
-    _msgController.addListener(() {
-      setState(() => _isTyping = _msgController.text.trim().isNotEmpty);
-    });
-
-    _pageController
-        .forward()
-        .then((_) => _listController.forward());
-
-    _loadMessages();
-  }
-
-  Future<void> _loadMessages() async {
-    setState(() {
-      _isLoadingMessages = true;
-      _loadError = null;
-    });
-
-    try {
-      final fetched = await MessageService.instance
-          .fetchConversation(widget.otherUserId);
-
-      final currentUserId = AppSession.currentUserId;
-
-      setState(() {
-        _messages.clear();
-        _messages.addAll(fetched.map((m) => _ChatMessage(
-              sender:
-                  m.fromUserId == currentUserId ? _Sender.me : _Sender.them,
-              text: m.text,
-              time: _formatTime(m.createdAt),
-            )));
-        _isLoadingMessages = false;
-      });
-
-      _scrollToBottom(immediate: true);
-    } catch (e) {
-      setState(() {
-        _loadError = 'Could not load messages. Tap to retry.';
-        _isLoadingMessages = false;
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    _listController.dispose();
-    _msgController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  String _formatTime(DateTime dt) {
-    final hour = dt.hour;
-    final minute = dt.minute.toString().padLeft(2, '0');
-    final period = hour >= 12 ? 'PM' : 'AM';
-    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-    return '$displayHour:$minute $period';
-  }
-
-  void _scrollToBottom({bool immediate = false}) {
-    final delay = immediate ? 0 : 300;
-    Future.delayed(Duration(milliseconds: delay), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  Future<void> _sendMessage() async {
-    final text = _msgController.text.trim();
-    if (text.isEmpty || _isSending) return;
-
-    // Optimistic UI: add to list immediately
-    final optimisticMsg = _ChatMessage(
-      sender: _Sender.me,
-      text: text,
-      time: _formatTime(DateTime.now()),
-    );
-
-    setState(() {
-      _messages.add(optimisticMsg);
-      _msgController.clear();
-      _isTyping = false;
-      _isSending = true;
-    });
-
-    _scrollToBottom();
-
-    try {
-      await MessageService.instance.saveMessage(
-        toUserId: widget.otherUserId,
-        text: text,
-      );
-    } catch (e) {
-      // Roll back optimistic message on failure
-      if (mounted) {
-        setState(() => _messages.remove(optimisticMsg));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Failed to send message. Please try again.'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red.shade600,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSending = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SlideTransition(
-      position: _slideAnim,
-      child: FadeTransition(
-        opacity: _fadeAnim,
-        child: Scaffold(
-          backgroundColor: Colors.white,
-          body: Column(
-            children: [
-              _buildHeader(context),
-              Expanded(child: _buildChatArea()),
-              _buildInputArea(context),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 16,
-        bottom: 16,
-        left: 20,
-        right: 24,
-      ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6))),
-      ),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: widget.onBack,
-            child: const Icon(Icons.arrow_back, size: 28, color: _textDark),
-          ),
-          const SizedBox(width: 16),
-          _buildChatAvatar(),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.name,
-                  style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: _textDark,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                          color: Color(0xFF10B981), shape: BoxShape.circle),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Online',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: _textLight,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: widget.onCall,
-            child: Icon(PhosphorIcons.phone(), color: _textDark, size: 28),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChatAvatar() {
-    if (widget.avatarUrl == null || widget.avatarUrl!.isEmpty) {
-      return Container(
-        width: 48,
-        height: 48,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          color: Color(0xFFF3F4F6),
-        ),
-        child: const Icon(Icons.person, color: _textLight, size: 24),
-      );
-    }
-    return ClipOval(
-      child: buildPropertyImage(
-        widget.avatarUrl!,
-        width: 48,
-        height: 48,
-        fit: BoxFit.cover,
-        errorPlaceholder: Container(
-          width: 48,
-          height: 48,
-          color: const Color(0xFFF3F4F6),
-          child: const Icon(Icons.person, color: _textLight, size: 24),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChatArea() {
-    if (_isLoadingMessages) {
-      return const Center(
-        child: CircularProgressIndicator(color: _landlordPrimary),
-      );
-    }
-
-    if (_loadError != null) {
-      return Center(
-        child: GestureDetector(
-          onTap: _loadMessages,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.refresh, color: _textLight, size: 40),
-              const SizedBox(height: 12),
-              Text(
-                _loadError!,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                    fontSize: 14, color: _textLight),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_messages.isEmpty) {
-      return Center(
-        child: Text(
-          'Say hello 👋',
-          style: GoogleFonts.poppins(fontSize: 16, color: _textLight),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.all(24),
-      itemCount: _messages.length,
-      itemBuilder: (context, index) {
-        final msg = _messages[index];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 24),
-          child: msg.sender == _Sender.me
-              ? _MyBubble(message: msg)
-              : _TheirBubble(message: msg),
-        );
-      },
-    );
-  }
-
-  Widget _buildInputArea(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 16,
-        bottom: MediaQuery.of(context).padding.bottom + 16,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _msgController,
-              decoration: InputDecoration(
-                hintText: 'Type a message..',
-                border: InputBorder.none,
-                hintStyle: GoogleFonts.poppins(color: _textLight),
-              ),
-              onSubmitted: (_) => _sendMessage(),
-            ),
-          ),
-          const Icon(Icons.sentiment_satisfied_alt_rounded,
-              color: _textLight, size: 28),
-          const SizedBox(width: 16),
-          GestureDetector(
-            onTap: _sendMessage,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: _isTyping ? _landlordPrimary : _textLight,
-                shape: BoxShape.circle,
-              ),
-              child: _isSending
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.send_rounded,
-                      color: Colors.white, size: 20),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Bubbles ─────────────────────────────────────────────────────────────────
-
-class _TheirBubble extends StatelessWidget {
-  final _ChatMessage message;
-  const _TheirBubble({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ClipOval(
-          child: Container(
-            width: 44,
-            height: 44,
-            color: const Color(0xFFF3F4F6),
-            child: const Icon(Icons.person, color: _textLight),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Flexible(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: Text(
-              message.text,
-              style: GoogleFonts.poppins(fontSize: 14, color: _textDark),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MyBubble extends StatelessWidget {
-  final _ChatMessage message;
-  const _MyBubble({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        Flexible(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: _landlordPrimary,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              message.text,
-              style:
-                  GoogleFonts.poppins(fontSize: 14, color: Colors.white),
-            ),
-          ),
-        ),
       ],
     );
   }
