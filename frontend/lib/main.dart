@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'theme.dart';
 import 'data.dart';
 import 'models/property.dart';
@@ -17,12 +19,27 @@ import 'session/app_session.dart';
 import 'screens/dashboard/landlord_bookings_page.dart';
 import 'screens/privacy_policy.dart';
 import 'screens/auth/tenant_survey.dart';
+import 'screens/notification_settings_view.dart';
 import 'services/property_service.dart';
 import 'services/socket_service.dart';
+import 'services/fcm_service.dart';
+import 'services/auth_service.dart'; // Import AuthService
 import 'screens/landlord/landlord_dashboard_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Must be called before accessing any Firebase services (FCM, etc.)
+  await Firebase.initializeApp();
+
+  // Extract + log the current FCM device registration token (helps debugging)
+  try {
+    final fcmToken = await FirebaseMessaging.instance.getToken();
+    debugPrint('[FCM][token] ${fcmToken ?? '-'}');
+  } catch (err) {
+    debugPrint('FCM token extraction failed: $err');
+  }
+
   try {
     await dotenv.load(fileName: '.env');
   } on FileNotFoundError {
@@ -35,6 +52,34 @@ Future<void> main() async {
     debugPrint('Effective API_BASE_URL = ${AppSession.apiBaseUrl}');
   }
 
+  // ─── FCM extraction + filtered logs (load first) ──────────────────────────
+  void logFcm(RemoteMessage m, {String source = 'unknown'}) {
+    // Only print the keys we actually use (keeps logs readable)
+    final data = m.data;
+    final title = m.notification?.title;
+    final body = m.notification?.body;
+    final senderId = data['senderId']?.toString();
+    final chatId = data['chatId']?.toString();
+    final clickAction = data['click_action']?.toString();
+
+    debugPrint(
+      '[FCM][$source] title=${title ?? '-'} body=${body ?? '-'} senderId=${senderId ?? '-'} chatId=${chatId ?? '-'} click_action=${clickAction ?? '-'} data=${data.isEmpty ? '{}' : data} ',
+    );
+  }
+
+  // Initialize FCM early (before runApp so logs/navigation wiring work)
+  await FCMService.instance.initialize();
+
+  FirebaseMessaging.onMessage.listen((m) => logFcm(m, source: 'onMessage'));
+  FirebaseMessaging.onMessageOpenedApp
+      .listen((m) => logFcm(m, source: 'onMessageOpenedApp'));
+
+  // Assign the global navigator key to FCMService
+  FCMService.instance.navigatorKey = navigatorKey;
+
+  final initial = await FirebaseMessaging.instance.getInitialMessage();
+  if (initial != null) logFcm(initial, source: 'getInitialMessage');
+
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
@@ -43,6 +88,8 @@ Future<void> main() async {
   runApp(const PropertyApp());
 }
 
+// Define the Global Navigator Key here
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 class PropertyApp extends StatefulWidget {
   const PropertyApp({super.key});
 
@@ -78,12 +125,14 @@ class _PropertyAppState extends State<PropertyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Property App',
+      navigatorKey: navigatorKey, // Assign the navigator key to MaterialApp
       debugShowCheckedModeBanner: false,
       theme: AppTheme.themeForRole(_role),
       initialRoute: '/',
       routes: {
         '/': (context) => const SplashView(),
         '/login': (context) => LoginView(
+              // After successful login, sync FCM token
               onLogin: () {
                 if (!AppSession.currentUserVerified) {
                   Navigator.pushReplacementNamed(context, '/otp');
@@ -91,6 +140,7 @@ class _PropertyAppState extends State<PropertyApp> {
                   Navigator.pushReplacementNamed(context, '/portal');
                 } else {
                   Navigator.pushReplacementNamed(context, '/home');
+                  AuthService.instance.syncFCMToken(); // Sync FCM token
                 }
               },
               onRegister: () => Navigator.pushNamed(context, '/register'),
@@ -145,6 +195,9 @@ class _PropertyAppState extends State<PropertyApp> {
                     break;
                   case 'Help & Support':
                     Navigator.pushNamed(context, '/help_support');
+                    break;
+                  case 'Notification Settings': // New setting
+                    Navigator.pushNamed(context, '/notification_settings');
                     break;
                   default:
                     break;
@@ -208,11 +261,21 @@ class _PropertyAppState extends State<PropertyApp> {
               onBack: () => Navigator.pop(context),
               onLogout: () {
                 AppSession.reset();
+                // Consider clearing FCM token from backend on logout
                 Navigator.pushReplacementNamed(context, '/');
               },
               onItemTap: (title) {
                 if (title == 'Help & Support') {
                   Navigator.pushNamed(context, '/help_support');
+                } else if (title == 'Notification Settings') {
+                  Navigator.pushNamed(
+                    context,
+                    '/notification_settings',
+                    arguments: {
+                      'title': title,
+                      'subtitle': title,
+                    },
+                  );
                 } else {
                   Navigator.pushNamed(context, '/how_it_works', arguments: {
                     'title': title,
@@ -231,7 +294,15 @@ class _PropertyAppState extends State<PropertyApp> {
         '/list_property': (context) => const AddListingFlow(),
         '/verification_center': (context) => const VerificationCenter(),
         '/referral': (context) => const ReferralView(),
-        '/reviews': (context) => const ReviewsView(),
+        '/reviews': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+          return ReviewsView(
+            propertyId: args?['propertyId'] ?? '',
+            bookingId: args?['bookingId'],
+            averageRating: (args?['averageRating'] as num?)?.toDouble() ?? 0.0,
+            reviewCount: args?['reviewCount'] ?? 0,
+          );
+        },
         '/amenities': (context) =>
             AmenitiesView(onClose: () => Navigator.pop(context)),
         '/location': (context) => LocationView(
@@ -289,6 +360,7 @@ class _PropertyAppState extends State<PropertyApp> {
                 Navigator.pop(context);
               });
         },
+        '/notification_settings': (context) => const NotificationSettingsView(),
       },
     );
   }

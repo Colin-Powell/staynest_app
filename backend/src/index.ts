@@ -4,6 +4,45 @@ import app from './app.js';
 import { env } from './config.js';
 import { query } from './db.js';
 
+function splitSqlStatements(sql: string): string[] {
+  const statements: string[] = [];
+  let current = '';
+  let i = 0;
+
+  while (i < sql.length) {
+    const char = sql[i];
+    const next = sql[i + 1] ?? '';
+
+    if (char === '$' && next === '$') {
+      const end = sql.indexOf('$$', i + 2);
+      if (end === -1) {
+        current += sql.slice(i);
+        break;
+      }
+
+      current += sql.slice(i, end + 2);
+      i = end + 2;
+      continue;
+    }
+
+    if (char === ';') {
+      const trimmed = current.trim();
+      if (trimmed) statements.push(trimmed);
+      current = '';
+      i += 1;
+      continue;
+    }
+
+    current += char;
+    i += 1;
+  }
+
+  const trailing = current.trim();
+  if (trailing) statements.push(trailing);
+
+  return statements;
+}
+
 async function ensureDatabaseSchema() {
   const initSqlPath = path.resolve(process.cwd(), 'scripts', 'init-db.sql');
   try {
@@ -11,10 +50,7 @@ async function ensureDatabaseSchema() {
 
     // Split into individual statements and execute sequentially so we can
     // ignore errors for objects that already exist (e.g. policies).
-    const statements = sql
-      .split(/;\s*\n/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+    const statements = splitSqlStatements(sql).filter((s) => s.length > 0);
 
     for (const stmt of statements) {
       try {

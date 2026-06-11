@@ -68,7 +68,7 @@ class _LandlordBookingsViewState extends State<LandlordBookingsView> {
 
   Future<void> _confirmBooking(String bookingId) async {
     try {
-      await _repository.confirmBooking(bookingId);
+      await _repository.confirmBooking(bookingId: bookingId);
       _loadBookings();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -89,7 +89,7 @@ class _LandlordBookingsViewState extends State<LandlordBookingsView> {
     if (reason == null) return;
 
     try {
-      await _repository.cancelBooking(bookingId, reason: reason);
+      await _repository.cancelBooking(bookingId: bookingId, reason: reason);
       _loadBookings();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -156,7 +156,7 @@ class _LandlordBookingsViewState extends State<LandlordBookingsView> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.06),
+                            color: Colors.black.withValues(alpha: 0.06),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -343,7 +343,7 @@ class _BookingCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _getStatusColor(
                           (booking['status'] ?? 'pending').toString())
-                      .withOpacity(0.1),
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -402,7 +402,7 @@ class _BookingCard extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEF4444).withOpacity(0.1),
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: const Color(0xFFEF4444)),
                       ),
@@ -450,7 +450,7 @@ class _BookingCard extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEF4444).withOpacity(0.1),
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFFEF4444)),
                 ),

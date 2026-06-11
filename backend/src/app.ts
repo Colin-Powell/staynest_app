@@ -14,6 +14,7 @@ import tenantProfilesRouter from './routes/tenant_profiles.js';
 import privacyRouter from './routes/privacy.js';
 import messagesRouter from './routes/messages.js';
 import bookingsRouter from './routes/bookings.js';
+import analyticsRouter from './routes/analytics.js';
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/tenant_profiles', tenantProfilesRouter);
 app.use('/api/privacy', privacyRouter);
 app.use('/api/messages', messagesRouter);
 app.use('/api/bookings', bookingsRouter);
+app.use('/api/analytics', analyticsRouter);
 app.use('/uploads', express.static(path.resolve(process.cwd(), env.storagePath)));
 
 app.get('/api/health', (_req, res) => {

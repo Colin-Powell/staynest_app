@@ -14,6 +14,8 @@ const Color _landlordPrimary = Color(0xFF059669);
 const Color _textDark = Color(0xFF111827);
 const Color _textLight = Color(0xFF9CA3AF);
 
+enum _LandlordFilter { all, applicants, tenants, archived }
+
 class LandlordMessagesPage extends StatefulWidget {
   final VoidCallback onChatOpen;
   final VoidCallback onChatClose;
@@ -35,10 +37,14 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
   bool _isLoading = true;
   String? _errorMessage;
   bool _isSelectionMode = false;
+  _LandlordFilter _currentFilter = _LandlordFilter.all;
   Set<String> _selectedIds = {};
+  Set<String> _onlineUserIds = {};
 
   List<ConversationModel> _conversations = [];
+  List<ConversationModel> _suggestedTenants = [];
   StreamSubscription? _messageSubscription;
+  StreamSubscription? _presenceSubscription;
 
   @override
   void initState() {
@@ -47,13 +53,52 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       setState(() => _searchQuery = _searchController.text.toLowerCase());
     });
     _loadConversations();
+    _loadSuggested();
     _setupSocketListener();
   }
 
+  Future<void> _loadSuggested() async {
+    final contacts = await MessageService.instance.fetchRecentContacts();
+    if (mounted) setState(() => _suggestedTenants = contacts);
+  }
+
   void _setupSocketListener() {
-    _messageSubscription = SocketService.instance.messages.listen((_) {
-      // Refresh list when any new message arrives to update last message/unread count
-      _loadConversations();
+    _messageSubscription = SocketService.instance.messages.listen((msg) {
+      final currentUserId = AppSession.currentUserId;
+      final otherId = msg.from == currentUserId ? msg.to : msg.from;
+
+      final index = _conversations.indexWhere((c) => c.userId == otherId);
+      if (index != -1) {
+        setState(() {
+          final old = _conversations[index];
+          _conversations[index] = ConversationModel(
+            userId: old.userId,
+            userName: old.userName,
+            userAvatar: old.userAvatar,
+            lastMessage: msg.text,
+            lastMessageAt: DateTime.fromMillisecondsSinceEpoch(msg.ts),
+            unreadCount: msg.from != currentUserId
+                ? old.unreadCount + 1
+                : old.unreadCount,
+          );
+          final item = _conversations.removeAt(index);
+          _conversations.insert(0, item);
+        });
+      } else {
+        _loadConversations();
+      }
+    });
+
+    _presenceSubscription = SocketService.instance.presence.listen((data) {
+      final userId = data['userId']?.toString();
+      if (userId == null) return;
+      setState(() {
+        if (data['online'] == true) {
+          _onlineUserIds.add(userId);
+        } else {
+          _onlineUserIds.remove(userId);
+        }
+      });
     });
   }
 
@@ -81,12 +126,19 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
   void dispose() {
     _searchController.dispose();
     _messageSubscription?.cancel();
+    _presenceSubscription?.cancel();
     super.dispose();
   }
 
   List<ConversationModel> get _filteredConversations {
-    if (_searchQuery.isEmpty) return _conversations;
-    return _conversations
+    Iterable<ConversationModel> filtered = _conversations;
+
+    if (_currentFilter == _LandlordFilter.archived) {
+      filtered = filtered.where((c) => false);
+    }
+
+    if (_searchQuery.isEmpty) return filtered.toList();
+    return filtered
         .where((conv) =>
             conv.userName.toLowerCase().contains(_searchQuery.toLowerCase()))
         .toList();
@@ -178,8 +230,29 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
 
           return Dismissible(
             key: ValueKey(conv.userId),
-            direction: DismissDirection.endToStart,
+            direction: DismissDirection.horizontal,
             background: Container(
+              // Swipe Right: Mute
+              margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade700,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              alignment: Alignment.centerLeft,
+              child: const Row(
+                children: [
+                  Icon(Icons.notifications_off_outlined,
+                      color: Colors.white, size: 28),
+                  SizedBox(width: 12),
+                  Text('Mute',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+            secondaryBackground: Container(
+              // Swipe Left: Delete
               margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
               padding: const EdgeInsets.symmetric(horizontal: 24),
               decoration: BoxDecoration(
@@ -187,17 +260,26 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                 borderRadius: BorderRadius.circular(24),
               ),
               alignment: Alignment.centerRight,
-              child: const Icon(Icons.delete_outline, color: Colors.white, size: 32),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text('Delete',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+                  SizedBox(width: 12),
+                  Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                ],
+              ),
             ),
-            onDismissed: (_) {
-              setState(() {
-                _conversations.removeWhere((c) => c.userId == conv.userId);
-                _selectedIds.remove(conv.userId);
-                if (_selectedIds.isEmpty) _isSelectionMode = false;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Chat with ${conv.userName} deleted'), behavior: SnackBarBehavior.floating),
-              );
+            onDismissed: (direction) async {
+              if (direction == DismissDirection.endToStart) {
+                final userId = conv.userId;
+                setState(() =>
+                    _conversations.removeWhere((c) => c.userId == userId));
+                await MessageService.instance.deleteConversation(userId);
+              } else {
+                _loadConversations();
+              }
             },
             child: _ConversationTile(
               name: conv.userName,
@@ -205,7 +287,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
               lastMessage: conv.lastMessage ?? 'No messages yet',
               time: _formatTime(conv.lastMessageAt),
               unread: conv.unreadCount,
-              isOnline: false,
+              isOnline: _onlineUserIds.contains(conv.userId),
               isSelected: isSelected,
               isSelectionMode: _isSelectionMode,
               onTap: () {
@@ -263,11 +345,8 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
     try {
       final idsToMark = _selectedIds.toList();
       await MessageService.instance.markAsRead(idsToMark);
-      
-      setState(() {
-        _loadConversations(); // Refresh list to get updated counts from DB
-        _exitSelectionMode();
-      });
+      _exitSelectionMode();
+      _loadConversations();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to mark as read: $e')),
@@ -322,10 +401,17 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                 ),
                 child: AnimatedCrossFade(
                   duration: const Duration(milliseconds: 250),
-                  crossFadeState: _isSelectionMode ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                  crossFadeState: _isSelectionMode
+                      ? CrossFadeState.showSecond
+                      : CrossFadeState.showFirst,
                   firstChild: _buildNormalHeader(),
                   secondChild: _buildSelectionHeader(),
                 ),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: _buildFilterChips(),
               ),
               Padding(
                 padding:
@@ -389,10 +475,38 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
     );
   }
 
+  Widget _buildFilterChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: _LandlordFilter.values.map((filter) {
+          final isSelected = _currentFilter == filter;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label:
+                  Text(filter.name[0].toUpperCase() + filter.name.substring(1)),
+              selected: isSelected,
+              onSelected: (val) => setState(() => _currentFilter = filter),
+              selectedColor: _landlordPrimary.withOpacity(0.2),
+              labelStyle: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: isSelected ? _landlordPrimary : _textDark,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500),
+              backgroundColor: Colors.white.withOpacity(0.5),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildNormalHeader() {
     return Text(
       'Messages',
-      style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w800, color: _textDark),
+      style: GoogleFonts.poppins(
+          fontSize: 32, fontWeight: FontWeight.w800, color: _textDark),
     );
   }
 
@@ -409,13 +523,16 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
             const SizedBox(width: 8),
             Text(
               '${_selectedIds.length} Selected',
-              style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: _textDark),
+              style: GoogleFonts.poppins(
+                  fontSize: 22, fontWeight: FontWeight.w700, color: _textDark),
             ),
           ],
         ),
         TextButton(
           onPressed: _selectAll,
-          child: Text(_selectedIds.length == _filteredConversations.length ? 'Unselect All' : 'Select All'),
+          child: Text(_selectedIds.length == _filteredConversations.length
+              ? 'Unselect All'
+              : 'Select All'),
         ),
       ],
     );
@@ -428,25 +545,36 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
         offset: _isSelectionMode ? Offset.zero : const Offset(0, 1.2),
         duration: const Duration(milliseconds: 250),
         child: Container(
-          padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).padding.bottom + 20),
+          padding: EdgeInsets.fromLTRB(
+              24, 20, 24, MediaQuery.of(context).padding.bottom + 20),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20)],
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20)
+            ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _BottomBarIcon(icon: Icons.notifications_off_outlined, label: 'Mute', onTap: _exitSelectionMode),
+              _BottomBarIcon(
+                  icon: Icons.notifications_off_outlined,
+                  label: 'Mute',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Mute coming soon')));
+                  }),
               _BottomBarIcon(
                 icon: Icons.delete_outline,
                 label: 'Delete',
                 color: Colors.red,
-                onTap: () {
-                  setState(() {
-                    _conversations.removeWhere((c) => _selectedIds.contains(c.userId));
-                    _exitSelectionMode();
-                  });
+                onTap: () async {
+                  final ids = _selectedIds.toList();
+                  setState(() => _conversations
+                      .removeWhere((c) => ids.contains(c.userId)));
+                  for (var id in ids)
+                    await MessageService.instance.deleteConversation(id);
+                  _exitSelectionMode();
                 },
               ),
               PopupMenuButton<String>(
@@ -519,7 +647,8 @@ class _GlassContainer extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(opacity),
             borderRadius: radius,
-            border: Border.all(color: Colors.white.withOpacity(0.4), width: borderWidth),
+            border: Border.all(
+                color: Colors.white.withOpacity(0.4), width: borderWidth),
           ),
           child: child,
         ),
@@ -534,7 +663,11 @@ class _BottomBarIcon extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  const _BottomBarIcon({required this.icon, required this.label, this.color = _textDark, required this.onTap});
+  const _BottomBarIcon(
+      {required this.icon,
+      required this.label,
+      this.color = _textDark,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -545,13 +678,14 @@ class _BottomBarIcon extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 28),
           const SizedBox(height: 4),
-          Text(label, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+          Text(label,
+              style: GoogleFonts.poppins(
+                  fontSize: 12, fontWeight: FontWeight.w600, color: color)),
         ],
       ),
     );
   }
 }
-
 
 // ─── Conversation Tile ───────────────────────────────────────────────────────
 
@@ -592,11 +726,25 @@ class _ConversationTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         child: Row(
           children: [
+            // Visual hierarchy accent bar
+            if (unread > 0 && !isSelectionMode)
+              Container(
+                width: 4,
+                height: 40,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  color: _landlordPrimary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+
             if (isSelectionMode)
               Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: Icon(
-                  isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+                  isSelected
+                      ? Icons.check_circle
+                      : Icons.radio_button_unchecked,
                   color: isSelected ? _landlordPrimary : _textLight,
                 ),
               ),
@@ -643,13 +791,15 @@ class _ConversationTile extends StatelessWidget {
                 const SizedBox(height: 8),
                 if (unread > 0)
                   Container(
-                    padding: const EdgeInsets.all(6),
+                    width: unread > 9 ? 32 : 24,
+                    height: 24,
                     decoration: const BoxDecoration(
                       color: _landlordPrimary,
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
+                    alignment: Alignment.center,
                     child: Text(
-                      unread.toString(),
+                      unread > 99 ? '99+' : unread.toString(),
                       style: GoogleFonts.poppins(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,

@@ -23,13 +23,18 @@ class _PrivacyPolicyViewState extends State<PrivacyPolicyView> {
   Future<void> _loadPolicy() async {
     setState(() => _loading = true);
     try {
-      final res = await _repo.apiClient.getJson('/privacy');
-      final payload = res['data'] ?? res;
-      setState(() => _policy = payload is Map && payload['policy'] != null ? payload['policy'].toString() : payload.toString());
+      final res = await _repo.getPrivacyPolicy();
+      if (!mounted) return;
+      // The _decodeData method already extracts 'data' if present,
+      // so 'res' should directly contain the policy map or an empty map.
+      final payload = res;
+      setState(() => _policy = payload is Map && payload['policy'] != null
+          ? payload['policy'].toString()
+          : payload.toString());
     } catch (_) {
-      setState(() => _policy = 'Unable to load policy.');
+      if (mounted) setState(() => _policy = 'Unable to load policy.');
     }
-    setState(() => _loading = false);
+    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _requestDeletion() async {
@@ -38,25 +43,38 @@ class _PrivacyPolicyViewState extends State<PrivacyPolicyView> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Request Data Deletion'),
-        content: TextField(controller: reasonController, decoration: const InputDecoration(hintText: 'Optional reason')),
+        content: TextField(
+            controller: reasonController,
+            decoration: const InputDecoration(hintText: 'Optional reason')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Submit')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Submit')),
         ],
       ),
     );
 
+    if (!mounted) return;
     if (ok != true) return;
     try {
-      final res = await _repo.apiClient.postJson('/privacy/delete-request', body: {'reason': reasonController.text});
-      final payload = res['data'] ?? res;
+      final res =
+          await _repo.requestDataDeletion(reason: reasonController.text);
+      if (!mounted) return;
+      final payload = res;
       if (payload is Map && payload['id'] != null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deletion request submitted.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Deletion request submitted.')));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to submit deletion request.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Failed to submit deletion request.')));
       }
     } catch (_) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to submit deletion request.')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to submit deletion request.')));
     }
   }
 
@@ -71,11 +89,21 @@ class _PrivacyPolicyViewState extends State<PrivacyPolicyView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: SingleChildScrollView(child: Text(_policy, style: GoogleFonts.poppins(fontSize: 14)))),
+                  Expanded(
+                      child: SingleChildScrollView(
+                          child: Text(_policy,
+                              style: GoogleFonts.poppins(fontSize: 14)))),
                   const SizedBox(height: 12),
-                  Text('Data Retention: We will keep personal data until it is requested to be deleted or for legal/business requirements.', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+                  Text(
+                      'Data Retention: We will keep personal data until it is requested to be deleted or for legal/business requirements.',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, color: Colors.grey)),
                   const SizedBox(height: 12),
-                  SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _requestDeletion, child: const Text('Request Data Deletion'))),
+                  SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                          onPressed: _requestDeletion,
+                          child: const Text('Request Data Deletion'))),
                 ],
               ),
             ),

@@ -1,9 +1,7 @@
-# TODO
-
-## VisibilityDetector dependency fix
-- [ ] Inspect pubspec.yaml for `visibility_detector` dependency (already: missing).
-- [ ] Add `visibility_detector` to `frontend/pubspec.yaml`.
-- [ ] Run `flutter pub get` (frontend) to fetch the package.
-- [ ] Re-run `flutter analyze` / `flutter test` to confirm HomeView and SearchView compile.
-- [ ] If any remaining compile errors (e.g., in search_view.dart around line ~538), fix them.
+- [ ] Add missing _HttpJsonClient implementation (or correct client usage) in frontend/lib/repository/remote_database_repository.dart
+- [ ] Fix duplicate authenticate definitions by removing positional overload or merging call sites
+- [ ] Fix auth/otp/register call-site parameter mismatches to match repository method signatures
+- [ ] Fix repository authenticate/register/verifyPhoneCode overloads so call sites compile
+- [ ] Resolve remaining void-return misuse errors
+- [ ] Run `flutter analyze` (or `flutter test`) and iterate until clean build
 

@@ -41,11 +41,15 @@ class _SavedViewState extends State<SavedView>
         final repository = RemoteDatabaseRepository();
         if (isCurrentlySaved) {
           await repository.removeFavoriteForUser(
-              AppSession.currentUserId!, propertyId);
+            userId: AppSession.currentUserId!,
+            propertyId: propertyId,
+          );
           AppSession.savedPropertyIds.remove(propertyId);
         } else {
           await repository.savePropertyForUser(
-              AppSession.currentUserId!, propertyId);
+            userId: AppSession.currentUserId!,
+            propertyId: propertyId,
+          );
           AppSession.savedPropertyIds.add(propertyId);
         }
         return;

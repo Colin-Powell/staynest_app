@@ -26,7 +26,8 @@ router.post('/register', async (req, res, next) => {
         const created = result.rows[0];
         // If landlord, store business fields
         if (userRole === 'landlord') {
-            const { business_name, business_type, business_description, tax_id, years_in_business } = req.body;
+            const businessData = req.body.businessFields || req.body;
+            const { business_name, business_type, business_description, tax_id, years_in_business } = businessData;
             if (business_name || business_type || business_description || tax_id || years_in_business) {
                 await query(`UPDATE users SET business_name = $1, business_type = $2, business_description = $3, tax_id = $4, years_in_business = $5 WHERE id = $6`, [
                     business_name?.trim() || null,
@@ -44,7 +45,7 @@ router.post('/register', async (req, res, next) => {
             role: created.role,
             verified: created.verified,
         }, env.jwtSecret, { expiresIn: '6h' });
-        return res.status(201).json({ data: { token, user: created } });
+        return res.status(201).json({ data: { token, ...created } });
     }
     catch (error) {
         next(error);
@@ -67,7 +68,7 @@ router.post('/verify', requireAuth, async (req, res, next) => {
         if (result.rowCount === 0) {
             return res.status(404).json({ error: 'User not found.' });
         }
-        return res.json({ data: { user: result.rows[0] } });
+        return res.json({ data: result.rows[0] });
     }
     catch (error) {
         next(error);
@@ -97,17 +98,10 @@ router.post('/login', async (req, res, next) => {
         return res.json({
             data: {
                 token,
-                user: {
-                    id: user.id,
-                    name: user.name,
-                    email: user.email,
-                    phone: user.phone,
-                    avatar: user.avatar,
-                    role: user.role,
-                    verified: user.verified,
-                },
-            },
-        });
+                id: user.id, name: user.name, email: user.email,
+                phone: user.phone, avatar: user.avatar,
+                role: user.role, verified: user.verified
+            } });
     }
     catch (error) {
         next(error);

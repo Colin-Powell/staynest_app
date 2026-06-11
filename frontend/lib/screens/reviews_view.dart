@@ -1,61 +1,32 @@
 // lib/screens/reviews_view.dart
 import 'package:flutter/material.dart';
-
-// --- MOCK DATA ---
-class Review {
-  final String name;
-  final String role;
-  final double rating;
-  final String text;
-  final String date;
-  final String avatar;
-
-  Review({
-    required this.name,
-    required this.role,
-    required this.rating,
-    required this.text,
-    required this.date,
-    required this.avatar,
-  });
-}
-
-final List<Review> _mockReviews = [
-  Review(
-    name: 'Mary Wanjiku',
-    role: 'Tenant',
-    rating: 4.0,
-    text: 'Great landlord, The place is\ngreat and clean.',
-    date: 'May 14, 2026',
-    avatar: 'https://i.pravatar.cc/150?img=31',
-  ),
-  Review(
-    name: 'James Odhiambo',
-    role: 'Tenant',
-    rating: 4.5,
-    text: 'Great landlord, The place is\ngreat and clean.',
-    date: 'May 14, 2026',
-    avatar: 'https://i.pravatar.cc/150?img=33',
-  ),
-  Review(
-    name: 'Aisha Njeri',
-    role: 'Tenant',
-    rating: 4.8,
-    text: 'The apartment was exactly as shown in the pictures. Very safe neighborhood.',
-    date: 'April 22, 2026',
-    avatar: 'https://i.pravatar.cc/150?img=35',
-  ),
-];
+import 'package:property_app/models/review.dart';
+import 'package:property_app/repository/remote_database_repository.dart';
+import 'package:intl/intl.dart';
 
 // ==================== MAIN REVIEWS SCREEN ====================
 class ReviewsView extends StatefulWidget {
-  const ReviewsView({super.key});
+  final String propertyId;
+  final String? bookingId; // Passed if coming from a completed booking
+  final double averageRating;
+  final int reviewCount;
+
+  const ReviewsView({
+    super.key,
+    required this.propertyId,
+    this.bookingId,
+    this.averageRating = 0.0,
+    this.reviewCount = 0,
+  });
 
   @override
   State<ReviewsView> createState() => _ReviewsViewState();
 }
 
 class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin {
+  final RemoteDatabaseRepository _repo = RemoteDatabaseRepository();
+  late Future<List<Review>> _reviewsFuture;
+
   late final AnimationController _pageCtrl = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 420),
@@ -72,6 +43,7 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
   @override
   void initState() {
     super.initState();
+    _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId);
     _pageCtrl.forward();
   }
 
@@ -86,7 +58,10 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (context, animation, secondaryAnimation) => const WriteReviewView(),
+        pageBuilder: (context, animation, secondaryAnimation) => WriteReviewView(
+          propertyId: widget.propertyId,
+          bookingId: widget.bookingId ?? '',
+        ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
             opacity: animation,
@@ -98,7 +73,9 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
           );
         },
       ),
-    );
+    ).then((value) {
+      if (value == true) setState(() => _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId));
+    });
   }
 
   void _navToAllReviews() {
@@ -106,7 +83,7 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (context, animation, secondaryAnimation) => const AllReviewsView(),
+        pageBuilder: (context, animation, secondaryAnimation) => AllReviewsView(propertyId: widget.propertyId),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
             opacity: animation,
@@ -141,25 +118,44 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
                     ),
                     padding: const EdgeInsets.fromLTRB(24, 12, 24, 100),
                     children: [
-                      const _OverallRatingSection(),
+                      _OverallRatingSection(
+                        rating: widget.averageRating,
+                        count: widget.reviewCount,
+                      ),
                       const SizedBox(height: 40),
                       const Divider(color: Color(0xFFF3F4F6), thickness: 1.5, height: 1),
                       const SizedBox(height: 32),
-                      ..._mockReviews.map((review) => _ReviewCard(
-                            avatar: review.avatar,
-                            name: review.name,
-                            role: review.role,
-                            rating: review.rating,
-                            review: review.text,
-                            date: review.date,
-                          )),
+                      FutureBuilder<List<Review>>(
+                        future: _reviewsFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          final reviews = snapshot.data ?? [];
+                          if (reviews.isEmpty) {
+                            return const Center(child: Text('No reviews yet.'));
+                          }
+                          // Show top 3 reviews on main view
+                          return Column(
+                            children: reviews.take(3).map((review) => _ReviewCard(
+                              avatar: review.reviewer?.avatar ?? '',
+                              name: review.reviewer?.name ?? 'Anonymous',
+                              role: 'Tenant',
+                              rating: review.rating.toDouble(),
+                              review: review.comment ?? '',
+                              date: DateFormat.yMMMd().format(review.createdAt),
+                            )).toList(),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
               ),
             ],
           ),
-          floatingActionButton: GestureDetector(
+          floatingActionButton: widget.bookingId != null 
+            ? GestureDetector(
             onTap: _navToWriteReview,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -168,7 +164,7 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF3F3CD4).withOpacity(0.3),
+                    color: const Color(0xFF3F3CD4).withValues(alpha: 0.3),
                     blurRadius: 16,
                     offset: const Offset(0, 8),
                   ),
@@ -190,7 +186,7 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
                 ],
               ),
             ),
-          ),
+          ) : null,
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
           bottomNavigationBar: SafeArea(
             child: Container(
@@ -199,7 +195,7 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.white.withOpacity(0.0), Colors.white],
+                  colors: [Colors.white.withValues(alpha: 0.0), Colors.white],
                 ),
               ),
               child: _OutlinedActionButton(
@@ -216,15 +212,15 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
 
 // ==================== ALL REVIEWS SCREEN ====================
 class AllReviewsView extends StatefulWidget {
-  const AllReviewsView({super.key});
+  final String propertyId;
+  const AllReviewsView({super.key, required this.propertyId});
 
   @override
   State<AllReviewsView> createState() => _AllReviewsViewState();
 }
 
 class _AllReviewsViewState extends State<AllReviewsView> {
-  // Multiply mock data to show a long list
-  final List<Review> _allReviews = [..._mockReviews, ..._mockReviews, ..._mockReviews];
+  final RemoteDatabaseRepository _repo = RemoteDatabaseRepository();
 
   @override
   Widget build(BuildContext context) {
@@ -236,19 +232,25 @@ class _AllReviewsViewState extends State<AllReviewsView> {
           Expanded(
             child: ScrollConfiguration(
               behavior: const AppScrollBehavior(),
-              child: ListView.builder(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
-                itemCount: _allReviews.length,
-                itemBuilder: (context, index) {
-                  final review = _allReviews[index];
-                  return _ReviewCard(
-                    avatar: review.avatar,
-                    name: review.name,
-                    role: review.role,
-                    rating: review.rating,
-                    review: review.text,
-                    date: review.date,
+              child: FutureBuilder<List<Review>>(
+                future: _repo.fetchPropertyReviews(widget.propertyId),
+                builder: (context, snapshot) {
+                  final reviews = snapshot.data ?? [];
+                  return ListView.builder(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+                    itemCount: reviews.length,
+                    itemBuilder: (context, index) {
+                      final review = reviews[index];
+                      return _ReviewCard(
+                        avatar: review.reviewer?.avatar ?? '',
+                        name: review.reviewer?.name ?? 'Anonymous',
+                        role: 'Tenant',
+                        rating: review.rating.toDouble(),
+                        review: review.comment ?? '',
+                        date: DateFormat.yMMMd().format(review.createdAt),
+                      );
+                    },
                   );
                 },
               ),
@@ -262,7 +264,10 @@ class _AllReviewsViewState extends State<AllReviewsView> {
 
 // ==================== WRITE REVIEW SCREEN ====================
 class WriteReviewView extends StatefulWidget {
-  const WriteReviewView({super.key});
+  final String propertyId;
+  final String bookingId;
+
+  const WriteReviewView({super.key, required this.propertyId, required this.bookingId});
 
   @override
   State<WriteReviewView> createState() => _WriteReviewViewState();
@@ -270,6 +275,10 @@ class WriteReviewView extends StatefulWidget {
 
 class _WriteReviewViewState extends State<WriteReviewView>
     with TickerProviderStateMixin {
+  final RemoteDatabaseRepository _repo = RemoteDatabaseRepository();
+  final TextEditingController _commentController = TextEditingController();
+  bool _isSubmitting = false;
+
   late final AnimationController _pageCtrl = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 420),
@@ -294,7 +303,36 @@ class _WriteReviewViewState extends State<WriteReviewView>
   @override
   void dispose() {
     _pageCtrl.dispose();
+    _commentController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleSubmit() async {
+    setState(() => _isSubmitting = true);
+    try {
+      final review = await _repo.submitReview(
+        bookingId: widget.bookingId,
+        propertyId: widget.propertyId,
+        rating: _rating.toInt(),
+        comment: _commentController.text.trim(),
+      );
+      if (review != null) {
+        if (!mounted) return;
+        _showSuccessModal();
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to submit review')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      setState(() => _isSubmitting = false);
+    }
   }
 
   void _showSuccessModal() {
@@ -315,7 +353,7 @@ class _WriteReviewViewState extends State<WriteReviewView>
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 24,
                     offset: const Offset(0, 10),
                   ),
@@ -361,7 +399,7 @@ class _WriteReviewViewState extends State<WriteReviewView>
                   GestureDetector(
                     onTap: () {
                       Navigator.pop(context); // Close Dialog
-                      Navigator.pop(context); // Close WriteReviewView
+                      Navigator.pop(context, true); // Close WriteReviewView with success signal
                     },
                     child: Container(
                       width: double.infinity,
@@ -459,7 +497,8 @@ class _WriteReviewViewState extends State<WriteReviewView>
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
                           ),
-                          child: const TextField(
+                          child: TextField(
+                            controller: _commentController,
                             maxLines: 8,
                             decoration: InputDecoration(
                               hintText: 'Share your experience...',
@@ -481,8 +520,8 @@ class _WriteReviewViewState extends State<WriteReviewView>
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
                   child: _OutlinedActionButton(
-                    text: 'Submit Review',
-                    onTap: _showSuccessModal,
+                    text: _isSubmitting ? 'Submitting...' : 'Submit Review',
+                    onTap: _isSubmitting ? () {} : _handleSubmit,
                   ),
                 ),
               ),
@@ -539,7 +578,10 @@ class _Header extends StatelessWidget {
 
 // Matches the exact stacked vertical layout from the PDF
 class _OverallRatingSection extends StatelessWidget {
-  const _OverallRatingSection();
+  final double rating;
+  final int count;
+
+  const _OverallRatingSection({required this.rating, required this.count});
 
   @override
   Widget build(BuildContext context) {
@@ -558,9 +600,9 @@ class _OverallRatingSection extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Text(
-              '4.8',
-              style: TextStyle(
+            Text(
+              rating.toStringAsFixed(1),
+              style: const TextStyle(
                 fontSize: 64,
                 fontWeight: FontWeight.w800,
                 color: Color(0xFF111827),
@@ -584,9 +626,9 @@ class _OverallRatingSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        const Text(
-          '(200 reviews)',
-          style: TextStyle(
+        Text(
+          '($count reviews)',
+          style: const TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w500,
             color: Color(0xFF9CA3AF),

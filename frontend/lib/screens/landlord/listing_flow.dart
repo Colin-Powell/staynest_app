@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -8,12 +7,12 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Your project imports
+import 'package:property_app/repository/http_json_client.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/services/uploads.dart';
 import 'package:property_app/utils/geocoding.dart';
-import 'package:property_app/services/api_client.dart';
 
 class AddListingFlow extends StatefulWidget {
   const AddListingFlow({super.key});
@@ -51,7 +50,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
   final _zip = TextEditingController();
 
   final List<String> _countries = [
-    'Kenya', 'Uganda', 'Tanzania', 'Rwanda', 'South Africa'
+    'Kenya',
+    'Uganda',
+    'Tanzania',
+    'Rwanda',
+    'South Africa'
   ];
   final Map<String, List<String>> _citiesByCountry = {
     'Kenya': ['Nairobi', 'Mombasa', 'Kilifi', 'Nakuru', 'Kisumu', 'Eldoret'],
@@ -106,12 +109,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   RemoteDatabaseRepository _buildRepo() {
     final token = AppSession.apiToken;
     return RemoteDatabaseRepository(
-      apiClient: ApiClient(
-        baseUrl: AppSession.apiBaseUrl,
-        defaultHeaders: token != null
-            ? {'Authorization': 'Bearer $token'}
-            : null,
-      ),
+      apiClient: HttpJsonClient(),
     );
   }
 
@@ -160,7 +158,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
         if (_countries.contains(data['country'])) {
           _selectedCountry = data['country'];
         }
-        if (_citiesByCountry[_selectedCountry]?.contains(data['city']) ?? false) {
+        if (_citiesByCountry[_selectedCountry]?.contains(data['city']) ??
+            false) {
           _selectedCity = data['city'];
         }
 
@@ -176,7 +175,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
           _availableFrom = DateTime.tryParse(data['availableFrom']);
         }
 
-        final savedAmenities = Map<String, dynamic>.from(data['amenities'] ?? {});
+        final savedAmenities =
+            Map<String, dynamic>.from(data['amenities'] ?? {});
         for (final key in _amenities.keys) {
           if (savedAmenities.containsKey(key)) {
             _amenities[key] = savedAmenities[key] == true;
@@ -241,7 +241,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
               Text(
                   'To keep our community safe, we require all landlords to be verified before their listings go live. We\'ve saved your draft!',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(color: AppColors.gray500, height: 1.5)),
+                  style: GoogleFonts.poppins(
+                      color: AppColors.gray500, height: 1.5)),
               const SizedBox(height: 24),
             ],
           ),
@@ -251,7 +252,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 onPressed: () => Navigator.pop(ctx),
                 child: Text('Edit Draft',
                     style: GoogleFonts.poppins(
-                        color: AppColors.primary, fontWeight: FontWeight.w600))),
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
@@ -310,22 +312,19 @@ class _AddListingFlowState extends State<AddListingFlow> {
       ].whereType<String>().where((p) => p.isNotEmpty).join(', ');
 
       final coords = await geocodeAddress(geocodeQuery);
-      final selectedAmenities = _amenities.entries
-          .where((e) => e.value)
-          .map((e) => e.key)
-          .toList();
+      final selectedAmenities =
+          _amenities.entries.where((e) => e.value).map((e) => e.key).toList();
       final estimatedArea = (_bedrooms * 35).clamp(30, 500);
 
       // 3) Create property — use fresh repo with current token
       final repo = _buildRepo();
-      final propertyPayload = {
+      final Map<String, dynamic> propertyPayload = {
         'title': _title.text.trim(),
         'description': _description.text.trim(),
         'category': _propertyType,
         'city': _selectedCity,
-        'address': fullAddress.isNotEmpty
-            ? fullAddress
-            : _neighborhood.text.trim(),
+        'address':
+            fullAddress.isNotEmpty ? fullAddress : _neighborhood.text.trim(),
         'price': _rentPrice.text.trim(),
         'bedrooms': _bedrooms,
         'bathrooms': _bathrooms,
@@ -337,8 +336,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'lng': coords?.lng,
       };
 
-      final created = await repo.createPropertyFromListing(propertyPayload);
-      if (created == null) throw Exception('Property creation returned null');
+      await repo.createPropertyFromListing(listingPayload: propertyPayload);
 
       // 4) Submit verification record
       final propertyVerificationPayload = {
@@ -353,8 +351,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
       };
 
       final documents = {'photos': uploadedUrls};
-      final resp = await repo.submitVerification(documents, propertyVerificationPayload);
-      if (resp == null) throw Exception('Verification submission returned null');
+      await repo.submitVerification(
+          verificationPayload: propertyVerificationPayload);
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_draftKey);
@@ -387,19 +385,23 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // NAVIGATION
   // ==========================================
   void _nextStep() {
-    if (_currentStep == 1 && !(_step1Key.currentState?.validate() ?? false)) return;
-    if (_currentStep == 2 && !(_step2Key.currentState?.validate() ?? false)) return;
+    if (_currentStep == 1 && !(_step1Key.currentState?.validate() ?? false))
+      return;
+    if (_currentStep == 2 && !(_step2Key.currentState?.validate() ?? false))
+      return;
     if (_currentStep == 4 && _photos.isEmpty) {
       ModalUtils.showError(context, "Photos Required",
           "Let's show off your property! Please upload at least one photo to continue.");
       return;
     }
-    if (_currentStep == 5 && !(_step5Key.currentState?.validate() ?? false)) return;
+    if (_currentStep == 5 && !(_step5Key.currentState?.validate() ?? false))
+      return;
 
     if (_currentStep < _totalSteps) {
       setState(() => _currentStep++);
       _pageController.nextPage(
-          duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic);
     }
   }
 
@@ -407,14 +409,28 @@ class _AddListingFlowState extends State<AddListingFlow> {
     if (_currentStep > 1) {
       setState(() => _currentStep--);
       _pageController.previousPage(
-          duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic);
     } else {
       Navigator.pop(context);
     }
   }
 
   String _formatDate(DateTime date) {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
@@ -455,7 +471,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
         leading: GestureDetector(
           onTap: _previousStep,
           behavior: HitTestBehavior.opaque,
-          child: const Icon(Icons.arrow_back, size: 28, color: AppColors.gray900),
+          child:
+              const Icon(Icons.arrow_back, size: 28, color: AppColors.gray900),
         ),
         title: _currentStep < _totalSteps
             ? Text('Add New Listing',
@@ -504,7 +521,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isActive ? AppColors.primary : AppColors.white,
-              border: isActive ? null : Border.all(color: StayNestColors.outlineLight),
+              border: isActive
+                  ? null
+                  : Border.all(color: StayNestColors.outlineLight),
             ),
             child: Center(
               child: Text(stepNum.toString(),
@@ -531,10 +550,16 @@ class _AddListingFlowState extends State<AddListingFlow> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Basic Information',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.gray900)),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(color: AppColors.gray900)),
             const SizedBox(height: 24),
             Text('Property Type',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(color: AppColors.gray900)),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(color: AppColors.gray900)),
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
@@ -553,22 +578,30 @@ class _AddListingFlowState extends State<AddListingFlow> {
             Row(
               children: [
                 Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildLabel('Bedrooms'),
-                  _buildCounter(
-                      () => setState(() { if (_bedrooms > 0) _bedrooms--; }),
-                      () => setState(() => _bedrooms++),
-                      _bedrooms),
-                ])),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      _buildLabel('Bedrooms'),
+                      _buildCounter(
+                          () => setState(() {
+                                if (_bedrooms > 0) _bedrooms--;
+                              }),
+                          () => setState(() => _bedrooms++),
+                          _bedrooms),
+                    ])),
                 const SizedBox(width: 16),
                 Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _buildLabel('Bathrooms'),
-                  _buildCounter(
-                      () => setState(() { if (_bathrooms > 0) _bathrooms--; }),
-                      () => setState(() => _bathrooms++),
-                      _bathrooms),
-                ])),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      _buildLabel('Bathrooms'),
+                      _buildCounter(
+                          () => setState(() {
+                                if (_bathrooms > 0) _bathrooms--;
+                              }),
+                          () => setState(() => _bathrooms++),
+                          _bathrooms),
+                    ])),
               ],
             ),
             const SizedBox(height: 24),
@@ -597,7 +630,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Location & Address',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.gray900)),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(color: AppColors.gray900)),
             const SizedBox(height: 24),
             _buildLabel('Country'),
             _buildDropdown(
@@ -628,7 +664,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
             _buildTextField(_building, 'Sunset Apartments', required: false),
             const SizedBox(height: 20),
             _buildLabel('Zip / Postal Code (Optional)'),
-            _buildTextField(_zip, '00100', required: false, keyboardType: TextInputType.number),
+            _buildTextField(_zip, '00100',
+                required: false, keyboardType: TextInputType.number),
             const SizedBox(height: 48),
             _buildNextButton('Next: Amenities', _nextStep),
             const SizedBox(height: 24),
@@ -648,20 +685,32 @@ class _AddListingFlowState extends State<AddListingFlow> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Amenities',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.gray900)),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(color: AppColors.gray900)),
           const SizedBox(height: 4),
           Text('Select all that applies',
-              style: GoogleFonts.poppins(fontSize: 14, color: AppColors.gray400)),
+              style:
+                  GoogleFonts.poppins(fontSize: 14, color: AppColors.gray400)),
           const SizedBox(height: 32),
           Text('Essential',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.gray900)),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(color: AppColors.gray900)),
           const SizedBox(height: 20),
-          ..._essentialAmenities.entries.map((e) => _buildCheckbox(e.key, e.value)),
+          ..._essentialAmenities.entries
+              .map((e) => _buildCheckbox(e.key, e.value)),
           const SizedBox(height: 24),
           Text('Additional',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.gray900)),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(color: AppColors.gray900)),
           const SizedBox(height: 20),
-          ..._additionalAmenities.entries.map((e) => _buildCheckbox(e.key, e.value)),
+          ..._additionalAmenities.entries
+              .map((e) => _buildCheckbox(e.key, e.value)),
           const SizedBox(height: 48),
           _buildNextButton('Next: Photos', _nextStep),
           const SizedBox(height: 24),
@@ -683,7 +732,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
             Expanded(
                 child: Text(label,
                     style: GoogleFonts.poppins(
-                        fontSize: 15, color: AppColors.gray900, fontWeight: FontWeight.w500))),
+                        fontSize: 15,
+                        color: AppColors.gray900,
+                        fontWeight: FontWeight.w500))),
             Container(
               width: 22,
               height: 22,
@@ -691,7 +742,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 color: isChecked ? AppColors.green600 : AppColors.white,
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                    color: isChecked ? AppColors.green600 : StayNestColors.outlineLight,
+                    color: isChecked
+                        ? AppColors.green600
+                        : StayNestColors.outlineLight,
                     width: 1.5),
               ),
               child: isChecked
@@ -715,24 +768,33 @@ class _AddListingFlowState extends State<AddListingFlow> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Photos',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.gray900)),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(color: AppColors.gray900)),
           const SizedBox(height: 4),
           Text('Upload high-quality photos of your property',
-              style: GoogleFonts.poppins(fontSize: 14, color: AppColors.gray400)),
+              style:
+                  GoogleFonts.poppins(fontSize: 14, color: AppColors.gray400)),
           const SizedBox(height: 32),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2, crossAxisSpacing: 16, mainAxisSpacing: 16, childAspectRatio: 1),
+                crossAxisCount: 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 1),
             itemCount: _photos.length + 1,
             itemBuilder: (context, index) {
               if (index == _photos.length) {
                 return GestureDetector(
                   onTap: () async {
-                    final picked = await ImagePicker().pickMultiImage(imageQuality: 75);
+                    final picked =
+                        await ImagePicker().pickMultiImage(imageQuality: 75);
                     if (picked.isNotEmpty) {
-                      setState(() => _photos.addAll(picked.map((x) => File(x.path))));
+                      setState(() =>
+                          _photos.addAll(picked.map((x) => File(x.path))));
                     }
                   },
                   child: Container(
@@ -743,7 +805,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(PhosphorIcons.plus(), size: 36, color: AppColors.primary),
+                        Icon(PhosphorIcons.plus(),
+                            size: 36, color: AppColors.primary),
                         const SizedBox(height: 12),
                         Text('Add Photo',
                             style: GoogleFonts.poppins(
@@ -770,7 +833,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
                           padding: const EdgeInsets.all(4),
                           decoration: const BoxDecoration(
                               color: Colors.black54, shape: BoxShape.circle),
-                          child: const Icon(Icons.close, color: Colors.white, size: 18)),
+                          child: const Icon(Icons.close,
+                              color: Colors.white, size: 18)),
                     ),
                   )
                 ],
@@ -780,11 +844,14 @@ class _AddListingFlowState extends State<AddListingFlow> {
           const SizedBox(height: 32),
           Text('Tips',
               style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w700, fontSize: 16, color: AppColors.gray900)),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  color: AppColors.gray900)),
           const SizedBox(height: 16),
           Text(
               '• Include a picture of the living room, bedroom, and kitchen.\n• Shoot in landscape mode with good natural lighting.',
-              style: GoogleFonts.poppins(color: AppColors.gray500, height: 1.6, fontSize: 14)),
+              style: GoogleFonts.poppins(
+                  color: AppColors.gray500, height: 1.6, fontSize: 14)),
           const SizedBox(height: 48),
           _buildNextButton('Next: Pricing & Details', _nextStep),
           const SizedBox(height: 24),
@@ -805,7 +872,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Pricing and Details',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.gray900)),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(color: AppColors.gray900)),
             const SizedBox(height: 24),
             _buildLabel('Rent Price'),
             _buildPricingField(_rentPrice, '12000', '/month'),
@@ -821,14 +891,16 @@ class _AddListingFlowState extends State<AddListingFlow> {
               value: _minimumStay,
               items: ['1 Month', '3 Months', '6 Months', '1 Year'],
               hint: 'Select Minimum Stay',
-              onChanged: (val) => setState(() => _minimumStay = val ?? '6 Months'),
+              onChanged: (val) =>
+                  setState(() => _minimumStay = val ?? '6 Months'),
             ),
             const SizedBox(height: 20),
             _buildLabel('Available From'),
             GestureDetector(
               onTap: _selectDate,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 decoration: BoxDecoration(
                   color: Colors.transparent,
                   border: Border.all(color: StayNestColors.outlineLight),
@@ -838,14 +910,21 @@ class _AddListingFlowState extends State<AddListingFlow> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      _availableFrom != null ? _formatDate(_availableFrom!) : 'Select Date',
+                      _availableFrom != null
+                          ? _formatDate(_availableFrom!)
+                          : 'Select Date',
                       style: GoogleFonts.poppins(
-                        color: _availableFrom != null ? AppColors.gray900 : AppColors.gray400,
-                        fontWeight: _availableFrom != null ? FontWeight.w600 : FontWeight.w500,
+                        color: _availableFrom != null
+                            ? AppColors.gray900
+                            : AppColors.gray400,
+                        fontWeight: _availableFrom != null
+                            ? FontWeight.w600
+                            : FontWeight.w500,
                         fontSize: 15,
                       ),
                     ),
-                    Icon(PhosphorIcons.calendarBlank(), color: AppColors.gray400, size: 22),
+                    Icon(PhosphorIcons.calendarBlank(),
+                        color: AppColors.gray400, size: 22),
                   ],
                 ),
               ),
@@ -859,23 +938,29 @@ class _AddListingFlowState extends State<AddListingFlow> {
     );
   }
 
-  Widget _buildPricingField(TextEditingController controller, String hint, String suffix) {
+  Widget _buildPricingField(
+      TextEditingController controller, String hint, String suffix) {
     return TextFormField(
       controller: controller,
       keyboardType: TextInputType.number,
-      style: GoogleFonts.poppins(color: AppColors.gray900, fontWeight: FontWeight.w600, fontSize: 16),
-      validator: (value) => (value == null || value.trim().isEmpty) ? 'Required' : null,
+      style: GoogleFonts.poppins(
+          color: AppColors.gray900, fontWeight: FontWeight.w600, fontSize: 16),
+      validator: (value) =>
+          (value == null || value.trim().isEmpty) ? 'Required' : null,
       decoration: InputDecoration(
         hintText: hint,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        hintStyle: GoogleFonts.poppins(color: AppColors.gray400, fontWeight: FontWeight.w600),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        hintStyle: GoogleFonts.poppins(
+            color: AppColors.gray400, fontWeight: FontWeight.w600),
         suffixIcon: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Padding(
               padding: const EdgeInsets.only(right: 16.0),
               child: Text(suffix,
-                  style: GoogleFonts.poppins(color: AppColors.gray400, fontSize: 14)),
+                  style: GoogleFonts.poppins(
+                      color: AppColors.gray400, fontSize: 14)),
             ),
           ],
         ),
@@ -907,10 +992,13 @@ class _AddListingFlowState extends State<AddListingFlow> {
         children: [
           Text('Review & Publish',
               style: GoogleFonts.poppins(
-                  fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.gray900)),
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.gray900)),
           const SizedBox(height: 4),
           Text('Review your listing details',
-              style: GoogleFonts.poppins(fontSize: 14, color: AppColors.gray400)),
+              style:
+                  GoogleFonts.poppins(fontSize: 14, color: AppColors.gray400)),
           const SizedBox(height: 32),
 
           // Preview Card
@@ -923,9 +1011,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
             child: Row(
               children: [
                 ClipRRect(
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(24)),
+                  borderRadius:
+                      const BorderRadius.horizontal(left: Radius.circular(24)),
                   child: _photos.isNotEmpty
-                      ? Image.file(_photos.first, width: 120, height: 120, fit: BoxFit.cover)
+                      ? Image.file(_photos.first,
+                          width: 120, height: 120, fit: BoxFit.cover)
                       : Container(
                           width: 120,
                           height: 120,
@@ -935,7 +1025,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 8.0),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 16.0, horizontal: 8.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -963,14 +1054,16 @@ class _AddListingFlowState extends State<AddListingFlow> {
                         RichText(
                             text: TextSpan(children: [
                           TextSpan(
-                              text: 'Kes. ${_rentPrice.text.isEmpty ? '0' : _rentPrice.text}',
+                              text:
+                                  'Kes. ${_rentPrice.text.isEmpty ? '0' : _rentPrice.text}',
                               style: GoogleFonts.poppins(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14,
                                   color: AppColors.gray900)),
                           TextSpan(
                               text: ' /month',
-                              style: GoogleFonts.poppins(color: AppColors.gray400, fontSize: 14)),
+                              style: GoogleFonts.poppins(
+                                  color: AppColors.gray400, fontSize: 14)),
                         ]))
                       ],
                     ),
@@ -982,30 +1075,43 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
           const SizedBox(height: 40),
           Text('Details',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: AppColors.gray900)),
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(color: AppColors.gray900)),
           const SizedBox(height: 24),
           _buildReviewRow('Property Type', _propertyType),
           _buildReviewRow('Bedrooms', _bedrooms.toString()),
           _buildReviewRow('Bathrooms', _bathrooms.toString()),
-          _buildReviewRow('Furnished', _amenities['Furnished'] == true ? 'Yes' : 'No'),
+          _buildReviewRow(
+              'Furnished', _amenities['Furnished'] == true ? 'Yes' : 'No'),
 
           const Divider(color: StayNestColors.outlineLight, height: 40),
 
           Text('Pricing',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: AppColors.gray900)),
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(color: AppColors.gray900)),
           const SizedBox(height: 24),
           _buildReviewRow('Rent Price', 'Kes. ${_rentPrice.text} /month'),
-          _buildReviewRow('Service Charges', 'Kes. ${_serviceCharges.text} /month'),
+          _buildReviewRow(
+              'Service Charges', 'Kes. ${_serviceCharges.text} /month'),
           _buildReviewRow('Security Deposit', 'Kes. ${_securityDeposit.text}'),
           _buildReviewRow('Minimum Stay', _minimumStay),
           _buildReviewRow(
               'Available From',
-              _availableFrom != null ? _formatDate(_availableFrom!) : 'Immediate'),
+              _availableFrom != null
+                  ? _formatDate(_availableFrom!)
+                  : 'Immediate'),
 
           const Divider(color: StayNestColors.outlineLight, height: 40),
 
           Text('Amenities',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: AppColors.gray900)),
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(color: AppColors.gray900)),
           const SizedBox(height: 24),
           Wrap(
             spacing: 10,
@@ -1020,17 +1126,24 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 if (selectedAmenities.isEmpty)
                   Text('No amenities selected.',
                       style: GoogleFonts.poppins(
-                          color: AppColors.gray400, fontStyle: FontStyle.italic))
+                          color: AppColors.gray400,
+                          fontStyle: FontStyle.italic))
               ]),
           ),
 
           const SizedBox(height: 32),
           Text('Description',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: AppColors.gray900)),
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(color: AppColors.gray900)),
           const SizedBox(height: 16),
           Text(
-              _description.text.isEmpty ? 'No description provided.' : _description.text,
-              style: GoogleFonts.poppins(color: AppColors.gray500, height: 1.6, fontSize: 14)),
+              _description.text.isEmpty
+                  ? 'No description provided.'
+                  : _description.text,
+              style: GoogleFonts.poppins(
+                  color: AppColors.gray500, height: 1.6, fontSize: 14)),
 
           const SizedBox(height: 48),
           Row(
@@ -1041,7 +1154,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
                   style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       side: BorderSide(color: AppColors.primary, width: 1.5),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14))),
                   child: Text('Save Draft',
                       style: GoogleFonts.poppins(
                           color: AppColors.primary,
@@ -1056,7 +1170,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
                   style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       backgroundColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                       elevation: 0),
                   child: _submitting
                       ? const SizedBox(
@@ -1087,10 +1202,14 @@ class _AddListingFlowState extends State<AddListingFlow> {
         children: [
           Text(title,
               style: GoogleFonts.poppins(
-                  color: AppColors.gray500, fontWeight: FontWeight.w500, fontSize: 14)),
+                  color: AppColors.gray500,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14)),
           Text(value,
               style: GoogleFonts.poppins(
-                  color: AppColors.gray900, fontWeight: FontWeight.w700, fontSize: 14)),
+                  color: AppColors.gray900,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14)),
         ],
       ),
     );
@@ -1114,7 +1233,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
           const SizedBox(width: 8),
           Text(label,
               style: GoogleFonts.poppins(
-                  fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.gray900)),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.gray900)),
         ],
       ),
     );
@@ -1133,11 +1254,15 @@ class _AddListingFlowState extends State<AddListingFlow> {
             color: isSelected ? AppColors.primary : AppColors.gray50,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-                color: isSelected ? AppColors.primary : StayNestColors.outlineLight)),
+                color: isSelected
+                    ? AppColors.primary
+                    : StayNestColors.outlineLight)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 20, color: isSelected ? AppColors.white : AppColors.gray500),
+            Icon(icon,
+                size: 20,
+                color: isSelected ? AppColors.white : AppColors.gray500),
             const SizedBox(width: 8),
             Text(label,
                 style: GoogleFonts.poppins(
@@ -1161,12 +1286,15 @@ class _AddListingFlowState extends State<AddListingFlow> {
         children: [
           GestureDetector(
               onTap: onDec,
-              child: Icon(PhosphorIcons.minus(), color: AppColors.gray500, size: 20)),
+              child: Icon(PhosphorIcons.minus(),
+                  color: AppColors.gray500, size: 20)),
           Text(value.toString(),
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 16)),
+              style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600, fontSize: 16)),
           GestureDetector(
               onTap: onInc,
-              child: Icon(PhosphorIcons.plus(), color: AppColors.gray900, size: 20)),
+              child: Icon(PhosphorIcons.plus(),
+                  color: AppColors.gray900, size: 20)),
         ],
       ),
     );
@@ -1176,23 +1304,33 @@ class _AddListingFlowState extends State<AddListingFlow> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0, left: 4.0),
       child: Text(text,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.gray900)),
+          style: Theme.of(context)
+              .textTheme
+              .labelLarge
+              ?.copyWith(color: AppColors.gray900)),
     );
   }
 
   Widget _buildTextField(TextEditingController controller, String hint,
-      {int maxLines = 1, TextInputType keyboardType = TextInputType.text, bool required = true}) {
+      {int maxLines = 1,
+      TextInputType keyboardType = TextInputType.text,
+      bool required = true}) {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
-      style: GoogleFonts.poppins(color: AppColors.gray900, fontWeight: FontWeight.w500),
+      style: GoogleFonts.poppins(
+          color: AppColors.gray900, fontWeight: FontWeight.w500),
       validator: (value) =>
-          (required && (value == null || value.trim().isEmpty)) ? 'Required' : null,
+          (required && (value == null || value.trim().isEmpty))
+              ? 'Required'
+              : null,
       decoration: InputDecoration(
         hintText: hint,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        hintStyle: GoogleFonts.poppins(color: AppColors.gray400, fontWeight: FontWeight.w500),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        hintStyle: GoogleFonts.poppins(
+            color: AppColors.gray400, fontWeight: FontWeight.w500),
         filled: false,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
@@ -1226,7 +1364,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
       validator: (val) => val == null || val.isEmpty ? 'Required' : null,
       decoration: InputDecoration(
         hintText: hint,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         filled: false,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
@@ -1248,11 +1387,15 @@ class _AddListingFlowState extends State<AddListingFlow> {
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             elevation: 0),
         onPressed: onPressed,
         child: Text(text,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: AppColors.white)),
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall
+                ?.copyWith(color: AppColors.white)),
       ),
     );
   }
@@ -1269,7 +1412,8 @@ class ModalUtils {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.white,
-        shape: const RoundedRectangleBorder(borderRadius: AppRadius.dialogBorderRadius),
+        shape: const RoundedRectangleBorder(
+            borderRadius: AppRadius.dialogBorderRadius),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1279,11 +1423,14 @@ class ModalUtils {
             Text(title,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
-                    fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.gray900)),
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.gray900)),
             const SizedBox(height: 12),
             Text(message,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(color: AppColors.gray500, height: 1.5)),
+                style:
+                    GoogleFonts.poppins(color: AppColors.gray500, height: 1.5)),
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
@@ -1311,7 +1458,8 @@ class ModalUtils {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.white,
-        shape: const RoundedRectangleBorder(borderRadius: AppRadius.dialogBorderRadius),
+        shape: const RoundedRectangleBorder(
+            borderRadius: AppRadius.dialogBorderRadius),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1321,11 +1469,14 @@ class ModalUtils {
             Text(title,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
-                    fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.gray900)),
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.gray900)),
             const SizedBox(height: 12),
             Text(message,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(color: AppColors.gray500, height: 1.5)),
+                style:
+                    GoogleFonts.poppins(color: AppColors.gray500, height: 1.5)),
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,

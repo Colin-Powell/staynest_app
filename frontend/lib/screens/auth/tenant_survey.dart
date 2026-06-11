@@ -20,7 +20,7 @@ class _TenantSurveyViewState extends State<TenantSurveyView> {
   final List<String> _preferredCategories = [];
   final _preferredCities = TextEditingController();
   bool _optIn = true;
-    bool _consentGiven = false;
+  bool _consentGiven = false;
   bool _isSaving = false;
 
   final _repo = RemoteDatabaseRepository();
@@ -61,7 +61,9 @@ class _TenantSurveyViewState extends State<TenantSurveyView> {
     };
 
     if (_optIn && !_consentGiven) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please provide consent to enable personalized recommendations.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Please provide consent to enable personalized recommendations.')));
       setState(() => _isSaving = false);
       return;
     }
@@ -69,6 +71,11 @@ class _TenantSurveyViewState extends State<TenantSurveyView> {
     try {
       final res = await _repo.saveTenantProfile(profile);
       if (res != null) {
+        // Fetch the fresh, full user object to ensure we have the correct 
+        // verification status before checking it for navigation.
+        final fullUser = await _repo.loadCurrentUser();
+        AppSession.updateCurrentUser(fullUser);
+        
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Preferences saved.')));
       }
@@ -78,8 +85,12 @@ class _TenantSurveyViewState extends State<TenantSurveyView> {
     }
 
     setState(() => _isSaving = false);
-    // Continue to OTP flow or home
-    Navigator.pushReplacementNamed(context, '/otp');
+    // Only show OTP screen for unverified users (registrations).
+    if (AppSession.currentUserVerified == true) {
+      Navigator.pushReplacementNamed(context, '/home');
+    } else {
+      Navigator.pushReplacementNamed(context, '/otp');
+    }
   }
 
   @override
@@ -189,14 +200,18 @@ class _TenantSurveyViewState extends State<TenantSurveyView> {
               ]),
               const SizedBox(height: 8),
               Row(children: [
-                Checkbox(value: _consentGiven, onChanged: (v) => setState(() => _consentGiven = v ?? false)),
+                Checkbox(
+                    value: _consentGiven,
+                    onChanged: (v) =>
+                        setState(() => _consentGiven = v ?? false)),
                 const SizedBox(width: 8),
                 Expanded(
                   child: GestureDetector(
                     onTap: () => Navigator.pushNamed(context, '/privacy'),
                     child: Text(
                       'I have read and agree to the Privacy & Data Retention Policy',
-                      style: GoogleFonts.poppins(fontSize: 13, decoration: TextDecoration.underline),
+                      style: GoogleFonts.poppins(
+                          fontSize: 13, decoration: TextDecoration.underline),
                     ),
                   ),
                 ),

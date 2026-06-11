@@ -432,11 +432,14 @@ class _EditProfileViewState extends State<EditProfileView>
     setState(() => _isSaving = true);
     try {
       final repository = RemoteDatabaseRepository();
-      final user = await repository.updateCurrentUser(name, email, phone);
-      if (user == null) {
-        throw Exception('Failed to update profile.');
-      }
+      await repository.updateCurrentUser(update: {
+        'name': name,
+        'email': email,
+        'phone': phone,
+      });
 
+      // Reload user data to update AppSession
+      final user = await repository.loadCurrentUser();
       AppSession.updateCurrentUser(user);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

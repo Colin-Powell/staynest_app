@@ -49,24 +49,100 @@ router.get('/conversation/:userId', requireAuth, async (req, res, next) => {
         next(error);
     }
 });
+router.post('/mark-read', requireAuth, async (req, res, next) => {
+    try {
+        const currentUserId = req.auth.id;
+        // Interpret payload as "mark all messages from these users as read for me".
+        // Frontend currently sends: { user_ids: [...] }
+        const { user_ids } = req.body;
+        const partnerIds = (user_ids ?? [])
+            .map((v) => v?.toString())
+            .filter(Boolean);
+        // If no users provided, mark all incoming messages as read.
+        if (partnerIds.length === 0) {
+            const unreadFromResult = await query(`SELECT DISTINCT from_user_id
+         FROM messages
+         WHERE to_user_id = $1
+           AND NOT EXISTS (
+             SELECT 1
+             FROM message_reads mr
+             WHERE mr.user_id = $1
+               AND mr.message_id = messages.id
+           )`, [currentUserId]);
+            const allPartnerIds = unreadFromResult.rows.map((r) => r.from_user_id);
+            if (allPartnerIds.length === 0) {
+                return res.status(200).json({ data: { updated: 0 } });
+            }
+            const now = new Date();
+            // Insert read receipts for all unread messages
+            const result = await query(`INSERT INTO message_reads (user_id, message_id, read_at)
+         SELECT $1 as user_id, m.id as message_id, $2 as read_at
+         FROM messages m
+         WHERE m.to_user_id = $1
+           AND m.from_user_id = ANY($3)
+           AND NOT EXISTS (
+             SELECT 1 FROM message_reads mr
+             WHERE mr.user_id = $1 AND mr.message_id = m.id
+           )`, [currentUserId, now, allPartnerIds]);
+            return res.status(200).json({ data: { updated: result.rowCount } });
+        }
+        const now = new Date();
+        // Upsert-ish behavior via INSERT ... SELECT + NOT EXISTS
+        const result = await query(`INSERT INTO message_reads (user_id, message_id, read_at)
+       SELECT $1 as user_id, m.id as message_id, $2 as read_at
+       FROM messages m
+       WHERE m.to_user_id = $1
+         AND m.from_user_id = ANY($3)
+         AND NOT EXISTS (
+           SELECT 1 FROM message_reads mr
+           WHERE mr.user_id = $1 AND mr.message_id = m.id
+         )`, [currentUserId, now, partnerIds]);
+        return res.status(200).json({ data: { updated: result.rowCount } });
+    }
+    catch (error) {
+        next(error);
+    }
+});
 // Fetch all conversations (unique users the current user has messaged)
 router.get('/conversations', requireAuth, async (req, res, next) => {
     try {
         const currentUserId = req.auth.id;
-        const result = await query(`SELECT DISTINCT
-         CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END as user_id,
-         (SELECT name FROM users u WHERE u.id = CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END) as user_name,
-         (SELECT avatar FROM users u WHERE u.id = CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END) as user_avatar,
-         (SELECT text FROM messages m2 WHERE 
-           (m2.from_user_id = $1 AND m2.to_user_id = CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END)
-           OR (m2.from_user_id = CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END AND m2.to_user_id = $1)
-           ORDER BY m2.created_at DESC LIMIT 1) as last_message,
-         (SELECT created_at FROM messages m2 WHERE 
-           (m2.from_user_id = $1 AND m2.to_user_id = CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END)
-           OR (m2.from_user_id = CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END AND m2.to_user_id = $1)
-           ORDER BY m2.created_at DESC LIMIT 1) as last_message_at
-       FROM messages
-       WHERE from_user_id = $1 OR to_user_id = $1
+        const result = await query(`WITH partners AS (
+         SELECT DISTINCT
+           CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END as partner_id
+         FROM messages
+         WHERE from_user_id = $1 OR to_user_id = $1
+       )
+       SELECT
+         p.partner_id as user_id,
+         u.name as user_name,
+         u.avatar as user_avatar,
+         (SELECT m2.text
+            FROM messages m2
+           WHERE (m2.from_user_id = $1 AND m2.to_user_id = p.partner_id)
+              OR (m2.from_user_id = p.partner_id AND m2.to_user_id = $1)
+           ORDER BY m2.created_at DESC
+           LIMIT 1) as last_message,
+         (SELECT m2.created_at
+            FROM messages m2
+           WHERE (m2.from_user_id = $1 AND m2.to_user_id = p.partner_id)
+              OR (m2.from_user_id = p.partner_id AND m2.to_user_id = $1)
+           ORDER BY m2.created_at DESC
+           LIMIT 1) as last_message_at,
+         (
+           SELECT COUNT(*)
+           FROM messages m3
+           WHERE m3.to_user_id = $1
+             AND m3.from_user_id = p.partner_id
+             AND NOT EXISTS (
+               SELECT 1
+               FROM message_reads mr
+               WHERE mr.user_id = $1
+                 AND mr.message_id = m3.id
+             )
+         ) as unread_count
+       FROM partners p
+       JOIN users u ON u.id = p.partner_id
        ORDER BY last_message_at DESC`, [currentUserId]);
         return res.json({
             data: {

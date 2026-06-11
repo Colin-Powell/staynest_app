@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "193200636263",
+    "project_id": "staynest-3a1bb",
+    "storage_bucket": "staynest-3a1bb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:193200636263:android:ab65acef0915225e02efc2",
+        "android_client_info": {
+          "package_name": "com.example.property_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB9_bsqsky_UEU0D_JPWraqFfuBXVtcczY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

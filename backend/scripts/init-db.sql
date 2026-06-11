@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS business_name text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS business_type text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS business_description text;
@@ -38,7 +39,9 @@ CREATE TABLE IF NOT EXISTS properties (
   lat numeric,
   lng numeric,
   landlord_id uuid REFERENCES users(id) ON DELETE SET NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  average_rating numeric DEFAULT 0,
+  review_count integer DEFAULT 0
 );
 
 -- Ensure lat/lng columns exist for older databases
@@ -133,6 +136,19 @@ CREATE TABLE IF NOT EXISTS messages (
 -- Index for efficient message retrieval by conversation pair
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(from_user_id, to_user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_to_user ON messages(to_user_id, created_at DESC);
+
+-- Message read tracking:
+-- Each user records which specific message IDs have been read.
+-- This enables unread_count computation for the conversations list.
+CREATE TABLE IF NOT EXISTS message_reads (
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id uuid NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  read_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, message_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_reads_user_id ON message_reads(user_id);
+CREATE INDEX IF NOT EXISTS idx_message_reads_message_id ON message_reads(message_id);
 
 -- Bookings table for property bookings/reservations
 CREATE TABLE IF NOT EXISTS bookings (
@@ -261,3 +277,51 @@ CREATE TABLE IF NOT EXISTS property_unique_views (
 ALTER TABLE property_analytics ADD COLUMN IF NOT EXISTS impressions integer DEFAULT 0;
 ALTER TABLE property_analytics ADD COLUMN IF NOT EXISTS clicks integer DEFAULT 0;
 ALTER TABLE property_analytics ADD COLUMN IF NOT EXISTS bookings_confirmed integer DEFAULT 0;
+
+-- Reviews Table for properties
+CREATE TABLE IF NOT EXISTS reviews (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id uuid NOT NULL REFERENCES bookings(id) ON DELETE CASCADE, -- Link to a specific booking
+  property_id uuid NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  reviewer_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  rating integer NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  comment text,
+  landlord_response text, -- Optional response from the landlord
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (booking_id, reviewer_id) -- Ensure one review per booking per user
+);
+
+-- Index for efficient review retrieval by property
+CREATE INDEX IF NOT EXISTS idx_reviews_property_id ON reviews(property_id, created_at DESC);
+-- Index for efficient review retrieval by reviewer
+CREATE INDEX IF NOT EXISTS idx_reviews_reviewer_id ON reviews(reviewer_id, created_at DESC);
+
+-- Function to update property average rating and review count
+CREATE OR REPLACE FUNCTION update_property_rating()
+RETURNS TRIGGER AS $$
+DECLARE
+  prop_id UUID;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    prop_id = OLD.property_id;
+  ELSE
+    prop_id = NEW.property_id;
+  END IF;
+
+  UPDATE properties
+  SET
+    average_rating = (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE property_id = prop_id),
+    review_count = (SELECT COUNT(*) FROM reviews WHERE property_id = prop_id),
+    updated_at = NOW()
+  WHERE id = prop_id;
+
+  RETURN NEW; -- For AFTER triggers, returning NEW or OLD doesn't affect the result
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to call the function after any INSERT, UPDATE, or DELETE on the reviews table
+CREATE TRIGGER after_review_change
+AFTER INSERT OR UPDATE OR DELETE ON reviews
+FOR EACH ROW
+EXECUTE FUNCTION update_property_rating();

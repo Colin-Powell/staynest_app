@@ -39,6 +39,9 @@ class AppSession {
 
   static String? apiToken;
 
+  // Backward-compatible alias (some code references authToken).
+  static String? get authToken => apiToken;
+
   static final Set<String> savedPropertyIds = {};
 
   static bool isSaved(String id) => savedPropertyIds.contains(id);
@@ -56,6 +59,11 @@ class AppSession {
       savedPropertyIds.add(id);
       AnalyticsService.trackPropertySave(id);
     }
+  }
+
+  static void trackEngagement(String eventType, String propertyId) {
+    // This allows tracking clicks, views, etc.
+    AnalyticsService.logEvent(eventType: eventType, propertyId: propertyId);
   }
 
   static String get displayName => currentUserName?.trim().isNotEmpty == true

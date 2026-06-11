@@ -29,12 +29,15 @@ class AnalyticsService {
         Uri.parse('$_baseUrl/track'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${AppSession.apiToken}',
+          if (AppSession.apiToken != null)
+            'Authorization': 'Bearer ${AppSession.apiToken}',
         },
         body: jsonEncode({
           'eventType': eventType,
-          'userId': userId ?? AppSession.currentUserId, // Send null for guests to satisfy UUID constraint
-          'propertyId': propertyId,
+          'userId': userId ??
+              AppSession
+                  .currentUserId, // Send null for guests to satisfy UUID constraint
+          'propertyId': propertyId.trim(),
           'sessionId': sessionId,
           'timestamp': DateTime.now().toIso8601String(),
           'metadata': metadata,
@@ -73,13 +76,17 @@ class AnalyticsService {
 
   /// Primary impression tracker with anti-duplication and rich metadata
   static void trackPropertyImpression(String propertyId,
-          {String? userId, String? source, int? position, String? query, Map<String, dynamic>? filters, String? eventOverride}) {
-    
+      {String? userId,
+      String? source,
+      int? position,
+      String? query,
+      Map<String, dynamic>? filters,
+      String? eventOverride}) {
     final sourceKey = source ?? 'search';
     final eventType = eventOverride ?? 'property_impression';
-    
+
     _sessionImpressions.putIfAbsent(sourceKey, () => {});
-    
+
     // Anti-duplication rule: Only once per session per property per source
     if (_sessionImpressions[sourceKey]!.contains(propertyId)) return;
     _sessionImpressions[sourceKey]!.add(propertyId);
@@ -97,35 +104,43 @@ class AnalyticsService {
         });
   }
 
-  static void trackFeaturedPropertyImpression(String propertyId, {int? position}) =>
-      trackPropertyImpression(propertyId, source: 'home_featured', position: position, eventOverride: 'featured_property_impression');
+  static void trackFeaturedPropertyImpression(String propertyId,
+          {int? position}) =>
+      trackPropertyImpression(propertyId,
+          source: 'home_featured',
+          position: position,
+          eventOverride: 'featured_property_impression');
 
   static void trackMapPropertyImpression(String propertyId) =>
-      trackPropertyImpression(propertyId, source: 'map', eventOverride: 'map_property_impression');
+      trackPropertyImpression(propertyId,
+          source: 'map', eventOverride: 'map_property_impression');
 
-  static void trackRecommendedPropertyImpression(String propertyId, String sourcePropertyId, {int? position}) {
+  static void trackRecommendedPropertyImpression(
+      String propertyId, String sourcePropertyId,
+      {int? position}) {
     const event = 'recommended_property_impression';
     _sessionImpressions.putIfAbsent(event, () => {});
     if (_sessionImpressions[event]!.contains(propertyId)) return;
     _sessionImpressions[event]!.add(propertyId);
 
-    logEvent(
-      eventType: event,
-      propertyId: propertyId,
-      metadata: {
-        'source': 'recommended',
-        'source_property_id': sourcePropertyId,
-        'position': position,
-        'timestamp': DateTime.now().toIso8601String(),
-      }
-    );
+    logEvent(eventType: event, propertyId: propertyId, metadata: {
+      'source': 'recommended',
+      'source_property_id': sourcePropertyId,
+      'position': position,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
   }
 
-  static void trackSavedPropertyImpression(String propertyId, {int? position}) =>
-      trackPropertyImpression(propertyId, source: 'saved', position: position, eventOverride: 'saved_property_impression');
+  static void trackSavedPropertyImpression(String propertyId,
+          {int? position}) =>
+      trackPropertyImpression(propertyId,
+          source: 'saved',
+          position: position,
+          eventOverride: 'saved_property_impression');
 
   static void trackOwnerPropertyImpression(String propertyId) =>
-      trackPropertyImpression(propertyId, source: 'owner_preview', eventOverride: 'owner_property_impression');
+      trackPropertyImpression(propertyId,
+          source: 'owner_preview', eventOverride: 'owner_property_impression');
 
   static void trackChatInitiated(String propertyId,
           {String? userId, String? source}) =>
@@ -152,13 +167,16 @@ class AnalyticsService {
           metadata: {'source': source});
 
   static void trackPropertySave(String propertyId, {String? userId}) =>
-      logEvent(eventType: 'property_save', userId: userId, propertyId: propertyId);
+      logEvent(
+          eventType: 'property_save', userId: userId, propertyId: propertyId);
 
   static void trackPropertyShare(String propertyId, {String? userId}) =>
-      logEvent(eventType: 'property_share', userId: userId, propertyId: propertyId);
+      logEvent(
+          eventType: 'property_share', userId: userId, propertyId: propertyId);
 
   // 4. Conversion Funnel Tracking
-  static void trackFunnelStep(String step, String propertyId, {String? userId}) =>
+  static void trackFunnelStep(String step, String propertyId,
+          {String? userId}) =>
       logEvent(
           eventType: 'funnel_$step', userId: userId, propertyId: propertyId);
 
@@ -349,7 +367,8 @@ class AnalyticsService {
   static Future<List<int>> getPropertyAvailability(String propertyId) async {
     try {
       final response = await http.get(
-        Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId/availability'),
+        Uri.parse(
+            '${AppSession.apiBaseUrl}/properties/$propertyId/availability'),
         headers: {'Authorization': 'Bearer ${AppSession.apiToken}'},
       );
       if (response.statusCode == 200) {

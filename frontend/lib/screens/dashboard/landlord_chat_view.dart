@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/services/message_service.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/services/fcm_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:property_app/models/communication_models.dart';
 
@@ -44,8 +46,14 @@ class _LandlordChatViewState extends State<LandlordChatView>
   late final Animation<double> _fadeAnim;
 
   StreamSubscription? _socketSubscription;
+  StreamSubscription? _typingSubscription;
+  StreamSubscription? _seenSubscription;
+  StreamSubscription? _fcmSubscription;
+
   bool _isTyping = false;
+  bool _isOtherTyping = false;
   bool _isLoading = true;
+  Timer? _typingDebounce;
 
   final List<ChatMessage> _messages = [];
 
@@ -68,35 +76,110 @@ class _LandlordChatViewState extends State<LandlordChatView>
     );
 
     _msgController.addListener(() {
-      setState(() => _isTyping = _msgController.text.trim().isNotEmpty);
+      _handleTypingStatus();
+      setState(() {
+        _isTyping = _msgController.text.trim().isNotEmpty;
+      });
     });
 
     _pageController.forward().then((_) => _listController.forward());
 
     _fetchMessages();
 
+    _typingSubscription = SocketService.instance.typing.listen((data) {
+      if (data['userId'] == widget.userId) {
+        setState(() => _isOtherTyping = data['isTyping'] == true);
+      }
+    });
+
+    _seenSubscription = SocketService.instance.seen.listen((data) {
+      // Update local message status to seen
+      setState(() {
+        for (int i = 0; i < _messages.length; i++) {
+          if (_messages[i].sender == ChatSender.me &&
+              _messages[i].status != MessageStatus.sent) {
+            _messages[i] = _messages[i].copyWith(status: MessageStatus.sent);
+          }
+        }
+      });
+    });
+
+    // Listen for FCM messages while in the chat to update UI if socket is slow
+    _fcmSubscription = FirebaseMessaging.onMessage.listen((message) {
+      if (message.data['senderId'] == widget.userId) {
+        final text = message.notification?.body ?? '';
+        final ts = DateTime.now().millisecondsSinceEpoch;
+        
+        // The logic inside _addMessage automatically handles de-duplication via msg.id
+        final fcmMsgId = message.messageId ?? 'fcm_$ts';
+        
+        if (!_messages.any((m) => m.id == fcmMsgId)) {
+          _addMessage(ChatMessage(
+            id: fcmMsgId,
+            sender: ChatSender.them,
+            text: text,
+            time: _formatTime(DateTime.now()),
+          ));
+        }
+      }
+    });
+
     // Only handle messages FROM the other person — our own are added optimistically
     _socketSubscription = SocketService.instance.messages.listen((msg) {
-      if (msg.from == widget.userId) {
-        // Deduplicate incoming socket events using a stable ID
-        _addMessage(ChatMessage(
-          id: 'socket_${msg.ts}',
-          sender: ChatSender.them,
-          text: msg.text,
-          time: _formatTime(DateTime.fromMillisecondsSinceEpoch(msg.ts)),
-        ));
-      }
+      // Debug: helps confirm whether the same socket payload is received multiple times.
+      // ignore: avoid_print
+      print(
+          'landlord socket message recv: id=${msg.id} from=${msg.from} to=${msg.to} ts=${msg.ts} text=${msg.text}');
+
+      if (msg.from != widget.userId) return;
+
+      final socketId = msg.id.trim();
+      final socketText = msg.text.trim();
+      final socketTs = msg.ts;
+
+      final alreadyById =
+          socketId.isNotEmpty && _messages.any((m) => m.id == socketId);
+      if (alreadyById) return;
+
+      final alreadyByFingerprint = _messages.any((m) =>
+          m.text.trim() == socketText &&
+          (m.time == 'Now' ||
+              m.time ==
+                  _formatTime(DateTime.fromMillisecondsSinceEpoch(socketTs))));
+      if (alreadyByFingerprint) return;
+
+      _addMessage(ChatMessage(
+        id: socketId.isNotEmpty
+            ? socketId
+            : 'socket_${socketTs}_${socketText.hashCode}',
+        sender: ChatSender.them,
+        text: msg.text,
+        time: _formatTime(DateTime.fromMillisecondsSinceEpoch(socketTs)),
+      ));
     });
   }
 
   @override
   void dispose() {
     _socketSubscription?.cancel();
+    _fcmSubscription?.cancel();
+    _typingSubscription?.cancel();
+    _seenSubscription?.cancel();
     _pageController.dispose();
     _listController.dispose();
     _msgController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _handleTypingStatus() {
+    if (_typingDebounce?.isActive ?? false) _typingDebounce!.cancel();
+
+    SocketService.instance.sendTyping(to: widget.userId, isTyping: true);
+
+    _typingDebounce = Timer(const Duration(milliseconds: 1500), () {
+      SocketService.instance.sendTyping(to: widget.userId, isTyping: false);
+    });
   }
 
   void _addMessage(ChatMessage msg) {
@@ -113,19 +196,30 @@ class _LandlordChatViewState extends State<LandlordChatView>
     try {
       final messages =
           await MessageService.instance.fetchConversation(widget.userId);
+      if (!mounted) return;
+
       final currentUserId = AppSession.currentUserId ?? '';
-      _messages.clear();
-      for (final msg in messages) {
-        _addMessage(ChatMessage(
-          id: msg.id,
-          sender: msg.fromUserId == currentUserId ? ChatSender.me : ChatSender.them,
-          text: msg.text,
-          time: _formatTime(msg.createdAt),
-        ));
-      }
+
+      messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
       setState(() {
+        for (final msg in messages) {
+          final chatMsg = ChatMessage(
+            id: msg.id,
+            sender: msg.fromUserId == currentUserId
+                ? ChatSender.me
+                : ChatSender.them,
+            text: msg.text,
+            time: _formatTime(msg.createdAt),
+          );
+
+          if (!_messages.any((m) => m.id == chatMsg.id)) {
+            _messages.add(chatMsg);
+          }
+        }
         _isLoading = false;
       });
+      _scrollToBottom();
     } catch (err) {
       setState(() => _isLoading = false);
       // ignore: avoid_print
@@ -144,7 +238,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
       id: messageId,
       sender: ChatSender.me,
       text: text,
-      time: _formatTime(DateTime.now()),
+      time: 'Now',
       status: MessageStatus.sending,
     ));
 
@@ -156,12 +250,16 @@ class _LandlordChatViewState extends State<LandlordChatView>
 
   Future<void> _performSave(String messageId, String text) async {
     try {
-      await MessageService.instance.saveMessage(toUserId: widget.userId, text: text);
+      final realId = await MessageService.instance
+          .saveMessage(toUserId: widget.userId, text: text);
       if (!mounted) return;
       final idx = _messages.indexWhere((m) => m.id == messageId);
       if (idx != -1) {
         setState(() {
-          _messages[idx] = _messages[idx].copyWith(status: MessageStatus.sent);
+          _messages[idx] = _messages[idx].copyWith(
+            id: realId,
+            status: MessageStatus.sent,
+          );
         });
       }
     } catch (err) {
@@ -169,7 +267,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
       final idx = _messages.indexWhere((m) => m.id == messageId);
       if (idx != -1) {
         setState(() {
-          _messages[idx] = _messages[idx].copyWith(status: MessageStatus.failed);
+          _messages[idx] =
+              _messages[idx].copyWith(status: MessageStatus.failed);
         });
       }
       print('Failed to save message: $err');
@@ -302,20 +401,33 @@ class _LandlordChatViewState extends State<LandlordChatView>
                 Row(
                   children: [
                     Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF10B981),
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: _isOtherTyping
+                            ? const Color(0xFF3B82F6)
+                            : const Color(0xFF10B981),
                         shape: BoxShape.circle,
+                        boxShadow: _isOtherTyping
+                            ? [
+                                BoxShadow(
+                                    color: const Color(0xFF3B82F6)
+                                        .withOpacity(0.4),
+                                    blurRadius: 4,
+                                    spreadRadius: 1)
+                              ]
+                            : null,
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     Text(
-                      'Online',
+                      _isOtherTyping ? 'typing...' : 'Online',
                       style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF9CA3AF),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: _isOtherTyping
+                            ? const Color(0xFF3B82F6)
+                            : const Color(0xFF9CA3AF),
                       ),
                     ),
                   ],
@@ -399,6 +511,47 @@ class _LandlordChatViewState extends State<LandlordChatView>
 
   Widget _buildInputArea(BuildContext context) {
     return Container(
+      decoration: const BoxDecoration(color: Colors.white),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_isTyping == false) _buildQuickReplies(),
+          _buildActualInput(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickReplies() {
+    final replies = ['Is it available?', 'When can I view?', 'Can we talk?'];
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        children: replies
+            .map((r) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ActionChip(
+                    label: Text(r,
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: _landlordPrimary)),
+                    onPressed: () {
+                      _msgController.text = r;
+                      _sendMessage();
+                    },
+                  ),
+                ))
+            .toList(),
+      ),
+    );
+  }
+
+  Widget _buildActualInput(BuildContext context) {
+    return Container(
       padding: EdgeInsets.only(
         left: 24,
         right: 24,
@@ -408,6 +561,15 @@ class _LandlordChatViewState extends State<LandlordChatView>
       decoration: const BoxDecoration(color: Colors.white),
       child: Row(
         children: [
+          GestureDetector(
+            onTap: () {}, // Attachments
+            child: const Icon(
+              Icons.add_circle_outline_rounded,
+              color: Color(0xFF9CA3AF),
+              size: 30,
+            ),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: TextField(
               controller: _msgController,
@@ -558,15 +720,18 @@ class _MyBubble extends StatelessWidget {
           ),
         );
       case MessageStatus.sent:
-        return const Icon(Icons.done_all, size: 14, color: Colors.white70);
+        // The double-tick color logic
+        final isSeen = false; // Mock seen state
+        return Icon(Icons.done_all,
+            size: 16, color: isSeen ? const Color(0xFF4ADE80) : Colors.white70);
       case MessageStatus.failed:
         return GestureDetector(
           onTap: onRetry,
           behavior: HitTestBehavior.opaque,
           child: const Padding(
             padding: EdgeInsets.symmetric(horizontal: 2),
-            child: Icon(Icons.error_outline,
-                size: 16, color: Color(0xFFFCA5A5)),
+            child:
+                Icon(Icons.error_outline, size: 16, color: Color(0xFFFCA5A5)),
           ),
         );
     }

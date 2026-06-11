@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/services/message_service.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/widgets/property_image.dart';
 import 'dart:ui';
 
 // ─── Local UI model (maps from ConversationModel) ────────────────────────────
@@ -17,7 +18,8 @@ class _ChatItem {
   final String msg;
   final String time;
   int unread = 0;
-  final bool online;
+  bool online;
+  final DateTime? lastMessageAt;
 
   _ChatItem({
     required this.id,
@@ -25,10 +27,13 @@ class _ChatItem {
     this.avatarUrl,
     required this.msg,
     required this.time,
+    this.lastMessageAt,
     this.unread = 0,
     this.online = false,
   });
 }
+
+enum _MessageFilter { all, unread, tenants, archived }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -47,31 +52,75 @@ class MessagesViewScreen extends StatefulWidget {
   State<MessagesViewScreen> createState() => _MessagesViewScreenState();
 }
 
-class _MessagesViewScreenState extends State<MessagesViewScreen> {
+class _MessagesViewScreenState extends State<MessagesViewScreen>
+    with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
 
   bool _isLoading = true;
   String? _errorMessage;
   String _searchQuery = '';
   bool _isSelectionMode = false;
+  _MessageFilter _currentFilter = _MessageFilter.all;
   Set<String> _selectedIds = {};
 
   List<_ChatItem> _chats = [];
+  List<_ChatItem> _suggestedContacts = [];
   StreamSubscription? _messageSubscription;
+  StreamSubscription? _presenceSubscription;
+  late AnimationController _skeletonController;
 
   @override
   void initState() {
     super.initState();
+    _skeletonController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text.toLowerCase());
     });
     _loadConversations();
+    _loadSuggestions();
     _setupSocketListener();
   }
 
   void _setupSocketListener() {
-    _messageSubscription = SocketService.instance.messages.listen((_) {
-      _loadConversations();
+    _messageSubscription = SocketService.instance.messages.listen((msg) {
+      final currentUserId = AppSession.currentUserId;
+      final otherId = msg.from == currentUserId ? msg.to : msg.from;
+
+      final index = _chats.indexWhere((c) => c.id == otherId);
+      if (index != -1) {
+        setState(() {
+          final chat = _chats[index];
+          _chats[index] = _ChatItem(
+            id: chat.id,
+            name: chat.name,
+            avatarUrl: chat.avatarUrl,
+            msg: msg.text,
+            time: _formatTime(DateTime.fromMillisecondsSinceEpoch(msg.ts)),
+            lastMessageAt: DateTime.fromMillisecondsSinceEpoch(msg.ts),
+            unread: msg.from != currentUserId ? chat.unread + 1 : chat.unread,
+            online: chat.online,
+          );
+          // Move to top
+          final item = _chats.removeAt(index);
+          _chats.insert(0, item);
+        });
+      } else {
+        // New conversation we don't have in list yet
+        _loadConversations();
+      }
+    });
+
+    _presenceSubscription = SocketService.instance.presence.listen((data) {
+      final userId = data['userId']?.toString();
+      final isOnline = data['online'] == true;
+      final idx = _chats.indexWhere((c) => c.id == userId);
+      if (idx != -1) {
+        setState(() => _chats[idx].online = isOnline);
+      }
     });
   }
 
@@ -79,10 +128,28 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
   void dispose() {
     _searchController.dispose();
     _messageSubscription?.cancel();
+    _presenceSubscription?.cancel();
+    _skeletonController.dispose();
     super.dispose();
   }
 
   // ── Data loading ────────────────────────────────────────────────────────────
+
+  Future<void> _loadSuggestions() async {
+    final contacts = await MessageService.instance.fetchRecentContacts();
+    if (!mounted) return;
+    setState(() {
+      _suggestedContacts = contacts
+          .map((c) => _ChatItem(
+                id: c.userId,
+                name: c.userName,
+                avatarUrl: c.userAvatar,
+                msg: 'Contact to start chat',
+                time: '',
+              ))
+          .toList();
+    });
+  }
 
   Future<void> _loadConversations() async {
     setState(() {
@@ -100,6 +167,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                   avatarUrl: c.userAvatar,
                   msg: c.lastMessage ?? 'No messages yet',
                   time: _formatTime(c.lastMessageAt),
+                  lastMessageAt: c.lastMessageAt,
                   unread: c.unreadCount,
                 ))
             .toList();
@@ -172,11 +240,22 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
     widget.onSelectionModeChanged?.call(false);
   }
 
-  void _deleteSelected() {
+  Future<void> _deleteSelected() async {
+    final idsToDelete = _selectedIds.toList();
     setState(() {
-      _chats.removeWhere((c) => _selectedIds.contains(c.id));
+      _chats.removeWhere((c) => idsToDelete.contains(c.id));
       _exitSelectionMode();
     });
+
+    try {
+      for (final id in idsToDelete) {
+        await MessageService.instance.deleteConversation(id);
+      }
+    } catch (e) {
+      debugPrint('Failed to delete conversations: $e');
+      // Re-sync with backend if deletion fails
+      _loadConversations();
+    }
   }
 
   Future<void> _markSelectedAsRead() async {
@@ -202,9 +281,17 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _chats
-        .where((c) => c.name.toLowerCase().contains(_searchQuery))
-        .toList();
+    Iterable<_ChatItem> filtered =
+        _chats.where((c) => c.name.toLowerCase().contains(_searchQuery));
+
+    if (_currentFilter == _MessageFilter.unread) {
+      filtered = filtered.where((c) => c.unread > 0);
+    } else if (_currentFilter == _MessageFilter.archived) {
+      // Placeholder logic for archived
+      filtered = filtered.where((c) => false);
+    }
+
+    final displayList = filtered.toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -240,10 +327,12 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                         crossFadeState: _isSelectionMode
                             ? CrossFadeState.showSecond
                             : CrossFadeState.showFirst,
-                        firstChild: _buildNormalHeader(),
-                        secondChild: _buildSelectionHeader(filtered.length),
+                        firstChild: _buildNormalHeader(displayList.length),
+                        secondChild: _buildSelectionHeader(displayList.length),
                       ),
                       const SizedBox(height: 24),
+                      _buildFilterChips(),
+                      const SizedBox(height: 16),
                       _GlassContainer(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         height: 52,
@@ -304,7 +393,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                         ? _buildLoadingState()
                         : _errorMessage != null
                             ? _buildErrorState()
-                            : filtered.isEmpty
+                            : displayList.isEmpty
                                 ? _buildEmptyState()
                                 : RefreshIndicator(
                                     onRefresh: _loadConversations,
@@ -319,17 +408,46 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                                                 .bottom +
                                             140,
                                       ),
-                                      itemCount: filtered.length,
+                                      itemCount: displayList.length,
                                       itemBuilder: (context, i) {
-                                        final chat = filtered[i];
+                                        final chat = displayList[i];
                                         final isSelected =
                                             _selectedIds.contains(chat.id);
 
                                         return Dismissible(
                                           key: ValueKey(chat.id),
                                           direction:
-                                              DismissDirection.endToStart,
+                                              DismissDirection.horizontal,
                                           background: Container(
+                                            // Swipe Right: Mute
+                                            margin: const EdgeInsets.only(
+                                                bottom: 8, left: 12, right: 12),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 24),
+                                            decoration: BoxDecoration(
+                                              color: Colors.amber.shade700,
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                            ),
+                                            alignment: Alignment.centerLeft,
+                                            child: const Row(
+                                              children: [
+                                                Icon(
+                                                    Icons
+                                                        .notifications_off_outlined,
+                                                    color: Colors.white,
+                                                    size: 28),
+                                                SizedBox(width: 12),
+                                                Text('Mute',
+                                                    style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.bold)),
+                                              ],
+                                            ),
+                                          ),
+                                          secondaryBackground: Container(
+                                            // Swipe Left: Delete
                                             margin: const EdgeInsets.only(
                                                 bottom: 8, left: 12, right: 12),
                                             padding: const EdgeInsets.symmetric(
@@ -340,22 +458,31 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                                                   BorderRadius.circular(16),
                                             ),
                                             alignment: Alignment.centerRight,
-                                            child: const Icon(
-                                                Icons.delete_outline,
-                                                color: Colors.white,
-                                                size: 32),
+                                            child: const Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.end,
+                                              children: [
+                                                Text('Delete',
+                                                    style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.bold)),
+                                                SizedBox(width: 12),
+                                                Icon(Icons.delete_outline,
+                                                    color: Colors.white,
+                                                    size: 28),
+                                              ],
+                                            ),
                                           ),
-                                          onDismissed: (direction) {
-                                            setState(() {
-                                              _chats.removeWhere(
-                                                  (c) => c.id == chat.id);
-                                              _selectedIds.remove(chat.id);
-                                              if (_selectedIds.isEmpty) {
-                                                _isSelectionMode = false;
-                                                widget.onSelectionModeChanged
-                                                    ?.call(false);
-                                              }
-                                            });
+                                          onDismissed: (direction) async {
+                                            if (direction ==
+                                                DismissDirection.endToStart) {
+                                              _selectedIds = {chat.id};
+                                              await _deleteSelected();
+                                            } else {
+                                              // Handle Mute
+                                              _loadConversations();
+                                            }
                                             ScaffoldMessenger.of(context)
                                                 .showSnackBar(SnackBar(
                                               content:
@@ -381,7 +508,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                                                     'avatar':
                                                         chat.avatarUrl ?? '',
                                                   },
-                                                );
+                                                ).then((_) =>
+                                                    _loadConversations());
                                               }
                                             },
                                             onLongPress: () {
@@ -431,7 +559,11 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                       _BottomBarIcon(
                         icon: Icons.notifications_off_outlined,
                         label: 'Mute',
-                        onTap: _exitSelectionMode,
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Mute coming soon')),
+                          );
+                        },
                       ),
                       _BottomBarIcon(
                         icon: Icons.delete_outline_rounded,
@@ -460,8 +592,11 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                         offset: const Offset(0, -160),
                         onSelected: (value) {
                           if (value == 'read') _markSelectedAsRead();
-                          if (value == 'block') _exitSelectionMode();
-                          if (value == 'pin') _exitSelectionMode();
+                          if (value == 'block' || value == 'pin') {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text(
+                                    '${value[0].toUpperCase()}${value.substring(1)} coming soon')));
+                          }
                         },
                         itemBuilder: (context) => [
                           const PopupMenuItem(
@@ -475,7 +610,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                                       TextStyle(fontWeight: FontWeight.w600)),
                             ]),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: 'read',
                             child: Row(children: [
                               Icon(Icons.mark_chat_read_outlined,
@@ -486,7 +621,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                                       TextStyle(fontWeight: FontWeight.w600)),
                             ]),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: 'block',
                             child: Row(children: [
                               Icon(Icons.block_outlined,
@@ -511,9 +646,39 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
     );
   }
 
+  Widget _buildFilterChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: _MessageFilter.values.map((filter) {
+          final isSelected = _currentFilter == filter;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              label:
+                  Text(filter.name[0].toUpperCase() + filter.name.substring(1)),
+              selected: isSelected,
+              onSelected: (val) => setState(() => _currentFilter = filter),
+              selectedColor: _tenantPrimary.withOpacity(0.2),
+              labelStyle: TextStyle(
+                color: isSelected ? _tenantPrimary : Colors.black54,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+              backgroundColor: Colors.white,
+              shape: StadiumBorder(
+                  side: BorderSide(
+                      color: isSelected ? _tenantPrimary : Colors.black12)),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   // ── Headers ──────────────────────────────────────────────────────────────────
 
-  Widget _buildNormalHeader() {
+  Widget _buildNormalHeader(int total) {
     return Row(
       key: const ValueKey('normalHeader'),
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -533,15 +698,32 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           itemBuilder: (context) => [
-            const PopupMenuItem(
+            PopupMenuItem(
                 value: 'read',
-                child: Text('Mark all as read',
+                child: Text('Mark all ($total) as read',
                     style: TextStyle(fontWeight: FontWeight.w600))),
-            const PopupMenuItem(
+            PopupMenuItem(
                 value: 'unread',
-                child: Text('Filter by unread',
-                    style: TextStyle(fontWeight: FontWeight.w600))),
+                child: Text(
+                    _currentFilter == _MessageFilter.unread
+                        ? 'Show all'
+                        : 'Filter by unread',
+                    style: const TextStyle(fontWeight: FontWeight.w600))),
           ],
+          onSelected: (val) {
+            if (val == 'read') {
+              MessageService.instance
+                  .markAsRead(_chats.map((e) => e.id).toList())
+                  .then((_) => _loadConversations());
+            } else if (val == 'unread') {
+              // Legacy menu support
+              setState(() {
+                _currentFilter = _currentFilter == _MessageFilter.unread
+                    ? _MessageFilter.all
+                    : _MessageFilter.unread;
+              });
+            }
+          },
         ),
       ],
     );
@@ -632,38 +814,41 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       itemCount: 6,
-      itemBuilder: (context, i) => Padding(
-        padding: const EdgeInsets.only(bottom: 24),
-        child: Row(
-          children: [
-            Container(
-              width: 60,
-              height: 60,
-              decoration: const BoxDecoration(
-                  color: Color(0xFFE5E7EB), shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                      height: 16,
-                      width: 140,
-                      decoration: BoxDecoration(
-                          color: const Color(0xFFE5E7EB),
-                          borderRadius: BorderRadius.circular(8))),
-                  const SizedBox(height: 10),
-                  Container(
-                      height: 14,
-                      width: 220,
-                      decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
-                          borderRadius: BorderRadius.circular(8))),
-                ],
+      itemBuilder: (context, i) => FadeTransition(
+        opacity: _skeletonController,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 24),
+          child: Row(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: const BoxDecoration(
+                    color: Color(0xFFE5E7EB), shape: BoxShape.circle),
               ),
-            ),
-          ],
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                        height: 16,
+                        width: 140,
+                        decoration: BoxDecoration(
+                            color: const Color(0xFFE5E7EB),
+                            borderRadius: BorderRadius.circular(8))),
+                    const SizedBox(height: 10),
+                    Container(
+                        height: 14,
+                        width: 220,
+                        decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(8))),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -696,29 +881,85 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: const BoxDecoration(
-                color: Color(0xFFF3F4F6), shape: BoxShape.circle),
-            child: const Icon(Icons.chat_bubble_outline_rounded,
-                size: 48, color: Color(0xFF9CA3AF)),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            _searchQuery.isEmpty ? 'No conversations yet' : 'No messages found',
-            style: const TextStyle(
-                fontSize: 18, fontWeight: FontWeight.w800, color: Colors.black),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _searchQuery.isEmpty
-                ? 'Your conversations will appear here.'
-                : 'Try adjusting your search query.',
-            style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF9CA3AF)),
-          ),
+          if (_searchQuery.isEmpty && _suggestedContacts.isNotEmpty) ...[
+            Text(
+              'Start a conversation',
+              style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black54),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 100,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                itemCount: _suggestedContacts.length,
+                itemBuilder: (context, i) {
+                  final contact = _suggestedContacts[i];
+                  return GestureDetector(
+                    onTap: () => widget.onSelectChat(
+                        contact.id, contact.name, contact.avatarUrl),
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 20),
+                      child: Column(
+                        children: [
+                          ClipOval(
+                            child: buildPropertyImage(
+                              contact.avatarUrl ?? '',
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              errorPlaceholder: const Icon(
+                                Icons.person,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            contact.name.split(' ')[0],
+                            style: const TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 40),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                  color: Color(0xFFF3F4F6), shape: BoxShape.circle),
+              child: const Icon(Icons.chat_bubble_outline_rounded,
+                  size: 48, color: Color(0xFF9CA3AF)),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              _searchQuery.isEmpty
+                  ? 'No conversations yet'
+                  : 'No messages found',
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _searchQuery.isEmpty
+                  ? 'Your conversations will appear here.'
+                  : 'Try adjusting your search query.',
+              style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF9CA3AF)),
+            ),
+          ]
         ],
       ),
     );
@@ -836,6 +1077,19 @@ class _ChatTileState extends State<_ChatTile>
             borderRadius: BorderRadius.circular(24),
             child: Row(
               children: [
+                // Accent bar for unread
+                if (hasUnread && !widget.isSelectionMode)
+                  Container(
+                    width: 4,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _tenantPrimary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                if (hasUnread && !widget.isSelectionMode)
+                  const SizedBox(width: 8),
+
                 // Selection checkbox
                 AnimatedSize(
                   duration: const Duration(milliseconds: 200),
@@ -870,16 +1124,16 @@ class _ChatTileState extends State<_ChatTile>
                         color: Color(0xFFE5E7EB),
                       ),
                       child: ClipOval(
-                        child: c.avatarUrl != null && c.avatarUrl!.isNotEmpty
-                            ? Image.network(
-                                c.avatarUrl!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(
-                                    Icons.person,
-                                    color: Color(0xFF9CA3AF)),
-                              )
-                            : const Icon(Icons.person,
-                                color: Color(0xFF9CA3AF)),
+                        child: buildPropertyImage(
+                          c.avatarUrl ?? '',
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.cover,
+                          errorPlaceholder: const Icon(
+                            Icons.person,
+                            color: Color(0xFF9CA3AF),
+                          ),
+                        ),
                       ),
                     ),
                     if (c.online)

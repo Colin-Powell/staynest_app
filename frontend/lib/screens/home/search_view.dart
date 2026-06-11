@@ -82,11 +82,15 @@ class _SearchViewState extends State<SearchView> {
       try {
         if (isCurrentlySaved) {
           await repository.removeFavoriteForUser(
-              AppSession.currentUserId!, propertyId);
+            userId: AppSession.currentUserId!,
+            propertyId: propertyId,
+          );
           AppSession.savedPropertyIds.remove(propertyId);
         } else {
           await repository.savePropertyForUser(
-              AppSession.currentUserId!, propertyId);
+            userId: AppSession.currentUserId!,
+            propertyId: propertyId,
+          );
           AppSession.savedPropertyIds.add(propertyId);
           AnalyticsService.trackPropertySave(propertyId);
         }
@@ -263,7 +267,8 @@ class _SearchViewState extends State<SearchView> {
                         child: SvgPicture.string(searchSvg,
                             width: 24,
                             height: 24,
-                            color: const Color(0xFF9CA3AF))),
+                            colorFilter: const ColorFilter.mode(
+                                Color(0xFF9CA3AF), BlendMode.srcIn))),
                     Expanded(
                       child: TextField(
                         onChanged: (value) {
@@ -298,7 +303,8 @@ class _SearchViewState extends State<SearchView> {
                                 child: SvgPicture.string(xCircleSvg,
                                     width: 22,
                                     height: 22,
-                                    color: const Color(0xFF9CA3AF))),
+                                    colorFilter: const ColorFilter.mode(
+                                        Color(0xFF9CA3AF), BlendMode.srcIn))),
                           ),
                         ),
                       ),
@@ -323,7 +329,8 @@ class _SearchViewState extends State<SearchView> {
                             SvgPicture.string(filterSvg,
                                 width: 22,
                                 height: 22,
-                                color: const Color(0xFF111827)),
+                                colorFilter: const ColorFilter.mode(
+                                    Color(0xFF111827), BlendMode.srcIn)),
                             const SizedBox(width: 8),
                             const Text('Filters',
                                 style: TextStyle(
@@ -342,7 +349,8 @@ class _SearchViewState extends State<SearchView> {
                             SvgPicture.string(sortSvg,
                                 width: 22,
                                 height: 22,
-                                color: const Color(0xFF111827)),
+                                colorFilter: const ColorFilter.mode(
+                                    Color(0xFF111827), BlendMode.srcIn)),
                             const SizedBox(width: 8),
                             const Text('Sort',
                                 style: TextStyle(

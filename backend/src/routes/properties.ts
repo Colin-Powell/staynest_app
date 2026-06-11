@@ -68,6 +68,8 @@ const PROPERTY_SELECT = `p.id,
               u.verified AS landlord_verified,
               u.business_name AS landlord_business_name,
               u.business_description AS landlord_business_description,
+              p.average_rating,
+              p.review_count,
               u.created_at AS landlord_member_since`;
 
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
@@ -404,6 +406,64 @@ router.post('/:id/availability', requireAuth, authorize('landlord', 'host'), asy
     );
 
     res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/properties/:id/reviews
+ * Fetches all reviews for a specific property including reviewer details
+ */
+router.get('/:id/reviews', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await query(
+      `SELECT r.*, 
+              u.name as reviewer_name, 
+              u.avatar as reviewer_avatar,
+              u.role as reviewer_role
+       FROM reviews r
+       JOIN users u ON u.id = r.reviewer_id
+       WHERE r.property_id = $1
+       ORDER BY r.created_at DESC`,
+      [req.params.id]
+    );
+    res.json({ data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/v1/properties/reviews
+ * Submits a new review. Requires authentication.
+ */
+router.post('/reviews', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { bookingId, propertyId, rating, comment } = req.body;
+
+    if (!bookingId || !propertyId || !rating) {
+      return res.status(400).json({ error: 'Missing required review fields.' });
+    }
+
+    // Verify the booking belongs to the user and is 'completed'
+    const bookingCheck = await query(
+      "SELECT id FROM bookings WHERE id = $1 AND tenant_id = $2 AND status = 'completed'",
+      [bookingId, req.auth?.id]
+    );
+
+    if (bookingCheck.rowCount === 0) {
+      return res.status(403).json({ error: 'You can only review completed bookings that you made.' });
+    }
+
+    const result = await query(
+      `INSERT INTO reviews (booking_id, property_id, reviewer_id, rating, comment)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [bookingId, propertyId, req.auth?.id, rating, comment]
+    );
+
+    res.status(201).json({ data: result.rows[0] });
   } catch (error) {
     next(error);
   }

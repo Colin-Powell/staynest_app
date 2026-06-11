@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:property_app/session/app_session.dart';
+import 'package:uuid/uuid.dart';
 
 class AnalyticsService {
   static Future<void> logEvent({
@@ -10,9 +11,8 @@ class AnalyticsService {
     Map<String, dynamic>? metadata,
   }) async {
     try {
-      final url = Uri.parse('${AppSession.apiBaseUrl}/analytics/events');
-
-      http.post(
+      final url = Uri.parse('${AppSession.apiBaseUrl}/analytics/track');
+      final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -23,18 +23,22 @@ class AnalyticsService {
           'eventType': eventType,
           'userId': AppSession.currentUserId,
           'propertyId': propertyId,
+          'sessionId': const Uuid().v4(),
           'metadata': metadata ?? {},
           'timestamp': DateTime.now().toIso8601String(),
         }),
-      ).catchError((e) {
+      );
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
         if (kDebugMode) {
-          print('Analytics error: $e');
+          print(
+              'Analytics request failed: ${response.statusCode} ${response.body}');
         }
-      });
+      }
     } catch (e) {
       if (kDebugMode) {
         print('Failed to log analytics event: $e');
       }
     }
   }
-}  
+}

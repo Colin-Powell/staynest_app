@@ -69,7 +69,7 @@ class MessageService {
 
   final String _baseUrl = AppSession.apiBaseUrl;
 
-  Future<void> saveMessage(
+  Future<String> saveMessage(
       {required String toUserId, required String text}) async {
     try {
       final response = await http.post(
@@ -84,6 +84,8 @@ class MessageService {
       if (response.statusCode != 201) {
         throw Exception('Failed to save message: ${response.body}');
       }
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return json['data']?['id']?.toString() ?? '';
     } catch (err) {
       rethrow;
     }
@@ -157,6 +159,45 @@ class MessageService {
 
     if (response.statusCode != 200) {
       throw Exception('Failed to mark as read: ${response.body}');
+    }
+  }
+
+  Future<void> deleteConversation(String userId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/messages/conversation/$userId'),
+        headers: {
+          'Authorization': 'Bearer ${AppSession.apiToken}',
+        },
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        throw Exception('Failed to delete conversation: ${response.body}');
+      }
+    } catch (err) {
+      rethrow;
+    }
+  }
+
+  Future<List<ConversationModel>> fetchRecentContacts() async {
+    try {
+      // Placeholder for actual property-related contact fetching logic
+      final response = await http.get(
+        Uri.parse('$_baseUrl/users/recent-contacts'),
+        headers: {
+          'Authorization': 'Bearer ${AppSession.apiToken}',
+        },
+      );
+
+      if (response.statusCode != 200) return [];
+
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return (json['data']?['contacts'] as List<dynamic>?)
+              ?.map((c) => ConversationModel.fromJson(c as Map<String, dynamic>))
+              .toList() ??
+          [];
+    } catch (err) {
+      return [];
     }
   }
 }

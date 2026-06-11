@@ -46,6 +46,35 @@ router.get('/me', requireAuth, async (req: Request, res: Response, next: NextFun
   }
 });
 
+router.put('/:id/fcm-token', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.params.id;
+    if (!ensureCurrentUserOrAdmin(req, userId)) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    const { fcmToken } = req.body as { fcmToken?: string };
+    if (!fcmToken || !fcmToken.trim()) {
+      return res.status(400).json({ error: 'fcmToken is required.' });
+    }
+
+    await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token text');
+
+    const result = await query(
+      'UPDATE users SET fcm_token = $1 WHERE id = $2 RETURNING id',
+      [fcmToken.trim(), userId],
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    return res.json({ data: { ok: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.patch('/me', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { name, email, phone, avatar } = req.body as {
@@ -105,7 +134,7 @@ router.patch('/me', requireAuth, async (req: Request, res: Response, next: NextF
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    res.json({ data: { user: result.rows[0] } });
+    res.json({ data: result.rows[0] });
   } catch (error) {
     next(error);
   }

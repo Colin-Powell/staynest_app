@@ -40,8 +40,12 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   late final Animation<double> _fadeAnim;
 
   StreamSubscription? _socketSubscription;
+  StreamSubscription? _typingSubscription;
+  StreamSubscription? _seenSubscription;
   bool _isTyping = false;
+  bool _isOtherTyping = false;
   bool _isLoading = true;
+  Timer? _typingDebounce;
 
   final List<ChatMessage> _messages = [];
 
@@ -65,6 +69,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     );
 
     _msgController.addListener(() {
+      _handleTypingStatus();
       setState(() {
         _isTyping = _msgController.text.trim().isNotEmpty;
       });
@@ -75,28 +80,92 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     // Fetch messages from backend
     _fetchMessages();
 
+    // State action: mark messages from this conversation partner as read
+    // so unread badges/conversation list state stay consistent.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await MessageService.instance.markAsRead([widget.userId]);
+        // No local badge state exists here; MessagesViewScreen reloads on return.
+      } catch (_) {
+        // Ignore read-tracking failures to avoid breaking chat UI.
+      }
+    });
+
     // Listen to socket messages
     _socketSubscription = SocketService.instance.messages.listen((msg) {
-      if (msg.from == widget.userId) {
-        // Use a stable identifier for socket deduplication
-        _addMessage(ChatMessage(
-          id: 'socket_${msg.ts}',
-          sender: ChatSender.them,
-          text: msg.text,
-          time: _formatTime(msg.ts),
-        ));
+      // Debug: helps confirm whether the same socket payload is received multiple times.
+      // ignore: avoid_print
+      print(
+          'socket message recv: id=${msg.id} from=${msg.from} to=${msg.to} ts=${msg.ts} text=${msg.text}');
+
+      // Only handle messages FROM the person we are chatting with.
+      // For sender, we rely on optimistic UI + HTTP reconciliation.
+      if (msg.from != widget.userId) return;
+
+      final socketId = msg.id.trim();
+      final socketText = msg.text.trim();
+      final socketTime = msg.ts;
+
+      // Robust dedupe: prefer DB id, but also guard against empty/missing id
+      // and against duplicate events.
+      final alreadyById =
+          socketId.isNotEmpty && _messages.any((m) => m.id == socketId);
+      if (alreadyById) return;
+
+      final alreadyByFingerprint = _messages.any((m) =>
+          m.text.trim() == socketText &&
+          (m.time == 'Now' || m.time == _formatTime(socketTime)));
+      if (alreadyByFingerprint) return;
+
+      _addMessage(ChatMessage(
+        id: socketId.isNotEmpty
+            ? socketId
+            : 'socket_${socketTime}_${socketText.hashCode}',
+        sender: ChatSender.them,
+        text: msg.text,
+        time: _formatTime(socketTime),
+      ));
+    });
+
+    _typingSubscription = SocketService.instance.typing.listen((data) {
+      if (data['userId'] == widget.userId) {
+        setState(() => _isOtherTyping = data['isTyping'] == true);
       }
+    });
+
+    _seenSubscription = SocketService.instance.seen.listen((data) {
+      // Logic to update local message status to seen
+      setState(() {
+        for (int i = 0; i < _messages.length; i++) {
+          if (_messages[i].sender == ChatSender.me &&
+              _messages[i].status != MessageStatus.sent) {
+            _messages[i] = _messages[i].copyWith(status: MessageStatus.sent);
+          }
+        }
+      });
     });
   }
 
   @override
   void dispose() {
     _socketSubscription?.cancel();
+    _typingSubscription?.cancel();
+    _seenSubscription?.cancel();
     _pageController.dispose();
     _listController.dispose();
     _msgController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _handleTypingStatus() {
+    if (_typingDebounce?.isActive ?? false) _typingDebounce!.cancel();
+
+    SocketService.instance.sendTyping(to: widget.userId, isTyping: true);
+
+    _typingDebounce = Timer(const Duration(milliseconds: 1500), () {
+      SocketService.instance.sendTyping(to: widget.userId, isTyping: false);
+    });
   }
 
   void _addMessage(ChatMessage msg) {
@@ -132,12 +201,16 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
   Future<void> _performSave(String messageId, String text) async {
     try {
-      await MessageService.instance.saveMessage(toUserId: widget.userId, text: text);
+      final realId = await MessageService.instance
+          .saveMessage(toUserId: widget.userId, text: text);
       if (!mounted) return;
       final idx = _messages.indexWhere((m) => m.id == messageId);
       if (idx != -1) {
         setState(() {
-          _messages[idx] = _messages[idx].copyWith(status: MessageStatus.sent);
+          _messages[idx] = _messages[idx].copyWith(
+            id: realId,
+            status: MessageStatus.sent,
+          );
         });
       }
     } catch (err) {
@@ -168,17 +241,29 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     try {
       final messages =
           await MessageService.instance.fetchConversation(widget.userId);
-      _messages.clear();
-      for (final msg in messages) {
-        _addMessage(ChatMessage(
-          id: msg.id, // Use actual DB ID
-          sender:
-              msg.fromUserId == widget.userId ? ChatSender.them : ChatSender.me,
-          text: msg.text,
-          time: _formatTime(msg.createdAt.millisecondsSinceEpoch),
-        ));
-      }
-      setState(() => _isLoading = false);
+      if (!mounted) return;
+
+      // Ensure messages are sorted by creation date before adding to the UI list
+      messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+      setState(() {
+        for (final msg in messages) {
+          final chatMsg = ChatMessage(
+            id: msg.id, // Use actual DB ID
+            sender: msg.fromUserId == widget.userId
+                ? ChatSender.them
+                : ChatSender.me,
+            text: msg.text,
+            time: _formatTime(msg.createdAt.millisecondsSinceEpoch),
+          );
+
+          if (!_messages.any((m) => m.id == chatMsg.id)) {
+            _messages.add(chatMsg);
+          }
+        }
+        _isLoading = false;
+      });
+      _scrollToBottom();
     } catch (err) {
       setState(() {
         _isLoading = false;
@@ -297,20 +382,33 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                 Row(
                   children: [
                     Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF22C55E), // Green dot
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: _isOtherTyping
+                            ? const Color(0xFF3B82F6)
+                            : const Color(0xFF22C55E),
                         shape: BoxShape.circle,
+                        boxShadow: _isOtherTyping
+                            ? [
+                                BoxShadow(
+                                    color: const Color(0xFF3B82F6)
+                                        .withOpacity(0.4),
+                                    blurRadius: 4,
+                                    spreadRadius: 1)
+                              ]
+                            : null,
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'Online',
+                    const SizedBox(width: 8),
+                    Text(
+                      _isOtherTyping ? 'typing...' : 'Online',
                       style: TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF9CA3AF),
+                        fontWeight: FontWeight.w700,
+                        color: _isOtherTyping
+                            ? const Color(0xFF3B82F6)
+                            : const Color(0xFF9CA3AF),
                       ),
                     ),
                   ],
@@ -390,6 +488,47 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
   Widget _buildInputArea(BuildContext context) {
     return Container(
+      decoration: const BoxDecoration(color: Colors.white),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_isTyping == false) _buildQuickReplies(),
+          _buildActualInput(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickReplies() {
+    final replies = ['Is it available?', 'When can I view?', 'Can we talk?'];
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        children: replies
+            .map((r) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ActionChip(
+                    label: Text(r,
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: _primary)),
+                    onPressed: () {
+                      _msgController.text = r;
+                      _sendMessage();
+                    },
+                  ),
+                ))
+            .toList(),
+      ),
+    );
+  }
+
+  Widget _buildActualInput(BuildContext context) {
+    return Container(
       padding: EdgeInsets.only(
         left: 24,
         right: 24,
@@ -401,7 +540,15 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       ),
       child: Row(
         children: [
-          // Text input
+          GestureDetector(
+            onTap: () {}, // Attachments
+            child: const Icon(
+              Icons.add_circle_outline_rounded,
+              color: Color(0xFF9CA3AF),
+              size: 30,
+            ),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: TextField(
               controller: _msgController,
@@ -572,15 +719,17 @@ class _MyBubble extends StatelessWidget {
           ),
         );
       case MessageStatus.sent:
-        return const Icon(Icons.done_all, size: 14, color: Colors.white70);
+        // The double-tick color logic
+        final isSeen = false; // Mock seen state
+        return Icon(Icons.done_all,
+            size: 16, color: isSeen ? const Color(0xFF4ADE80) : Colors.white70);
       case MessageStatus.failed:
         return GestureDetector(
           onTap: onRetry,
           behavior: HitTestBehavior.opaque,
           child: const Padding(
             padding: EdgeInsets.symmetric(horizontal: 2),
-            child: Icon(Icons.error_outline,
-                size: 16, color: Colors.redAccent),
+            child: Icon(Icons.error_outline, size: 16, color: Colors.redAccent),
           ),
         );
     }
