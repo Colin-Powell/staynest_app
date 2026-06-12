@@ -1,3 +1,5 @@
+// lib/screens/search/search_view.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:property_app/models/property.dart';
@@ -5,6 +7,7 @@ import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/property_service.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/utils/property_mapper.dart';
 import '../../widgets/phosphor_icons.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
 import 'package:visibility_detector/visibility_detector.dart';
@@ -29,6 +32,8 @@ class SearchView extends StatefulWidget {
 
 class _SearchViewState extends State<SearchView> {
   String query = '';
+  final TextEditingController _searchController = TextEditingController();
+
   String _sortBy =
       'recommended'; // recommended, price_low, price_high, rating, name
   Map<String, dynamic> _activeFilters = {};
@@ -66,13 +71,24 @@ class _SearchViewState extends State<SearchView> {
     }
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
-    final loaded = await _propertyService.fetchProperties();
-    if (!mounted) return;
-    setState(() {
-      _all = loaded;
-      _loading = false;
-    });
+    final repo = RemoteDatabaseRepository();
+    
+    await repo.loadPropertiesCached(
+      onData: (rawData, isFromCache) {
+        if (!mounted) return;
+        setState(() {
+          _all = rawData.map(mapApiProperty).toList();
+          _loading = false;
+        });
+      },
+    );
   }
 
   Future<void> _toggleSave(String propertyId) async {
@@ -105,6 +121,7 @@ class _SearchViewState extends State<SearchView> {
   List<Property> get results {
     List<Property> filtered = _all;
 
+    // Search Filtering
     if (query.isNotEmpty) {
       final normalized = query.toLowerCase();
       filtered = filtered.where((property) {
@@ -113,6 +130,7 @@ class _SearchViewState extends State<SearchView> {
       }).toList();
     }
 
+    // Additional Filters
     if (_activeFilters.isNotEmpty) {
       if (_activeFilters['minPrice'] != null) {
         filtered = filtered
@@ -124,7 +142,6 @@ class _SearchViewState extends State<SearchView> {
             .where((p) => p.price <= _activeFilters['maxPrice'])
             .toList();
       }
-      // Add more filter logic as needed
     }
 
     // Sorting
@@ -271,6 +288,7 @@ class _SearchViewState extends State<SearchView> {
                                 Color(0xFF9CA3AF), BlendMode.srcIn))),
                     Expanded(
                       child: TextField(
+                        controller: _searchController,
                         onChanged: (value) {
                           AnalyticsService.resetSessionImpressions();
                           setState(() => query = value);
@@ -283,7 +301,11 @@ class _SearchViewState extends State<SearchView> {
                           hintText: 'Kilifi, Kenya',
                           hintStyle:
                               TextStyle(color: Color(0xFF9CA3AF), fontSize: 16),
+                          filled: false,
                           border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          isDense: true,
                           contentPadding: EdgeInsets.symmetric(
                               horizontal: 12, vertical: 17),
                         ),
@@ -297,7 +319,10 @@ class _SearchViewState extends State<SearchView> {
                           shape: const CircleBorder(),
                           child: InkWell(
                             customBorder: const CircleBorder(),
-                            onTap: () => setState(() => query = ''),
+                            onTap: () {
+                              _searchController.clear();
+                              setState(() => query = '');
+                            },
                             child: Padding(
                                 padding: const EdgeInsets.all(6),
                                 child: SvgPicture.string(xCircleSvg,
@@ -408,146 +433,150 @@ class _SearchViewState extends State<SearchView> {
                                   widget.onSelectProperty?.call(property.id),
                               child: Container(
                                 height: 138,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(24),
-                                boxShadow: [
-                                  BoxShadow(
-                                      color:
-                                          Colors.black.withValues(alpha: 0.06),
-                                      blurRadius: 16,
-                                      offset: const Offset(0, 6))
-                                ],
-                              ),
-                              child: Row(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(24),
-                                    child: buildPropertyImage(property.image,
-                                        width: 118,
-                                        height: 138,
-                                        fit: BoxFit.cover),
-                                  ),
-                                  Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                          16, 14, 16, 14),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                  child: Text(property.name,
-                                                      style: const TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.w700,
-                                                          fontSize: 16.5,
-                                                          color: Color(
-                                                              0xFF111827)),
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow
-                                                          .ellipsis)),
-                                              GestureDetector(
-                                                onTap: () {
-                                                  _toggleSave(property.id).then(
-                                                      (_) => setState(() {}));
-                                                },
-                                                child: Icon(
-                                                  isSaved
-                                                      ? AppIcons.heart
-                                                      : AppIcons.heartOutline,
-                                                  size: 24,
-                                                  color: isSaved
-                                                      ? const Color(0xFFEC4899)
-                                                      : const Color(0xFFD1D5DB),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              const Icon(AppIcons.location,
-                                                  size: 14,
-                                                  color: Color(0xFF9CA3AF)),
-                                              const SizedBox(width: 4),
-                                              Expanded(
-                                                  child: Text(property.location,
-                                                      style: const TextStyle(
-                                                          fontSize: 13,
-                                                          color:
-                                                              Color(0xFF9CA3AF),
-                                                          fontWeight:
-                                                              FontWeight.w500),
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow
-                                                          .ellipsis)),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                              'Kes. ${property.price ~/ 1000}k/month',
-                                              style: const TextStyle(
-                                                  fontSize: 16.5,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: Color(0xFF111827))),
-                                          const Spacer(),
-                                          Row(
-                                            children: [
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 4),
-                                                decoration: BoxDecoration(
-                                                    color:
-                                                        const Color(0xFFFFF7ED),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            10)),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    const Icon(
-                                                        Icons.star_rounded,
-                                                        size: 15,
-                                                        color:
-                                                            Color(0xFFF59E42)),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                        property.rating
-                                                            .toStringAsFixed(1),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(24),
+                                  boxShadow: [
+                                    BoxShadow(
+                                        color:
+                                            Colors.black.withValues(alpha: 0.06),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 6))
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Flush Image to the left side
+                                    ClipRRect(
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(24),
+                                        bottomLeft: Radius.circular(24),
+                                      ),
+                                      child: buildPropertyImage(property.image,
+                                          width: 118,
+                                          height: 138,
+                                          fit: BoxFit.cover),
+                                    ),
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                            16, 14, 16, 14),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                    child: Text(property.name,
                                                         style: const TextStyle(
-                                                            fontSize: 13.5,
                                                             fontWeight:
                                                                 FontWeight.w700,
+                                                            fontSize: 16.5,
                                                             color: Color(
-                                                                0xFFFB923C))),
-                                                  ],
+                                                                0xFF111827)),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis)),
+                                                GestureDetector(
+                                                  onTap: () {
+                                                    _toggleSave(property.id).then(
+                                                        (_) => setState(() {}));
+                                                  },
+                                                  child: Icon(
+                                                    isSaved
+                                                        ? AppIcons.heart
+                                                        : AppIcons.heartOutline,
+                                                    size: 24,
+                                                    color: isSaved
+                                                        ? const Color(0xFFEC4899)
+                                                        : const Color(0xFFD1D5DB),
+                                                  ),
                                                 ),
-                                              ),
-                                              const Spacer(),
-                                              Text(
-                                                  '${property.features.beds} Beds',
-                                                  style: const TextStyle(
-                                                      fontSize: 13.5,
-                                                      color: Color(0xFF9CA3AF),
-                                                      fontWeight:
-                                                          FontWeight.w500)),
-                                            ],
-                                          ),
-                                        ],
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              children: [
+                                                const Icon(AppIcons.location,
+                                                    size: 14,
+                                                    color: Color(0xFF9CA3AF)),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                    child: Text(property.location,
+                                                        style: const TextStyle(
+                                                            fontSize: 13,
+                                                            color:
+                                                                Color(0xFF9CA3AF),
+                                                            fontWeight:
+                                                                FontWeight.w500),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis)),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                                'Kes. ${property.price ~/ 1000}k/month',
+                                                style: const TextStyle(
+                                                    fontSize: 16.5,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Color(0xFF111827))),
+                                            const Spacer(),
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                      color:
+                                                          const Color(0xFFFFF7ED),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              10)),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(
+                                                          Icons.star_rounded,
+                                                          size: 15,
+                                                          color:
+                                                              Color(0xFFF59E42)),
+                                                      const SizedBox(width: 4),
+                                                      Text(
+                                                          property.rating
+                                                              .toStringAsFixed(1),
+                                                          style: const TextStyle(
+                                                              fontSize: 13.5,
+                                                              fontWeight:
+                                                                  FontWeight.w700,
+                                                              color: Color(
+                                                                  0xFFFB923C))),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const Spacer(),
+                                                Text(
+                                                    '${property.features.beds} Beds',
+                                                    style: const TextStyle(
+                                                        fontSize: 13.5,
+                                                        color: Color(0xFF9CA3AF),
+                                                        fontWeight:
+                                                            FontWeight.w500)),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                          )
                         );
                       },
                     ),

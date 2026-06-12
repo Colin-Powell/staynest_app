@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:property_app/screens/dashboard/analytics_service.dart';
+import 'package:property_app/screens/home/cache_engine.dart';
 
 class AppSession {
   static String currentRole = 'tenant';
@@ -125,5 +129,6 @@ class AppSession {
     currentUserAvatar = null;
     currentUserVerified = false;
     apiToken = null;
+    CacheEngine.instance.clearAll(); // Critical: Invalidate cache on logout
   }
 }

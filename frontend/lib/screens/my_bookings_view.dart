@@ -60,9 +60,11 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
     setState(() {
       _allBookings = bookings.map((b) {
         String uiStatus = 'Upcoming';
-        if (b['status'] == 'confirmed' || b['status'] == 'pending') uiStatus = 'Upcoming';
+        if (b['status'] == 'confirmed' || b['status'] == 'pending')
+          uiStatus = 'Upcoming';
         if (b['status'] == 'completed') uiStatus = 'Completed';
-        if (b['status'] == 'cancelled' || b['status'] == 'rejected') uiStatus = 'Cancelled';
+        if (b['status'] == 'cancelled' || b['status'] == 'rejected')
+          uiStatus = 'Cancelled';
 
         final checkIn = DateTime.parse(b['check_in_date']);
         final dateStr = "${checkIn.day}/${checkIn.month}/${checkIn.year}";
@@ -73,10 +75,16 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
             name: b['title']?.toString() ?? 'Property',
             location: b['city']?.toString() ?? '',
             image: b['image_url']?.toString() ?? '',
-            price: (b['total_price'] as num?)?.toInt() ?? 0,
+            // total_price may arrive as String or num depending on API / decoding
+            price: (b['total_price'] is num)
+                ? (b['total_price'] as num).toInt()
+                : int.tryParse(b['total_price']?.toString() ?? '') ?? 0,
+
             lat: 0, lng: 0, rating: 0, reviews: 0, category: '', images: [],
-            features: const PropertyFeatures(beds: 0, rooms: 0, baths: 0, furnished: false),
-            amenities: [], agent: const Agent(userId: '', name: '', avatar: ''), description: '',
+            features: const PropertyFeatures(
+                beds: 0, rooms: 0, baths: 0, furnished: false),
+            amenities: [], agent: const Agent(userId: '', name: '', avatar: ''),
+            description: '',
           ),
           dateTime: dateStr,
           status: uiStatus,
@@ -251,12 +259,17 @@ class _TabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Row(
-        children: tabs.map((tab) {
-          final isActive = tab == active;
-          return Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: tabs.map((tab) {
+            final isActive = tab == active;
+            return Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: GestureDetector(
+
+
               onTap: () => onTap(tab),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
@@ -286,6 +299,7 @@ class _TabBar extends StatelessWidget {
           );
         }).toList(),
       ),
+      )
     );
   }
 }

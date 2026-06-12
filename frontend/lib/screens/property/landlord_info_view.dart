@@ -38,6 +38,8 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
     'KRA PIN Certificate',
   ];
 
+  bool _hasAuthIssue = false;
+
   @override
   void initState() {
     super.initState();
@@ -62,12 +64,20 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
       final rawProperties = await repo.loadPropertiesForUser(landlordId);
       if (!mounted) return;
       setState(() {
+        _hasAuthIssue = false;
         _landlordProfile = profile;
         _landlordProperties = rawProperties.map(mapApiProperty).toList();
         _loading = false;
       });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      // If JWT auth fails (403/401), we can still show profile but properties will be empty.
+      // This avoids silently keeping the UI in a broken state.
+      if (mounted) {
+        setState(() {
+          _hasAuthIssue = true;
+          _loading = false;
+        });
+      }
     }
     _controller.forward();
   }
@@ -424,7 +434,9 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
         ),
       ),
       child: ElevatedButton(
-        onPressed: _landlordProperties.isEmpty ? null : _toggleProperties,
+        onPressed: (_landlordProperties.isEmpty || _hasAuthIssue)
+            ? null
+            : _toggleProperties,
         style: ElevatedButton.styleFrom(
           backgroundColor: StayNestColors.primary,
           foregroundColor: Colors.white,

@@ -1,3 +1,4 @@
+// START OF FILE
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -333,15 +334,19 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
                       const SizedBox(height: 24),
                       _buildFilterChips(),
                       const SizedBox(height: 16),
+                      // CLEAN SEARCH BAR UI
                       _GlassContainer(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: EdgeInsets.zero,
                         height: 52,
                         borderRadius: BorderRadius.circular(26),
                         opacity: 0.6,
                         child: Row(
                           children: [
-                            const Icon(Icons.search_rounded,
-                                color: Colors.black, size: 24),
+                            const Padding(
+                              padding: EdgeInsets.only(left: 16),
+                              child: Icon(Icons.search_rounded,
+                                  color: Colors.black, size: 24),
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: TextField(
@@ -351,6 +356,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
                                   fontWeight: FontWeight.w500,
                                   color: Colors.black,
                                 ),
+                                // Disabling native fill and borders to prevent double-pill visual
                                 decoration: const InputDecoration(
                                   hintText: 'Search Messages',
                                   hintStyle: TextStyle(
@@ -358,7 +364,16 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,
                                   ),
+                                  filled: false,
+                                  fillColor: Colors.transparent,
                                   border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  errorBorder: InputBorder.none,
+                                  disabledBorder: InputBorder.none,
+                                  isDense: true,
+                                  contentPadding:
+                                      EdgeInsets.symmetric(vertical: 14),
                                 ),
                               ),
                             ),
@@ -368,14 +383,13 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
                                   _searchController.clear();
                                   FocusScope.of(context).unfocus();
                                 },
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white,
+                                child: const Padding(
+                                  padding: EdgeInsets.only(right: 16),
+                                  child: Icon(
+                                    Icons.cancel,
+                                    color: Color(0xFF9CA3AF),
+                                    size: 22,
                                   ),
-                                  child: const Icon(Icons.close_rounded,
-                                      color: Colors.black, size: 18),
                                 ),
                               ),
                           ],

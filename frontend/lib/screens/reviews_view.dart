@@ -23,7 +23,8 @@ class ReviewsView extends StatefulWidget {
   State<ReviewsView> createState() => _ReviewsViewState();
 }
 
-class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin {
+class _ReviewsViewState extends State<ReviewsView>
+    with TickerProviderStateMixin {
   final RemoteDatabaseRepository _repo = RemoteDatabaseRepository();
   late Future<List<Review>> _reviewsFuture;
 
@@ -58,7 +59,8 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (context, animation, secondaryAnimation) => WriteReviewView(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            WriteReviewView(
           propertyId: widget.propertyId,
           bookingId: widget.bookingId ?? '',
         ),
@@ -66,15 +68,20 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
           return FadeTransition(
             opacity: animation,
             child: SlideTransition(
-              position: Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero)
-                  .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+              position:
+                  Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero)
+                      .animate(CurvedAnimation(
+                          parent: animation, curve: Curves.easeOutCubic)),
               child: child,
             ),
           );
         },
       ),
     ).then((value) {
-      if (value == true) setState(() => _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId));
+      if (value == true) {
+        setState(() =>
+            _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId));
+      }
     });
   }
 
@@ -83,19 +90,29 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (context, animation, secondaryAnimation) => AllReviewsView(propertyId: widget.propertyId),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            AllReviewsView(
+          propertyId: widget.propertyId,
+          bookingId: widget.bookingId, // Pass bookingId down
+        ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
             opacity: animation,
             child: SlideTransition(
-              position: Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero)
-                  .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+              position:
+                  Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero)
+                      .animate(CurvedAnimation(
+                          parent: animation, curve: Curves.easeOutCubic)),
               child: child,
             ),
           );
         },
       ),
-    );
+    ).then((_) {
+      // Refresh in case a review was added in the AllReviewsView
+      setState(() =>
+          _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId));
+    });
   }
 
   @override
@@ -105,7 +122,7 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
       child: SlideTransition(
         position: _pageSlide,
         child: Scaffold(
-          backgroundColor: const Color(0xFFFFFFFF), 
+          backgroundColor: const Color(0xFFFFFFFF),
           body: Column(
             children: [
               _Header(title: 'Reviews', onBack: () => Navigator.pop(context)),
@@ -123,28 +140,42 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
                         count: widget.reviewCount,
                       ),
                       const SizedBox(height: 40),
-                      const Divider(color: Color(0xFFF3F4F6), thickness: 1.5, height: 1),
+                      const Divider(
+                          color: Color(0xFFF3F4F6), thickness: 1.5, height: 1),
                       const SizedBox(height: 32),
                       FutureBuilder<List<Review>>(
                         future: _reviewsFuture,
                         builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Center(
+                                child: CircularProgressIndicator());
                           }
                           final reviews = snapshot.data ?? [];
+                          
+                          // SHOW BEAUTIFUL EMPTY STATE IF NO REVIEWS
                           if (reviews.isEmpty) {
-                            return const Center(child: Text('No reviews yet.'));
+                            return _buildEmptyState(
+                              // Only provide add review function if eligible
+                              widget.bookingId != null ? _navToWriteReview : null
+                            );
                           }
+                          
                           // Show top 3 reviews on main view
                           return Column(
-                            children: reviews.take(3).map((review) => _ReviewCard(
-                              avatar: review.reviewer?.avatar ?? '',
-                              name: review.reviewer?.name ?? 'Anonymous',
-                              role: 'Tenant',
-                              rating: review.rating.toDouble(),
-                              review: review.comment ?? '',
-                              date: DateFormat.yMMMd().format(review.createdAt),
-                            )).toList(),
+                            children: reviews
+                                .take(3)
+                                .map((review) => ReviewCard(
+                                      avatar: review.reviewer?.avatar ?? '',
+                                      name:
+                                          review.reviewer?.name ?? 'Anonymous',
+                                      role: 'Tenant',
+                                      rating: review.rating.toDouble(),
+                                      review: review.comment ?? '',
+                                      date: DateFormat.yMMMd()
+                                          .format(review.createdAt),
+                                    ))
+                                .toList(),
                           );
                         },
                       ),
@@ -154,40 +185,46 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
               ),
             ],
           ),
-          floatingActionButton: widget.bookingId != null 
-            ? GestureDetector(
-            onTap: _navToWriteReview,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF3F3CD4), 
-                borderRadius: BorderRadius.circular(30),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF3F3CD4).withValues(alpha: 0.3),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add_circle_outline_rounded, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'Add a Review',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
+          
+          // FLOATING ACTION BUTTON
+          floatingActionButton: widget.bookingId != null
+              ? GestureDetector(
+                  onTap: _navToWriteReview,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3F3CD4),
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF3F3CD4).withValues(alpha: 0.3),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add_circle_outline_rounded,
+                            color: Colors.white, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Add a Review',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
-          ) : null,
+                )
+              : null,
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+          
           bottomNavigationBar: SafeArea(
             child: Container(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
@@ -213,7 +250,9 @@ class _ReviewsViewState extends State<ReviewsView> with TickerProviderStateMixin
 // ==================== ALL REVIEWS SCREEN ====================
 class AllReviewsView extends StatefulWidget {
   final String propertyId;
-  const AllReviewsView({super.key, required this.propertyId});
+  final String? bookingId; // Passed down to allow writing reviews here too
+
+  const AllReviewsView({super.key, required this.propertyId, this.bookingId});
 
   @override
   State<AllReviewsView> createState() => _AllReviewsViewState();
@@ -221,6 +260,44 @@ class AllReviewsView extends StatefulWidget {
 
 class _AllReviewsViewState extends State<AllReviewsView> {
   final RemoteDatabaseRepository _repo = RemoteDatabaseRepository();
+  late Future<List<Review>> _reviewsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId);
+  }
+
+  void _navToWriteReview() {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 400),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            WriteReviewView(
+          propertyId: widget.propertyId,
+          bookingId: widget.bookingId ?? '',
+        ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position:
+                  Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero)
+                      .animate(CurvedAnimation(
+                          parent: animation, curve: Curves.easeOutCubic)),
+              child: child,
+            ),
+          );
+        },
+      ),
+    ).then((value) {
+      if (value == true) {
+        setState(() =>
+            _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId));
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -233,16 +310,27 @@ class _AllReviewsViewState extends State<AllReviewsView> {
             child: ScrollConfiguration(
               behavior: const AppScrollBehavior(),
               child: FutureBuilder<List<Review>>(
-                future: _repo.fetchPropertyReviews(widget.propertyId),
+                future: _reviewsFuture,
                 builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
                   final reviews = snapshot.data ?? [];
+                  
+                  // EMPTY STATE FOR ALL REVIEWS SCREEN
+                  if (reviews.isEmpty) {
+                    return _buildEmptyState(
+                      widget.bookingId != null ? _navToWriteReview : null
+                    );
+                  }
+                  
                   return ListView.builder(
                     physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
                     itemCount: reviews.length,
                     itemBuilder: (context, index) {
                       final review = reviews[index];
-                      return _ReviewCard(
+                      return ReviewCard(
                         avatar: review.reviewer?.avatar ?? '',
                         name: review.reviewer?.name ?? 'Anonymous',
                         role: 'Tenant',
@@ -258,6 +346,45 @@ class _AllReviewsViewState extends State<AllReviewsView> {
           ),
         ],
       ),
+      
+      // FLOATING ACTION BUTTON
+      floatingActionButton: widget.bookingId != null
+          ? GestureDetector(
+              onTap: _navToWriteReview,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3F3CD4),
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF3F3CD4).withValues(alpha: 0.3),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_circle_outline_rounded,
+                        color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Add a Review',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }
@@ -267,7 +394,8 @@ class WriteReviewView extends StatefulWidget {
   final String propertyId;
   final String bookingId;
 
-  const WriteReviewView({super.key, required this.propertyId, required this.bookingId});
+  const WriteReviewView(
+      {super.key, required this.propertyId, required this.bookingId});
 
   @override
   State<WriteReviewView> createState() => _WriteReviewViewState();
@@ -399,7 +527,8 @@ class _WriteReviewViewState extends State<WriteReviewView>
                   GestureDetector(
                     onTap: () {
                       Navigator.pop(context); // Close Dialog
-                      Navigator.pop(context, true); // Close WriteReviewView with success signal
+                      Navigator.pop(context,
+                          true); // Close WriteReviewView with success signal
                     },
                     child: Container(
                       width: double.infinity,
@@ -445,7 +574,9 @@ class _WriteReviewViewState extends State<WriteReviewView>
           backgroundColor: const Color(0xFFFFFFFF),
           body: Column(
             children: [
-              _Header(title: 'Write a Review', onBack: () => Navigator.pop(context)),
+              _Header(
+                  title: 'Write a Review',
+                  onBack: () => Navigator.pop(context)),
               Expanded(
                 child: ScrollConfiguration(
                   behavior: const AppScrollBehavior(),
@@ -469,7 +600,8 @@ class _WriteReviewViewState extends State<WriteReviewView>
                           children: List.generate(5, (index) {
                             return Expanded(
                               child: GestureDetector(
-                                onTap: () => setState(() => _rating = index + 1.0),
+                                onTap: () =>
+                                    setState(() => _rating = index + 1.0),
                                 child: Icon(
                                   Icons.star_rounded,
                                   color: index < _rating
@@ -495,12 +627,13 @@ class _WriteReviewViewState extends State<WriteReviewView>
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
+                            border: Border.all(
+                                color: const Color(0xFFE5E7EB), width: 1.5),
                           ),
                           child: TextField(
                             controller: _commentController,
                             maxLines: 8,
-                            decoration: InputDecoration(
+                            decoration: const InputDecoration(
                               hintText: 'Share your experience...',
                               hintStyle: TextStyle(
                                 color: Color(0xFF9CA3AF),
@@ -535,6 +668,73 @@ class _WriteReviewViewState extends State<WriteReviewView>
 
 // ==================== SHARED WIDGETS ====================
 
+Widget _buildEmptyState(VoidCallback? onAddReview) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: Color(0xFFF3F4F6),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.rate_review_outlined, size: 48, color: Color(0xFF9CA3AF)),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'No reviews yet',
+          style: TextStyle(
+            fontSize: 20, 
+            fontWeight: FontWeight.w800, 
+            color: Color(0xFF111827)
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Be the first to share your experience!',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 15, 
+            color: Color(0xFF6B7280),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        // Display the big button if the user is eligible
+        if (onAddReview != null) ...[
+          const SizedBox(height: 32),
+          GestureDetector(
+            onTap: onAddReview,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3F3CD4),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF3F3CD4).withValues(alpha: 0.3),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: const Text(
+                'Add a Review',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
 class _Header extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
@@ -556,7 +756,8 @@ class _Header extends StatelessWidget {
           GestureDetector(
             onTap: onBack,
             behavior: HitTestBehavior.opaque,
-            child: const Icon(Icons.arrow_back, size: 28, color: Color(0xFF111827)),
+            child: const Icon(Icons.arrow_back,
+                size: 28, color: Color(0xFF111827)),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -576,7 +777,6 @@ class _Header extends StatelessWidget {
   }
 }
 
-// Matches the exact stacked vertical layout from the PDF
 class _OverallRatingSection extends StatelessWidget {
   final double rating;
   final int count;
@@ -612,8 +812,9 @@ class _OverallRatingSection extends StatelessWidget {
             ),
             const SizedBox(width: 24),
             Row(
-              children: List.generate(5, (i) => 
-                const Padding(
+              children: List.generate(
+                5,
+                (i) => const Padding(
                   padding: EdgeInsets.only(right: 4),
                   child: Icon(
                     Icons.star_rounded,
@@ -655,7 +856,8 @@ class _OverallRatingSection extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Icon(Icons.star_rounded, size: 16, color: Color(0xFFD1D5DB)),
+                  const Icon(Icons.star_rounded,
+                      size: 16, color: Color(0xFFD1D5DB)),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Container(
@@ -686,7 +888,7 @@ class _OverallRatingSection extends StatelessWidget {
   }
 }
 
-class _ReviewCard extends StatelessWidget {
+class ReviewCard extends StatelessWidget {
   final String avatar;
   final String name;
   final String role;
@@ -694,7 +896,8 @@ class _ReviewCard extends StatelessWidget {
   final String review;
   final String date;
 
-  const _ReviewCard({
+  const ReviewCard({
+    super.key,
     required this.avatar,
     required this.name,
     required this.role,
@@ -746,7 +949,7 @@ class _ReviewCard extends StatelessWidget {
                     Text(
                       role,
                       style: const TextStyle(
-                        color: Color(0xFFF59E0B), 
+                        color: Color(0xFFF59E0B),
                         fontSize: 13.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -756,7 +959,8 @@ class _ReviewCard extends StatelessWidget {
               ),
               Row(
                 children: [
-                  const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 22),
+                  const Icon(Icons.star_rounded,
+                      color: Color(0xFFFBBF24), size: 22),
                   const SizedBox(width: 4),
                   Text(
                     rating.toStringAsFixed(1),
@@ -809,10 +1013,10 @@ class _OutlinedActionButton extends StatelessWidget {
         width: double.infinity,
         height: 56,
         decoration: BoxDecoration(
-          color: Colors.white, 
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: const Color(0xFF3F3CD4), 
+            color: const Color(0xFF3F3CD4),
             width: 1.5,
           ),
         ),
@@ -820,7 +1024,7 @@ class _OutlinedActionButton extends StatelessWidget {
           child: Text(
             text,
             style: const TextStyle(
-              color: Color(0xFF3F3CD4), 
+              color: Color(0xFF3F3CD4),
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
@@ -834,8 +1038,11 @@ class _OutlinedActionButton extends StatelessWidget {
 class AppScrollBehavior extends ScrollBehavior {
   const AppScrollBehavior();
   @override
-  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) => child;
+  Widget buildOverscrollIndicator(
+          BuildContext context, Widget child, ScrollableDetails details) =>
+      child;
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) =>
-      const BouncingScrollPhysics(decelerationRate: ScrollDecelerationRate.fast);
+      const BouncingScrollPhysics(
+          decelerationRate: ScrollDecelerationRate.fast);
 }

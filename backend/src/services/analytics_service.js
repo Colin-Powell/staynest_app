@@ -3,8 +3,16 @@ const Keyv = require('keyv');
 
 // Utilizing keyv for fast, TTL-based caching (uniqueness and ranking)
 const cache = new Keyv(); 
+
+/**
+ * Dedicated workers should use a small pool size. 
+ * 'max: 2' is usually sufficient for a single-threaded worker process.
+ */
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  max: process.env.DB_WORKER_MAX_CONN ? parseInt(process.env.DB_WORKER_MAX_CONN) : 2,
+  idleTimeoutMillis: 10000, // Close idle connections after 10 seconds
+  connectionTimeoutMillis: 5000, // Fail if connection takes > 5s
 });
 
 /**
@@ -30,6 +38,57 @@ class AnalyticsService {
       'booking_confirmed': 25,
       'booking_completed': 50,
     };
+
+    // Handle process termination to close the pool gracefully
+    process.on('SIGTERM', () => this.shutdown());
+    process.on('SIGINT', () => this.shutdown());
+
+    // Initialize long-running background maintenance jobs
+    this.startDailyMaintenance();
+  }
+
+  async shutdown() {
+    console.log('[AnalyticsService] Closing database pool...');
+    await pool.end();
+  }
+
+  /**
+   * Periodically refreshes the trending cache to ensure zero-latency for users.
+   * This prevents "cache stampedes" and the "cold start" penalty.
+   */
+  startMaintenanceLoop() {
+    const TEN_MINUTES = 10 * 60 * 1000;
+    return setInterval(async () => {
+      try {
+        await this.getTrendingProperties(20);
+        await this.computeVelocityScores();
+      } catch (err) {
+        console.error('[AnalyticsService] Cache warming failed:', err.message);
+      }
+    }, TEN_MINUTES);
+  }
+
+  /**
+   * Schedules database maintenance tasks that should run once every 24 hours.
+   */
+  startDailyMaintenance() {
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+    // Run immediately on service startup
+    this.cleanupRefreshTokens();
+
+    return setInterval(() => this.cleanupRefreshTokens(), TWENTY_FOUR_HOURS);
+  }
+
+  async cleanupRefreshTokens() {
+    try {
+      const result = await pool.query(
+        'DELETE FROM refresh_tokens WHERE expires_at < NOW() OR revoked_at IS NOT NULL'
+      );
+      console.log(`[AnalyticsService] Daily cleanup: Purged ${result.rowCount} expired or revoked refresh tokens.`);
+    } catch (err) {
+      console.error('[AnalyticsService] Error during token cleanup job:', err.message);
+    }
   }
 
   /**
@@ -223,6 +282,12 @@ class AnalyticsService {
    * Used to feed the Landlord Dashboard.
    */
   async getLandlordOverview(landlordId) {
+    const cacheKey = `landlord:overview:${landlordId}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const statsResult = await pool.query(
       `SELECT 
         SUM(views) as views,
@@ -258,7 +323,7 @@ class AnalyticsService {
       [landlordId]
     );
 
-    return {
+    const data = {
       overview: {
         totalViews: (row.views || 0).toLocaleString(),
         growth: '0%', 
@@ -285,9 +350,20 @@ class AnalyticsService {
       })),
       insight: null
     };
+
+    // Cache for 5 minutes (300,000 ms) to keep the dashboard responsive
+    await cache.set(cacheKey, data, 5 * 60 * 1000);
+
+    return data;
   }
 
   async getTrendingProperties(limit = 20) {
+    const cacheKey = `trending:properties:${limit}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const result = await pool.query(
       `SELECT p.id, p.title, p.price, pa.views, pa.saves, pa.engagement_score
        FROM properties p
@@ -296,7 +372,11 @@ class AnalyticsService {
        LIMIT $1`,
       [limit]
     );
-    return result.rows;
+
+    const data = result.rows;
+    // Cache trending properties for 10 minutes to optimize public browsing performance
+    await cache.set(cacheKey, data, 10 * 60 * 1000);
+    return data;
   }
 
   async getPerformanceInsights(propertyId) {

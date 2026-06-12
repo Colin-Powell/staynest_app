@@ -14,5 +14,6 @@ class AppIcons {
   static const IconData search = PhosphorIconsFill.magnifyingGlass;
   static const IconData bell = PhosphorIconsFill.bell;
 
+  static const IconData refresh = PhosphorIconsRegular.arrowsClockwise;
   static const IconData x = PhosphorIconsFill.xCircle;
 }

@@ -1,10 +1,17 @@
+// lib/screens/dashboard/property_details.dart
+
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
+import 'package:property_app/models/review.dart'; // Import Review model
+import 'package:property_app/repository/remote_database_repository.dart';
+import 'package:intl/intl.dart'; // Import for DateFormat
 import 'booking_view.dart';
-
+import '../reviews_view.dart';
 
 class PropertyDetails extends StatefulWidget {
   final Property property;
@@ -31,21 +38,74 @@ class PropertyDetails extends StatefulWidget {
 }
 
 class _PropertyDetailsState extends State<PropertyDetails> {
+  List<Review> _reviews = [];
+  bool _loadingReviews = true;
+
+  // Carousel Controllers
+  final PageController _reviewPageController = PageController(viewportFraction: 1.0);
+  Timer? _carouselTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchReviews();
+  }
+
+  Future<void> _fetchReviews() async {
+    setState(() {
+      _loadingReviews = true;
+    });
+    try {
+      final fetchedReviews = await RemoteDatabaseRepository()
+          .fetchPropertyReviews(widget.property.id);
+      if (mounted) {
+        setState(() {
+          _reviews = fetchedReviews;
+          _loadingReviews = false;
+        });
+        _startCarousel();
+      }
+    } catch (e) {
+      debugPrint('Error fetching reviews: $e');
+      if (mounted) setState(() => _loadingReviews = false);
+    }
+  }
+
+  void _startCarousel() {
+    _carouselTimer?.cancel();
+    if (_reviews.length > 1) {
+      _carouselTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+        if (_reviewPageController.hasClients) {
+          _reviewPageController.nextPage(
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.easeInOutCubic,
+          );
+        }
+      });
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
     // Track property view once when the screen is first inserted into the tree.
-    // (Anti-duplication is handled server-side via unique views table.)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      AnalyticsService.trackPropertyView(widget.property.id, source: 'property_details');
+      AnalyticsService.trackPropertyView(widget.property.id,
+          source: 'property_details');
       AnalyticsService.trackPropertyDetailView(widget.property.id);
     });
   }
 
   @override
-  Widget build(BuildContext context) {
+  void dispose() {
+    _carouselTimer?.cancel();
+    _reviewPageController.dispose();
+    super.dispose();
+  }
 
+  @override
+  Widget build(BuildContext context) {
     // Ensure we have at least 3 images for the spacious rooms preview
     final photos = widget.property.images.isNotEmpty
         ? widget.property.images
@@ -130,42 +190,56 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                     // Rating and Location
                     Row(
                       children: [
-                        const Icon(Icons.star_rounded,
-                            color: Color(0xFFFBBF24), size: 24),
-                        const SizedBox(width: 6),
-                        if (widget.property.reviews > 0 &&
-                            widget.property.rating > 0) ...[
-                          Text(
-                            widget.property.rating.toStringAsFixed(1),
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.black,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: () =>
-                                Navigator.pushNamed(context, '/reviews'),
-                            behavior: HitTestBehavior.opaque,
-                            child: Text(
-                              '(${widget.property.reviews} Reviews)',
-                              style: const TextStyle(
-                                fontSize: 15,
-                                color: Color(0xFF9CA3AF),
-                                fontWeight: FontWeight.w500,
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ReviewsView(
+                                  propertyId: widget.property.id,
+                                  averageRating: widget.property.rating,
+                                  reviewCount: widget.property.reviews,
+                                ),
                               ),
-                            ),
+                            );
+                          },
+                          behavior: HitTestBehavior.opaque,
+                          child: Row(
+                            children: [
+                              const Icon(Icons.star_rounded,
+                                  color: Color(0xFFFBBF24), size: 24),
+                              const SizedBox(width: 6),
+                              if (widget.property.reviews > 0 &&
+                                  widget.property.rating > 0) ...[
+                                Text(
+                                  widget.property.rating.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '(${widget.property.reviews} Reviews)',
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    color: Color(0xFF9CA3AF),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ] else
+                                const Text(
+                                  'No reviews yet',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: Color(0xFF9CA3AF),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                            ],
                           ),
-                        ] else
-                          const Text(
-                            'No reviews yet',
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: Color(0xFF9CA3AF),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                        ),
                         const Spacer(),
                         Text(
                           widget.property.location,
@@ -330,7 +404,12 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                       ),
                     ),
 
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 32),
+
+                    // Vertical Reviews Carousel Section
+                    _buildReviewsCarousel(),
+
+                    const SizedBox(height: 32),
 
                     // Navigation Tabs
                     Row(
@@ -339,6 +418,18 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                         _buildNavTab('Amenities',
                             onTap: widget.onViewAmenities),
                         _buildNavTab('Gallery', onTap: widget.onViewGallery),
+                        _buildNavTab('Reviews', onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ReviewsView(
+                                propertyId: widget.property.id,
+                                averageRating: widget.property.rating,
+                                reviewCount: widget.property.reviews,
+                              ),
+                            ),
+                          );
+                        }),
                         _buildNavTab('Location', onTap: widget.onViewLocation),
                         _buildNavTab('Landlord', onTap: widget.onViewLandlord),
                       ],
@@ -495,6 +586,194 @@ class _PropertyDetailsState extends State<PropertyDetails> {
           fontWeight: FontWeight.w600,
           color: Color(0xFF3F37C9),
         ),
+      ),
+    );
+  }
+
+  Widget _buildReviewsCarousel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Reviews',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Colors.black,
+              ),
+            ),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ReviewsView(
+                    propertyId: widget.property.id,
+                    averageRating: widget.property.rating,
+                    reviewCount: widget.property.reviews,
+                  ),
+                ),
+              ),
+              child: const Text(
+                'See All',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF3F37C9),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_loadingReviews)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24.0),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (_reviews.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: const Column(
+              children: [
+                Icon(Icons.reviews_outlined, color: Color(0xFF9CA3AF), size: 32),
+                SizedBox(height: 12),
+                Text(
+                  'No reviews yet',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          // Vertical Carousel Implementation with ShaderMask for fading edges
+          SizedBox(
+            height: 150, // Fixed height limits the space, showing 1 card at a time beautifully
+            child: ShaderMask(
+              shaderCallback: (Rect bounds) {
+                return const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.white,
+                    Colors.white,
+                    Colors.transparent,
+                  ],
+                  stops: [0.0, 0.1, 0.9, 1.0],
+                ).createShader(bounds);
+              },
+              blendMode: BlendMode.dstIn,
+              child: PageView.builder(
+                controller: _reviewPageController,
+                scrollDirection: Axis.vertical,
+                physics: const BouncingScrollPhysics(),
+                itemBuilder: (context, index) {
+                  // Allows infinite looping
+                  final review = _reviews[index % _reviews.length];
+                  return _buildCarouselCard(review);
+                },
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildCarouselCard(Review review) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8), // Small spacing between cards when sliding
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              ClipOval(
+                child: buildPropertyImage(
+                  review.reviewer?.avatar ?? '',
+                  width: 40,
+                  height: 40,
+                  fit: BoxFit.cover,
+                  errorPlaceholder: Container(
+                    width: 40,
+                    height: 40,
+                    color: const Color(0xFFE5E7EB),
+                    child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
+                  )
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      review.reviewer?.name ?? 'Anonymous',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700, 
+                        color: Colors.black,
+                        fontSize: 15
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Row(
+                      children: [
+                        const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          review.rating.toStringAsFixed(1),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600, 
+                            fontSize: 13, 
+                            color: Color(0xFF6B7280)
+                          ),
+                        ),
+                      ],
+                    )
+                  ],
+                ),
+              ),
+              Text(
+                DateFormat.yMMMd().format(review.createdAt),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            review.comment ?? 'No comment provided.',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 14, 
+              color: Color(0xFF6B7280), 
+              height: 1.4,
+              fontWeight: FontWeight.w500
+            ),
+          ),
+        ],
       ),
     );
   }
