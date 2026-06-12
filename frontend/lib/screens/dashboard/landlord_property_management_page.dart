@@ -48,10 +48,13 @@ class _LandlordPropertyManagementPageState
   }
 
   Future<void> _fetchInitialData() async {
-    final id = _property['id']?.toString() ?? '';
-    if (id.isEmpty) return;
+    final id = (_property['id'] ?? _property['propertyId'] ?? '').toString();
+    if (id.isEmpty) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
 
-    AnalyticsService.trackOwnerPropertyImpression(id);
+    // AnalyticsService.trackOwnerPropertyImpression(id); // Disabled for landlord's own view
     setState(() => _isLoading = true);
 
     try {
@@ -61,9 +64,15 @@ class _LandlordPropertyManagementPageState
         AnalyticsService.getPropertyAvailability(id),
       ]);
 
-      final data = results[0] as Map<String, dynamic>?;
-      final landlordBookings = results[1] as List<dynamic>?;
-      final blocked = results[2] as List<int>?;
+      final data = results[0] is Map<String, dynamic>
+          ? results[0] as Map<String, dynamic>
+          : null;
+      final landlordBookings = results[1] is List
+          ? results[1] as List
+          : null;
+      final blocked = results[2] is List<int>
+          ? results[2] as List<int>
+          : null;
 
       if (mounted && data != null) {
         setState(() {
@@ -73,6 +82,15 @@ class _LandlordPropertyManagementPageState
             'pending': data['stats']?['booking_requested']?.toString() ?? '0',
             'saves': data['stats']?['saves']?.toString() ?? '0',
           };
+
+          // Fill in property info if missing (e.g. if we only got an ID from arguments)
+          // and it is provided in the management payload from the server
+          if ((_property['title'] == null || _property['title'] == '') &&
+              data['property'] != null &&
+              data['property'] is Map) {
+            _property.addAll(Map<String, dynamic>.from(data['property']));
+          }
+
           _healthStatus = data['health'] ?? 'HEALTHY';
           _activity = data['activity'] ?? [];
           _leads = data['leads'] ?? [];
@@ -236,8 +254,7 @@ class _LandlordPropertyManagementPageState
                 fit: StackFit.expand,
                 children: [
                   buildPropertyImage(
-                    (_property['image_url'] ?? _property['image'] ?? '')
-                        as String,
+                    (_property['image_url'] ?? _property['image'] ?? '').toString(),
                     fit: BoxFit.cover,
                   ),
                   // Top Gradient for Navigation Legibility

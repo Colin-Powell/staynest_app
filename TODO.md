@@ -1,7 +1,7 @@
-- [ ] Add missing _HttpJsonClient implementation (or correct client usage) in frontend/lib/repository/remote_database_repository.dart
-- [ ] Fix duplicate authenticate definitions by removing positional overload or merging call sites
-- [ ] Fix auth/otp/register call-site parameter mismatches to match repository method signatures
-- [ ] Fix repository authenticate/register/verifyPhoneCode overloads so call sites compile
-- [ ] Resolve remaining void-return misuse errors
-- [ ] Run `flutter analyze` (or `flutter test`) and iterate until clean build
-
+- [x] Inspect existing analytics/properties routes to determine best location/pattern for new endpoint
+- [x] Implement GET /analytics/trending-properties in backend/src/routes/analytics.ts
+- [x] Add SQL query to compute trending by high engagement_score and low impression-to-view ratio (last 7 days)
+- [x] Validate query parameters (optional limit, default 12/10) and guard against division by zero
+- [x] Return response shape: id, title, price, location (city), engagementScore, impressions, views, clicks, saves
+- [ ] (Optional) Add frontend wiring later if needed (not requested in this task)
+- [x] Run backend tests / basic typecheck / start server smoke test

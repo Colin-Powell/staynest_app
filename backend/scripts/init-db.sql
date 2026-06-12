@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS settings jsonb DEFAULT '{"push": true, "email": true, "two_factor": false}'::jsonb;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS business_name text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS business_type text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS business_description text;
@@ -50,6 +51,8 @@ ALTER TABLE properties ADD COLUMN IF NOT EXISTS lng numeric;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS images jsonb DEFAULT '[]'::jsonb;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS amenities jsonb DEFAULT '[]'::jsonb;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS address text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS average_rating numeric DEFAULT 0;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS review_count integer DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS verifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -217,6 +220,7 @@ CREATE TABLE IF NOT EXISTS property_analytics (
   chats integer DEFAULT 0,
   bookings_completed integer DEFAULT 0,
   booking_requested integer DEFAULT 0,
+  bookings_confirmed integer DEFAULT 0,
   avg_time_spent_ms numeric DEFAULT 0,
   engagement_score numeric DEFAULT 0,
   velocity_score numeric DEFAULT 0, -- For Trend Detection
@@ -277,6 +281,9 @@ CREATE TABLE IF NOT EXISTS property_unique_views (
 ALTER TABLE property_analytics ADD COLUMN IF NOT EXISTS impressions integer DEFAULT 0;
 ALTER TABLE property_analytics ADD COLUMN IF NOT EXISTS clicks integer DEFAULT 0;
 ALTER TABLE property_analytics ADD COLUMN IF NOT EXISTS bookings_confirmed integer DEFAULT 0;
+ALTER TABLE property_analytics ADD COLUMN IF NOT EXISTS booking_requested integer DEFAULT 0;
+ALTER TABLE property_analytics ADD COLUMN IF NOT EXISTS bookings_completed integer DEFAULT 0;
+ALTER TABLE property_analytics ADD COLUMN IF NOT EXISTS unique_views integer DEFAULT 0;
 
 -- Reviews Table for properties
 CREATE TABLE IF NOT EXISTS reviews (

@@ -2,7 +2,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/screens/dashboard/analytics_service.dart';
 import 'booking_view.dart';
+
 
 class PropertyDetails extends StatefulWidget {
   final Property property;
@@ -30,7 +32,20 @@ class PropertyDetails extends StatefulWidget {
 
 class _PropertyDetailsState extends State<PropertyDetails> {
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Track property view once when the screen is first inserted into the tree.
+    // (Anti-duplication is handled server-side via unique views table.)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AnalyticsService.trackPropertyView(widget.property.id, source: 'property_details');
+      AnalyticsService.trackPropertyDetailView(widget.property.id);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+
     // Ensure we have at least 3 images for the spacious rooms preview
     final photos = widget.property.images.isNotEmpty
         ? widget.property.images

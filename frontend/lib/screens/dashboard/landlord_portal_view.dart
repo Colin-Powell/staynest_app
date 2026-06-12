@@ -55,12 +55,9 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
           status?['status']?.toString().toLowerCase() == 'approved';
 
       if (mounted) {
-        // Check if verification status changed from not-approved to approved
         if (isCurrentlyApproved && !_wasVerifiedBefore) {
           _wasVerifiedBefore = true;
-          // Refresh user session data
           await _refreshUserData();
-          // Show success modal
           _showVerificationSuccessModal();
         }
 
@@ -184,7 +181,6 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
               const SizedBox(height: 24),
               ConstrainedBox(
                 constraints: BoxConstraints(
-                  // Prevent infinite width inside Dialog layout
                   maxWidth:
                       (MediaQuery.of(_).size.width - 64).clamp(0.0, 360.0),
                 ),
@@ -193,7 +189,6 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
                   child: ElevatedButton(
                     onPressed: () {
                       Navigator.pop(_);
-                      // Ensure we're on dashboard
                       setState(() => _selectedNav = 'Dashboard');
                     },
                     style: ElevatedButton.styleFrom(
@@ -266,7 +261,6 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
       _verificationStatus != null &&
       _verificationStatus!['status']?.toString().toLowerCase() == 'rejected';
 
-  // Legacy pages that haven't been converted to the new Glassmorphism full-screen design yet
   Widget _getLegacyPage() {
     switch (_selectedNav) {
       case 'Bookings':
@@ -292,14 +286,10 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
       return _buildUnauthorizedView();
     }
 
-    // Use AppSession.currentUserVerified as the primary source of truth
-    // This comes from the JWT token and reflects users.verified in the database
     if (!AppSession.currentUserVerified) {
-      // Only show verification required if user is not verified in the database
       if (_isVerificationRejected) {
         return _buildVerificationRequiredView();
       }
-      // User has never submitted verification or is still pending
       if (_verificationStatus == null || !_isVerificationApproved) {
         return _buildVerificationRequiredView();
       }
@@ -533,7 +523,7 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
             ),
           ),
 
-          // 3. Clean Glass Bottom Navigation
+          // 3. Clean Floating Glass Bottom Navigation
           if (!_isChatOpen)
             Align(
               alignment: Alignment.bottomCenter,
@@ -545,34 +535,30 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   }
 
   Widget _buildGlassBottomNav() {
-    return _GlassContainer(
-      blur: 25,
-      opacity: 0.85, // Higher opacity to prevent background from muddling icons
-      borderRadius:
-          BorderRadius.zero, // Edge-to-edge flush with the screen bottom
-      borderWidth: 0,
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom + 12,
-        top: 16,
-        left: 8,
-        right: 8,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildNavItem(
-              PhosphorIcons.house(PhosphorIconsStyle.fill), 'Dashboard'),
-          _buildNavItem(
-              PhosphorIcons.buildings(PhosphorIconsStyle.fill), 'Properties'),
-          _buildNavItem(
-              PhosphorIcons.calendarCheck(PhosphorIconsStyle.fill), 'Bookings'),
-          _buildNavItem(
-              PhosphorIcons.chatTeardrop(PhosphorIconsStyle.fill), 'Messages'),
-          _buildNavItem(
-              PhosphorIcons.userCircle(PhosphorIconsStyle.fill), 'Settings',
-              displayLabel:
-                  'Profile'), // Maps 'Settings' route to 'Profile' visual
-        ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24, left: 24, right: 24),
+      child: _GlassContainer(
+        blur: 25,
+        opacity: 0.85,
+        borderRadius: BorderRadius.circular(32),
+        borderWidth: 1.5,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildNavItem(
+                PhosphorIcons.house(PhosphorIconsStyle.fill), 'Dashboard'),
+            _buildNavItem(
+                PhosphorIcons.buildings(PhosphorIconsStyle.fill), 'Properties'),
+            _buildNavItem(
+                PhosphorIcons.calendarCheck(PhosphorIconsStyle.fill), 'Bookings'),
+            _buildNavItem(
+                PhosphorIcons.chatTeardrop(PhosphorIconsStyle.fill), 'Messages'),
+            _buildNavItem(
+                PhosphorIcons.userCircle(PhosphorIconsStyle.fill), 'Settings',
+                displayLabel: 'Profile'),
+          ],
+        ),
       ),
     );
   }
@@ -584,26 +570,42 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
 
     return GestureDetector(
       onTap: () => setState(() => _selectedNav = routeLabel),
-      behavior: HitTestBehavior.opaque, // Ensures the whole column is clickable
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 26,
-            color: isActive ? const Color(0xFF059669) : const Color(0xFF9CA3AF),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            labelToShow,
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-              color:
-                  isActive ? const Color(0xFF059669) : const Color(0xFF9CA3AF),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.symmetric(
+          horizontal: isActive ? 16 : 8,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          color: isActive 
+              ? const Color(0xFF059669).withValues(alpha: 0.12) 
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 26,
+              color: isActive ? const Color(0xFF059669) : const Color(0xFF9CA3AF),
             ),
-          )
-        ],
+            // Only reveal the text when the tab is active
+            if (isActive) ...[
+              const SizedBox(width: 8),
+              Text(
+                labelToShow,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF059669),
+                ),
+              )
+            ]
+          ],
+        ),
       ),
     );
   }
@@ -643,12 +645,11 @@ class _GlassContainer extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.8),
               width: borderWidth,
             ),
-            // Subtle shadow for depth
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 10,
-                offset: const Offset(0, -4), // Shadow pushed slightly upwards
+                offset: const Offset(0, -4),
               ),
             ],
           ),

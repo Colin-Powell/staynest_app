@@ -49,22 +49,38 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
     try {
       final data = await AnalyticsService.getLandlordOverview(_selectedFilter);
 
+      if (!mounted) return;
+
       setState(() {
-        _overview = data?['overview'] ?? _overview;
-        _metrics = data?['metrics'] != null
-            ? Map<String, String>.from(data!['metrics'])
-            : _metrics;
-        _topProperties =
-            List<Map<String, dynamic>>.from(data?['topProperties'] ?? []);
-        _funnelSteps = List<Map<String, dynamic>>.from(data?['funnel'] ?? []);
-        _photoPerformance =
-            List<Map<String, dynamic>>.from(data?['photoPerformance'] ?? []);
-        _insight = data?['insight'];
+        if (data != null) {
+          if (data['overview'] != null) {
+            _overview = {
+              ..._overview,
+              ...Map<String, dynamic>.from(data['overview']),
+            };
+            // Ensure chartData is a valid list to prevent crashes in build()
+            _overview['chartData'] ??= <double>[];
+          }
+          _metrics = data['metrics'] != null
+              ? Map<String, String>.from(data['metrics'])
+              : _metrics;
+          _topProperties =
+              List<Map<String, dynamic>>.from(data['topProperties'] ?? []);
+          _funnelSteps = List<Map<String, dynamic>>.from(data['funnel'] ?? []);
+          _photoPerformance =
+              List<Map<String, dynamic>>.from(data['photoPerformance'] ?? []);
+          _insight = data['insight'];
+        }
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
-      // Handle error (e.g., show snackbar)
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load analytics: ${e.toString()}'),
+        ),
+      );
     }
   }
 
@@ -260,8 +276,9 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                                                 fontSize: 13)))
                                     : CustomPaint(
                                         painter: _SmoothLineChartPainter(
-                                          data: List<double>.from(
-                                              _overview['chartData']),
+                                          data: (_overview['chartData'] as List)
+                                              .map((e) => (e as num).toDouble())
+                                              .toList(),
                                           lineColor: const Color(0xFF059669),
                                           gradientColor: const Color(0xFF059669)
                                               .withOpacity(0.25),
@@ -434,12 +451,16 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                                       style: GoogleFonts.poppins(
                                           color: const Color(0xFF6B7280))))
                               : Column(
-                                  children: _funnelSteps
-                                      .map((step) => _buildFunnelStep(
-                                          step['label'],
-                                          step['value'],
-                                          step['percentage'].toDouble()))
-                                      .toList(),
+                                  children: _funnelSteps.map((step) {
+                                    final pctRaw = step['percentage'];
+                                    final double pct =
+                                        pctRaw is num ? pctRaw.toDouble() : 0.0;
+                                    return _buildFunnelStep(
+                                      step['label'].toString(),
+                                      step['value'].toString(),
+                                      pct,
+                                    );
+                                  }).toList(),
                                 ),
                         ),
                         const SizedBox(height: 40),
@@ -639,7 +660,7 @@ class _SmoothLineChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (data.isEmpty) return;
+    if (data.length < 2) return; // Prevent division by zero crash if data is sparse
 
     final double maxData = data.reduce((a, b) => a > b ? a : b);
     final double minData = data.reduce((a, b) => a < b ? a : b);

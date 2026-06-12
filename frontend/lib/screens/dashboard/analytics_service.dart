@@ -34,12 +34,9 @@ class AnalyticsService {
         },
         body: jsonEncode({
           'eventType': eventType,
-          'userId': userId ??
-              AppSession
-                  .currentUserId, // Send null for guests to satisfy UUID constraint
+          'userId': userId ?? AppSession.currentUserId,
           'propertyId': propertyId.trim(),
           'sessionId': sessionId,
-          'timestamp': DateTime.now().toIso8601String(),
           'metadata': metadata,
         }),
       );

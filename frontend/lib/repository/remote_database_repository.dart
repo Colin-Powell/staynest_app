@@ -16,7 +16,8 @@ class RemoteDatabaseRepository {
   // NOTE: Implemented below (private class).
 
   Map<String, String> get _authHeaders => {
-        if (AppSession.apiToken != null) 'Authorization': 'Bearer ${AppSession.apiToken}',
+        if (AppSession.apiToken != null)
+          'Authorization': 'Bearer ${AppSession.apiToken}',
         'Content-Type': 'application/json',
       };
 
@@ -129,8 +130,11 @@ class RemoteDatabaseRepository {
 
   Future<List<Map<String, dynamic>>> loadPropertiesForUser(
       String userId) async {
+    // Landlord properties are secured via JWT auth on:
+    // GET /api/properties/me
+    // So we ignore the userId path param here.
     final response = await apiClient.get(
-      Uri.parse('${AppSession.apiBaseUrl}/users/$userId/properties'),
+      Uri.parse('${AppSession.apiBaseUrl}/properties/me'),
       headers: _authHeaders,
     );
 

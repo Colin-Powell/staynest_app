@@ -47,6 +47,7 @@ export 'reviews_view.dart' hide AppScrollBehavior;
 
 export 'dashboard/admin_dashboard_view.dart';
 export 'dashboard/landlord_portal_view.dart';
+export 'dashboard/landlord_settings_page.dart';
 
 export 'communication/chat_view.dart';
 export 'communication/calling_view.dart';

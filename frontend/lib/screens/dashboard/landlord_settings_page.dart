@@ -2,14 +2,22 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:io';
+
+import 'package:image_picker/image_picker.dart';
+
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:property_app/session/app_session.dart';
+import 'package:property_app/services/user_service.dart';
+import 'package:property_app/services/avatar_service.dart';
+import 'package:property_app/screens/home/how_it_works_view.dart';
+import 'package:property_app/widgets/property_image.dart';
 import 'landlord_analytics_page.dart';
 
 // --- MAIN SETTINGS PAGE ---
 
 class LandlordSettingsPage extends StatelessWidget {
   const LandlordSettingsPage({super.key});
-
   static const Color textDark = Color(0xFF111827);
   static const Color textLight = Color(0xFF9CA3AF);
   static const Color iconColor = Color(0xFF9CA3AF);
@@ -40,6 +48,7 @@ class LandlordSettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = AppSession.currentUser ?? {};
     return Scaffold(
       backgroundColor: Colors.transparent, // Let portal gradient show through
       body: SafeArea(
@@ -83,10 +92,12 @@ class LandlordSettingsPage extends StatelessWidget {
                           offset: const Offset(0, 4),
                         ),
                       ],
-                      image: const DecorationImage(
-                        image: NetworkImage(
-                          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-4.0.3&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-                        ),
+                    ),
+                    child: ClipOval(
+                      child: buildPropertyImage(
+                        user['avatar'] ?? '',
+                        width: 64,
+                        height: 64,
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -97,7 +108,7 @@ class LandlordSettingsPage extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Jomison',
+                          user['name'] ?? 'Landlord',
                           style: GoogleFonts.poppins(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -149,6 +160,19 @@ class LandlordSettingsPage extends StatelessWidget {
                 onTap: () => _navigateTo(context, const BankDetailsPage()),
               ),
               _buildSettingRow(
+                title: 'Help & Support',
+                icon: PhosphorIcons.question(PhosphorIconsStyle.fill),
+                onTap: () => _navigateTo(
+                    context,
+                    const HowItWorksView(
+                      title: 'Landlord Support',
+                      subtitle:
+                          'Managing your properties and tenants on StayNest.',
+                      details:
+                          'Find comprehensive guides on optimizing your listings, managing booking requests, and tracking your business performance analytics.',
+                    )),
+              ),
+              _buildSettingRow(
                 title: 'Privacy Policy',
                 icon: PhosphorIcons.fileLock(PhosphorIconsStyle.fill),
                 onTap: () => _navigateTo(context, const PrivacyPolicyPage()),
@@ -161,7 +185,8 @@ class LandlordSettingsPage extends StatelessWidget {
               _buildSettingRow(
                 title: 'Two-Factor Authentication',
                 icon: PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill),
-                trailingText: 'On',
+                trailingText:
+                    (user['settings']?['two_factor'] ?? false) ? 'On' : 'Off',
                 onTap: () => _navigateTo(context, const TwoFactorAuthPage()),
               ),
 
@@ -170,7 +195,9 @@ class LandlordSettingsPage extends StatelessWidget {
               // --- LOGOUT BUTTON ---
               GestureDetector(
                 onTap: () {
-                  // Handle logout logic
+                  AppSession.logout();
+                  Navigator.of(context, rootNavigator: true)
+                      .pushNamedAndRemoveUntil('/login', (route) => false);
                 },
                 behavior: HitTestBehavior.opaque,
                 child: Padding(
@@ -335,7 +362,10 @@ class SettingsPageLayout extends StatelessWidget {
 
 // Shared UI helper for Input Fields
 Widget _buildTextField(String label,
-    {String? hintText, bool isPassword = false, IconData? prefixIcon}) {
+    {String? hintText,
+    bool isPassword = false,
+    IconData? prefixIcon,
+    TextEditingController? controller}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 24),
     child: Column(
@@ -351,6 +381,7 @@ Widget _buildTextField(String label,
         ),
         const SizedBox(height: 8),
         TextFormField(
+          controller: controller,
           obscureText: isPassword,
           style: GoogleFonts.poppins(fontSize: 15),
           decoration: InputDecoration(
@@ -385,7 +416,8 @@ Widget _buildTextField(String label,
 }
 
 // Shared UI helper for Save Buttons
-Widget _buildSaveButton(BuildContext context, {String text = "Save Changes"}) {
+Widget _buildSaveButton(BuildContext context,
+    {String text = "Save Changes", VoidCallback? onPressed}) {
   return Container(
     padding: EdgeInsets.fromLTRB(
         24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
@@ -394,7 +426,7 @@ Widget _buildSaveButton(BuildContext context, {String text = "Save Changes"}) {
       border: Border(top: BorderSide(color: Colors.black.withOpacity(0.05))),
     ),
     child: ElevatedButton(
-      onPressed: () => Navigator.pop(context),
+      onPressed: onPressed ?? () => Navigator.pop(context),
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF059669),
         elevation: 0,
@@ -415,14 +447,93 @@ Widget _buildSaveButton(BuildContext context, {String text = "Save Changes"}) {
 }
 
 // --- 1. PERSONAL INFORMATION PAGE ---
-class PersonalInfoPage extends StatelessWidget {
+class PersonalInfoPage extends StatefulWidget {
   const PersonalInfoPage({super.key});
+
+  @override
+  State<PersonalInfoPage> createState() => _PersonalInfoPageState();
+}
+
+class _PersonalInfoPageState extends State<PersonalInfoPage> {
+  late TextEditingController _nameController;
+  late TextEditingController _emailController;
+  late TextEditingController _phoneController;
+  String? _avatarUrl;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = AppSession.currentUser ?? {};
+    _nameController = TextEditingController(text: user['name'] ?? '');
+    _emailController = TextEditingController(text: user['email'] ?? '');
+    _phoneController = TextEditingController(text: user['phone'] ?? '');
+    _avatarUrl = user['avatar'];
+  }
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final image =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (image == null) return;
+
+    setState(() {
+      // Clear UI preview while uploading so broken local paths aren't shown.
+      _avatarUrl = null;
+    });
+
+    try {
+      final avatarFile = File(image.path);
+      final publicId = await AvatarService.uploadAvatar(avatarFile);
+      setState(() => _avatarUrl = publicId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Avatar upload failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _handleSave() async {
+    setState(() => _isSaving = true);
+    final success = await UserService.updateProfile({
+      'name': _nameController.text,
+      'phone': _phoneController.text,
+      'avatar': _avatarUrl,
+    });
+
+    if (mounted) {
+      setState(() => _isSaving = false);
+      if (success) {
+        // Update session locally
+        final updatedUser =
+            Map<String, dynamic>.from(AppSession.currentUser ?? {});
+        updatedUser['name'] = _nameController.text;
+        updatedUser['phone'] = _phoneController.text;
+        updatedUser['avatar'] = _avatarUrl;
+        AppSession.updateCurrentUser(updatedUser);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile updated successfully')),
+        );
+        Navigator.pop(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to update profile')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return SettingsPageLayout(
       title: 'Personal Info',
-      bottomNavigationBar: _buildSaveButton(context),
+      bottomNavigationBar: _buildSaveButton(
+        context,
+        onPressed: _isSaving ? null : _handleSave,
+        text: _isSaving ? "Saving..." : "Save Changes",
+      ),
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -433,43 +544,50 @@ class PersonalInfoPage extends StatelessWidget {
             Stack(
               alignment: Alignment.bottomRight,
               children: [
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 4),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 10,
-                      )
-                    ],
-                    image: const DecorationImage(
-                      image: NetworkImage(
-                          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-4.0.3&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'),
-                      fit: BoxFit.cover,
+                GestureDetector(
+                  onTap: _pickImage,
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                        )
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: buildPropertyImage(
+                        _avatarUrl ?? '',
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF059669),
-                    shape: BoxShape.circle,
+                GestureDetector(
+                  onTap: _pickImage,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF059669),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.camera_alt,
+                        color: Colors.white, size: 18),
                   ),
-                  child: const Icon(Icons.camera_alt,
-                      color: Colors.white, size: 18),
-                )
+                ),
               ],
             ),
             const SizedBox(height: 40),
-            _buildTextField('Full Name', hintText: 'Jomison'),
+            _buildTextField('Full Name', controller: _nameController),
             _buildTextField('Email Address',
-                hintText: 'jomison@example.com',
+                controller: _emailController,
                 prefixIcon: PhosphorIcons.envelopeSimple()),
             _buildTextField('Phone Number',
-                hintText: '+1 (555) 000-0000',
+                controller: _phoneController,
                 prefixIcon: PhosphorIcons.phone()),
             const SizedBox(height: 24),
           ],
@@ -743,14 +861,55 @@ class PrivacyPolicyPage extends StatelessWidget {
 }
 
 // --- 6. CHANGE PASSWORD PAGE ---
-class ChangePasswordPage extends StatelessWidget {
+class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
+
+  @override
+  State<ChangePasswordPage> createState() => _ChangePasswordPageState();
+}
+
+class _ChangePasswordPageState extends State<ChangePasswordPage> {
+  final _currentController = TextEditingController();
+  final _newController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _isUpdating = false;
+
+  Future<void> _handleUpdate() async {
+    if (_newController.text != _confirmController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match')),
+      );
+      return;
+    }
+
+    setState(() => _isUpdating = true);
+    final res = await UserService.changePassword(
+        _currentController.text, _newController.text);
+
+    if (mounted) {
+      setState(() => _isUpdating = false);
+      if (res['ok'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Password updated successfully')),
+        );
+        Navigator.pop(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res['error'] ?? 'Failed to update password')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return SettingsPageLayout(
       title: 'Change Password',
-      bottomNavigationBar: _buildSaveButton(context, text: "Update Password"),
+      bottomNavigationBar: _buildSaveButton(
+        context,
+        text: _isUpdating ? "Updating..." : "Update Password",
+        onPressed: _isUpdating ? null : _handleUpdate,
+      ),
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -758,16 +917,16 @@ class ChangePasswordPage extends StatelessWidget {
           children: [
             const SizedBox(height: 16),
             _buildTextField('Current Password',
-                hintText: '••••••••',
+                controller: _currentController,
                 isPassword: true,
                 prefixIcon: PhosphorIcons.lock()),
             const SizedBox(height: 8),
             _buildTextField('New Password',
-                hintText: '••••••••',
+                controller: _newController,
                 isPassword: true,
                 prefixIcon: PhosphorIcons.lockKey()),
             _buildTextField('Confirm New Password',
-                hintText: '••••••••',
+                controller: _confirmController,
                 isPassword: true,
                 prefixIcon: PhosphorIcons.lockKey()),
           ],

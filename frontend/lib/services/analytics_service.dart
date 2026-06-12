@@ -5,7 +5,14 @@ import 'package:property_app/session/app_session.dart';
 import 'package:uuid/uuid.dart';
 
 class AnalyticsService {
+  // Matches backend `getTimeWindow` filter values
+  static String mapAnalyticsFilter(String filter) {
+    if (filter == 'Last 28 Days') return 'Last 28 Days';
+    return 'This Week';
+  }
+
   static Future<void> logEvent({
+
     required String eventType,
     String? propertyId,
     Map<String, dynamic>? metadata,

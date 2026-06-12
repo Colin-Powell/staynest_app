@@ -6,6 +6,20 @@ class AppSession {
   static String currentRole = 'tenant';
   static final ValueNotifier<String> currentRoleNotifier =
       ValueNotifier(currentRole);
+  static Map<String, dynamic> get currentUser => <String, dynamic>{
+        'id': currentUserId,
+        'name': currentUserName,
+        'email': currentUserEmail,
+        'phone': currentUserPhone,
+        'avatar': currentUserAvatar,
+        'role': currentRole,
+        'verified': currentUserVerified,
+      };
+
+  /// Backward-compatible logout used by older UI code.
+  static void logout() {
+    reset();
+  }
 
   static void setRole(String role) {
     currentRole = role;
