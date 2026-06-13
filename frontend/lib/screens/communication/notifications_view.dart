@@ -19,7 +19,6 @@ class NotificationItem {
 class AppScrollBehavior extends ScrollBehavior {
   const AppScrollBehavior();
 
-  @override
   Widget buildViewportChrome(
     BuildContext context,
     Widget child,

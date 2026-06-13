@@ -7,7 +7,6 @@ import '../models/review.dart';
 import 'http_json_client.dart';
 import '../services/cache_engine.dart';
 
-
 class RemoteDatabaseRepository {
   final HttpJsonClient apiClient;
 
@@ -63,8 +62,7 @@ class RemoteDatabaseRepository {
   }
 
   Future<void> loadPropertiesCached({
-    required Function(List<Map<String, dynamic>> data, bool isFromCache)
-        onData,
+    required Function(List<Map<String, dynamic>> data, bool isFromCache) onData,
   }) async {
     await CacheEngine.instance.handle<List<Map<String, dynamic>>>(
       key: CacheKeys.propertyList,
@@ -80,7 +78,8 @@ class RemoteDatabaseRepository {
     );
   }
 
-  Future<List<Map<String, dynamic>>> loadPropertiesForUser(String userId) async {
+  Future<List<Map<String, dynamic>>> loadPropertiesForUser(
+      String userId) async {
     final response = await apiClient.get(
       Uri.parse('${AppSession.apiBaseUrl}/properties/me'),
       headers: _authHeaders,
@@ -88,7 +87,8 @@ class RemoteDatabaseRepository {
     return _decodeListData(response);
   }
 
-  Future<Map<String, List<Map<String, dynamic>>>> loadPropertiesByCategory() async {
+  Future<Map<String, List<Map<String, dynamic>>>>
+      loadPropertiesByCategory() async {
     final response = await apiClient.get(
       Uri.parse('${AppSession.apiBaseUrl}/properties/by-category'),
       headers: _authHeaders,
@@ -244,13 +244,18 @@ class RemoteDatabaseRepository {
       final m = item as Map<String, dynamic>;
       return Review(
         id: m['id']?.toString() ?? 'unknown',
-        bookingId: m['booking_id']?.toString() ?? m['bookingId']?.toString() ?? '',
-        propertyId: m['property_id']?.toString() ?? m['propertyId']?.toString() ?? '',
-        reviewerId: m['reviewer_id']?.toString() ?? m['reviewerId']?.toString() ?? '',
+        bookingId:
+            m['booking_id']?.toString() ?? m['bookingId']?.toString() ?? '',
+        propertyId:
+            m['property_id']?.toString() ?? m['propertyId']?.toString() ?? '',
+        reviewerId:
+            m['reviewer_id']?.toString() ?? m['reviewerId']?.toString() ?? '',
         rating: (m['rating'] as num?)?.toInt() ?? 0,
         comment: m['comment']?.toString(),
-        createdAt: DateTime.tryParse(m['created_at']?.toString() ?? '') ?? DateTime.now(),
-        updatedAt: DateTime.tryParse(m['updated_at']?.toString() ?? '') ?? DateTime.now(),
+        createdAt: DateTime.tryParse(m['created_at']?.toString() ?? '') ??
+            DateTime.now(),
+        updatedAt: DateTime.tryParse(m['updated_at']?.toString() ?? '') ??
+            DateTime.now(),
       );
     }).toList();
   }
@@ -261,8 +266,10 @@ class RemoteDatabaseRepository {
     required int rating,
     String? comment,
   }) async {
+    // The backend POST endpoint for reviews does not expect the propertyId in the URL path.
+    final url = '${AppSession.apiBaseUrl}/properties/reviews';
     final response = await apiClient.post(
-      Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId/reviews'),
+      Uri.parse(url),
       headers: _authHeaders,
       body: jsonEncode({
         'bookingId': bookingId,
@@ -273,12 +280,12 @@ class RemoteDatabaseRepository {
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      return null;
+      throw Exception(
+          'Failed to submit review (${response.statusCode}): ${response.body}');
     }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    final m = (decoded['data'] as Map<String, dynamic>? ?? const {})
-        as Map<String, dynamic>;
+    final m = (decoded['data'] as Map<String, dynamic>? ?? const {});
 
     return Review(
       id: m['id']?.toString() ?? 'generated_id',
@@ -287,8 +294,10 @@ class RemoteDatabaseRepository {
       reviewerId: m['reviewer_id']?.toString() ?? 'current_user',
       rating: (m['rating'] as num?)?.toInt() ?? rating,
       comment: m['comment']?.toString() ?? comment,
-      createdAt: DateTime.tryParse(m['created_at']?.toString() ?? '') ?? DateTime.now(),
-      updatedAt: DateTime.tryParse(m['updated_at']?.toString() ?? '') ?? DateTime.now(),
+      createdAt: DateTime.tryParse(m['created_at']?.toString() ?? '') ??
+          DateTime.now(),
+      updatedAt: DateTime.tryParse(m['updated_at']?.toString() ?? '') ??
+          DateTime.now(),
     );
   }
 
@@ -466,4 +475,3 @@ class RemoteDatabaseRepository {
     }
   }
 }
-

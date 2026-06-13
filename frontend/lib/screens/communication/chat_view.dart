@@ -44,7 +44,6 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   StreamSubscription? _seenSubscription;
   bool _isTyping = false;
   bool _isOtherTyping = false;
-  bool _isLoading = true;
   Timer? _typingDebounce;
 
   final List<ChatMessage> _messages = [];
@@ -261,12 +260,10 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
             _messages.add(chatMsg);
           }
         }
-        _isLoading = false;
       });
       _scrollToBottom();
     } catch (err) {
       setState(() {
-        _isLoading = false;
       });
       // ignore: avoid_print
       print('Failed to fetch messages: $err');

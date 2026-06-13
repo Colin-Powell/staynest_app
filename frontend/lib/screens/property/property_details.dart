@@ -10,8 +10,10 @@ import 'package:property_app/screens/dashboard/analytics_service.dart';
 import 'package:property_app/models/review.dart'; // Import Review model
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:intl/intl.dart'; // Import for DateFormat
+import 'package:property_app/services/booking_service.dart';
+import 'package:property_app/session/app_session.dart';
 import 'booking_view.dart';
-import '../reviews_view.dart';
+import '../reviews_view.dart' hide WriteReviewView;
 
 class PropertyDetails extends StatefulWidget {
   final Property property;
@@ -40,15 +42,41 @@ class PropertyDetails extends StatefulWidget {
 class _PropertyDetailsState extends State<PropertyDetails> {
   List<Review> _reviews = [];
   bool _loadingReviews = true;
+  String? _eligibleBookingId;
+  bool _hasReviewed = false;
 
   // Carousel Controllers
-  final PageController _reviewPageController = PageController(viewportFraction: 1.0);
+  final PageController _reviewPageController =
+      PageController(viewportFraction: 1.0);
   Timer? _carouselTimer;
 
   @override
   void initState() {
     super.initState();
     _fetchReviews();
+  }
+
+  Future<void> _checkReviewEligibility() async {
+    try {
+      final bookings = await BookingService.fetchBookings(isLandlord: false);
+      // Find a completed booking for this specific property
+      final completed = bookings.firstWhere(
+        (b) =>
+            b['property_id'].toString() == widget.property.id &&
+            b['status'] == 'completed',
+        orElse: () => null,
+      );
+
+      if (completed != null && mounted) {
+        final bId = completed['id'].toString();
+        setState(() {
+          _eligibleBookingId = bId;
+          _hasReviewed = _reviews.any((r) => r.bookingId == bId);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking review eligibility: $e');
+    }
   }
 
   Future<void> _fetchReviews() async {
@@ -63,6 +91,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
           _reviews = fetchedReviews;
           _loadingReviews = false;
         });
+        _checkReviewEligibility();
         _startCarousel();
       }
     } catch (e) {
@@ -197,8 +226,12 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                               MaterialPageRoute(
                                 builder: (_) => ReviewsView(
                                   propertyId: widget.property.id,
+                  propertyName: widget.property.name,
                                   averageRating: widget.property.rating,
                                   reviewCount: widget.property.reviews,
+                                  bookingId: _eligibleBookingId,
+                                  canReview: _eligibleBookingId != null,
+                                  hasReviewed: _hasReviewed,
                                 ),
                               ),
                             );
@@ -424,8 +457,12 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                             MaterialPageRoute(
                               builder: (_) => ReviewsView(
                                 propertyId: widget.property.id,
+                                propertyName: widget.property.name,
                                 averageRating: widget.property.rating,
                                 reviewCount: widget.property.reviews,
+                                canReview: _eligibleBookingId != null,
+                                hasReviewed: _hasReviewed,
+                                bookingId: _eligibleBookingId,
                               ),
                             ),
                           );
@@ -612,7 +649,11 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                   builder: (_) => ReviewsView(
                     propertyId: widget.property.id,
                     averageRating: widget.property.rating,
+                    propertyName: widget.property.name,
                     reviewCount: widget.property.reviews,
+                    canReview: _eligibleBookingId != null,
+                    hasReviewed: _hasReviewed,
+                    bookingId: _eligibleBookingId,
                   ),
                 ),
               ),
@@ -628,6 +669,28 @@ class _PropertyDetailsState extends State<PropertyDetails> {
           ],
         ),
         const SizedBox(height: 16),
+        if (_eligibleBookingId == null)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Only users who have completed a stay can leave a review.',
+              style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF9CA3AF),
+                  fontWeight: FontWeight.w500),
+            ),
+          )
+        else if (_hasReviewed)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text(
+              '✓ You have already reviewed this stay.',
+              style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF10B981),
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
         if (_loadingReviews)
           const Center(
             child: Padding(
@@ -646,7 +709,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
             ),
             child: const Column(
               children: [
-                Icon(Icons.reviews_outlined, color: Color(0xFF9CA3AF), size: 32),
+                Icon(Icons.reviews_outlined,
+                    color: Color(0xFF9CA3AF), size: 32),
                 SizedBox(height: 12),
                 Text(
                   'No reviews yet',
@@ -662,7 +726,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
         else
           // Vertical Carousel Implementation with ShaderMask for fading edges
           SizedBox(
-            height: 150, // Fixed height limits the space, showing 1 card at a time beautifully
+            height:
+                150, // Fixed height limits the space, showing 1 card at a time beautifully
             child: ShaderMask(
               shaderCallback: (Rect bounds) {
                 return const LinearGradient(
@@ -696,7 +761,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
 
   Widget _buildCarouselCard(Review review) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8), // Small spacing between cards when sliding
+      margin: const EdgeInsets.symmetric(
+          vertical: 8), // Small spacing between cards when sliding
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
@@ -710,18 +776,16 @@ class _PropertyDetailsState extends State<PropertyDetails> {
           Row(
             children: [
               ClipOval(
-                child: buildPropertyImage(
-                  review.reviewer?.avatar ?? '',
-                  width: 40,
-                  height: 40,
-                  fit: BoxFit.cover,
-                  errorPlaceholder: Container(
+                child: buildPropertyImage(review.reviewer?.avatar ?? '',
                     width: 40,
                     height: 40,
-                    color: const Color(0xFFE5E7EB),
-                    child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
-                  )
-                ),
+                    fit: BoxFit.cover,
+                    errorPlaceholder: Container(
+                      width: 40,
+                      height: 40,
+                      color: const Color(0xFFE5E7EB),
+                      child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
+                    )),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -731,24 +795,23 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                     Text(
                       review.reviewer?.name ?? 'Anonymous',
                       style: const TextStyle(
-                        fontWeight: FontWeight.w700, 
-                        color: Colors.black,
-                        fontSize: 15
-                      ),
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black,
+                          fontSize: 15),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     Row(
                       children: [
-                        const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 16),
+                        const Icon(Icons.star_rounded,
+                            color: Color(0xFFFBBF24), size: 16),
                         const SizedBox(width: 4),
                         Text(
                           review.rating.toStringAsFixed(1),
                           style: const TextStyle(
-                            fontWeight: FontWeight.w600, 
-                            fontSize: 13, 
-                            color: Color(0xFF6B7280)
-                          ),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              color: Color(0xFF6B7280)),
                         ),
                       ],
                     )
@@ -757,7 +820,10 @@ class _PropertyDetailsState extends State<PropertyDetails> {
               ),
               Text(
                 DateFormat.yMMMd().format(review.createdAt),
-                style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF9CA3AF),
+                    fontWeight: FontWeight.w500),
               ),
             ],
           ),
@@ -767,11 +833,10 @@ class _PropertyDetailsState extends State<PropertyDetails> {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 14, 
-              color: Color(0xFF6B7280), 
-              height: 1.4,
-              fontWeight: FontWeight.w500
-            ),
+                fontSize: 14,
+                color: Color(0xFF6B7280),
+                height: 1.4,
+                fontWeight: FontWeight.w500),
           ),
         ],
       ),

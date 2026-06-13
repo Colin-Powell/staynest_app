@@ -335,7 +335,6 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
   Widget _buildVerificationCard(Map<String, dynamic> verification) {
     final propertyData = verification['property_data'] as Map<String, dynamic>?;
     final userData = verification['user_name'] as String? ?? 'Unknown';
-    final userEmail = verification['user_email'] as String? ?? '';
     final price = propertyData?['price'] as int?;
     final title = propertyData?['title'] as String? ?? 'Unnamed Property';
     final city = propertyData?['city'] as String? ?? 'Unknown';

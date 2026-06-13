@@ -1,7 +1,10 @@
-- [x] Inspect existing analytics/properties routes to determine best location/pattern for new endpoint
-- [x] Implement GET /analytics/trending-properties in backend/src/routes/analytics.ts
-- [x] Add SQL query to compute trending by high engagement_score and low impression-to-view ratio (last 7 days)
-- [x] Validate query parameters (optional limit, default 12/10) and guard against division by zero
-- [x] Return response shape: id, title, price, location (city), engagementScore, impressions, views, clicks, saves
-- [ ] (Optional) Add frontend wiring later if needed (not requested in this task)
-- [x] Run backend tests / basic typecheck / start server smoke test
+# TODO
+
+## Review submission failure (reviews_view.dart)
+
+- [ ] Gather root cause by checking request/route mismatch for submitReview
+- [ ] Fix review submission flow in `frontend/lib/screens/reviews_view.dart`
+- [ ] Ensure bookingId is correctly passed to WriteReviewView and submit payload matches backend expectations
+- [ ] Add better error handling/logging for failed submitReview
+- [ ] Run Flutter/Dart build or tests to verify no compile errors
+

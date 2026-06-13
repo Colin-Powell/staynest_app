@@ -469,6 +469,37 @@ router.post('/reviews', requireAuth, async (req: Request, res: Response, next: N
   }
 });
 
+/**
+ * POST /api/v1/reviews/:id/report
+ * Submits a report for an inappropriate review. Requires authentication.
+ */
+router.post('/reviews/:id/report', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const reviewId = req.params.id;
+    const { reason } = req.body as { reason: string };
+
+    if (!reason) {
+      return res.status(400).json({ error: 'Report reason is required.' });
+    }
+
+    // Ensure the review exists
+    const reviewCheck = await query('SELECT id FROM reviews WHERE id = $1', [reviewId]);
+    if (reviewCheck.rowCount === 0) {
+      return res.status(404).json({ error: 'Review not found.' });
+    }
+
+    await query(
+      `INSERT INTO review_reports (review_id, reporter_id, reason, status)
+       VALUES ($1, $2, $3, 'pending')`,
+      [reviewId, req.auth!.id, reason]
+    );
+
+    res.status(201).json({ message: 'Review reported successfully.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const {

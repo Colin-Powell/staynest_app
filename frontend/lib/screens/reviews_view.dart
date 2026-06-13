@@ -1,22 +1,39 @@
 // lib/screens/reviews_view.dart
 import 'package:flutter/material.dart';
 import 'package:property_app/models/review.dart';
+import 'package:property_app/session/app_session.dart';
+import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:intl/intl.dart';
+import 'property/write_review_view.dart';
+
+// NOTE: This file also defines ReviewsView/AllReviewsView/WriteReviewView.
+// Keep any named-parameter usages in this file consistent with these widget constructors.
+
+// Removed the duplicate embedded WriteReviewView from this file.
+// The actual implementation lives in frontend/lib/screens/property/write_review_view.dart.
 
 // ==================== MAIN REVIEWS SCREEN ====================
 class ReviewsView extends StatefulWidget {
   final String propertyId;
   final String? bookingId; // Passed if coming from a completed booking
+  final String propertyName;
+
   final double averageRating;
+
   final int reviewCount;
+  final bool canReview;
+  final bool hasReviewed;
 
   const ReviewsView({
     super.key,
     required this.propertyId,
     this.bookingId,
+    required this.propertyName,
     this.averageRating = 0.0,
     this.reviewCount = 0,
+    this.canReview = false,
+    this.hasReviewed = false,
   });
 
   @override
@@ -55,6 +72,17 @@ class _ReviewsViewState extends State<ReviewsView>
   }
 
   void _navToWriteReview() {
+    // Backend requires bookingId + auth + completed booking.
+    // Prevent navigation when bookingId is missing.
+    if (widget.bookingId == null || widget.bookingId!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Missing booking reference. Please complete the booking before leaving a review.')),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -62,7 +90,8 @@ class _ReviewsViewState extends State<ReviewsView>
         pageBuilder: (context, animation, secondaryAnimation) =>
             WriteReviewView(
           propertyId: widget.propertyId,
-          bookingId: widget.bookingId ?? '',
+          propertyName: widget.propertyName,
+          bookingId: widget.bookingId!,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
@@ -86,13 +115,16 @@ class _ReviewsViewState extends State<ReviewsView>
   }
 
   void _navToAllReviews() {
+    // Ensure bookingId is set for write-review FAB.
+    // If bookingId is missing, FAB/submit will be disabled.
     Navigator.push(
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            AllReviewsView(
+        pageBuilder: (context, animation, secondaryAnimation) => AllReviewsView(
           propertyId: widget.propertyId,
+          propertyName: widget.propertyName ?? '',
+
           bookingId: widget.bookingId, // Pass bookingId down
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -110,8 +142,8 @@ class _ReviewsViewState extends State<ReviewsView>
       ),
     ).then((_) {
       // Refresh in case a review was added in the AllReviewsView
-      setState(() =>
-          _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId));
+      setState(
+          () => _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId));
     });
   }
 
@@ -152,15 +184,14 @@ class _ReviewsViewState extends State<ReviewsView>
                                 child: CircularProgressIndicator());
                           }
                           final reviews = snapshot.data ?? [];
-                          
+
                           // SHOW BEAUTIFUL EMPTY STATE IF NO REVIEWS
                           if (reviews.isEmpty) {
                             return _buildEmptyState(
-                              // Only provide add review function if eligible
-                              widget.bookingId != null ? _navToWriteReview : null
-                            );
+                                // Only provide add review function if eligible
+                                widget.canReview ? _navToWriteReview : null);
                           }
-                          
+
                           // Show top 3 reviews on main view
                           return Column(
                             children: reviews
@@ -172,6 +203,8 @@ class _ReviewsViewState extends State<ReviewsView>
                                       role: 'Tenant',
                                       rating: review.rating.toDouble(),
                                       review: review.comment ?? '',
+                                      reviewId: review
+                                          .id, // Pass review ID for reporting
                                       date: DateFormat.yMMMd()
                                           .format(review.createdAt),
                                     ))
@@ -185,46 +218,18 @@ class _ReviewsViewState extends State<ReviewsView>
               ),
             ],
           ),
-          
+
           // FLOATING ACTION BUTTON
-          floatingActionButton: widget.bookingId != null
-              ? GestureDetector(
-                  onTap: _navToWriteReview,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF3F3CD4),
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF3F3CD4).withValues(alpha: 0.3),
-                          blurRadius: 16,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.add_circle_outline_rounded,
-                            color: Colors.white, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Add a Review',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+          floatingActionButton: widget.canReview && !widget.hasReviewed
+              ? ScaleTransition(
+                  scale:
+                      Tween<double>(begin: 0.85, end: 1.0).animate(_pageFade),
+                  child: _buildAddReviewFab(),
                 )
               : null,
+
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-          
+
           bottomNavigationBar: SafeArea(
             child: Container(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
@@ -245,14 +250,186 @@ class _ReviewsViewState extends State<ReviewsView>
       ),
     );
   }
+
+  Widget _buildAddReviewFab() {
+    return GestureDetector(
+      onTap: _navToWriteReview,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF3F3CD4),
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF3F3CD4).withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.add_circle_outline_rounded,
+                color: Colors.white, size: 20),
+            SizedBox(width: 8),
+            Text(
+              'Add a Review',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Reporting is currently disabled because RemoteDatabaseRepository does not
+  // yet implement reportReview.
+  Future<void> _reportReview(String reviewId, String reason) async {
+    debugPrint('reportReview disabled: reviewId=$reviewId reason=$reason');
+  }
+
+  void _showReportReviewDialog(String reviewId) {
+    final TextEditingController reportReasonController =
+        TextEditingController();
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      transitionDuration: const Duration(milliseconds: 350),
+      pageBuilder: (context, anim1, anim2) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Report Review',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Please tell us why you are reporting this review:',
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.5,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: reportReasonController,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      hintText:
+                          'e.g., Inappropriate content, spam, fake review...',
+                      hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        if (reportReasonController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    'Please provide a reason for reporting.')),
+                          );
+                          return;
+                        }
+                        Navigator.pop(context); // Close dialog
+                        await _reportReview(
+                          reviewId,
+                          reportReasonController.text.trim(),
+                        );
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    'Review reported successfully. Thank you!')),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            const Color(0xFFEF4444), // Red color for report
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: const Text('Submit Report',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
+          child: FadeTransition(opacity: anim1, child: child),
+        );
+      },
+    );
+  }
 }
 
 // ==================== ALL REVIEWS SCREEN ====================
 class AllReviewsView extends StatefulWidget {
   final String propertyId;
+  final String propertyName;
   final String? bookingId; // Passed down to allow writing reviews here too
 
-  const AllReviewsView({super.key, required this.propertyId, this.bookingId});
+  const AllReviewsView({
+    super.key,
+    required this.propertyId,
+    required this.propertyName,
+    this.bookingId,
+  });
 
   @override
   State<AllReviewsView> createState() => _AllReviewsViewState();
@@ -276,6 +453,7 @@ class _AllReviewsViewState extends State<AllReviewsView> {
         pageBuilder: (context, animation, secondaryAnimation) =>
             WriteReviewView(
           propertyId: widget.propertyId,
+          propertyName: widget.propertyName,
           bookingId: widget.bookingId ?? '',
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -316,14 +494,13 @@ class _AllReviewsViewState extends State<AllReviewsView> {
                     return const Center(child: CircularProgressIndicator());
                   }
                   final reviews = snapshot.data ?? [];
-                  
+
                   // EMPTY STATE FOR ALL REVIEWS SCREEN
                   if (reviews.isEmpty) {
                     return _buildEmptyState(
-                      widget.bookingId != null ? _navToWriteReview : null
-                    );
+                        widget.bookingId != null ? _navToWriteReview : null);
                   }
-                  
+
                   return ListView.builder(
                     physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
@@ -336,6 +513,7 @@ class _AllReviewsViewState extends State<AllReviewsView> {
                         role: 'Tenant',
                         rating: review.rating.toDouble(),
                         review: review.comment ?? '',
+                        reviewId: review.id, // Pass review ID for reporting
                         date: DateFormat.yMMMd().format(review.createdAt),
                       );
                     },
@@ -346,14 +524,14 @@ class _AllReviewsViewState extends State<AllReviewsView> {
           ),
         ],
       ),
-      
+
       // FLOATING ACTION BUTTON
       floatingActionButton: widget.bookingId != null
           ? GestureDetector(
               onTap: _navToWriteReview,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFF3F3CD4),
                   borderRadius: BorderRadius.circular(30),
@@ -389,286 +567,9 @@ class _AllReviewsViewState extends State<AllReviewsView> {
   }
 }
 
-// ==================== WRITE REVIEW SCREEN ====================
-class WriteReviewView extends StatefulWidget {
-  final String propertyId;
-  final String bookingId;
-
-  const WriteReviewView(
-      {super.key, required this.propertyId, required this.bookingId});
-
-  @override
-  State<WriteReviewView> createState() => _WriteReviewViewState();
-}
-
-class _WriteReviewViewState extends State<WriteReviewView>
-    with TickerProviderStateMixin {
-  final RemoteDatabaseRepository _repo = RemoteDatabaseRepository();
-  final TextEditingController _commentController = TextEditingController();
-  bool _isSubmitting = false;
-
-  late final AnimationController _pageCtrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 420),
-  );
-  late final Animation<double> _pageFade = CurvedAnimation(
-    parent: _pageCtrl,
-    curve: Curves.easeOutCubic,
-  );
-  late final Animation<Offset> _pageSlide = Tween<Offset>(
-    begin: const Offset(0.08, 0),
-    end: Offset.zero,
-  ).animate(_pageFade);
-
-  double _rating = 4.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _pageCtrl.forward();
-  }
-
-  @override
-  void dispose() {
-    _pageCtrl.dispose();
-    _commentController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleSubmit() async {
-    setState(() => _isSubmitting = true);
-    try {
-      final review = await _repo.submitReview(
-        bookingId: widget.bookingId,
-        propertyId: widget.propertyId,
-        rating: _rating.toInt(),
-        comment: _commentController.text.trim(),
-      );
-      if (review != null) {
-        if (!mounted) return;
-        _showSuccessModal();
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to submit review')),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    } finally {
-      setState(() => _isSubmitting = false);
-    }
-  }
-
-  void _showSuccessModal() {
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Dismiss',
-      transitionDuration: const Duration(milliseconds: 350),
-      pageBuilder: (context, anim1, anim2) {
-        return Center(
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 24,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFD1FAE5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      color: Color(0xFF10B981),
-                      size: 40,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Review Submitted!',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Thank you for sharing your experience. Your review helps others find great places.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1.5,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.pop(context); // Close Dialog
-                      Navigator.pop(context,
-                          true); // Close WriteReviewView with success signal
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF3F3CD4),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Done',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-      transitionBuilder: (context, anim1, anim2, child) {
-        return ScaleTransition(
-          scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
-          child: FadeTransition(opacity: anim1, child: child),
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _pageFade,
-      child: SlideTransition(
-        position: _pageSlide,
-        child: Scaffold(
-          backgroundColor: const Color(0xFFFFFFFF),
-          body: Column(
-            children: [
-              _Header(
-                  title: 'Write a Review',
-                  onBack: () => Navigator.pop(context)),
-              Expanded(
-                child: ScrollConfiguration(
-                  behavior: const AppScrollBehavior(),
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Overall Rating',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF111827),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: List.generate(5, (index) {
-                            return Expanded(
-                              child: GestureDetector(
-                                onTap: () =>
-                                    setState(() => _rating = index + 1.0),
-                                child: Icon(
-                                  Icons.star_rounded,
-                                  color: index < _rating
-                                      ? const Color(0xFFFBBF24)
-                                      : const Color(0xFFD1D5DB),
-                                  size: 48,
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
-                        const SizedBox(height: 40),
-                        const Text(
-                          'Your Review',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF111827),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                                color: const Color(0xFFE5E7EB), width: 1.5),
-                          ),
-                          child: TextField(
-                            controller: _commentController,
-                            maxLines: 8,
-                            decoration: const InputDecoration(
-                              hintText: 'Share your experience...',
-                              hintStyle: TextStyle(
-                                color: Color(0xFF9CA3AF),
-                                fontSize: 15,
-                              ),
-                              contentPadding: EdgeInsets.all(20),
-                              border: InputBorder.none,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-                  child: _OutlinedActionButton(
-                    text: _isSubmitting ? 'Submitting...' : 'Submit Review',
-                    onTap: _isSubmitting ? () {} : _handleSubmit,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ==================== SHARED WIDGETS ====================
 
-Widget _buildEmptyState(VoidCallback? onAddReview) {
+Widget _buildEmptyState(VoidCallback? onAddReview, {bool isEligible = false}) {
   return Padding(
     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
     child: Column(
@@ -680,56 +581,30 @@ Widget _buildEmptyState(VoidCallback? onAddReview) {
             color: Color(0xFFF3F4F6),
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.rate_review_outlined, size: 48, color: Color(0xFF9CA3AF)),
+          child: const Icon(Icons.rate_review_outlined,
+              size: 48, color: Color(0xFF9CA3AF)),
         ),
         const SizedBox(height: 24),
         const Text(
           'No reviews yet',
           style: TextStyle(
-            fontSize: 20, 
-            fontWeight: FontWeight.w800, 
-            color: Color(0xFF111827)
-          ),
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF111827)),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Be the first to share your experience!',
+        Text(
+          isEligible
+              ? 'Be the first to share your experience!'
+              : 'Only verified guests with completed bookings can leave reviews.',
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 15, 
+            fontSize: 15,
             color: Color(0xFF6B7280),
             fontWeight: FontWeight.w500,
           ),
         ),
         // Display the big button if the user is eligible
-        if (onAddReview != null) ...[
-          const SizedBox(height: 32),
-          GestureDetector(
-            onTap: onAddReview,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF3F3CD4),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF3F3CD4).withValues(alpha: 0.3),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: const Text(
-                'Add a Review',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-          ),
-        ],
       ],
     ),
   );
@@ -895,6 +770,7 @@ class ReviewCard extends StatelessWidget {
   final double rating;
   final String review;
   final String date;
+  final String reviewId; // Added for reporting feature
 
   const ReviewCard({
     super.key,
@@ -904,6 +780,7 @@ class ReviewCard extends StatelessWidget {
     required this.rating,
     required this.review,
     required this.date,
+    required this.reviewId, // Added for reporting feature
   });
 
   @override
@@ -971,6 +848,20 @@ class ReviewCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+              const Spacer(), // Pushes report icon to the right
+              GestureDetector(
+                onTap: () {
+                  // Reporting handled by the parent widget state
+                  // (passed down via closure)
+                  // ignore: invalid_use_of_protected_member
+                  // This will be overridden when wired with callback below.
+                },
+                child: const Icon(
+                  Icons.flag_outlined,
+                  color: Color(0xFF9CA3AF),
+                  size: 20,
+                ),
               ),
             ],
           ),

@@ -90,6 +90,7 @@ Future<void> main() async {
 
 // Define the Global Navigator Key here
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 class PropertyApp extends StatefulWidget {
   const PropertyApp({super.key});
 
@@ -295,12 +296,16 @@ class _PropertyAppState extends State<PropertyApp> {
         '/verification_center': (context) => const VerificationCenter(),
         '/referral': (context) => const ReferralView(),
         '/reviews': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+          final args = ModalRoute.of(context)!.settings.arguments
+              as Map<String, dynamic>?;
           return ReviewsView(
             propertyId: args?['propertyId'] ?? '',
+            propertyName: args?['propertyName'] ?? '',
             bookingId: args?['bookingId'],
             averageRating: (args?['averageRating'] as num?)?.toDouble() ?? 0.0,
             reviewCount: args?['reviewCount'] ?? 0,
+            canReview: args?['canReview'] ?? false,
+            hasReviewed: args?['hasReviewed'] ?? false,
           );
         },
         '/amenities': (context) =>

@@ -40,9 +40,7 @@ class _CallingViewState extends State<CallingView>
   late final Timer _timer;
   int _seconds = 0;
   bool _isMuted = false;
-  final bool _isSpeaker = false;
   bool _isVideoOn = true;
-  bool _isCallActive = false;
 
   @override
   void initState() {
@@ -125,7 +123,6 @@ class _CallingViewState extends State<CallingView>
       });
 
       setState(() {
-        _isCallActive = true;
       });
     } catch (err) {
       // ignore: avoid_print

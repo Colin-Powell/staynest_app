@@ -332,3 +332,14 @@ CREATE TRIGGER after_review_change
 AFTER INSERT OR UPDATE OR DELETE ON reviews
 FOR EACH ROW
 EXECUTE FUNCTION update_property_rating();
+
+-- Review Reports Table
+CREATE TABLE IF NOT EXISTS review_reports (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  review_id uuid NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+  reporter_id uuid NOT NULL REFERENCES users(id) ON DELETE SET NULL, -- User who reported
+  reason text NOT NULL,
+  status text NOT NULL DEFAULT 'pending', -- pending | reviewed | resolved | rejected
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
