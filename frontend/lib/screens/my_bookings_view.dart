@@ -80,7 +80,10 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                 ? (b['total_price'] as num).toInt()
                 : int.tryParse(b['total_price']?.toString() ?? '') ?? 0,
 
-            lat: 0, lng: 0, rating: 0, reviews: 0, category: '', images: [],
+            lat: 0, lng: 0, 
+            rating: (double.tryParse(b['average_rating']?.toString() ?? '0') ?? 0.0).toDouble(),
+            reviews: int.tryParse(b['review_count']?.toString() ?? '0') ?? 0,
+            category: '', images: [],
             features: const PropertyFeatures(
                 beds: 0, rooms: 0, baths: 0, furnished: false),
             amenities: [], agent: const Agent(userId: '', name: '', avatar: ''),
@@ -367,20 +370,35 @@ class _BookingCard extends StatelessWidget {
                           .center, // Visually center the text layout vertically
                       children: [
                         const SizedBox(height: 2),
-                        Padding(
-                          padding: const EdgeInsets.only(
-                              right: 28), // Reserve space for the Pink Heart
-                          child: Text(
-                            booking.property.name,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF111827),
-                              letterSpacing: -0.3,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                booking.property.name,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF111827),
+                                  letterSpacing: -0.3,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                            if (booking.property.reviews > 0) ...[
+                              const SizedBox(width: 8),
+                              const Icon(Icons.star_rounded, size: 18, color: Color(0xFFFBBF24)),
+                              const SizedBox(width: 4),
+                              Text(
+                                booking.property.rating.toStringAsFixed(1),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF111827),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 6),
                         Text(

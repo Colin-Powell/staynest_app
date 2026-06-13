@@ -88,6 +88,8 @@ class _MyBookingsViewState extends State<MyBookingsView>
                   'time': '10:00 AM',
                   'status': _mapStatus(b['status']?.toString() ?? ''),
                   'image': b['image_url']?.toString() ?? '',
+                  'rating': (double.tryParse(b['average_rating']?.toString() ?? '0') ?? 0.0).toDouble(),
+                  'reviews': int.tryParse(b['review_count']?.toString() ?? '0') ?? 0,
                 })
             .toList();
         _isLoading = false;
@@ -348,6 +350,22 @@ class _MyBookingsViewState extends State<MyBookingsView>
                         color: textLight,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    if ((booking['reviews'] as int? ?? 0) > 0)
+                      Row(
+                        children: [
+                          const Icon(Icons.star_rounded, size: 14, color: Color(0xFFFBBF24)),
+                          const SizedBox(width: 2),
+                          Text(
+                            (booking['rating'] as double? ?? 0.0).toStringAsFixed(1),
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: textDark,
+                            ),
+                          ),
+                        ],
+                      ),
                     const Spacer(),
                     Text(
                       booking['date'],
@@ -586,8 +604,8 @@ class _BookingViewState extends State<BookingView> {
         lat: double.tryParse(raw['lat']?.toString() ?? '') ?? 0.0,
         lng: double.tryParse(raw['lng']?.toString() ?? '') ?? 0.0,
         price: (double.tryParse(raw['price']?.toString() ?? '') ?? 0).toInt(),
-        rating: 0,
-        reviews: 0,
+        rating: (double.tryParse(raw['average_rating']?.toString() ?? '0') ?? 0.0).toDouble(),
+        reviews: int.tryParse(raw['review_count']?.toString() ?? '0') ?? 0,
         category: raw['category']?.toString() ?? 'Apartment',
         image: raw['image_url']?.toString() ?? '',
         images: <String>[],

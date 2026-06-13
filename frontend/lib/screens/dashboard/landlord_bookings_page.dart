@@ -83,6 +83,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
             'price': (double.tryParse(b['total_price']?.toString() ?? '0') ??
                     0)
                 .toInt(),
+          'rating': (double.tryParse(b['average_rating']?.toString() ?? '0') ?? 0.0).toDouble(),
+            'reviews': int.tryParse(b['review_count']?.toString() ?? '0') ?? 0,
           };
         }).toList();
         _isLoading = false;
@@ -471,6 +473,22 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                       ),
                     ),
                     
+                    const SizedBox(height: 4),
+                    if ((booking['reviews'] as int? ?? 0) > 0)
+                      Row(
+                        children: [
+                          const Icon(Icons.star_rounded, size: 14, color: Color(0xFFFBBF24)),
+                          const SizedBox(width: 2),
+                          Text(
+                            (booking['rating'] as double? ?? 0.0).toStringAsFixed(1),
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: textDark,
+                            ),
+                          ),
+                        ],
+                      ),
                     const Spacer(),
                     
                     // Price

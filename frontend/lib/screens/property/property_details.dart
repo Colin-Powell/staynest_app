@@ -7,9 +7,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
-import 'package:property_app/models/review.dart'; // Import Review model
+import 'package:property_app/models/review.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
-import 'package:intl/intl.dart'; // Import for DateFormat
+import 'package:intl/intl.dart';
 import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'booking_view.dart';
@@ -45,6 +45,15 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   String? _eligibleBookingId;
   bool _hasReviewed = false;
 
+  // ─── Computed getters — single source of truth for rating & count ──────────
+  double get _avgRating => _reviews.isEmpty
+      ? widget.property.rating
+      : _reviews.map((r) => r.rating).reduce((a, b) => a + b) /
+          _reviews.length;
+
+  int get _reviewCount =>
+      _reviews.isEmpty ? widget.property.reviews : _reviews.length;
+
   // Carousel Controllers
   final PageController _reviewPageController =
       PageController(viewportFraction: 1.0);
@@ -59,7 +68,6 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   Future<void> _checkReviewEligibility() async {
     try {
       final bookings = await BookingService.fetchBookings(isLandlord: false);
-      // Find a completed booking for this specific property
       final completed = bookings.firstWhere(
         (b) =>
             b['property_id'].toString() == widget.property.id &&
@@ -117,8 +125,6 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-
-    // Track property view once when the screen is first inserted into the tree.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AnalyticsService.trackPropertyView(widget.property.id,
           source: 'property_details');
@@ -135,7 +141,6 @@ class _PropertyDetailsState extends State<PropertyDetails> {
 
   @override
   Widget build(BuildContext context) {
-    // Ensure we have at least 3 images for the spacious rooms preview
     final photos = widget.property.images.isNotEmpty
         ? widget.property.images
         : [widget.property.image, widget.property.image, widget.property.image];
@@ -193,8 +198,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
 
             // Main Content Container
             Container(
-              margin:
-                  const EdgeInsets.only(top: 340), // Overlaps the image by 40px
+              margin: const EdgeInsets.only(top: 340),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
@@ -226,15 +230,15 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                               MaterialPageRoute(
                                 builder: (_) => ReviewsView(
                                   propertyId: widget.property.id,
-                  propertyName: widget.property.name,
-                                  averageRating: widget.property.rating,
-                                  reviewCount: widget.property.reviews,
+                                  propertyName: widget.property.name,
+                                  averageRating: _avgRating,
+                                  reviewCount: _reviewCount,
                                   bookingId: _eligibleBookingId,
                                   canReview: _eligibleBookingId != null,
                                   hasReviewed: _hasReviewed,
                                 ),
                               ),
-                            );
+                            ).then((_) => _fetchReviews());
                           },
                           behavior: HitTestBehavior.opaque,
                           child: Row(
@@ -242,10 +246,9 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                               const Icon(Icons.star_rounded,
                                   color: Color(0xFFFBBF24), size: 24),
                               const SizedBox(width: 6),
-                              if (widget.property.reviews > 0 &&
-                                  widget.property.rating > 0) ...[
+                              if (_reviewCount > 0) ...[
                                 Text(
-                                  widget.property.rating.toStringAsFixed(1),
+                                  _avgRating.toStringAsFixed(1),
                                   style: const TextStyle(
                                     fontSize: 17,
                                     fontWeight: FontWeight.w800,
@@ -254,7 +257,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  '(${widget.property.reviews} Reviews)',
+                                  '($_reviewCount Reviews)',
                                   style: const TextStyle(
                                     fontSize: 15,
                                     color: Color(0xFF9CA3AF),
@@ -330,7 +333,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
 
                     const SizedBox(height: 32),
 
-                    // Spacious Rooms Area
+                    // Property Photos
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -415,7 +418,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
 
                     const SizedBox(height: 32),
 
-                    // About Property Section
+                    // About Property
                     const Text(
                       'About Property',
                       style: TextStyle(
@@ -439,7 +442,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
 
                     const SizedBox(height: 32),
 
-                    // Vertical Reviews Carousel Section
+                    // Reviews Carousel
                     _buildReviewsCarousel(),
 
                     const SizedBox(height: 32),
@@ -458,14 +461,14 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                               builder: (_) => ReviewsView(
                                 propertyId: widget.property.id,
                                 propertyName: widget.property.name,
-                                averageRating: widget.property.rating,
-                                reviewCount: widget.property.reviews,
+                                averageRating: _avgRating,
+                                reviewCount: _reviewCount,
                                 canReview: _eligibleBookingId != null,
                                 hasReviewed: _hasReviewed,
                                 bookingId: _eligibleBookingId,
                               ),
                             ),
-                          );
+                          ).then((_) => _fetchReviews());
                         }),
                         _buildNavTab('Location', onTap: widget.onViewLocation),
                         _buildNavTab('Landlord', onTap: widget.onViewLandlord),
@@ -522,7 +525,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                             ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF3F37C9),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 16),
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16)),
@@ -549,6 +553,204 @@ class _PropertyDetailsState extends State<PropertyDetails> {
     );
   }
 
+  // ─── Reviews Carousel ─────────────────────────────────────────────────────
+  // Eligibility banners and rating breakdown bars are intentionally removed —
+  // the main file handles that summary. This section shows only the header
+  // with a "See All" link and the auto-scrolling review cards.
+
+  Widget _buildReviewsCarousel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Reviews',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Colors.black,
+              ),
+            ),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ReviewsView(
+                    propertyId: widget.property.id,
+                    propertyName: widget.property.name,
+                    averageRating: _avgRating,
+                    reviewCount: _reviewCount,
+                    canReview: _eligibleBookingId != null,
+                    hasReviewed: _hasReviewed,
+                    bookingId: _eligibleBookingId,
+                  ),
+                ),
+              ),
+              child: const Text(
+                'See All',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF3F37C9),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_loadingReviews)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24.0),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (_reviews.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: const Column(
+              children: [
+                Icon(Icons.reviews_outlined,
+                    color: Color(0xFF9CA3AF), size: 32),
+                SizedBox(height: 12),
+                Text(
+                  'No reviews yet',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          SizedBox(
+            height: 150,
+            child: ShaderMask(
+              shaderCallback: (Rect bounds) {
+                return const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.white,
+                    Colors.white,
+                    Colors.transparent,
+                  ],
+                  stops: [0.0, 0.1, 0.9, 1.0],
+                ).createShader(bounds);
+              },
+              blendMode: BlendMode.dstIn,
+              child: PageView.builder(
+                controller: _reviewPageController,
+                scrollDirection: Axis.vertical,
+                physics: const BouncingScrollPhysics(),
+                itemBuilder: (context, index) {
+                  final review = _reviews[index % _reviews.length];
+                  return _buildCarouselCard(review);
+                },
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildCarouselCard(Review review) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              ClipOval(
+                child: buildPropertyImage(
+                  review.reviewer?.avatar ?? '',
+                  width: 40,
+                  height: 40,
+                  fit: BoxFit.cover,
+                  errorPlaceholder: Container(
+                    width: 40,
+                    height: 40,
+                    color: const Color(0xFFE5E7EB),
+                    child:
+                        const Icon(Icons.person, color: Color(0xFF9CA3AF)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      review.reviewer?.name ?? 'Anonymous',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black,
+                          fontSize: 15),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Row(
+                      children: [
+                        const Icon(Icons.star_rounded,
+                            color: Color(0xFFFBBF24), size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          review.rating.toStringAsFixed(1),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              color: Color(0xFF6B7280)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                DateFormat.yMMMd().format(review.createdAt),
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF9CA3AF),
+                    fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            review.comment ?? 'No comment provided.',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF6B7280),
+                height: 1.4,
+                fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTag(IconData icon, String label, bool isPrimary) {
     return Container(
       padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
@@ -568,8 +770,9 @@ class _PropertyDetailsState extends State<PropertyDetails> {
             child: Icon(
               icon,
               size: 16,
-              color:
-                  isPrimary ? const Color(0xFF3F37C9) : const Color(0xFF9CA3AF),
+              color: isPrimary
+                  ? const Color(0xFF3F37C9)
+                  : const Color(0xFF9CA3AF),
             ),
           ),
           const SizedBox(width: 8),
@@ -623,222 +826,6 @@ class _PropertyDetailsState extends State<PropertyDetails> {
           fontWeight: FontWeight.w600,
           color: Color(0xFF3F37C9),
         ),
-      ),
-    );
-  }
-
-  Widget _buildReviewsCarousel() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Reviews',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: Colors.black,
-              ),
-            ),
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ReviewsView(
-                    propertyId: widget.property.id,
-                    averageRating: widget.property.rating,
-                    propertyName: widget.property.name,
-                    reviewCount: widget.property.reviews,
-                    canReview: _eligibleBookingId != null,
-                    hasReviewed: _hasReviewed,
-                    bookingId: _eligibleBookingId,
-                  ),
-                ),
-              ),
-              child: const Text(
-                'See All',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF3F37C9),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        if (_eligibleBookingId == null)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12),
-            child: Text(
-              'Only users who have completed a stay can leave a review.',
-              style: TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF9CA3AF),
-                  fontWeight: FontWeight.w500),
-            ),
-          )
-        else if (_hasReviewed)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12),
-            child: Text(
-              '✓ You have already reviewed this stay.',
-              style: TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF10B981),
-                  fontWeight: FontWeight.w600),
-            ),
-          ),
-        if (_loadingReviews)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24.0),
-              child: CircularProgressIndicator(),
-            ),
-          )
-        else if (_reviews.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: const Column(
-              children: [
-                Icon(Icons.reviews_outlined,
-                    color: Color(0xFF9CA3AF), size: 32),
-                SizedBox(height: 12),
-                Text(
-                  'No reviews yet',
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: Color(0xFF6B7280),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          // Vertical Carousel Implementation with ShaderMask for fading edges
-          SizedBox(
-            height:
-                150, // Fixed height limits the space, showing 1 card at a time beautifully
-            child: ShaderMask(
-              shaderCallback: (Rect bounds) {
-                return const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.white,
-                    Colors.white,
-                    Colors.transparent,
-                  ],
-                  stops: [0.0, 0.1, 0.9, 1.0],
-                ).createShader(bounds);
-              },
-              blendMode: BlendMode.dstIn,
-              child: PageView.builder(
-                controller: _reviewPageController,
-                scrollDirection: Axis.vertical,
-                physics: const BouncingScrollPhysics(),
-                itemBuilder: (context, index) {
-                  // Allows infinite looping
-                  final review = _reviews[index % _reviews.length];
-                  return _buildCarouselCard(review);
-                },
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildCarouselCard(Review review) {
-    return Container(
-      margin: const EdgeInsets.symmetric(
-          vertical: 8), // Small spacing between cards when sliding
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            children: [
-              ClipOval(
-                child: buildPropertyImage(review.reviewer?.avatar ?? '',
-                    width: 40,
-                    height: 40,
-                    fit: BoxFit.cover,
-                    errorPlaceholder: Container(
-                      width: 40,
-                      height: 40,
-                      color: const Color(0xFFE5E7EB),
-                      child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
-                    )),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      review.reviewer?.name ?? 'Anonymous',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black,
-                          fontSize: 15),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Row(
-                      children: [
-                        const Icon(Icons.star_rounded,
-                            color: Color(0xFFFBBF24), size: 16),
-                        const SizedBox(width: 4),
-                        Text(
-                          review.rating.toStringAsFixed(1),
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                              color: Color(0xFF6B7280)),
-                        ),
-                      ],
-                    )
-                  ],
-                ),
-              ),
-              Text(
-                DateFormat.yMMMd().format(review.createdAt),
-                style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF9CA3AF),
-                    fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            review.comment ?? 'No comment provided.',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF6B7280),
-                height: 1.4,
-                fontWeight: FontWeight.w500),
-          ),
-        ],
       ),
     );
   }

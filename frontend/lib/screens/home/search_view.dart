@@ -79,7 +79,7 @@ class _SearchViewState extends State<SearchView> {
 
   Future<void> _load() async {
     final repo = RemoteDatabaseRepository();
-    
+
     await repo.loadPropertiesCached(
       onData: (rawData, isFromCache) {
         if (!mounted) return;
@@ -438,8 +438,8 @@ class _SearchViewState extends State<SearchView> {
                                   borderRadius: BorderRadius.circular(24),
                                   boxShadow: [
                                     BoxShadow(
-                                        color:
-                                            Colors.black.withValues(alpha: 0.06),
+                                        color: Colors.black
+                                            .withValues(alpha: 0.06),
                                         blurRadius: 16,
                                         offset: const Offset(0, 6))
                                   ],
@@ -480,8 +480,9 @@ class _SearchViewState extends State<SearchView> {
                                                             .ellipsis)),
                                                 GestureDetector(
                                                   onTap: () {
-                                                    _toggleSave(property.id).then(
-                                                        (_) => setState(() {}));
+                                                    _toggleSave(property.id)
+                                                        .then((_) =>
+                                                            setState(() {}));
                                                   },
                                                   child: Icon(
                                                     isSaved
@@ -489,8 +490,10 @@ class _SearchViewState extends State<SearchView> {
                                                         : AppIcons.heartOutline,
                                                     size: 24,
                                                     color: isSaved
-                                                        ? const Color(0xFFEC4899)
-                                                        : const Color(0xFFD1D5DB),
+                                                        ? const Color(
+                                                            0xFFEC4899)
+                                                        : const Color(
+                                                            0xFFD1D5DB),
                                                   ),
                                                 ),
                                               ],
@@ -503,13 +506,15 @@ class _SearchViewState extends State<SearchView> {
                                                     color: Color(0xFF9CA3AF)),
                                                 const SizedBox(width: 4),
                                                 Expanded(
-                                                    child: Text(property.location,
+                                                    child: Text(
+                                                        property.location,
                                                         style: const TextStyle(
                                                             fontSize: 13,
-                                                            color:
-                                                                Color(0xFF9CA3AF),
+                                                            color: Color(
+                                                                0xFF9CA3AF),
                                                             fontWeight:
-                                                                FontWeight.w500),
+                                                                FontWeight
+                                                                    .w500),
                                                         maxLines: 1,
                                                         overflow: TextOverflow
                                                             .ellipsis)),
@@ -526,13 +531,13 @@ class _SearchViewState extends State<SearchView> {
                                             Row(
                                               children: [
                                                 Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                          horizontal: 8,
-                                                          vertical: 4),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
                                                   decoration: BoxDecoration(
-                                                      color:
-                                                          const Color(0xFFFFF7ED),
+                                                      color: const Color(
+                                                          0xFFFFF7ED),
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               10)),
@@ -543,16 +548,16 @@ class _SearchViewState extends State<SearchView> {
                                                       const Icon(
                                                           Icons.star_rounded,
                                                           size: 15,
-                                                          color:
-                                                              Color(0xFFF59E42)),
+                                                          color: Color(
+                                                              0xFFF59E42)),
                                                       const SizedBox(width: 4),
                                                       Text(
-                                                          property.rating
-                                                              .toStringAsFixed(1),
+                                                          '${property.rating.toStringAsFixed(1)} (${property.reviews})',
                                                           style: const TextStyle(
                                                               fontSize: 13.5,
                                                               fontWeight:
-                                                                  FontWeight.w700,
+                                                                  FontWeight
+                                                                      .w700,
                                                               color: Color(
                                                                   0xFFFB923C))),
                                                     ],
@@ -563,7 +568,8 @@ class _SearchViewState extends State<SearchView> {
                                                     '${property.features.beds} Beds',
                                                     style: const TextStyle(
                                                         fontSize: 13.5,
-                                                        color: Color(0xFF9CA3AF),
+                                                        color:
+                                                            Color(0xFF9CA3AF),
                                                         fontWeight:
                                                             FontWeight.w500)),
                                               ],

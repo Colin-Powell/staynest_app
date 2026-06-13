@@ -220,8 +220,8 @@ class _SavedViewState extends State<SavedView>
                                               ),
                                               GestureDetector(
                                                 onTap: () {
-                                                  _toggleSave(property.id)
-                                                      .then((_) => setState(() {}));
+                                                  _toggleSave(property.id).then(
+                                                      (_) => setState(() {}));
                                                 },
                                                 child: const Icon(
                                                   Icons.favorite,
@@ -317,8 +317,7 @@ class _SavedViewState extends State<SavedView>
                                                     ),
                                                     const SizedBox(width: 4),
                                                     Text(
-                                                      property.rating
-                                                          .toString(),
+                                                      '${property.rating.toStringAsFixed(1)} (${property.reviews})',
                                                       style: const TextStyle(
                                                         fontSize: 12,
                                                         fontWeight:

@@ -80,7 +80,6 @@ class _HomeViewState extends State<HomeView> {
     });
 
     try {
-      // Fetch all properties from API
       final allProperties = await PropertiesApi.getAllProperties();
 
       if (allProperties.isNotEmpty) {
@@ -98,7 +97,6 @@ class _HomeViewState extends State<HomeView> {
           _loadingRecommended = false;
         });
       } else {
-        // Remote returned empty; keep empty so UI doesn't show dummy data.
         setState(() {
           _nearby = [];
           _recommended = [];
@@ -107,7 +105,6 @@ class _HomeViewState extends State<HomeView> {
         });
       }
     } catch (e) {
-      // Error loading data; keep empty so UI doesn't show dummy data.
       debugPrint('Error loading properties: $e');
       setState(() {
         _nearby = [];
@@ -570,15 +567,14 @@ class _NearbyCard extends StatelessWidget {
                       const Icon(Icons.star_rounded,
                           color: Color(0xFFFBBC05), size: 16),
                       const SizedBox(width: 6),
-                      if (property.reviews > 0)
-                        Text(
-                          property.rating.toStringAsFixed(1),
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: _dark,
-                          ),
+                      Text(
+                        '${property.rating.toStringAsFixed(1)} (${property.reviews})',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: _dark,
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -699,7 +695,6 @@ class _RecommendedCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            // Prevent horizontal overflow inside the recommended card.
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -735,7 +730,6 @@ class _RecommendedCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Force this row to wrap content rather than overflow.
                   Wrap(
                     alignment: WrapAlignment.spaceBetween,
                     crossAxisAlignment: WrapCrossAlignment.center,
@@ -771,7 +765,7 @@ class _RecommendedCard extends StatelessWidget {
                                 color: Color(0xFFFBBC05), size: 14),
                             const SizedBox(width: 4),
                             Text(
-                              property.rating.toStringAsFixed(1),
+                              '${property.rating.toStringAsFixed(1)} (${property.reviews})',
                               style: GoogleFonts.poppins(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,

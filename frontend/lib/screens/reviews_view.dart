@@ -46,6 +46,7 @@ class _ReviewsViewState extends State<ReviewsView>
     with TickerProviderStateMixin {
   final RemoteDatabaseRepository _repo = RemoteDatabaseRepository();
   late Future<List<Review>> _reviewsFuture;
+  late bool _hasReviewed;
 
   late final AnimationController _pageCtrl = AnimationController(
     vsync: this,
@@ -63,6 +64,7 @@ class _ReviewsViewState extends State<ReviewsView>
   @override
   void initState() {
     super.initState();
+    _hasReviewed = widget.hasReviewed;
     _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId);
     _pageCtrl.forward();
   }
@@ -110,8 +112,10 @@ class _ReviewsViewState extends State<ReviewsView>
       ),
     ).then((value) {
       if (value == true) {
-        setState(() =>
-            _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId));
+        setState(() {
+          _hasReviewed = true;
+          _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId);
+        });
       }
     });
   }
@@ -128,6 +132,7 @@ class _ReviewsViewState extends State<ReviewsView>
           propertyName: widget.propertyName,
 
           bookingId: widget.bookingId, // Pass bookingId down
+          hasReviewed: _hasReviewed,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
@@ -144,8 +149,11 @@ class _ReviewsViewState extends State<ReviewsView>
       ),
     ).then((_) {
       // Refresh in case a review was added in the AllReviewsView
-      setState(
-          () => _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId));
+      setState(() {
+        _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId);
+        // We don't have a direct result from AllReviewsView here, but the
+        // refresh in FutureBuilder will naturally hide elements if we relied on list length.
+      });
     });
   }
 
@@ -187,23 +195,55 @@ class _ReviewsViewState extends State<ReviewsView>
                             );
                           }
 
-                          // Show top 3 reviews on main view
+                          // Calculate live stats for the utility header
+                          Map<int, int> distribution = {
+                            5: 0,
+                            4: 0,
+                            3: 0,
+                            2: 0,
+                            1: 0
+                          };
+                          double sum = 0;
+                          for (var r in reviews) {
+                            sum += r.rating;
+                            if (r.rating >= 1 && r.rating <= 5) {
+                              distribution[r.rating] =
+                                  (distribution[r.rating] ?? 0) + 1;
+                            }
+                          }
+                          final avg = reviews.isEmpty
+                              ? widget.averageRating
+                              : sum / reviews.length;
+
                           return Column(
-                            children: reviews
-                                .take(3)
-                                .map((review) => ReviewCard(
-                                      avatar: review.reviewer?.avatar ?? '',
-                                      name:
-                                          review.reviewer?.name ?? 'Anonymous',
-                                      role: 'Tenant',
-                                      rating: review.rating.toDouble(),
-                                      review: review.comment ?? '',
-                                      reviewId: review
-                                          .id, // Pass review ID for reporting
-                                      date: DateFormat.yMMMd()
-                                          .format(review.createdAt),
-                                    ))
-                                .toList(),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _OverallRatingSection(
+                                rating: avg,
+                                count: reviews.length,
+                                ratingCounts: distribution,
+                              ),
+                              const SizedBox(height: 48),
+                              const Text(
+                                'Recent Reviews',
+                                style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF111827)),
+                              ),
+                              const SizedBox(height: 24),
+                              ...reviews.map((review) => ReviewCard(
+                                    avatar: review.reviewer?.avatar ?? '',
+                                    name: review.reviewer?.name ?? 'Anonymous',
+                                    role: 'Tenant',
+                                    rating: review.rating.toDouble(),
+                                    review: review.comment ?? '',
+                                    reviewId: review
+                                        .id, // Pass review ID for reporting
+                                    date: DateFormat.yMMMd()
+                                        .format(review.createdAt),
+                                  )),
+                            ],
                           );
                         },
                       ),
@@ -215,7 +255,7 @@ class _ReviewsViewState extends State<ReviewsView>
           ),
 
           // FLOATING ACTION BUTTON
-          floatingActionButton: widget.canReview && !widget.hasReviewed
+          floatingActionButton: widget.canReview && !_hasReviewed
               ? ScaleTransition(
                   scale:
                       Tween<double>(begin: 0.85, end: 1.0).animate(_pageFade),
@@ -418,12 +458,14 @@ class AllReviewsView extends StatefulWidget {
   final String propertyId;
   final String propertyName;
   final String? bookingId; // Passed down to allow writing reviews here too
+  final bool hasReviewed;
 
   const AllReviewsView({
     super.key,
     required this.propertyId,
     required this.propertyName,
     this.bookingId,
+    this.hasReviewed = false,
   });
 
   @override
@@ -435,10 +477,12 @@ class _AllReviewsViewState extends State<AllReviewsView> {
   late Future<List<Review>> _reviewsFuture;
   String _sortBy = 'Most Recent';
   int? _selectedRating;
+  late bool _hasReviewed;
 
   @override
   void initState() {
     super.initState();
+    _hasReviewed = widget.hasReviewed;
     _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId);
   }
 
@@ -477,8 +521,10 @@ class _AllReviewsViewState extends State<AllReviewsView> {
       ),
     ).then((value) {
       if (value == true) {
-        setState(() =>
-            _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId));
+        setState(() {
+          _hasReviewed = true;
+          _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId);
+        });
       }
     });
   }
@@ -622,7 +668,7 @@ class _AllReviewsViewState extends State<AllReviewsView> {
       ),
 
       // FLOATING ACTION BUTTON
-      floatingActionButton: widget.bookingId != null
+      floatingActionButton: (widget.bookingId != null && !_hasReviewed)
           ? GestureDetector(
               onTap: _navToWriteReview,
               child: Container(
@@ -707,30 +753,6 @@ Widget _buildEmptyState(
               fontWeight: FontWeight.w500,
             ),
           ),
-          if (isEligible && onAddReview != null) ...[
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: onAddReview,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3F3CD4),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: const Text(
-                  'Leave a Review',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     ),

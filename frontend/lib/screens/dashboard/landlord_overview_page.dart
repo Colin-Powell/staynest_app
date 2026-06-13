@@ -350,6 +350,8 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
     final price = priceValue is String 
         ? double.tryParse(priceValue) ?? 0 
         : (priceValue as num? ?? 0);
+    final rating = (double.tryParse(property['average_rating']?.toString() ?? '0') ?? 0.0).toDouble();
+    final reviews = int.tryParse(property['review_count']?.toString() ?? '0') ?? 0;
 
     return GlassContainer(
       padding: const EdgeInsets.all(12),
@@ -397,14 +399,40 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                     color: textLight,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'KES ${price.toStringAsFixed(0)}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: textGreen,
-                  ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text(
+                      'KES ${price.toStringAsFixed(0)}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: textGreen,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (reviews > 0) ...[
+                      const Icon(Icons.star_rounded, size: 16, color: Color(0xFFFBBF24)),
+                      const SizedBox(width: 4),
+                      Text(
+                        rating.toStringAsFixed(1),
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: textDark,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '($reviews)',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: textLight,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),

@@ -388,22 +388,33 @@ router.patch('/:id/status', requireAuth, authorize('landlord', 'host'), async (r
   try {
     const { status } = req.body;
     const propertyId = req.params.id;
+    const userId = req.auth?.id;
+
+    console.log(`[PropertyStatusUpdate] Request to update property ${propertyId} to status "${status}" by user ${userId}`);
 
     if (!status) {
       return res.status(400).json({ error: 'Status is required.' });
     }
 
+    console.log(`[PropertyStatusUpdate] Query Params: status=${status}, propertyId=${propertyId}, userId=${userId}`);
+
     const result = await query(
-      'UPDATE properties SET status = $1, updated_at = now() WHERE id = $2 AND landlord_id = $3 RETURNING *',
-      [status, propertyId, req.auth?.id]
+      'UPDATE properties SET status = $1 WHERE id = $2 AND landlord_id = $3 RETURNING *',
+      [status, propertyId, userId]
     );
 
+    console.log(`[PropertyStatusUpdate] Query result rowCount: ${result.rowCount}`);
+
     if (result.rowCount === 0) {
+      console.warn(`[PropertyStatusUpdate] No rows updated. Either property ${propertyId} doesn't exist or user ${userId} is not the landlord.`);
       return res.status(404).json({ error: 'Property not found or access denied.' });
     }
 
+    console.log(`[PropertyStatusUpdate] Successfully updated property ${propertyId}`);
     res.json({ data: normalizePropertyRow(result.rows[0] as Record<string, unknown>) });
   } catch (error) {
+    const propertyId = req.params.id;
+    console.error(`[PropertyStatusUpdate] Database Error updating property ${propertyId}:`, error);
     next(error);
   }
 });
