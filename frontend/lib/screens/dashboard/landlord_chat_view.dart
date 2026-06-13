@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/services/message_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/fcm_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:property_app/models/communication_models.dart';
+import 'package:property_app/widgets/property_image.dart';
 
 const Color _landlordPrimary = Color(0xFF059669);
 
@@ -109,10 +109,10 @@ class _LandlordChatViewState extends State<LandlordChatView>
       if (message.data['senderId'] == widget.userId) {
         final text = message.notification?.body ?? '';
         final ts = DateTime.now().millisecondsSinceEpoch;
-        
+
         // The logic inside _addMessage automatically handles de-duplication via msg.id
         final fcmMsgId = message.messageId ?? 'fcm_$ts';
-        
+
         if (!_messages.any((m) => m.id == fcmMsgId)) {
           _addMessage(ChatMessage(
             id: fcmMsgId,
@@ -126,11 +126,6 @@ class _LandlordChatViewState extends State<LandlordChatView>
 
     // Only handle messages FROM the other person — our own are added optimistically
     _socketSubscription = SocketService.instance.messages.listen((msg) {
-      // Debug: helps confirm whether the same socket payload is received multiple times.
-      // ignore: avoid_print
-      print(
-          'landlord socket message recv: id=${msg.id} from=${msg.from} to=${msg.to} ts=${msg.ts} text=${msg.text}');
-
       if (msg.from != widget.userId) return;
 
       final socketId = msg.id.trim();
@@ -183,7 +178,6 @@ class _LandlordChatViewState extends State<LandlordChatView>
   }
 
   void _addMessage(ChatMessage msg) {
-    // Global ID check to prevent duplicates
     if (_messages.any((m) => m.id == msg.id)) return;
 
     setState(() {
@@ -222,8 +216,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
       _scrollToBottom();
     } catch (err) {
       setState(() => _isLoading = false);
-      // ignore: avoid_print
-      print('Failed to fetch messages: $err');
+      debugPrint('Failed to fetch messages: $err');
     }
   }
 
@@ -271,7 +264,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
               _messages[idx].copyWith(status: MessageStatus.failed);
         });
       }
-      print('Failed to save message: $err');
+      debugPrint('Failed to save message: $err');
     }
   }
 
@@ -370,18 +363,19 @@ class _LandlordChatViewState extends State<LandlordChatView>
           ),
           const SizedBox(width: 16),
           ClipOval(
-            child: buildPropertyImage(
-              widget.avatar ?? '',
-              width: 48,
-              height: 48,
-              fit: BoxFit.cover,
-              errorPlaceholder: Container(
-                width: 48,
-                height: 48,
-                color: const Color(0xFFF3F4F6),
-                child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
-              ),
-            ),
+            child: (widget.avatar != null && widget.avatar!.trim().isNotEmpty)
+                ? AppSession.buildAvatar(
+                    widget.avatar,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                  )
+                : Container(
+                    width: 48,
+                    height: 48,
+                    color: const Color(0xFFF3F4F6),
+                    child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
+                  ),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -437,7 +431,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
           ),
           GestureDetector(
             onTap: widget.onCall,
-            child: Icon(PhosphorIcons.phone(), color: Colors.black, size: 28),
+            child: Icon(PhosphorIcons.phone(PhosphorIconsStyle.fill), color: Colors.black, size: 26),
           ),
         ],
       ),
@@ -477,7 +471,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
                 message: msg,
                 onRetry: () => _retryMessage(msg),
               )
-            : _TheirBubble(message: msg, avatar: widget.avatar ?? '');
+            : _TheirBubble(message: msg, avatar: widget.avatar);
         return _buildStaggered(
           index: index,
           child: Padding(
@@ -494,135 +488,138 @@ class _LandlordChatViewState extends State<LandlordChatView>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xFFE5E7EB),
+            color: const Color(0xFFF3F4F6),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(label,
               style: GoogleFonts.poppins(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black)),
+                  color: const Color(0xFF9CA3AF))),
         ),
       ),
     );
   }
 
-  // ─── Input Area ──────────────────────────────────────────────────────────────
+  // ─── Minimalistic Input Area ──────────────────────────────────────────────────
 
   Widget _buildInputArea(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(color: Colors.white),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_isTyping == false) _buildQuickReplies(),
-          _buildActualInput(context),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 12,
+        bottom: MediaQuery.of(context).padding.bottom + 12,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
+          )
         ],
       ),
-    );
-  }
-
-  Widget _buildQuickReplies() {
-    final replies = ['Is it available?', 'When can I view?', 'Can we talk?'];
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        children: replies
-            .map((r) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ActionChip(
-                    label: Text(r,
-                        style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: _landlordPrimary)),
-                    onPressed: () {
-                      _msgController.text = r;
-                      _sendMessage();
-                    },
-                  ),
-                ))
-            .toList(),
-      ),
-    );
-  }
-
-  Widget _buildActualInput(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 16,
-        bottom: MediaQuery.of(context).padding.bottom + 16,
-      ),
-      decoration: const BoxDecoration(color: Colors.white),
       child: Row(
         children: [
           GestureDetector(
-            onTap: () {}, // Attachments
-            child: const Icon(
-              Icons.add_circle_outline_rounded,
-              color: Color(0xFF9CA3AF),
-              size: 30,
+            onTap: () {}, // Attachments Action
+            child: Icon(
+              PhosphorIcons.plusCircle(PhosphorIconsStyle.fill),
+              color: const Color(0xFF9CA3AF),
+              size: 32,
             ),
           ),
           const SizedBox(width: 12),
+          
+          // Clean Pill Search-Bar-style Text Field
           Expanded(
-            child: TextField(
-              controller: _msgController,
-              style: GoogleFonts.poppins(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black),
-              decoration: InputDecoration(
-                hintText: 'Type a message..',
-                hintStyle: GoogleFonts.poppins(
-                    color: const Color(0xFF9CA3AF),
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6), 
+                borderRadius: BorderRadius.circular(24),
               ),
-              onSubmitted: (_) => _sendMessage(),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _msgController,
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black,
+                      ),
+                      // Absolutely no native fills or boundaries
+                      decoration: InputDecoration(
+                        hintText: 'Type a message...',
+                        hintStyle: GoogleFonts.poppins(
+                          color: const Color(0xFF9CA3AF),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
+                  ),
+                  if (!_isTyping)
+                    GestureDetector(
+                      onTap: () {}, // Camera Action
+                      child: Icon(
+                        PhosphorIcons.camera(), 
+                        color: const Color(0xFF9CA3AF), 
+                        size: 22
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              GestureDetector(
-                onTap: () {},
-                child: const Icon(Icons.sentiment_satisfied_alt_rounded,
-                    color: Color(0xFF9CA3AF), size: 28),
-              ),
-              const SizedBox(width: 16),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                transitionBuilder: (child, animation) =>
-                    ScaleTransition(scale: animation, child: child),
-                child: _isTyping
-                    ? GestureDetector(
-                        key: const ValueKey('send'),
-                        onTap: _sendMessage,
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: const BoxDecoration(
-                              color: _landlordPrimary, shape: BoxShape.circle),
-                          child: const Icon(Icons.send_rounded,
-                              color: Colors.white, size: 20),
-                        ),
-                      )
-                    : GestureDetector(
-                        key: const ValueKey('camera'),
-                        onTap: () {},
-                        child: const Icon(Icons.camera_alt_outlined,
-                            color: Color(0xFF9CA3AF), size: 28),
+          const SizedBox(width: 12),
+          
+          // Send / Mic Button Switcher
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            transitionBuilder: (child, animation) =>
+                ScaleTransition(scale: animation, child: child),
+            child: _isTyping
+                ? GestureDetector(
+                    key: const ValueKey('send'),
+                    onTap: _sendMessage,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: _landlordPrimary,
+                        shape: BoxShape.circle,
                       ),
-              ),
-            ],
+                      child: const Icon(Icons.send_rounded,
+                          color: Colors.white, size: 20),
+                    ),
+                  )
+                : GestureDetector(
+                    key: const ValueKey('mic'),
+                    onTap: () {}, // Mic Action
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF3F4F6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        PhosphorIcons.microphone(),
+                        color: const Color(0xFF9CA3AF), 
+                        size: 22
+                      ),
+                    ),
+                  ),
           ),
         ],
       ),
@@ -634,7 +631,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
 
 class _TheirBubble extends StatelessWidget {
   final ChatMessage message;
-  final String avatar;
+  final String? avatar;
   const _TheirBubble({required this.message, required this.avatar});
 
   @override
@@ -643,16 +640,19 @@ class _TheirBubble extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ClipOval(
-          child: buildPropertyImage(avatar,
-              width: 44,
-              height: 44,
-              fit: BoxFit.cover,
-              errorPlaceholder: Container(
-                width: 44,
-                height: 44,
-                color: const Color(0xFFF3F4F6),
-                child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
-              )),
+          child: (avatar != null && avatar!.trim().isNotEmpty)
+              ? AppSession.buildAvatar(
+                  avatar,
+                  width: 44,
+                  height: 44,
+                  fit: BoxFit.cover,
+                )
+              : Container(
+                  width: 44,
+                  height: 44,
+                  color: const Color(0xFFF3F4F6),
+                  child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
+                ),
         ),
         const SizedBox(width: 12),
         Flexible(
@@ -680,7 +680,7 @@ class _TheirBubble extends StatelessWidget {
                 Text(message.text,
                     style: GoogleFonts.poppins(
                         fontSize: 14.5,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                         color: Colors.black,
                         height: 1.4)),
                 const SizedBox(height: 8),
@@ -720,8 +720,8 @@ class _MyBubble extends StatelessWidget {
           ),
         );
       case MessageStatus.sent:
-        // The double-tick color logic
-        final isSeen = false; // Mock seen state
+        // Mock seen state indicator
+        final isSeen = false; 
         return Icon(Icons.done_all,
             size: 16, color: isSeen ? const Color(0xFF4ADE80) : Colors.white70);
       case MessageStatus.failed:
@@ -768,7 +768,7 @@ class _MyBubble extends StatelessWidget {
                 Text(message.text,
                     style: GoogleFonts.poppins(
                         fontSize: 14.5,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                         color: Colors.white,
                         height: 1.4)),
                 const SizedBox(height: 8),

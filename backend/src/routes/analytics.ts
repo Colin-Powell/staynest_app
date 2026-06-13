@@ -221,6 +221,24 @@ router.get('/landlord-overview', requireAuth, async (req: Request, res: Response
 
     const row = statsResult.rows[0] ?? {};
 
+    // Calculate occupancy rate (for the period defined by filter)
+    const daysCount = filter === 'Last 28 Days' ? 28 : 7;
+    const occupancyResult = await query(
+      `WITH prop_count AS (
+         SELECT COUNT(*)::int as total FROM properties WHERE landlord_id = $1
+       ),
+       booked_days AS (
+         SELECT COALESCE(SUM(check_out_date - check_in_date), 0)::int as days
+         FROM bookings
+         WHERE landlord_id = $1 AND status IN ('confirmed', 'completed')
+           AND check_in_date >= NOW() - INTERVAL '${window}'
+       )
+       SELECT 
+         CASE WHEN pc.total > 0 THEN (bd.days::float / (pc.total * ${daysCount})) * 100 ELSE 0 END as rate
+       FROM prop_count pc, booked_days bd`,
+      [landlordId]
+    );
+
     const chartResult = await query(
       `SELECT DATE(ee.created_at) AS day, COUNT(*)::int AS total
        FROM engagement_events ee
@@ -260,8 +278,6 @@ router.get('/landlord-overview', requireAuth, async (req: Request, res: Response
     const totalViews = toNumber(row.views);
     const totalClicks = toNumber(row.clicks);
     const totalImpressions = toNumber(row.impressions);
-
-    const daysCount = filter === 'Last 28 Days' ? 28 : 7;
     const dateMap = new Map<string, number>();
     chartResult.rows.forEach((r: any) => {
       const d = new Date(r.day);
@@ -287,6 +303,8 @@ router.get('/landlord-overview', requireAuth, async (req: Request, res: Response
         uniqueViewers: toNumber(row.unique_viewers).toLocaleString(),
         saves: toNumber(row.saves).toLocaleString(),
         shares: toNumber(row.shares).toLocaleString(),
+        totalBookings: toNumber(row.bookings).toLocaleString(),
+        occupancyRate: occupancyResult.rows[0]?.rate ? Number(occupancyResult.rows[0].rate).toFixed(1) + '%' : '0%',
         avgCtr:
           totalImpressions > 0
             ? `${((totalClicks / totalImpressions) * 100).toFixed(1)}%`
@@ -440,4 +458,3 @@ router.get('/trending-properties', async (req: Request, res: Response, next: Nex
 });
 
 export default router;
-

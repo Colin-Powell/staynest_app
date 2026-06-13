@@ -57,6 +57,7 @@ const PROPERTY_SELECT = `p.id,
               p.bathrooms,
               p.area,
               p.image_url,
+              p.status,
               p.images,
               p.amenities,
               p.lat,
@@ -373,6 +374,30 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     res.json({ data: normalizePropertyRow(property) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/:id/status', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { status } = req.body;
+    const propertyId = req.params.id;
+
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required.' });
+    }
+
+    const result = await query(
+      'UPDATE properties SET status = $1, updated_at = now() WHERE id = $2 AND landlord_id = $3 RETURNING *',
+      [status, propertyId, req.auth?.id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Property not found or access denied.' });
+    }
+
+    res.json({ data: normalizePropertyRow(result.rows[0] as Record<string, unknown>) });
   } catch (error) {
     next(error);
   }

@@ -16,7 +16,8 @@ import 'screens/dashboard/landlord_tenants_page.dart';
 import 'screens/landlord/verification_flow.dart' show VerificationCenter;
 import 'app_theme.dart';
 import 'session/app_session.dart';
-import 'screens/dashboard/landlord_bookings_page.dart';
+import 'screens/dashboard/landlord_bookings_page.dart'
+    hide LandlordBookingsView;
 import 'screens/privacy_policy.dart';
 import 'screens/auth/tenant_survey.dart';
 import 'screens/notification_settings_view.dart';
@@ -255,6 +256,7 @@ class _PropertyAppState extends State<PropertyApp> {
         '/tenant_bookings': (context) => TenantBookingsView(
               onBack: () => Navigator.pop(context),
             ),
+        // Redirect legacy route to the primary portal page
         '/landlord_bookings': (context) => const LandlordBookingsPage(),
         '/help_support': (context) =>
             HelpSupportView(onBack: () => Navigator.pop(context)),
@@ -889,26 +891,28 @@ class _NavItemState extends State<_NavItem>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-            if (widget.isProfile)
-              Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: widget.active ? AppColors.primary : Colors.transparent,
-                    width: 1.5,
+              if (widget.isProfile)
+                Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: widget.active
+                          ? AppColors.primary
+                          : Colors.transparent,
+                      width: 1.5,
+                    ),
                   ),
+                  clipBehavior: Clip.antiAlias,
+                  child: AppSession.buildAvatar(AppSession.currentUserAvatar),
+                )
+              else
+                Icon(
+                  widget.active ? widget.activeIcon : widget.icon,
+                  color: widget.active ? AppColors.primary : AppColors.gray400,
+                  size: 22,
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: AppSession.buildAvatar(AppSession.currentUserAvatar),
-              )
-            else
-              Icon(
-                widget.active ? widget.activeIcon : widget.icon,
-                color: widget.active ? AppColors.primary : AppColors.gray400,
-                size: 22,
-              ),
               if (widget.active) ...[
                 const SizedBox(height: 3),
                 Text(

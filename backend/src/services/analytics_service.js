@@ -303,6 +303,23 @@ class AnalyticsService {
       [landlordId]
     );
 
+    // Calculate occupancy rate (last 30 days)
+    const occupancyRes = await pool.query(
+      `WITH prop_count AS (
+         SELECT COUNT(*)::int as total FROM properties WHERE landlord_id = $1
+       ),
+       booked_days AS (
+         SELECT COALESCE(SUM(check_out_date - check_in_date), 0)::int as days
+         FROM bookings
+         WHERE landlord_id = $1 AND status IN ('confirmed', 'completed')
+           AND check_in_date >= NOW() - INTERVAL '30 days'
+       )
+       SELECT 
+         CASE WHEN pc.total > 0 THEN (bd.days::float / (pc.total * 30)) * 100 ELSE 0 END as rate
+       FROM prop_count pc, booked_days bd`,
+      [landlordId]
+    );
+
     const row = statsResult.rows[0] || {};
     
     const topProps = await pool.query(
@@ -333,6 +350,8 @@ class AnalyticsService {
         uniqueViewers: (row.unique_viewers || 0).toLocaleString(),
         saves: (row.saves || 0).toLocaleString(),
         shares: (row.shares || 0).toLocaleString(),
+        totalBookings: (row.bookings || 0).toLocaleString(),
+        occupancyRate: occupancyRes.rows[0]?.rate ? Number(occupancyRes.rows[0].rate).toFixed(1) + '%' : '0%',
         avgCtr: row.impressions > 0 ? ((row.clicks / row.impressions) * 100).toFixed(1) + '%' : '0%',
       },
       funnel: [

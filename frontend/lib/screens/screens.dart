@@ -39,8 +39,6 @@ export 'property/add_property_view.dart';
 
 export 'landlord/verification_flow.dart';
 export 'landlord/listing_flow.dart' hide ModalUtils;
-export 'landlord/landlord_bookings_view.dart';
-
 export 'tenant/tenant_bookings_view.dart';
 
 export 'reviews_view.dart' hide AppScrollBehavior;

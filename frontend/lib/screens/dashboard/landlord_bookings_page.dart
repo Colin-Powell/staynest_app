@@ -1,7 +1,5 @@
 import 'dart:ui';
-
 import 'package:flutter/material.dart';
-
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/booking_service.dart';
@@ -11,7 +9,9 @@ import 'landlord_booking_detail_page.dart';
 import 'landlord_calendar_page.dart';
 
 class LandlordBookingsPage extends StatefulWidget {
-  const LandlordBookingsPage({super.key});
+  final VoidCallback? onBack;
+
+  const LandlordBookingsPage({super.key, this.onBack});
 
   @override
   State<LandlordBookingsPage> createState() => _LandlordBookingsPageState();
@@ -21,20 +21,21 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
   String _selectedTab = 'Upcoming';
   final List<String> _tabs = ['Upcoming', 'Completed', 'Cancelled'];
 
-  // Design Tokens
+  // Design Tokens - Landlord Emerald Theme
+  static const Color primaryGreen = Color(0xFF059669);
   static const Color textDark = Color(0xFF111827);
   static const Color textMedium = Color(0xFF4B5563);
   static const Color textLight = Color(0xFF9CA3AF);
 
-  // Status Pill Colors mapped exactly to the PDF
+  // Status Pill Colors mapped to the Theme
   static const Map<String, Map<String, Color>> statusColors = {
     'Upcoming': {
-      'bg': Color(0xFFD6E4FF), // Soft Blue BG
-      'text': Color(0xFF3F37C9), // Deep Blue Text
-    },
-    'Completed': {
       'bg': Color(0xFFD1FAE5), // Soft Green BG
       'text': Color(0xFF065F46), // Deep Green Text
+    },
+    'Completed': {
+      'bg': Color(0xFFE0E7FF), // Soft Indigo/Blue BG
+      'text': Color(0xFF3730A3), // Deep Indigo Text
     },
     'Cancelled': {
       'bg': Color(0xFFFEE2E2), // Soft Red BG
@@ -112,10 +113,10 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE8F6EF),
-      extendBody: true,
+      extendBodyBehindAppBar: true,
       body: Stack(
         children: [
+          // 1. Soft Gradient Background
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -130,6 +131,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
               ),
             ),
           ),
+          
           SafeArea(
             bottom: false,
             child: Stack(
@@ -137,23 +139,18 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                 CustomScrollView(
                   physics: const BouncingScrollPhysics(),
                   slivers: [
-                    // Header
+                    // Header (No back button)
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.only(
-                          top: 16,
-                          left: 24,
-                          right: 24,
-                          bottom: 24,
-                        ),
+                        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                         child: Row(
                           children: [
                             Expanded(
                               child: Text(
                                 'My Bookings',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w700,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w800,
                                   color: textDark,
                                   letterSpacing: -0.5,
                                 ),
@@ -165,15 +162,21 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                       ),
                     ),
 
-                    // Tabs
+                    // Filter Tabs
                     SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: _tabs
-                              .map((tab) => _buildTab(tab))
-                              .toList(),
+                      child: SizedBox(
+                        height: 44,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          itemCount: _tabs.length,
+                          itemBuilder: (context, index) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: _buildTab(_tabs[index]),
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -199,13 +202,18 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.poppins(
                                   color: Colors.red,
-                                  fontSize: 16,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 24),
                               ElevatedButton(
                                 onPressed: _loadBookings,
-                                child: const Text('Retry'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryGreen,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                child: Text('Retry', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
                               ),
                             ],
                           ),
@@ -223,42 +231,41 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               return Padding(
-                                padding:
-                                    const EdgeInsets.only(bottom: 32),
+                                padding: const EdgeInsets.only(bottom: 24),
                                 child: _buildBookingSkeletonCard(),
                               );
                             },
-                            childCount: 3,
+                            childCount: 4,
                           ),
                         ),
                       )
                     else if (_filteredBookings.isEmpty)
                       SliverToBoxAdapter(
                         child: Padding(
-                          padding: const EdgeInsets.all(24),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(
-                                Icons.calendar_today_outlined,
-                                color: textLight,
-                                size: 48,
+                              _GlassContainer(
+                                padding: const EdgeInsets.all(24),
+                                child: Icon(PhosphorIcons.calendarBlank(), size: 48, color: textLight),
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 24),
                               Text(
-                                'No bookings yet',
+                                'No $_selectedTab bookings',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
                                   color: textDark,
                                 ),
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Bookings will appear here when you receive reservations',
+                                'Bookings will appear here when you receive reservations.',
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.poppins(
-                                  fontSize: 13,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
                                   color: textLight,
                                 ),
                               ),
@@ -272,22 +279,20 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                           24,
                           0,
                           24,
-                          MediaQuery.of(context).padding.bottom + 160,
+                          MediaQuery.of(context).padding.bottom + 200, // Extra padding so cards don't hide behind floating button
                         ),
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final booking = _filteredBookings[index];
                               return Padding(
-                                padding:
-                                    const EdgeInsets.only(bottom: 32),
+                                padding: const EdgeInsets.only(bottom: 20),
                                 child: GestureDetector(
                                   onTap: () async {
                                     final result = await Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) =>
-                                            LandlordBookingDetailPage(
+                                        builder: (_) => LandlordBookingDetailPage(
                                           booking: booking,
                                         ),
                                       ),
@@ -307,35 +312,44 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                   ],
                 ),
 
-                // Floating "View Calendar" Button
+                // Floating "View Calendar" Glass Button
+                // Pushed higher up to prevent overlapping with the AppShell bottom navigation bar
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: Padding(
                     padding: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).padding.bottom + 120,
-                      left: 24,
-                      right: 24,
+                      bottom: MediaQuery.of(context).padding.bottom + 120, // Increased bottom padding
+                      left: 32,
+                      right: 32,
                     ),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 60,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.of(context)
-                            .push(LandlordCalendarPage.route()),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              const Color(0xFF8DCBAA),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                        child: Container(
+                          width: double.infinity,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: primaryGreen.withOpacity(0.85),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white.withOpacity(0.4), width: 1.5),
                           ),
-                          elevation: 0,
-                        ),
-                        child: Text(
-                          'View Calendar',
-                          style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => Navigator.of(context).push(LandlordCalendarPage.route()),
+                              child: Center(
+                                child: Text(
+                                  'View Calendar',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -353,40 +367,32 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
   Widget _buildTab(String label) {
     final bool isActive = _selectedTab == label;
 
-    final Color bgColor =
-        isActive ? statusColors[label]!['bg']! : Colors.transparent;
-    final Color textColor =
-        isActive ? statusColors[label]!['text']! : textLight;
-    final Color borderColor =
-        isActive ? Colors.transparent : const Color(0xFFD1D5DB);
-
     return GestureDetector(
       onTap: () {
         if (_selectedTab == label) return;
         setState(() {
           _selectedTab = label;
-          _isLoading = true;
-        });
-        Future.delayed(const Duration(milliseconds: 400), () {
-          if (mounted) {
-            setState(() => _isLoading = false);
-          }
         });
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
-          color: bgColor,
+          color: isActive ? primaryGreen.withOpacity(0.15) : Colors.white.withOpacity(0.6),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: borderColor, width: 1.5),
+          border: Border.all(
+            color: isActive ? primaryGreen : Colors.white.withOpacity(0.8),
+            width: 1.5,
+          ),
         ),
-        child: Text(
-          label,
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
-            color: textColor,
+        child: Center(
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+              color: isActive ? primaryGreen : textDark,
+            ),
           ),
         ),
       ),
@@ -395,35 +401,44 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
 
   Widget _buildBookingCard(Map<String, dynamic> booking) {
     final status = booking['status'] as String? ?? 'Upcoming';
+    final statusColor = statusColors[status]!['text']!;
+    final statusBg = statusColors[status]!['bg']!;
 
     return _GlassContainer(
       padding: EdgeInsets.zero,
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(24),
       child: SizedBox(
-        height: 140,
+        height: 145,
         child: Row(
           children: [
+            // Flush Image on the left
             ClipRRect(
-              borderRadius:
-                  const BorderRadius.horizontal(left: Radius.circular(28)),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(24),
+                bottomLeft: Radius.circular(24),
+              ),
               child: buildPropertyImage(
                 booking['image'] ?? '',
-                width: 115,
-                height: 140,
+                width: 120,
+                height: double.infinity,
                 fit: BoxFit.cover,
                 errorPlaceholder: Container(
-                  width: 115,
-                  height: 140,
+                  width: 120,
+                  height: double.infinity,
                   color: const Color(0xFFE8F6EF),
+                  child: Icon(PhosphorIcons.house(), color: primaryGreen.withOpacity(0.5), size: 32),
                 ),
               ),
             ),
+            
+            // Details on the right
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Title and Icon
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -433,52 +448,71 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w800,
                               color: textDark,
+                              height: 1.2,
                             ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 2),
+                    
+                    // Location & Tenant Name
                     Text(
-                      booking['location'] ?? 'Unknown location',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: textLight,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '${booking['date'] ?? 'TBD'}   |   ${booking['time'] ?? 'TBD'}',
+                      '${booking['location']} • ${booking['tenant_name']}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(
                         fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: textMedium,
+                        fontWeight: FontWeight.w500,
+                        color: textLight,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    
+                    const Spacer(),
+                    
+                    // Price
+                    Text(
+                      'Kes. ${booking['price']}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    
+                    // Date & Status Pill
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        Expanded(
+                          child: Text(
+                            '${booking['date']} | ${booking['time']}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: textMedium,
+                            ),
+                          ),
+                        ),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: statusColors[status]!['bg'],
-                            borderRadius: BorderRadius.circular(12),
+                            color: statusBg,
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             status,
                             style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: statusColors[status]!['text'],
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: statusColor,
+                              letterSpacing: 0.5,
                             ),
                           ),
                         ),
@@ -497,24 +531,25 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
   Widget _buildBookingSkeletonCard() {
     return _GlassContainer(
       padding: EdgeInsets.zero,
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(24),
       child: SizedBox(
-        height: 140,
+        height: 145,
         child: Row(
           children: [
             Container(
-              width: 115,
-              height: 140,
-              decoration: const BoxDecoration(
-                color: Color(0xFFE5E7EB),
-                borderRadius:
-                    BorderRadius.horizontal(left: Radius.circular(28)),
+              width: 120,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.5),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  bottomLeft: Radius.circular(24),
+                ),
               ),
             ),
-            const SizedBox(width: 12),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 16, 16, 16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -522,36 +557,49 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                       width: double.infinity,
                       height: 18,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB),
+                        color: Colors.white.withOpacity(0.6),
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
                     const SizedBox(height: 10),
                     Container(
                       width: 120,
-                      height: 14,
+                      height: 12,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB),
+                        color: Colors.white.withOpacity(0.6),
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
                     const Spacer(),
                     Container(
-                      width: 160,
-                      height: 14,
+                      width: 80,
+                      height: 16,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB),
+                        color: Colors.white.withOpacity(0.6),
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Container(
-                      width: 80,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          width: 100,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        Container(
+                          width: 60,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -602,8 +650,8 @@ class _GlassContainer extends StatelessWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 10,
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 20,
                 offset: const Offset(0, 4),
               ),
             ],

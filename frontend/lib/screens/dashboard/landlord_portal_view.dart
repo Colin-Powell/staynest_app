@@ -263,8 +263,8 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
 
   Widget _getLegacyPage() {
     switch (_selectedNav) {
-      case 'Bookings':
-        return const LandlordBookingsPage();
+case 'Bookings':
+        return LandlordBookingsPage();
       case 'Messages':
         return LandlordMessagesPage(
           onChatOpen: _handleChatOpen,

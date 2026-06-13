@@ -1,8 +1,8 @@
+// START OF FILE
 import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/message_service.dart';
 import 'package:property_app/services/socket_service.dart';
@@ -133,8 +133,9 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
   List<ConversationModel> get _filteredConversations {
     Iterable<ConversationModel> filtered = _conversations;
 
+    // Filter Logic based on the top-right menu selection
     if (_currentFilter == _LandlordFilter.archived) {
-      filtered = filtered.where((c) => false);
+      filtered = filtered.where((c) => false); // Add real condition later
     }
 
     if (_searchQuery.isEmpty) return filtered.toList();
@@ -232,7 +233,6 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
             key: ValueKey(conv.userId),
             direction: DismissDirection.horizontal,
             background: Container(
-              // Swipe Right: Mute
               margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
               padding: const EdgeInsets.symmetric(horizontal: 24),
               decoration: BoxDecoration(
@@ -252,7 +252,6 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
               ),
             ),
             secondaryBackground: Container(
-              // Swipe Left: Delete
               margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
               padding: const EdgeInsets.symmetric(horizontal: 24),
               decoration: BoxDecoration(
@@ -394,10 +393,10 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
             children: [
               Padding(
                 padding: EdgeInsets.only(
-                  top: MediaQuery.of(context).padding.top + 20,
-                  left: 32,
-                  right: 32,
-                  bottom: 24,
+                  top: MediaQuery.of(context).padding.top + 24,
+                  left: 24,
+                  right: 24,
+                  bottom: 16,
                 ),
                 child: AnimatedCrossFade(
                   duration: const Duration(milliseconds: 250),
@@ -408,64 +407,70 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                   secondChild: _buildSelectionHeader(),
                 ),
               ),
+              
+              // Clean Search Bar UI
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                child: _buildFilterChips(),
-              ),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB).withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(24),
-                        border:
-                            Border.all(color: Colors.white.withOpacity(0.3)),
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (value) =>
-                            setState(() => _searchQuery = value),
-                        decoration: InputDecoration(
-                          hintText: 'Search Messages',
-                          hintStyle: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: _textLight,
-                          ),
-                          prefixIcon: const Icon(Icons.search,
-                              color: _textDark, size: 24),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? GestureDetector(
-                                  onTap: () {
-                                    _searchController.clear();
-                                    setState(() => _searchQuery = '');
-                                  },
-                                  child: Container(
-                                    margin: const EdgeInsets.all(12),
-                                    decoration: const BoxDecoration(
-                                      color: Colors.white,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(Icons.close,
-                                        size: 14, color: _textDark),
-                                  ),
-                                )
-                              : null,
-                          border: InputBorder.none,
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: _GlassContainer(
+                  padding: EdgeInsets.zero,
+                  opacity: 0.6,
+                  borderRadius: BorderRadius.circular(26), // Smooth rounded pill
+                  child: SizedBox(
+                    height: 52,
+                    child: Row(
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(left: 16),
+                          child: Icon(Icons.search, color: _textDark, size: 24),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (value) => setState(() => _searchQuery = value),
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: _textDark,
+                            ),
+                            // Disable ALL default material fills and borders to prevent green active outlines
+                            decoration: InputDecoration(
+                              hintText: 'Search Messages',
+                              hintStyle: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: _textLight,
+                              ),
+                              filled: false,
+                              fillColor: Colors.transparent,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                        if (_searchQuery.isNotEmpty)
+                          GestureDetector(
+                            onTap: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                              FocusScope.of(context).unfocus(); // Drops the keyboard
+                            },
+                            child: const Padding(
+                              padding: EdgeInsets.only(right: 16, left: 16),
+                              child: Icon(Icons.cancel, color: _textLight, size: 22),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
               ),
+              const SizedBox(height: 8),
               Expanded(child: _buildConversationsList()),
             ],
           ),
@@ -475,38 +480,55 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
     );
   }
 
-  Widget _buildFilterChips() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      child: Row(
-        children: _LandlordFilter.values.map((filter) {
-          final isSelected = _currentFilter == filter;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label:
-                  Text(filter.name[0].toUpperCase() + filter.name.substring(1)),
-              selected: isSelected,
-              onSelected: (val) => setState(() => _currentFilter = filter),
-              selectedColor: _landlordPrimary.withOpacity(0.2),
-              labelStyle: GoogleFonts.poppins(
-                  fontSize: 13,
-                  color: isSelected ? _landlordPrimary : _textDark,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500),
-              backgroundColor: Colors.white.withOpacity(0.5),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
+  // --- REFACTORED NORMAL HEADER WITH MENU ---
   Widget _buildNormalHeader() {
-    return Text(
-      'Messages',
-      style: GoogleFonts.poppins(
-          fontSize: 32, fontWeight: FontWeight.w800, color: _textDark),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'Messages',
+          style: GoogleFonts.poppins(
+            fontSize: 32, 
+            fontWeight: FontWeight.w800, 
+            color: _textDark
+          ),
+        ),
+        // Filter pills replaced with this clean Top-Right Popup Menu
+        PopupMenuButton<_LandlordFilter>(
+          icon: const Icon(Icons.more_vert_rounded, color: _textDark, size: 28),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          color: Colors.white,
+          elevation: 8,
+          onSelected: (filter) {
+            setState(() => _currentFilter = filter);
+          },
+          itemBuilder: (context) => _LandlordFilter.values.map((filter) {
+            final isSelected = _currentFilter == filter;
+            final name = filter.name[0].toUpperCase() + filter.name.substring(1);
+            return PopupMenuItem(
+              value: filter,
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                    color: isSelected ? _landlordPrimary : _textLight,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    name,
+                    style: GoogleFonts.poppins(
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      color: isSelected ? _landlordPrimary : _textDark,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
@@ -817,10 +839,16 @@ class _ConversationTile extends StatelessWidget {
     );
   }
 
+  /// Resolves the conversation participant's avatar using the same logic
+  /// as the rest of the app (AppSession.buildAvatar), so Cloudinary public
+  /// IDs, full URLs, and local asset paths all render correctly and
+  /// consistently with profile screens elsewhere in the app.
   Widget _buildAvatar() {
-    final Widget avatarWidget = avatarUrl != null && avatarUrl!.isNotEmpty
-        ? buildPropertyImage(
-            avatarUrl!,
+    final Widget avatarWidget = avatarUrl != null && avatarUrl!.trim().isNotEmpty
+        ? AppSession.buildAvatar(
+            avatarUrl,
+            width: 64,
+            height: 64,
             fit: BoxFit.cover,
           )
         : Container(
