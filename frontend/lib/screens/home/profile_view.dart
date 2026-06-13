@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/widgets/property_image.dart';
 
 class ProfileView extends StatefulWidget {
   final VoidCallback? onViewBookings;
@@ -82,9 +83,6 @@ class _ProfileViewState extends State<ProfileView>
     try {
       final repository = RemoteDatabaseRepository();
       final user = await repository.loadCurrentUser();
-      if (user == null) {
-        return;
-      }
 
       AppSession.updateCurrentUser(user);
       if (!mounted) return;
@@ -189,13 +187,13 @@ class _ProfileViewState extends State<ProfileView>
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: const Color(0xFFE5E7EB),
-                                      image: DecorationImage(
-                                        image: _avatarPath.startsWith('http')
-                                            ? NetworkImage(_avatarPath)
-                                            : AssetImage(_avatarPath)
-                                                as ImageProvider<Object>,
-                                        fit: BoxFit.cover,
-                                      ),
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: buildPropertyImage(
+                                      _avatarPath,
+                                      width: 72,
+                                      height: 72,
+                                      fit: BoxFit.cover,
                                     ),
                                   ),
                                 ),

@@ -19,8 +19,9 @@ class FallbackPropertiesLoader {
   final LocalMockDatabaseRepository _repository;
   final RemoteDatabaseRepository? _remoteRepository;
 
-  Future<List<Property>> loadAll() async {
+  Future<List<dynamic>> loadAll() async {
     try {
+      // Landlord: try remote first, then local mock.
       if (AppSession.isLandlord && AppSession.currentUserId != null) {
         if (_remoteRepository != null) {
           try {
@@ -35,17 +36,17 @@ class FallbackPropertiesLoader {
           }
         }
 
-        final ownerProperties = await _repository.loadPropertiesForUser(
-          AppSession.currentUserId!,
-        );
+        final ownerProperties =
+            await _repository.loadPropertiesForUser(AppSession.currentUserId!);
         return ownerProperties.map(mapApiProperty).toList();
       }
 
+      // Everyone: try remote first, then local mock.
       if (_remoteRepository != null) {
         try {
           final remoteProperties = await _remoteRepository!.loadProperties();
           if (remoteProperties.isNotEmpty) {
-            return remoteProperties.map(mapApiProperty).toList();
+            return remoteProperties.map(mapApiProperty as Function(Property e)).toList();
           }
         } catch (e, st) {
           debugPrint('Remote properties load failed: $e');
@@ -62,7 +63,7 @@ class FallbackPropertiesLoader {
     }
   }
 
-  Future<List<Property>> loadByUiCategory(String uiCategory) async {
+  Future<List<dynamic>> loadByUiCategory(String uiCategory) async {
     try {
       if (_remoteRepository != null) {
         try {
@@ -72,9 +73,7 @@ class FallbackPropertiesLoader {
 
           final hits = <Property>[];
           for (final entry in categoryData.entries) {
-            if (_normalizeCategory(entry.key) != normalizedUiCategory) {
-              continue;
-            }
+            if (_normalizeCategory(entry.key) != normalizedUiCategory) continue;
             hits.addAll(entry.value.map(mapApiProperty));
           }
 
@@ -90,9 +89,7 @@ class FallbackPropertiesLoader {
 
       final hits = <Property>[];
       for (final entry in categoryData.entries) {
-        if (_normalizeCategory(entry.key) != normalizedUiCategory) {
-          continue;
-        }
+        if (_normalizeCategory(entry.key) != normalizedUiCategory) continue;
         hits.addAll(entry.value.map(mapApiProperty));
       }
 

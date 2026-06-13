@@ -412,6 +412,46 @@ router.post('/:id/availability', requireAuth, authorize('landlord', 'host'), asy
 });
 
 /**
+ * GET /api/v1/properties/:id/review-eligibility
+ * Checks if the authenticated user can review a specific property.
+ */
+router.get('/:id/review-eligibility', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const propertyId = req.params.id;
+    const userId = req.auth?.id;
+
+    // Find the latest completed booking for this user and property
+    const bookingRes = await query(
+      `SELECT id FROM bookings 
+       WHERE property_id = $1 AND tenant_id = $2 AND status = 'completed'
+       ORDER BY check_out_date DESC LIMIT 1`,
+      [propertyId, userId]
+    );
+
+    if (bookingRes.rowCount === 0) {
+      return res.json({ canReview: false, reason: 'No completed booking found' });
+    }
+
+    const bookingId = bookingRes.rows[0].id;
+
+    // Check if user has already reviewed this specific booking
+    const reviewRes = await query(
+      "SELECT id FROM reviews WHERE booking_id = $1",
+      [bookingId]
+    );
+
+    const reviewExists = (reviewRes.rowCount ?? 0) > 0;
+    res.json({ 
+      canReview: !reviewExists, 
+      bookingId,
+      reviewExists 
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/v1/properties/:id/reviews
  * Fetches all reviews for a specific property including reviewer details
  */
@@ -440,20 +480,31 @@ router.get('/:id/reviews', async (req: Request, res: Response, next: NextFunctio
  */
 router.post('/reviews', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { bookingId, propertyId, rating, comment } = req.body;
+    const { bookingId, propertyId, rating, comment } = req.body as { 
+      bookingId: string; 
+      propertyId: string; 
+      rating: number; 
+      comment?: string 
+    };
 
     if (!bookingId || !propertyId || !rating) {
       return res.status(400).json({ error: 'Missing required review fields.' });
     }
 
-    // Verify the booking belongs to the user and is 'completed'
+    // Verify the booking exists, belongs to the user, the property, and is 'completed'
     const bookingCheck = await query(
-      "SELECT id FROM bookings WHERE id = $1 AND tenant_id = $2 AND status = 'completed'",
-      [bookingId, req.auth?.id]
+      "SELECT id FROM bookings WHERE id = $1 AND tenant_id = $2 AND property_id = $3 AND status = 'completed' LIMIT 1",
+      [bookingId, req.auth?.id, propertyId]
     );
 
     if (bookingCheck.rowCount === 0) {
-      return res.status(403).json({ error: 'You can only review completed bookings that you made.' });
+      return res.status(403).json({ success: false, message: 'You are not eligible to review this property.' });
+    }
+
+    // Extra safety: Check if a review already exists for this booking
+    const existingReview = await query("SELECT id FROM reviews WHERE booking_id = $1", [bookingId]);
+    if ((existingReview.rowCount ?? 0) > 0) {
+      return res.status(400).json({ success: false, message: 'You have already reviewed this stay.' });
     }
 
     const result = await query(

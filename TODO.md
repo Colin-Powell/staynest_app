@@ -1,10 +1,11 @@
 # TODO
 
-## Review submission failure (reviews_view.dart)
-
-- [ ] Gather root cause by checking request/route mismatch for submitReview
-- [ ] Fix review submission flow in `frontend/lib/screens/reviews_view.dart`
-- [ ] Ensure bookingId is correctly passed to WriteReviewView and submit payload matches backend expectations
-- [ ] Add better error handling/logging for failed submitReview
-- [ ] Run Flutter/Dart build or tests to verify no compile errors
+## Fix Dart static analysis errors (RemoteDatabaseRepository + review fallback)
+- [ ] Inspect and fix `frontend/lib/repository/remote_database_repository.dart`:
+  - [ ] Remove duplicate `fetchPropertyReviews` and ensure correct return types.
+  - [ ] Fix `_authHeaders` undefined usage (either define it or remove it).
+  - [ ] Ensure `submitReview` signature matches UI usage (`submitReview` params include `bookingId`).
+- [ ] Fix `frontend/lib/data_loader/fallback_properties_loader.dart` `loadAll()` type errors.
+- [ ] Re-run `flutter analyze` to confirm remaining errors.
+- [ ] Run unit/widget smoke checks (build) if analysis passes.
 

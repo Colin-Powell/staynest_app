@@ -1,7 +1,10 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:property_app/models/property.dart';
+import 'package:property_app/screens/dashboard/analytics_service.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/utils/property_mapper.dart';
 
 import '../models/review.dart';
 import 'http_json_client.dart';
@@ -11,19 +14,10 @@ class RemoteDatabaseRepository {
   final HttpJsonClient apiClient;
 
   RemoteDatabaseRepository({HttpJsonClient? apiClient})
-      : apiClient = apiClient ?? HttpJsonClient();
-
-  Map<String, String> get _authHeaders => {
-        if (AppSession.apiToken != null)
-          'Authorization': 'Bearer ${AppSession.apiToken}',
-        'Content-Type': 'application/json',
-      };
+      : apiClient =
+            apiClient ?? HttpJsonClient(timeout: const Duration(seconds: 15));
 
   Future<Map<String, dynamic>> _decodeData(http.Response response) async {
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-          'Request failed (${response.statusCode}): ${response.body}');
-    }
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final data = decoded['data'];
     if (data is Map<String, dynamic>) {
@@ -38,43 +32,51 @@ class RemoteDatabaseRepository {
 
   Future<List<Map<String, dynamic>>> _decodeListData(
       http.Response response) async {
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-          'Request failed (${response.statusCode}): ${response.body}');
-    }
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final rows = decoded['data'] as List<dynamic>? ?? const [];
     return rows.map((item) => Map<String, dynamic>.from(item as Map)).toList();
   }
 
   // -------------------- Properties --------------------
-  Future<List<Map<String, dynamic>>> loadProperties() async {
+  Future<List<Property>> loadProperties({int page = 1, int limit = 20}) async {
     final response = await apiClient.get(
-      Uri.parse('${AppSession.apiBaseUrl}/properties'),
-      headers: _authHeaders,
+      Uri.parse('${AppSession.apiBaseUrl}/properties').replace(
+        queryParameters: {
+          'page': page.toString(),
+          'limit': limit.toString(),
+        },
+      ),
     );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      return const <Map<String, dynamic>>[];
-    }
-
-    return _decodeListData(response);
+    final rawList = await _decodeListData(response);
+    return rawList.map(mapApiProperty).toList();
   }
 
   Future<void> loadPropertiesCached({
+    int page = 1,
+    int limit = 20,
     required Function(List<Map<String, dynamic>> data, bool isFromCache) onData,
   }) async {
+    // Cache key must include pagination parameters to avoid returning wrong-sized/stale pages.
+    final cacheKey = '${CacheKeys.propertyList}_p${page}_l${limit}';
+
     await CacheEngine.instance.handle<List<Map<String, dynamic>>>(
-      key: CacheKeys.propertyList,
+      key: cacheKey,
       ttl: CacheTTL.listings,
       networkFetcher: () async {
         final response = await apiClient.get(
-          Uri.parse('${AppSession.apiBaseUrl}/properties'),
-          headers: _authHeaders,
+          Uri.parse('${AppSession.apiBaseUrl}/properties').replace(
+            queryParameters: {
+              'page': page.toString(),
+              'limit': limit.toString(),
+            },
+          ),
         );
         return _decodeListData(response);
       },
-      onData: onData,
+      onData: (data, isFromCache) {
+        onData(data, isFromCache);
+      },
     );
   }
 
@@ -82,7 +84,6 @@ class RemoteDatabaseRepository {
       String userId) async {
     final response = await apiClient.get(
       Uri.parse('${AppSession.apiBaseUrl}/properties/me'),
-      headers: _authHeaders,
     );
     return _decodeListData(response);
   }
@@ -91,12 +92,7 @@ class RemoteDatabaseRepository {
       loadPropertiesByCategory() async {
     final response = await apiClient.get(
       Uri.parse('${AppSession.apiBaseUrl}/properties/by-category'),
-      headers: _authHeaders,
     );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      return const {};
-    }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final data = decoded['data'];
@@ -113,42 +109,42 @@ class RemoteDatabaseRepository {
     return const {};
   }
 
-  Future<Map<String, dynamic>> loadPropertyById(String propertyId) async {
-    final response = await apiClient.get(
-      Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId'),
-      headers: _authHeaders,
+  Future<void> loadPropertyByIdCached(
+    String propertyId, {
+    required Function(Property data, bool isFromCache) onData,
+  }) async {
+    await CacheEngine.instance.handle<Map<String, dynamic>>(
+      key: CacheKeys.propertyDetail(propertyId),
+      ttl: CacheTTL.details,
+      networkFetcher: () async {
+        final response = await apiClient.get(
+          Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId'),
+        );
+        return _decodeData(response);
+      },
+      onData: (data, isFromCache) => onData(mapApiProperty(data), isFromCache),
     );
-
-    return _decodeData(response);
   }
 
   Future<void> createPropertyFromListing({
     required Map<String, dynamic> listingPayload,
   }) async {
-    final response = await apiClient.post(
+    await apiClient.post(
       Uri.parse('${AppSession.apiBaseUrl}/properties/from-listing'),
-      headers: _authHeaders,
-      body: jsonEncode(listingPayload),
+      body: listingPayload,
     );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-          'Failed to create property from listing: ${response.body}');
-    }
+    await CacheEngine.instance.invalidate(CacheKeys.propertyList);
+    AnalyticsService.logEvent(eventType: 'property_created', propertyId: 'new');
   }
 
   Future<void> submitVerification({
     required Map<String, dynamic> verificationPayload,
   }) async {
-    final response = await apiClient.post(
+    await apiClient.post(
       Uri.parse('${AppSession.apiBaseUrl}/landlord/verification'),
-      headers: _authHeaders,
-      body: jsonEncode(verificationPayload),
+      body: verificationPayload,
     );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to submit verification: ${response.body}');
-    }
   }
 
   // -------------------- Favorites / Saved --------------------
@@ -156,37 +152,26 @@ class RemoteDatabaseRepository {
     required String userId,
     required String propertyId,
   }) async {
-    final response = await apiClient.post(
+    await apiClient.post(
       Uri.parse('${AppSession.apiBaseUrl}/users/$userId/favorites'),
-      headers: _authHeaders,
-      body: jsonEncode({'propertyId': propertyId}),
+      body: {'propertyId': propertyId},
     );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to save favorite: ${response.body}');
-    }
+    AnalyticsService.trackPropertySave(propertyId, userId: userId);
   }
 
   Future<void> removeFavoriteForUser({
     required String userId,
     required String propertyId,
   }) async {
-    final response = await apiClient.delete(
+    await apiClient.delete(
       Uri.parse('${AppSession.apiBaseUrl}/users/$userId/favorites/$propertyId'),
-      headers: _authHeaders,
     );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to remove favorite: ${response.body}');
-    }
   }
 
   Future<List<Map<String, dynamic>>> loadFavoritesForUser(String userId) async {
     final response = await apiClient.get(
       Uri.parse('${AppSession.apiBaseUrl}/users/$userId/favorites'),
-      headers: _authHeaders,
     );
-
     return _decodeListData(response);
   }
 
@@ -194,43 +179,30 @@ class RemoteDatabaseRepository {
   Future<List<Map<String, dynamic>>> getLandlordBookings() async {
     final response = await apiClient.get(
       Uri.parse('${AppSession.apiBaseUrl}/landlord/bookings'),
-      headers: _authHeaders,
     );
-
     return _decodeListData(response);
   }
 
   Future<void> confirmBooking({required String bookingId}) async {
-    final response = await apiClient.patch(
+    await apiClient.patch(
       Uri.parse('${AppSession.apiBaseUrl}/bookings/$bookingId/confirm'),
-      headers: _authHeaders,
     );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to confirm booking: ${response.body}');
-    }
   }
 
   Future<void> cancelBooking({
     required String bookingId,
     String? reason,
   }) async {
-    final response = await apiClient.patch(
+    await apiClient.patch(
       Uri.parse('${AppSession.apiBaseUrl}/bookings/$bookingId/cancel'),
-      headers: _authHeaders,
-      body: reason != null ? jsonEncode({'reason': reason}) : null,
+      body: reason != null ? {'reason': reason} : null,
     );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to cancel booking: ${response.body}');
-    }
   }
 
   // -------------------- Reviews --------------------
   Future<List<Review>> fetchPropertyReviews(String propertyId) async {
     final response = await apiClient.get(
       Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId/reviews'),
-      headers: _authHeaders,
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -266,22 +238,19 @@ class RemoteDatabaseRepository {
     required int rating,
     String? comment,
   }) async {
-    // The backend POST endpoint for reviews does not expect the propertyId in the URL path.
     final url = '${AppSession.apiBaseUrl}/properties/reviews';
     final response = await apiClient.post(
       Uri.parse(url),
-      headers: _authHeaders,
-      body: jsonEncode({
+      body: {
         'bookingId': bookingId,
         'propertyId': propertyId,
         'rating': rating,
         'comment': comment,
-      }),
+      },
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-          'Failed to submit review (${response.statusCode}): ${response.body}');
+      return null;
     }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
@@ -301,6 +270,14 @@ class RemoteDatabaseRepository {
     );
   }
 
+  Future<Map<String, dynamic>> getReviewEligibility(String propertyId) async {
+    final response = await apiClient.get(
+      Uri.parse(
+          '${AppSession.apiBaseUrl}/properties/$propertyId/review-eligibility'),
+    );
+    return _decodeData(response);
+  }
+
   // -------------------- Auth / Onboarding --------------------
   Future<Map<String, dynamic>?> authenticate(
     String email,
@@ -308,8 +285,7 @@ class RemoteDatabaseRepository {
   ) async {
     final response = await apiClient.post(
       Uri.parse('${AppSession.apiBaseUrl}/auth/login'),
-      headers: _authHeaders,
-      body: jsonEncode({'email': email, 'password': password}),
+      body: {'email': email, 'password': password},
     );
 
     if (response.statusCode == 401 || response.statusCode == 404) {
@@ -356,17 +332,13 @@ class RemoteDatabaseRepository {
 
     final response = await apiClient.post(
       Uri.parse('${AppSession.apiBaseUrl}/auth/register'),
-      headers: _authHeaders,
       body: jsonEncode(payload),
     );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to register: ${response.body}');
-    }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final data = decoded['data'];
     final result = data is Map<String, dynamic> ? data : decoded;
+
     if (result.containsKey('user') && result['user'] is Map) {
       final userMap = Map<String, dynamic>.from(result['user'] as Map);
       return {...result, ...userMap};
@@ -381,17 +353,13 @@ class RemoteDatabaseRepository {
 
     final response = await apiClient.post(
       Uri.parse('${AppSession.apiBaseUrl}/auth/verify-phone'),
-      headers: _authHeaders,
-      body: jsonEncode({'code': code}),
+      body: {'code': code},
     );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      return null;
-    }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final data = decoded['data'];
     final result = data is Map<String, dynamic> ? data : decoded;
+
     if (result.containsKey('user') && result['user'] is Map) {
       final userMap = Map<String, dynamic>.from(result['user'] as Map);
       return {...result, ...userMap};
@@ -400,16 +368,12 @@ class RemoteDatabaseRepository {
   }
 
   Future<Map<String, dynamic>?> saveTenantProfile(
-      Map<String, dynamic> tenantPayload) async {
+    Map<String, dynamic> tenantPayload,
+  ) async {
     final response = await apiClient.post(
       Uri.parse('${AppSession.apiBaseUrl}/tenants/profile'),
-      headers: _authHeaders,
-      body: jsonEncode(tenantPayload),
+      body: tenantPayload,
     );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to save tenant profile: ${response.body}');
-    }
 
     if (response.body.isEmpty) return const {};
 
@@ -422,7 +386,6 @@ class RemoteDatabaseRepository {
   Future<Map<String, dynamic>> getPrivacyPolicy() async {
     final response = await apiClient.get(
       Uri.parse('${AppSession.apiBaseUrl}/privacy'),
-      headers: _authHeaders,
     );
     return _decodeData(response);
   }
@@ -432,8 +395,7 @@ class RemoteDatabaseRepository {
   }) async {
     final response = await apiClient.post(
       Uri.parse('${AppSession.apiBaseUrl}/privacy/delete-request'),
-      headers: _authHeaders,
-      body: jsonEncode({'reason': reason}),
+      body: {'reason': reason},
     );
     return _decodeData(response);
   }
@@ -445,7 +407,6 @@ class RemoteDatabaseRepository {
   Future<Map<String, dynamic>> loadUserById(String userId) async {
     final response = await apiClient.get(
       Uri.parse('${AppSession.apiBaseUrl}/users/$userId'),
-      headers: _authHeaders,
     );
     return _decodeData(response);
   }
@@ -453,25 +414,53 @@ class RemoteDatabaseRepository {
   Future<Map<String, dynamic>> loadCurrentUserLegacy() async =>
       loadCurrentUser();
 
-  Future<Map<String, dynamic>> loadCurrentUser() async {
-    final response = await apiClient.get(
-      Uri.parse('${AppSession.apiBaseUrl}/me'),
-      headers: _authHeaders,
+  Future<void> loadCurrentUserCached({
+    required Function(Map<String, dynamic> data, bool isFromCache) onData,
+  }) async {
+    if (AppSession.currentUserId == null) return;
+
+    await CacheEngine.instance.handle<Map<String, dynamic>>(
+      key: CacheKeys.userProfile(AppSession.currentUserId!),
+      ttl: CacheTTL.profile,
+      networkFetcher: () async {
+        final response = await apiClient.get(
+          Uri.parse('${AppSession.apiBaseUrl}/me'),
+        );
+        return _decodeData(response);
+      },
+      onData: onData,
     );
+  }
+
+  Future<Map<String, dynamic>> loadCurrentUser() async {
+    final response =
+        await apiClient.get(Uri.parse('${AppSession.apiBaseUrl}/me'));
     return _decodeData(response);
   }
 
-  Future<void> updateCurrentUser({
+  Future<Map<String, dynamic>> updateCurrentUser({
     required Map<String, dynamic> update,
   }) async {
     final response = await apiClient.patch(
       Uri.parse('${AppSession.apiBaseUrl}/me'),
-      headers: _authHeaders,
-      body: jsonEncode(update),
+      body: update,
     );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to update current user: ${response.body}');
+    final data = await _decodeData(response);
+
+    if (AppSession.currentUserId != null) {
+      await CacheEngine.instance.invalidate(
+        CacheKeys.userProfile(AppSession.currentUserId!),
+      );
     }
+
+    return data;
+  }
+
+  Future<Map<String, dynamic>> loadPropertyById(String propertyId) async {
+    final response = await apiClient.get(
+      Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId'),
+    );
+    return _decodeData(response);
   }
 }

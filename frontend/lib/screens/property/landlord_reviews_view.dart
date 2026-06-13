@@ -5,6 +5,7 @@ import 'package:property_app/app_theme.dart';
 import 'package:property_app/widgets/shared.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:property_app/screens/home/map_view.dart';
+import 'package:property_app/widgets/property_image.dart';
 
 class LandlordReviewsView extends StatefulWidget {
   final VoidCallback onClose;
@@ -335,12 +336,12 @@ class _ReviewCardState extends State<_ReviewCard>
                 children: [
                   // Avatar
                   ClipOval(
-                    child: Image.network(
+                    child: buildPropertyImage(
                       widget.review['avatar'],
                       width: 40,
                       height: 40,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorPlaceholder: Container(
                         width: 40,
                         height: 40,
                         color: AppTheme.primaryLight,

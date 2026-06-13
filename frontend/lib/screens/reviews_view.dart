@@ -1,10 +1,12 @@
 // lib/screens/reviews_view.dart
 import 'package:flutter/material.dart';
+import 'dart:ui' as ui;
 import 'package:property_app/models/review.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:intl/intl.dart';
+import 'package:property_app/widgets/property_image.dart';
 import 'property/write_review_view.dart';
 
 // NOTE: This file also defines ReviewsView/AllReviewsView/WriteReviewView.
@@ -123,7 +125,7 @@ class _ReviewsViewState extends State<ReviewsView>
         transitionDuration: const Duration(milliseconds: 400),
         pageBuilder: (context, animation, secondaryAnimation) => AllReviewsView(
           propertyId: widget.propertyId,
-          propertyName: widget.propertyName ?? '',
+          propertyName: widget.propertyName,
 
           bookingId: widget.bookingId, // Pass bookingId down
         ),
@@ -167,14 +169,6 @@ class _ReviewsViewState extends State<ReviewsView>
                     ),
                     padding: const EdgeInsets.fromLTRB(24, 12, 24, 100),
                     children: [
-                      _OverallRatingSection(
-                        rating: widget.averageRating,
-                        count: widget.reviewCount,
-                      ),
-                      const SizedBox(height: 40),
-                      const Divider(
-                          color: Color(0xFFF3F4F6), thickness: 1.5, height: 1),
-                      const SizedBox(height: 32),
                       FutureBuilder<List<Review>>(
                         future: _reviewsFuture,
                         builder: (context, snapshot) {
@@ -188,8 +182,9 @@ class _ReviewsViewState extends State<ReviewsView>
                           // SHOW BEAUTIFUL EMPTY STATE IF NO REVIEWS
                           if (reviews.isEmpty) {
                             return _buildEmptyState(
-                                // Only provide add review function if eligible
-                                widget.canReview ? _navToWriteReview : null);
+                              widget.canReview ? _navToWriteReview : null,
+                              isEligible: widget.canReview,
+                            );
                           }
 
                           // Show top 3 reviews on main view
@@ -438,6 +433,8 @@ class AllReviewsView extends StatefulWidget {
 class _AllReviewsViewState extends State<AllReviewsView> {
   final RemoteDatabaseRepository _repo = RemoteDatabaseRepository();
   late Future<List<Review>> _reviewsFuture;
+  String _sortBy = 'Most Recent';
+  int? _selectedRating;
 
   @override
   void initState() {
@@ -446,6 +443,15 @@ class _AllReviewsViewState extends State<AllReviewsView> {
   }
 
   void _navToWriteReview() {
+    if (widget.bookingId == null || widget.bookingId!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Missing booking reference. Please complete the booking before leaving a review.')),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -454,7 +460,7 @@ class _AllReviewsViewState extends State<AllReviewsView> {
             WriteReviewView(
           propertyId: widget.propertyId,
           propertyName: widget.propertyName,
-          bookingId: widget.bookingId ?? '',
+          bookingId: widget.bookingId!,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
@@ -484,21 +490,109 @@ class _AllReviewsViewState extends State<AllReviewsView> {
       body: Column(
         children: [
           _Header(title: 'All Reviews', onBack: () => Navigator.pop(context)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: Row(
+              children: [
+                const Text(
+                  'Sort by:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                DropdownButton<String>(
+                  value: _sortBy,
+                  underline: const SizedBox(),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF3F3CD4),
+                  ),
+                  items: ['Most Recent', 'Highest Rated'].map((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      setState(() => _sortBy = newValue);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: Row(
+              children: [
+                _RatingFilterChip(
+                  label: 'All',
+                  selected: _selectedRating == null,
+                  onSelected: (_) => setState(() => _selectedRating = null),
+                ),
+                ...List.generate(5, (index) {
+                  final rating = 5 - index;
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: _RatingFilterChip(
+                      label: '$rating Stars',
+                      selected: _selectedRating == rating,
+                      onSelected: (_) =>
+                          setState(() => _selectedRating = rating),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
           Expanded(
             child: ScrollConfiguration(
               behavior: const AppScrollBehavior(),
               child: FutureBuilder<List<Review>>(
                 future: _reviewsFuture,
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                  final bool isLoading =
+                      snapshot.connectionState == ConnectionState.waiting;
+                  final List<Review> reviews = List.from(snapshot.data ?? []);
+
+                  if (!isLoading && reviews.isNotEmpty) {
+                    // Filter by rating
+                    if (_selectedRating != null) {
+                      reviews.retainWhere((r) => r.rating == _selectedRating);
+                    }
+
+                    if (_sortBy == 'Most Recent') {
+                      reviews
+                          .sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                    } else if (_sortBy == 'Highest Rated') {
+                      reviews.sort((a, b) => b.rating.compareTo(a.rating));
+                    }
                   }
-                  final reviews = snapshot.data ?? [];
+
+                  if (isLoading) {
+                    return ListView.builder(
+                      itemCount: 5,
+                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
+                      itemBuilder: (context, index) =>
+                          const _ReviewCardSkeleton(),
+                    );
+                  }
 
                   // EMPTY STATE FOR ALL REVIEWS SCREEN
                   if (reviews.isEmpty) {
                     return _buildEmptyState(
-                        widget.bookingId != null ? _navToWriteReview : null);
+                      widget.bookingId != null ? _navToWriteReview : null,
+                      isEligible: widget.bookingId != null,
+                      isFiltered: (snapshot.data?.isNotEmpty ?? false) &&
+                          _selectedRating != null,
+                    );
                   }
 
                   return ListView.builder(
@@ -514,6 +608,8 @@ class _AllReviewsViewState extends State<AllReviewsView> {
                         rating: review.rating.toDouble(),
                         review: review.comment ?? '',
                         reviewId: review.id, // Pass review ID for reporting
+                        onReport:
+                            () {}, // Reporting wiring handled in parent view
                         date: DateFormat.yMMMd().format(review.createdAt),
                       );
                     },
@@ -569,43 +665,74 @@ class _AllReviewsViewState extends State<AllReviewsView> {
 
 // ==================== SHARED WIDGETS ====================
 
-Widget _buildEmptyState(VoidCallback? onAddReview, {bool isEligible = false}) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: const BoxDecoration(
-            color: Color(0xFFF3F4F6),
-            shape: BoxShape.circle,
+Widget _buildEmptyState(
+  VoidCallback? onAddReview, {
+  bool isEligible = false,
+  bool isFiltered = false,
+}) {
+  return Center(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF3F4F6),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.rate_review_outlined,
+                size: 48, color: Color(0xFF9CA3AF)),
           ),
-          child: const Icon(Icons.rate_review_outlined,
-              size: 48, color: Color(0xFF9CA3AF)),
-        ),
-        const SizedBox(height: 24),
-        const Text(
-          'No reviews yet',
-          style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF111827)),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          isEligible
-              ? 'Be the first to share your experience!'
-              : 'Only verified guests with completed bookings can leave reviews.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 15,
-            color: Color(0xFF6B7280),
-            fontWeight: FontWeight.w500,
+          const SizedBox(height: 24),
+          Text(
+            isFiltered ? 'No matches' : 'No reviews yet',
+            style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827)),
           ),
-        ),
-        // Display the big button if the user is eligible
-      ],
+          const SizedBox(height: 8),
+          Text(
+            isFiltered
+                ? 'No reviews match your filter. Try adjusting your selection.'
+                : (isEligible
+                    ? 'Be the first to share your experience!'
+                    : 'Only verified guests with completed bookings can leave reviews.'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 15,
+              color: Color(0xFF6B7280),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          if (isEligible && onAddReview != null) ...[
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: onAddReview,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3F3CD4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text(
+                  'Leave a Review',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     ),
   );
 }
@@ -655,8 +782,13 @@ class _Header extends StatelessWidget {
 class _OverallRatingSection extends StatelessWidget {
   final double rating;
   final int count;
+  final Map<int, int> ratingCounts;
 
-  const _OverallRatingSection({required this.rating, required this.count});
+  const _OverallRatingSection({
+    required this.rating,
+    required this.count,
+    required this.ratingCounts,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -686,19 +818,7 @@ class _OverallRatingSection extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 24),
-            Row(
-              children: List.generate(
-                5,
-                (i) => const Padding(
-                  padding: EdgeInsets.only(right: 4),
-                  child: Icon(
-                    Icons.star_rounded,
-                    color: Color(0xFFFBBF24),
-                    size: 32,
-                  ),
-                ),
-              ),
-            ),
+            _StarRating(rating: rating),
           ],
         ),
         const SizedBox(height: 4),
@@ -714,7 +834,8 @@ class _OverallRatingSection extends StatelessWidget {
         // Progress Bars Stacked Below
         Column(
           children: List.generate(5, (index) {
-            final value = [0.9, 0.65, 0.45, 0.25, 0.1][index];
+            final star = 5 - index;
+            final value = count > 0 ? (ratingCounts[star] ?? 0) / count : 0.0;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
@@ -771,6 +892,7 @@ class ReviewCard extends StatelessWidget {
   final String review;
   final String date;
   final String reviewId; // Added for reporting feature
+  final VoidCallback? onReport;
 
   const ReviewCard({
     super.key,
@@ -781,6 +903,7 @@ class ReviewCard extends StatelessWidget {
     required this.review,
     required this.date,
     required this.reviewId, // Added for reporting feature
+    this.onReport,
   });
 
   @override
@@ -794,19 +917,13 @@ class ReviewCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipOval(
-                child: Image.network(
+                child: buildPropertyImage(
                   avatar,
                   width: 52,
                   height: 52,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      width: 52,
-                      height: 52,
-                      color: const Color(0xFFF3F4F6),
-                      child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
-                    );
-                  },
+                  errorPlaceholder:
+                      const Icon(Icons.person, color: Color(0xFF9CA3AF)),
                 ),
               ),
               const SizedBox(width: 16),
@@ -851,12 +968,7 @@ class ReviewCard extends StatelessWidget {
               ),
               const Spacer(), // Pushes report icon to the right
               GestureDetector(
-                onTap: () {
-                  // Reporting handled by the parent widget state
-                  // (passed down via closure)
-                  // ignore: invalid_use_of_protected_member
-                  // This will be overridden when wired with callback below.
-                },
+                onTap: onReport,
                 child: const Icon(
                   Icons.flag_outlined,
                   color: Color(0xFF9CA3AF),
@@ -926,6 +1038,133 @@ class _OutlinedActionButton extends StatelessWidget {
   }
 }
 
+class _StarRating extends StatelessWidget {
+  final double rating;
+  final double size;
+  final Color color;
+  final Color backgroundColor;
+
+  const _StarRating({
+    required this.rating,
+    this.size = 32,
+    this.color = const Color(0xFFFBBF24),
+    this.backgroundColor = const Color(0xFFD1D5DB),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (index) {
+        double fill = 0.0;
+        if (rating >= index + 1) {
+          fill = 1.0;
+        } else if (rating > index) {
+          fill = rating - index;
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: CustomPaint(
+            size: Size(size, size),
+            painter: _StarPainter(
+              fill: fill,
+              color: color,
+              backgroundColor: backgroundColor,
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _StarPainter extends CustomPainter {
+  final double fill;
+  final Color color;
+  final Color backgroundColor;
+
+  _StarPainter({
+    required this.fill,
+    required this.color,
+    required this.backgroundColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final textPainter = TextPainter(textDirection: ui.TextDirection.ltr);
+    final iconData = Icons.star_rounded;
+    final textStyle = TextStyle(
+      fontSize: size.width,
+      fontFamily: iconData.fontFamily,
+      package: iconData.fontPackage,
+    );
+
+    // 1. Draw Background Star
+    textPainter.text = TextSpan(
+      text: String.fromCharCode(iconData.codePoint),
+      style: textStyle.copyWith(color: backgroundColor),
+    );
+    textPainter.layout();
+    textPainter.paint(canvas, Offset.zero);
+
+    // 2. Draw Foreground Star with Clipping
+    if (fill > 0) {
+      canvas.save();
+      canvas.clipRect(Rect.fromLTWH(0, 0, size.width * fill, size.height));
+      textPainter.text = TextSpan(
+        text: String.fromCharCode(iconData.codePoint),
+        style: textStyle.copyWith(color: color),
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, Offset.zero);
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _StarPainter oldDelegate) {
+    return oldDelegate.fill != fill ||
+        oldDelegate.color != color ||
+        oldDelegate.backgroundColor != backgroundColor;
+  }
+}
+
+class _RatingFilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final ValueChanged<bool> onSelected;
+
+  const _RatingFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label),
+      labelStyle: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        color: selected ? Colors.white : const Color(0xFF6B7280),
+      ),
+      selected: selected,
+      onSelected: onSelected,
+      showCheckmark: false,
+      selectedColor: const Color(0xFF3F3CD4),
+      backgroundColor: const Color(0xFFF3F4F6),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: Colors.transparent),
+      ),
+    );
+  }
+}
+
 class AppScrollBehavior extends ScrollBehavior {
   const AppScrollBehavior();
   @override
@@ -936,4 +1175,146 @@ class AppScrollBehavior extends ScrollBehavior {
   ScrollPhysics getScrollPhysics(BuildContext context) =>
       const BouncingScrollPhysics(
           decelerationRate: ScrollDecelerationRate.fast);
+}
+
+class _SkeletonPlaceholder extends StatefulWidget {
+  final double width;
+  final double height;
+  final double borderRadius;
+
+  const _SkeletonPlaceholder({
+    required this.width,
+    required this.height,
+    this.borderRadius = 8,
+  });
+
+  @override
+  State<_SkeletonPlaceholder> createState() => _SkeletonPlaceholderState();
+}
+
+class _SkeletonPlaceholderState extends State<_SkeletonPlaceholder>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.4, end: 0.8).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _animation,
+      child: Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: const Color(0xFFE5E7EB),
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewCardSkeleton extends StatelessWidget {
+  const _ReviewCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 32),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _SkeletonPlaceholder(width: 52, height: 52, borderRadius: 26),
+              SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SkeletonPlaceholder(width: 120, height: 16),
+                  SizedBox(height: 8),
+                  _SkeletonPlaceholder(width: 80, height: 12),
+                ],
+              ),
+              Spacer(),
+              _SkeletonPlaceholder(width: 40, height: 20),
+            ],
+          ),
+          SizedBox(height: 16),
+          _SkeletonPlaceholder(width: double.infinity, height: 14),
+          SizedBox(height: 8),
+          _SkeletonPlaceholder(width: 200, height: 14),
+          SizedBox(height: 12),
+          _SkeletonPlaceholder(width: 100, height: 12),
+        ],
+      ),
+    );
+  }
+}
+
+class _OverallRatingSkeleton extends StatelessWidget {
+  const _OverallRatingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SkeletonPlaceholder(width: 100, height: 14),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const _SkeletonPlaceholder(width: 80, height: 64),
+            const SizedBox(width: 24),
+            Row(
+              children: List.generate(
+                5,
+                (i) => const Padding(
+                  padding: EdgeInsets.only(right: 4),
+                  child: _SkeletonPlaceholder(
+                      width: 32, height: 32, borderRadius: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const _SkeletonPlaceholder(width: 90, height: 14),
+        const SizedBox(height: 32),
+        Column(
+          children: List.generate(5, (index) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  _SkeletonPlaceholder(width: 12, height: 14),
+                  SizedBox(width: 8),
+                  _SkeletonPlaceholder(width: 16, height: 16, borderRadius: 8),
+                  SizedBox(width: 16),
+                  Expanded(
+                      child: _SkeletonPlaceholder(
+                          width: double.infinity, height: 8)),
+                ],
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+  }
 }

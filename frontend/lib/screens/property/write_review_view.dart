@@ -30,6 +30,16 @@ class _WriteReviewViewState extends State<WriteReviewView> {
       return;
     }
 
+    final trimmedComment = _commentController.text.trim();
+
+    if (trimmedComment.length < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Feedback must be at least 10 characters long')),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
@@ -38,7 +48,7 @@ class _WriteReviewViewState extends State<WriteReviewView> {
       await repo.submitReview(
         propertyId: widget.propertyId,
         rating: _rating,
-        comment: _commentController.text,
+        comment: trimmedComment,
         bookingId: widget.bookingId,
       );
 
@@ -89,7 +99,7 @@ class _WriteReviewViewState extends State<WriteReviewView> {
               style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 16),
             ),
             const SizedBox(height: 32),
-            
+
             // Star Rating
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -109,9 +119,9 @@ class _WriteReviewViewState extends State<WriteReviewView> {
                 );
               }),
             ),
-            
+
             const SizedBox(height: 40),
-            
+
             // Comment Field
             Align(
               alignment: Alignment.centerLeft,
@@ -124,6 +134,7 @@ class _WriteReviewViewState extends State<WriteReviewView> {
             TextField(
               controller: _commentController,
               maxLines: 5,
+              onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 hintText: 'Tell us more about the property and stay...',
                 hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
@@ -137,17 +148,31 @@ class _WriteReviewViewState extends State<WriteReviewView> {
                   borderRadius: BorderRadius.circular(20),
                   borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
                 ),
+                counter: Text(
+                  '${_commentController.text.trim().length} / 10 characters min',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _commentController.text.trim().length < 10
+                        ? Colors.redAccent
+                        : Colors.green,
+                  ),
+                ),
               ),
             ),
-            
+
             const SizedBox(height: 40),
-            
+
             // Submit Button
             SizedBox(
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
-                onPressed: _isSubmitting ? null : _submit,
+                onPressed: (_rating > 0 &&
+                        _commentController.text.trim().length >= 10 &&
+                        !_isSubmitting)
+                    ? _submit
+                    : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF3F37C9),
                   shape: RoundedRectangleBorder(

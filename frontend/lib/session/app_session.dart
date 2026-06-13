@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
 import 'package:flutter/foundation.dart';
@@ -56,6 +58,7 @@ class AppSession {
   }
 
   static String? apiToken;
+  static String? refreshToken;
 
   // Backward-compatible alias (some code references authToken).
   static String? get authToken => apiToken;
@@ -101,6 +104,25 @@ class AppSession {
           ? currentUserAvatar!.trim()
           : 'assets/images/profile.jpg';
 
+  /// Resolves any avatar path or Cloudinary ID into a usable [ImageProvider].
+  /// Handles full URLs, local asset paths, and relative server upload IDs.
+  static ImageProvider getAvatarProvider(String? path) {
+    final avatar = (path?.trim().isNotEmpty == true) ? path!.trim() : 'assets/images/profile.jpg';
+
+    if (avatar.startsWith('http')) {
+      return NetworkImage(avatar);
+    }
+    if (avatar.startsWith('assets/')) {
+      return AssetImage(avatar);
+    }
+    // Construct the absolute URL for server uploads / Cloudinary public IDs.
+    final baseUrl = apiBaseUrl.split('/api').first;
+    return NetworkImage('$baseUrl/uploads/$avatar');
+  }
+
+  /// Returns the [ImageProvider] for the currently authenticated user's avatar.
+  static ImageProvider get currentUserAvatarProvider => getAvatarProvider(currentUserAvatar);
+
   static String get displayRole {
     final role = currentRole.trim();
     if (role.isEmpty) return 'Tenant';
@@ -129,6 +151,7 @@ class AppSession {
     currentUserAvatar = null;
     currentUserVerified = false;
     apiToken = null;
+    refreshToken = null;
     CacheEngine.instance.clearAll(); // Critical: Invalidate cache on logout
   }
 }

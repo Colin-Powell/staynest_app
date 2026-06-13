@@ -192,6 +192,8 @@ class CacheEngine {
 class CacheTTL {
   static const listings = Duration(minutes: 5);
   static const details = Duration(minutes: 30);
+  // Reviews change infrequently; choose a sensible default.
+  static const reviews = Duration(minutes: 15);
   static const profile = Duration(hours: 2);
   static const staticConfig = Duration(days: 7);
 }
@@ -200,6 +202,7 @@ class CacheTTL {
 class CacheKeys {
   static String propertyList = 'props_all';
   static String propertyDetail(String id) => 'prop_detail_$id';
+  static String propertyReviews(String id) => 'prop_reviews_$id';
   static String userProfile(String id) => 'user_profile_$id';
   static String search(String query) => 'search_${query.replaceAll(' ', '_')}';
 }

@@ -64,7 +64,7 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
     final loaded = await _loader.loadAll();
     if (!mounted) return;
     setState(() {
-      _properties = loaded;
+      _properties = loaded.cast<Property>();
       _loading = false;
     });
   }

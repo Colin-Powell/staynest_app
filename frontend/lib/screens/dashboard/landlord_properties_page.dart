@@ -73,7 +73,7 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage>
     final loaded = await _loader.loadAll();
     if (!mounted) return;
     setState(() {
-      _properties = loaded;
+      _properties = loaded.cast<Property>();
       _loading = false;
     });
   }

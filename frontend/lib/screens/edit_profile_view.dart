@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/services/api_client.dart';
+import 'package:property_app/services/avatar_service.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/widgets/property_image.dart';
 
 const Color _primary = Color(0xFF3F37C9);
 const Color _bgColor = Colors.white;
@@ -75,30 +77,12 @@ class _EditProfileViewState extends State<EditProfileView>
   }
 
   Widget _buildAvatarWidget(String avatarPath) {
-    if (avatarPath.startsWith('http')) {
-      return Image.network(
-        avatarPath,
-        width: 120,
-        height: 120,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => const Icon(
-          Icons.person,
-          size: 54,
-          color: Color(0xFF9CA3AF),
-        ),
-      );
-    }
-
-    return Image.asset(
+    return buildPropertyImage(
       avatarPath,
       width: 120,
       height: 120,
       fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) => const Icon(
-        Icons.person,
-        size: 54,
-        color: Color(0xFF9CA3AF),
-      ),
+      errorPlaceholder: const Icon(Icons.person, size: 54, color: Color(0xFF9CA3AF)),
     );
   }
 
@@ -431,16 +415,21 @@ class _EditProfileViewState extends State<EditProfileView>
 
     setState(() => _isSaving = true);
     try {
+      String? avatarPublicId;
+      if (_selectedImage != null) {
+        avatarPublicId = await AvatarService.uploadAvatar(_selectedImage!);
+      }
+
       final repository = RemoteDatabaseRepository();
-      await repository.updateCurrentUser(update: {
+      final updatedUser = await repository.updateCurrentUser(update: {
         'name': name,
         'email': email,
         'phone': phone,
+        if (avatarPublicId != null) 'avatar': avatarPublicId,
       });
 
-      // Reload user data to update AppSession
-      final user = await repository.loadCurrentUser();
-      AppSession.updateCurrentUser(user);
+      // Sync the global AppSession with the new data from backend
+      AppSession.updateCurrentUser(updatedUser);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
