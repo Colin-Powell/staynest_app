@@ -10,6 +10,11 @@ const router = Router();
 function normalizePropertyRow(property: Record<string, unknown>): Record<string, unknown> {
   let images = property.images;
 
+  // Ensure status is always defined for the frontend, defaulting to 'Available'
+  if (!property.status) {
+    property.status = 'Available';
+  }
+
   // FIX 1: null guard — pg returns null for empty jsonb, not undefined
   if (images === null) images = undefined;
 
@@ -606,7 +611,7 @@ router.post('/', requireAuth, authorize('landlord', 'host'), async (req: Request
     const result = await query(
       `INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, landlord_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, $15)
-       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng`,
+       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, status, images, amenities, lat, lng`,
       [
         title,
         description,
