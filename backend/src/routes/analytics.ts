@@ -46,7 +46,8 @@ function getTimeWindow(filter?: string) {
 }
 
 function toNumber(value: unknown) {
-  const n = typeof value === 'number' ? value : Number(value ?? 0);
+  // Postgres aggregation functions (SUM, COUNT) often return strings to preserve precision
+  const n = typeof value === 'string' ? parseFloat(value) : (typeof value === 'number' ? value : Number(value ?? 0));
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -203,77 +204,76 @@ router.get('/landlord-overview', requireAuth, async (req: Request, res: Response
     const filter = String(req.query.filter ?? 'This Week');
     const window = getTimeWindow(filter);
     const landlordId = req.auth?.id;
+    const daysCount = filter === 'Last 28 Days' ? 28 : 7;
 
-    const statsResult = await query(
-      `SELECT
-         COALESCE(SUM(pa.views), 0) AS views,
-         COALESCE(SUM(pa.unique_views), 0) AS unique_viewers,
-         COALESCE(SUM(pa.saves), 0) AS saves,
-         COALESCE(SUM(pa.shares), 0) AS shares,
-         COALESCE(SUM(pa.impressions), 0) AS impressions,
-         COALESCE(SUM(pa.clicks), 0) AS clicks,
-         COALESCE(SUM(pa.bookings_completed), 0) AS bookings
-       FROM property_analytics pa
-       JOIN properties p ON p.id = pa.property_id
-       WHERE p.landlord_id = $1`,
-      [landlordId],
-    );
+    // Parallelize all queries to prevent sequential processing bottlenecks 
+    // and resolve "Connection reset by peer" errors caused by Render timeouts.
+    const [statsResult, occupancyResult, chartResult, topProps, photoRows] = await Promise.all([
+      query(
+        `SELECT
+           COALESCE(SUM(pa.views), 0) AS views,
+           COALESCE(SUM(pa.unique_viewers), 0) AS unique_viewers,
+           COALESCE(SUM(pa.saves), 0) AS saves,
+           COALESCE(SUM(pa.shares), 0) AS shares,
+           COALESCE(SUM(pa.impressions), 0) AS impressions,
+           COALESCE(SUM(pa.clicks), 0) AS clicks,
+           COALESCE(SUM(pa.bookings_completed), 0) AS bookings
+         FROM property_analytics pa
+         JOIN properties p ON p.id = pa.property_id
+         WHERE p.landlord_id = $1`,
+        [landlordId]
+      ),
+      query(
+        `WITH prop_count AS (
+           SELECT COUNT(*)::int as total FROM properties WHERE landlord_id = $1
+         ),
+         booked_days AS (
+           SELECT COALESCE(SUM(check_out_date - check_in_date), 0)::int as days
+           FROM bookings
+           WHERE landlord_id = $1 AND status IN ('confirmed', 'completed')
+             AND check_in_date >= NOW() - INTERVAL '${window}'
+         )
+         SELECT 
+           CASE WHEN pc.total > 0 THEN (bd.days::float / (pc.total * ${daysCount})) * 100 ELSE 0 END as rate
+         FROM prop_count pc, booked_days bd`,
+        [landlordId]
+      ),
+      query(
+        `SELECT DATE(ee.created_at) AS day, COUNT(*)::int AS total
+         FROM engagement_events ee
+         JOIN properties p ON p.id = ee.property_id
+         WHERE p.landlord_id = $1
+           AND ee.created_at >= NOW() - INTERVAL '${window}'
+           AND ee.event_type IN ('property_view', 'property_detail_view')
+         GROUP BY DATE(ee.created_at)
+         ORDER BY day ASC`,
+        [landlordId]
+      ),
+      query(
+        `SELECT p.title AS name,
+                p.city AS location,
+                p.image_url AS image,
+                COALESCE(pa.views, 0)::text AS views
+         FROM properties p
+         JOIN property_analytics pa ON p.id = pa.property_id
+         WHERE p.landlord_id = $1
+         ORDER BY pa.views DESC, p.created_at DESC
+         LIMIT 3`,
+        [landlordId]
+      ),
+      query(
+        `SELECT p.title, p.image_url, COUNT(ee.id)::int AS engagement
+         FROM properties p
+         LEFT JOIN engagement_events ee ON ee.property_id = p.id AND ee.event_type = 'property_view'
+         WHERE p.landlord_id = $1
+         GROUP BY p.id, p.title, p.image_url
+         ORDER BY engagement DESC
+         LIMIT 3`,
+        [landlordId]
+      )
+    ]);
 
     const row = statsResult.rows[0] ?? {};
-
-    // Calculate occupancy rate (for the period defined by filter)
-    const daysCount = filter === 'Last 28 Days' ? 28 : 7;
-    const occupancyResult = await query(
-      `WITH prop_count AS (
-         SELECT COUNT(*)::int as total FROM properties WHERE landlord_id = $1
-       ),
-       booked_days AS (
-         SELECT COALESCE(SUM(check_out_date - check_in_date), 0)::int as days
-         FROM bookings
-         WHERE landlord_id = $1 AND status IN ('confirmed', 'completed')
-           AND check_in_date >= NOW() - INTERVAL '${window}'
-       )
-       SELECT 
-         CASE WHEN pc.total > 0 THEN (bd.days::float / (pc.total * ${daysCount})) * 100 ELSE 0 END as rate
-       FROM prop_count pc, booked_days bd`,
-      [landlordId]
-    );
-
-    const chartResult = await query(
-      `SELECT DATE(ee.created_at) AS day, COUNT(*)::int AS total
-       FROM engagement_events ee
-       JOIN properties p ON p.id = ee.property_id
-       WHERE p.landlord_id = $1
-         AND ee.created_at >= NOW() - INTERVAL '${window}'
-         AND ee.event_type IN ('property_view', 'property_detail_view')
-       GROUP BY DATE(ee.created_at)
-       ORDER BY day ASC`,
-      [landlordId],
-    );
-
-    const topProps = await query(
-      `SELECT p.title AS name,
-              p.city AS location,
-              p.image_url AS image,
-              COALESCE(pa.views, 0)::text AS views
-       FROM properties p
-       JOIN property_analytics pa ON p.id = pa.property_id
-       WHERE p.landlord_id = $1
-       ORDER BY pa.views DESC, p.created_at DESC
-       LIMIT 3`,
-      [landlordId],
-    );
-
-    const photoRows = await query(
-      `SELECT p.title, p.image_url, COUNT(ee.id)::int AS engagement
-       FROM properties p
-       LEFT JOIN engagement_events ee ON ee.property_id = p.id AND ee.event_type = 'property_view'
-       WHERE p.landlord_id = $1
-       GROUP BY p.id, p.title, p.image_url
-       ORDER BY engagement DESC
-       LIMIT 3`,
-      [landlordId],
-    );
 
     const totalViews = toNumber(row.views);
     const totalClicks = toNumber(row.clicks);
