@@ -822,6 +822,7 @@ class _BottomNav extends StatelessWidget {
             label: 'Profile',
             active: current == _AppScreen.profile,
             onTap: () => onTap(_AppScreen.profile),
+            isProfile: true,
           ),
         ],
       ),
@@ -835,6 +836,7 @@ class _NavItem extends StatefulWidget {
   final String label;
   final bool active;
   final VoidCallback onTap;
+  final bool isProfile;
 
   const _NavItem({
     required this.icon,
@@ -842,6 +844,7 @@ class _NavItem extends StatefulWidget {
     required this.label,
     required this.active,
     required this.onTap,
+    this.isProfile = false,
   });
 
   @override
@@ -886,6 +889,21 @@ class _NavItemState extends State<_NavItem>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+            if (widget.isProfile)
+              Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: widget.active ? AppColors.primary : Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: AppSession.buildAvatar(AppSession.currentUserAvatar),
+              )
+            else
               Icon(
                 widget.active ? widget.activeIcon : widget.icon,
                 color: widget.active ? AppColors.primary : AppColors.gray400,

@@ -424,20 +424,16 @@ class RemoteDatabaseRepository {
       key: CacheKeys.userProfile(AppSession.currentUserId!),
       ttl: CacheTTL.profile,
       networkFetcher: () async {
-        final response = await apiClient.get(
-          Uri.parse('${AppSession.apiBaseUrl}/users/profile'),
-        );
-        return _decodeData(response);
+        return loadUserById(AppSession.currentUserId!);
       },
       onData: onData,
     );
   }
 
   Future<Map<String, dynamic>> loadCurrentUser() async {
-    final response = await apiClient.get(
-      Uri.parse('${AppSession.apiBaseUrl}/users/profile'),
-    );
-    return _decodeData(response);
+    final userId = AppSession.currentUserId;
+    if (userId == null) throw Exception('No user ID found in session');
+    return loadUserById(userId);
   }
 
   Future<Map<String, dynamic>> updateCurrentUser({

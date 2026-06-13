@@ -344,6 +344,35 @@ router.post('/:id/availability', requireAuth, authorize('landlord', 'host'), asy
     }
 });
 /**
+ * GET /api/v1/properties/:id/review-eligibility
+ * Checks if the authenticated user can review a specific property.
+ */
+router.get('/:id/review-eligibility', requireAuth, async (req, res, next) => {
+    try {
+        const propertyId = req.params.id;
+        const userId = req.auth?.id;
+        // Find the latest completed booking for this user and property
+        const bookingRes = await query(`SELECT id FROM bookings 
+       WHERE property_id = $1 AND tenant_id = $2 AND status = 'completed'
+       ORDER BY check_out_date DESC LIMIT 1`, [propertyId, userId]);
+        if (bookingRes.rowCount === 0) {
+            return res.json({ canReview: false, reason: 'No completed booking found' });
+        }
+        const bookingId = bookingRes.rows[0].id;
+        // Check if user has already reviewed this specific booking
+        const reviewRes = await query("SELECT id FROM reviews WHERE booking_id = $1", [bookingId]);
+        const reviewExists = (reviewRes.rowCount ?? 0) > 0;
+        res.json({
+            canReview: !reviewExists,
+            bookingId,
+            reviewExists
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+/**
  * GET /api/v1/properties/:id/reviews
  * Fetches all reviews for a specific property including reviewer details
  */
@@ -373,15 +402,44 @@ router.post('/reviews', requireAuth, async (req, res, next) => {
         if (!bookingId || !propertyId || !rating) {
             return res.status(400).json({ error: 'Missing required review fields.' });
         }
-        // Verify the booking belongs to the user and is 'completed'
-        const bookingCheck = await query("SELECT id FROM bookings WHERE id = $1 AND tenant_id = $2 AND status = 'completed'", [bookingId, req.auth?.id]);
+        // Verify the booking exists, belongs to the user, the property, and is 'completed'
+        const bookingCheck = await query("SELECT id FROM bookings WHERE id = $1 AND tenant_id = $2 AND property_id = $3 AND status = 'completed' LIMIT 1", [bookingId, req.auth?.id, propertyId]);
         if (bookingCheck.rowCount === 0) {
-            return res.status(403).json({ error: 'You can only review completed bookings that you made.' });
+            return res.status(403).json({ success: false, message: 'You are not eligible to review this property.' });
+        }
+        // Extra safety: Check if a review already exists for this booking
+        const existingReview = await query("SELECT id FROM reviews WHERE booking_id = $1", [bookingId]);
+        if ((existingReview.rowCount ?? 0) > 0) {
+            return res.status(400).json({ success: false, message: 'You have already reviewed this stay.' });
         }
         const result = await query(`INSERT INTO reviews (booking_id, property_id, reviewer_id, rating, comment)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`, [bookingId, propertyId, req.auth?.id, rating, comment]);
         res.status(201).json({ data: result.rows[0] });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+/**
+ * POST /api/v1/reviews/:id/report
+ * Submits a report for an inappropriate review. Requires authentication.
+ */
+router.post('/reviews/:id/report', requireAuth, async (req, res, next) => {
+    try {
+        const reviewId = req.params.id;
+        const { reason } = req.body;
+        if (!reason) {
+            return res.status(400).json({ error: 'Report reason is required.' });
+        }
+        // Ensure the review exists
+        const reviewCheck = await query('SELECT id FROM reviews WHERE id = $1', [reviewId]);
+        if (reviewCheck.rowCount === 0) {
+            return res.status(404).json({ error: 'Review not found.' });
+        }
+        await query(`INSERT INTO review_reports (review_id, reporter_id, reason, status)
+       VALUES ($1, $2, $3, 'pending')`, [reviewId, req.auth.id, reason]);
+        res.status(201).json({ message: 'Review reported successfully.' });
     }
     catch (error) {
         next(error);

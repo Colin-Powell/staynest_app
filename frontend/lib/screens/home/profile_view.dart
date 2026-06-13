@@ -189,12 +189,7 @@ class _ProfileViewState extends State<ProfileView>
                                       color: const Color(0xFFE5E7EB),
                                     ),
                                     clipBehavior: Clip.antiAlias,
-                                    child: buildPropertyImage(
-                                      _avatarPath,
-                                      width: 72,
-                                      height: 72,
-                                      fit: BoxFit.cover,
-                                    ),
+                                    child: AppSession.buildAvatar(_avatarPath, width: 72, height: 72),
                                   ),
                                 ),
                                 const SizedBox(width: 20),

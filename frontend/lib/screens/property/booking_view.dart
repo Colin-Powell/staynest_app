@@ -6,6 +6,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
+import 'package:property_app/session/app_session.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/booking_service.dart';
 
@@ -407,21 +408,38 @@ class _MyBookingsViewState extends State<MyBookingsView>
           _buildNavItem(PhosphorIcons.chatTeardrop(PhosphorIconsStyle.fill),
               'Messages', false),
           _buildNavItem(PhosphorIcons.userCircle(PhosphorIconsStyle.fill),
-              'Profile', false),
+              'Profile', false,
+              isProfile: true),
         ],
       ),
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, bool isActive) {
+  Widget _buildNavItem(IconData icon, String label, bool isActive,
+      {bool isProfile = false}) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
-          size: 26,
-          color: isActive ? navActiveGreen : textLight,
-        ),
+        if (isProfile)
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isActive ? navActiveGreen : Colors.transparent,
+                width: 1.5,
+              ),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: AppSession.buildAvatar(AppSession.currentUserAvatar),
+          )
+        else
+          Icon(
+            icon,
+            size: 26,
+            color: isActive ? navActiveGreen : textLight,
+          ),
         const SizedBox(height: 4),
         Text(
           label,
@@ -585,7 +603,7 @@ class _BookingViewState extends State<BookingView> {
         agent: Agent(
           userId: raw['landlord_id']?.toString() ?? '',
           name: raw['landlord_name']?.toString() ?? '',
-          avatar: '',
+          avatar: raw['landlord_avatar']?.toString() ?? '',
         ),
         description: raw['description']?.toString() ?? '',
       );
@@ -1074,6 +1092,29 @@ class BookingConfirmedPage extends StatelessWidget {
                               color: Colors.black,
                               fontWeight: FontWeight.w600,
                             ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Container(
+                                width: 24,
+                                height: 24,
+                                decoration:
+                                    const BoxDecoration(shape: BoxShape.circle),
+                                clipBehavior: Clip.antiAlias,
+                                child:
+                                    AppSession.buildAvatar(property.agent.avatar),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                property.agent.name,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: const Color(0xFF6B7280),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

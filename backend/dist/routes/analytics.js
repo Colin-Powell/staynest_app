@@ -47,7 +47,8 @@ function toNumber(value) {
 }
 router.post('/track', requireAuth, async (req, res, next) => {
     try {
-        const { eventType, userId, propertyId, sessionId, metadata = {}, } = req.body;
+        const { eventType, propertyId, sessionId, metadata = {}, } = req.body;
+        const userId = req.auth?.id;
         if (!eventType || !propertyId) {
             return res.status(400).json({ error: 'eventType and propertyId are required.' });
         }
@@ -55,28 +56,47 @@ router.post('/track', requireAuth, async (req, res, next) => {
         if (propertyExists.rowCount === 0) {
             return res.status(404).json({ error: 'Property not found.' });
         }
-        await query(`INSERT INTO engagement_events (user_id, property_id, event_type, session_id, metadata, created_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())`, [userId ?? null, propertyId, eventType, sessionId ?? null, metadata]);
-        const uniqueView = userId && propertyId && (eventType === 'property_view' || eventType === 'property_detail_view')
-            ? (await query(`INSERT INTO property_unique_views (property_id, user_id, viewed_date)
-             VALUES ($1, $2, CURRENT_DATE)
-             ON CONFLICT (property_id, user_id, viewed_date) DO NOTHING`, [propertyId, userId])).rowCount ?? 0
-            : 0;
-        const weight = EVENT_WEIGHTS[eventType] ?? 0;
-        const score = weight * (uniqueView > 0 ? 1.5 : 1);
-        const column = METRIC_COLUMNS[eventType];
-        const uniqueInc = uniqueView > 0 ? 1 : 0;
-        await query(`INSERT INTO property_analytics (property_id, views, unique_views, impressions, clicks, saves, shares, chats, booking_requested, bookings_confirmed, bookings_completed, engagement_score, last_event_at, updated_at)
-       VALUES ($1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW(), NOW())
-       ON CONFLICT (property_id) DO NOTHING`, [propertyId]);
-        await query(`UPDATE property_analytics
-       SET ${column ? `${column} = property_analytics.${column} + 1,` : ''}
+        await query('BEGIN');
+        try {
+            const isViewEvent = eventType === 'property_view' || eventType === 'property_detail_view';
+            const isSaveEvent = eventType === 'property_save';
+            let isFirstAction = true;
+            if (userId && propertyId && (isViewEvent || isSaveEvent)) {
+                const priorCheck = await query(`SELECT 1 FROM engagement_events 
+           WHERE user_id = $1 AND property_id = $2 
+             AND event_type ${isViewEvent ? "IN ('property_view', 'property_detail_view')" : "= 'property_save'"}
+           LIMIT 1`, [userId, propertyId]);
+                isFirstAction = (priorCheck.rowCount ?? 0) === 0;
+            }
+            await query(`INSERT INTO engagement_events (user_id, property_id, event_type, session_id, metadata, created_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())`, [userId, propertyId, eventType, sessionId ?? null, metadata]);
+            if (userId && propertyId && isViewEvent) {
+                await query(`INSERT INTO property_unique_views (property_id, user_id, viewed_date)
+           VALUES ($1, $2, CURRENT_DATE)
+           ON CONFLICT (property_id, user_id, viewed_date) DO NOTHING`, [propertyId, userId]);
+            }
+            const weight = EVENT_WEIGHTS[eventType] ?? 0;
+            const score = weight * (isFirstAction ? 1.5 : (isViewEvent || isSaveEvent ? 0 : 1));
+            const column = METRIC_COLUMNS[eventType];
+            const uniqueInc = (isViewEvent && isFirstAction) ? 1 : 0;
+            const metricInc = (isViewEvent || isSaveEvent) ? (isFirstAction ? 1 : 0) : 1;
+            await query(`INSERT INTO property_analytics (property_id, views, unique_views, impressions, clicks, saves, shares, chats, booking_requested, bookings_confirmed, bookings_completed, engagement_score, last_event_at, updated_at)
+         VALUES ($1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW(), NOW())
+         ON CONFLICT (property_id) DO NOTHING`, [propertyId]);
+            await query(`UPDATE property_analytics
+         SET ${column ? `${column} = property_analytics.${column} + $4,` : ''}
            unique_views = property_analytics.unique_views + $2,
            engagement_score = COALESCE(property_analytics.engagement_score, 0) + $3,
            last_event_at = NOW(),
            updated_at = NOW()
-       WHERE property_id = $1`, [propertyId, uniqueInc, score]);
-        res.status(201).json({ ok: true, eventType, uniqueView });
+       WHERE property_id = $1`, [propertyId, uniqueInc, score, metricInc]);
+            await query('COMMIT');
+            res.status(201).json({ ok: true, eventType, uniqueInc });
+        }
+        catch (error) {
+            await query('ROLLBACK');
+            throw error;
+        }
     }
     catch (error) {
         next(error);
@@ -147,13 +167,13 @@ router.get('/landlord-overview', requireAuth, async (req, res, next) => {
        JOIN properties p ON p.id = pa.property_id
        WHERE p.landlord_id = $1`, [landlordId]);
         const row = statsResult.rows[0] ?? {};
-        const chartResult = await query(`SELECT DATE(created_at) AS day, COUNT(*)::int AS total
+        const chartResult = await query(`SELECT DATE(ee.created_at) AS day, COUNT(*)::int AS total
        FROM engagement_events ee
        JOIN properties p ON p.id = ee.property_id
        WHERE p.landlord_id = $1
          AND ee.created_at >= NOW() - INTERVAL '${window}'
          AND ee.event_type IN ('property_view', 'property_detail_view')
-       GROUP BY DATE(created_at)
+       GROUP BY DATE(ee.created_at)
        ORDER BY day ASC`, [landlordId]);
         const topProps = await query(`SELECT p.title AS name,
               p.city AS location,
@@ -164,37 +184,71 @@ router.get('/landlord-overview', requireAuth, async (req, res, next) => {
        WHERE p.landlord_id = $1
        ORDER BY pa.views DESC, p.created_at DESC
        LIMIT 3`, [landlordId]);
-        const photoRows = await query(`SELECT title, image_url
-       FROM properties
-       WHERE landlord_id = $1
-       ORDER BY created_at DESC
+        const photoRows = await query(`SELECT p.title, p.image_url, COUNT(ee.id)::int AS engagement
+       FROM properties p
+       LEFT JOIN engagement_events ee ON ee.property_id = p.id AND ee.event_type = 'property_view'
+       WHERE p.landlord_id = $1
+       GROUP BY p.id, p.title, p.image_url
+       ORDER BY engagement DESC
        LIMIT 3`, [landlordId]);
         const totalViews = toNumber(row.views);
         const totalClicks = toNumber(row.clicks);
         const totalImpressions = toNumber(row.impressions);
+        const daysCount = filter === 'Last 28 Days' ? 28 : 7;
+        const dateMap = new Map();
+        chartResult.rows.forEach((r) => {
+            const d = new Date(r.day);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            dateMap.set(key, toNumber(r.total));
+        });
+        const seriesData = [];
+        for (let i = 0; i < daysCount; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() - (daysCount - 1 - i));
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            seriesData.push(dateMap.get(key) || 0);
+        }
         res.json({
             overview: {
                 totalViews: totalViews.toLocaleString(),
                 growth: '0%',
-                chartData: chartResult.rows.map((item) => toNumber(item.total)),
+                chartData: seriesData,
             },
             metrics: {
                 uniqueViewers: toNumber(row.unique_viewers).toLocaleString(),
                 saves: toNumber(row.saves).toLocaleString(),
                 shares: toNumber(row.shares).toLocaleString(),
-                avgCtr: totalImpressions > 0 ? `${((totalClicks / totalImpressions) * 100).toFixed(1)}%` : '0%',
+                avgCtr: totalImpressions > 0
+                    ? `${((totalClicks / totalImpressions) * 100).toFixed(1)}%`
+                    : '0%',
             },
             funnel: [
-                { label: 'Impressions', value: totalImpressions.toLocaleString(), percentage: 1.0 },
-                { label: 'Views', value: totalViews.toLocaleString(), percentage: totalImpressions > 0 ? totalViews / totalImpressions : 0 },
-                { label: 'Engagement', value: (toNumber(row.saves) + totalClicks).toLocaleString(), percentage: totalViews > 0 ? (toNumber(row.saves) + totalClicks) / totalViews : 0 },
-                { label: 'Bookings', value: toNumber(row.bookings).toLocaleString(), percentage: totalViews > 0 ? toNumber(row.bookings) / totalViews : 0 },
+                {
+                    label: 'Impressions',
+                    value: totalImpressions.toLocaleString(),
+                    percentage: 1.0,
+                },
+                {
+                    label: 'Views',
+                    value: totalViews.toLocaleString(),
+                    percentage: totalImpressions > 0 ? totalViews / totalImpressions : 0,
+                },
+                {
+                    label: 'Engagement',
+                    value: (toNumber(row.saves) + totalClicks).toLocaleString(),
+                    percentage: totalViews > 0 ? (toNumber(row.saves) + totalClicks) / totalViews : 0,
+                },
+                {
+                    label: 'Bookings',
+                    value: toNumber(row.bookings).toLocaleString(),
+                    percentage: totalViews > 0 ? toNumber(row.bookings) / totalViews : 0,
+                },
             ],
             topProperties: topProps.rows,
             photoPerformance: photoRows.rows.map((item, index) => ({
                 label: item.title,
                 image: item.image_url,
-                engagement: index === 0 ? 'High engagement' : index === 1 ? 'Growing interest' : 'Emerging interest',
+                engagement: item.engagement > 0 ? `${item.engagement.toLocaleString()} views` : 'No views yet',
                 color: index === 0 ? 0xFF10B981 : index === 1 ? 0xFFF59E0B : 0xFFEF4444,
             })),
             insight: null,
@@ -220,7 +274,10 @@ router.get('/management/:propertyId', requireAuth, async (req, res, next) => {
        JOIN users u ON u.id = ee.user_id
        WHERE ee.property_id = $1
        GROUP BY u.id, u.name, u.avatar
-       HAVING COUNT(*) > 2 OR EXISTS (SELECT 1 FROM engagement_events WHERE event_type = 'property_save' AND user_id = u.id)
+       HAVING COUNT(*) > 2 OR EXISTS (
+         SELECT 1 FROM engagement_events
+         WHERE event_type = 'property_save' AND user_id = u.id
+       )
        ORDER BY interaction_count DESC
        LIMIT 5`, [propertyId]);
         res.json({
@@ -229,6 +286,61 @@ router.get('/management/:propertyId', requireAuth, async (req, res, next) => {
             activity: activity.rows,
             leads: leads.rows,
             isBoosted: false,
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+router.get('/trending-properties', async (req, res, next) => {
+    try {
+        const period = typeof req.query.period === 'string' ? req.query.period.toLowerCase() : '7d';
+        // const windowDays = period === '28d' ? 28 : period === 'all' ? null : 7;
+        const limit = typeof req.query.limit === 'string'
+            ? Math.max(1, Math.min(50, Number(req.query.limit) || 12))
+            : 12;
+        // NOTE: dateFilter is kept for future CTE-based scoring; current query uses a fixed 7d window.
+        // const dateFilter = windowDays ? `WHERE pa.last_event_at >= NOW() - INTERVAL '${windowDays} days'` : '';
+        const result = await query(`SELECT
+         p.id,
+         p.title,
+         p.price,
+         p.city AS location,
+         COALESCE(pa.engagement_score, 0)::float AS engagement_score,
+         COALESCE(pa.impressions, 0)::int AS impressions,
+         COALESCE(pa.views, 0)::int AS views,
+         COALESCE(pa.clicks, 0)::int AS clicks,
+         COALESCE(pa.saves, 0)::int AS saves
+       FROM properties p
+       JOIN property_analytics pa ON pa.property_id = p.id
+       WHERE pa.last_event_at >= NOW() - INTERVAL '7 days'
+         AND pa.views > 0
+       ORDER BY
+         pa.engagement_score DESC,
+         (pa.impressions::float / NULLIF(pa.views, 0)) ASC,
+         p.created_at DESC
+       LIMIT $1`, 
+        // NOTE: This limit is for the pre-selection set; the final result is also limited later.
+        [limit]);
+        // Keep existing API shape; if you want to use the full CTE-based scoring query, re-add it here.
+        res.json({
+            period,
+            count: result.rowCount,
+            data: result.rows.map((row) => ({
+                id: row.id,
+                title: row.title,
+                price: Number(row.price ?? 0),
+                location: row.location,
+                engagementScore: Number(row.engagement_score ?? row.engagementScore ?? 0),
+                trendingScore: Number(0),
+                impressions: Number(row.impressions ?? 0),
+                views: Number(row.views ?? 0),
+                clicks: Number(row.clicks ?? 0),
+                saves: Number(row.saves ?? 0),
+                ctr: Number(0),
+                impressionToViewRate: Number(0),
+                imageUrl: row.image_url ?? row.imageUrl ?? null,
+            })),
         });
     }
     catch (error) {

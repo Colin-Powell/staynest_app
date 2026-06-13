@@ -77,13 +77,11 @@ class _EditProfileViewState extends State<EditProfileView>
   }
 
   Widget _buildAvatarWidget(String avatarPath) {
-    return buildPropertyImage(
+    return AppSession.buildAvatar(
       avatarPath,
       width: 120,
       height: 120,
       fit: BoxFit.cover,
-      errorPlaceholder:
-          const Icon(Icons.person, size: 54, color: Color(0xFF9CA3AF)),
     );
   }
 

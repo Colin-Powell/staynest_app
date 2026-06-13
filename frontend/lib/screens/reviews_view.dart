@@ -917,13 +917,11 @@ class ReviewCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipOval(
-                child: buildPropertyImage(
+                child: AppSession.buildAvatar(
                   avatar,
                   width: 52,
                   height: 52,
                   fit: BoxFit.cover,
-                  errorPlaceholder:
-                      const Icon(Icons.person, color: Color(0xFF9CA3AF)),
                 ),
               ),
               const SizedBox(width: 16),

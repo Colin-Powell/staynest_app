@@ -104,10 +104,16 @@ class AppSession {
           ? currentUserAvatar!.trim()
           : 'assets/images/profile.jpg';
 
+  /// Cloudinary configuration for image assets
+  static const String cloudinaryCloudName = 'dxcht5cls';
+  static const String cloudinaryBaseUrl = 'https://res.cloudinary.com/$cloudinaryCloudName/image/upload';
+
   /// Resolves any avatar path or Cloudinary ID into a usable [ImageProvider].
   /// Handles full URLs, local asset paths, and relative server upload IDs.
   static ImageProvider getAvatarProvider(String? path) {
-    final avatar = (path?.trim().isNotEmpty == true) ? path!.trim() : 'assets/images/profile.jpg';
+    final avatar = (path?.trim().isNotEmpty == true)
+        ? path!.trim()
+        : 'assets/images/profile.jpg';
 
     if (avatar.startsWith('http')) {
       return NetworkImage(avatar);
@@ -115,13 +121,45 @@ class AppSession {
     if (avatar.startsWith('assets/')) {
       return AssetImage(avatar);
     }
-    // Construct the absolute URL for server uploads / Cloudinary public IDs.
-    final baseUrl = apiBaseUrl.split('/api').first;
-    return NetworkImage('$baseUrl/uploads/$avatar');
+
+    // Resolve Cloudinary IDs (e.g., 'staynest/filename')
+    // We append .jpg extension if missing to ensure proper network resource resolution
+    final fullId = avatar.contains('.') ? avatar : '$avatar.jpg';
+    return NetworkImage('$cloudinaryBaseUrl/$fullId');
   }
 
   /// Returns the [ImageProvider] for the currently authenticated user's avatar.
   static ImageProvider get currentUserAvatarProvider => getAvatarProvider(currentUserAvatar);
+
+  /// Builds a [Widget] for displaying an avatar with a shimmer loading effect.
+  static Widget buildAvatar(String? path, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
+    final avatar = (path?.trim().isNotEmpty == true) ? path!.trim() : 'assets/images/profile.jpg';
+
+    if (avatar.startsWith('assets/')) {
+      return Image.asset(avatar, width: width, height: height, fit: fit);
+    }
+
+    final url = avatar.startsWith('http')
+        ? avatar
+        : '$cloudinaryBaseUrl/${avatar.contains('.') ? avatar : '$avatar.jpg'}';
+
+    return Image.network(
+      url,
+      width: width,
+      height: height,
+      fit: fit,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return const _ShimmerPlaceholder();
+      },
+      errorBuilder: (context, error, stackTrace) => Image.asset(
+        'assets/images/profile.jpg',
+        width: width,
+        height: height,
+        fit: fit,
+      ),
+    );
+  }
 
   static String get displayRole {
     final role = currentRole.trim();
@@ -153,5 +191,44 @@ class AppSession {
     apiToken = null;
     refreshToken = null;
     CacheEngine.instance.clearAll(); // Critical: Invalidate cache on logout
+  }
+}
+
+class _ShimmerPlaceholder extends StatefulWidget {
+  const _ShimmerPlaceholder();
+
+  @override
+  State<_ShimmerPlaceholder> createState() => _ShimmerPlaceholderState();
+}
+
+class _ShimmerPlaceholderState extends State<_ShimmerPlaceholder>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.4, end: 1.0).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      ),
+      child: Container(
+        color: Colors.grey[300],
+      ),
+    );
   }
 }

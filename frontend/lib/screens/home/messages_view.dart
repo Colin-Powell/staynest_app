@@ -920,15 +920,11 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
                       child: Column(
                         children: [
                           ClipOval(
-                            child: buildPropertyImage(
+                            child: AppSession.buildAvatar(
                               contact.avatarUrl ?? '',
                               width: 60,
                               height: 60,
                               fit: BoxFit.cover,
-                              errorPlaceholder: const Icon(
-                                Icons.person,
-                                color: Color(0xFF9CA3AF),
-                              ),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -1138,15 +1134,11 @@ class _ChatTileState extends State<_ChatTile>
                         color: Color(0xFFE5E7EB),
                       ),
                       child: ClipOval(
-                        child: buildPropertyImage(
-                          c.avatarUrl ?? '',
+                        child: AppSession.buildAvatar(
+                          c.avatarUrl,
                           width: 60,
                           height: 60,
                           fit: BoxFit.cover,
-                          errorPlaceholder: const Icon(
-                            Icons.person,
-                            color: Color(0xFF9CA3AF),
-                          ),
                         ),
                       ),
                     ),

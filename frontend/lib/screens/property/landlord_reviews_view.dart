@@ -5,6 +5,7 @@ import 'package:property_app/app_theme.dart';
 import 'package:property_app/widgets/shared.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:property_app/screens/home/map_view.dart';
+import 'package:property_app/session/app_session.dart';
 import 'package:property_app/widgets/property_image.dart';
 
 class LandlordReviewsView extends StatefulWidget {
@@ -335,19 +336,16 @@ class _ReviewCardState extends State<_ReviewCard>
               Row(
                 children: [
                   // Avatar
-                  ClipOval(
-                    child: buildPropertyImage(
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(shape: BoxShape.circle),
+                    clipBehavior: Clip.antiAlias,
+                    child: AppSession.buildAvatar(
                       widget.review['avatar'],
                       width: 40,
                       height: 40,
                       fit: BoxFit.cover,
-                      errorPlaceholder: Container(
-                        width: 40,
-                        height: 40,
-                        color: AppTheme.primaryLight,
-                        child: Icon(PhosphorIcons.user(PhosphorIconsStyle.fill),
-                            color: AppTheme.primary, size: 20),
-                      ),
                     ),
                   ),
                   const SizedBox(width: 12),

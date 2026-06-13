@@ -33,8 +33,7 @@ router.patch('/profile', requireAuth, async (req: Request, res: Response, next: 
       }
     }
 
-
-    await query(
+    const result = await query(
       `UPDATE users
        SET name = COALESCE($1, name),
            phone = COALESCE($2, phone),
@@ -45,7 +44,8 @@ router.patch('/profile', requireAuth, async (req: Request, res: Response, next: 
            tax_id = COALESCE($7, tax_id),
            years_in_business = COALESCE($8, years_in_business),
            settings = COALESCE($9, settings)
-       WHERE id = $10`,
+       WHERE id = $10
+       RETURNING id, name, email, phone, avatar, role, verified, created_at, business_name, business_type, business_description, tax_id, years_in_business, settings`,
       [
         name, phone, avatar,
         businessName, businessType, businessDescription,
@@ -55,7 +55,7 @@ router.patch('/profile', requireAuth, async (req: Request, res: Response, next: 
       ]
     );
 
-    res.json({ ok: true });
+    res.json({ data: result.rows[0] });
   } catch (error) {
     next(error);
   }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/services/message_service.dart';
 import 'package:uuid/uuid.dart';
@@ -263,8 +264,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       });
       _scrollToBottom();
     } catch (err) {
-      setState(() {
-      });
+      setState(() {});
       // ignore: avoid_print
       print('Failed to fetch messages: $err');
     }
@@ -353,7 +353,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
           const SizedBox(width: 16),
           // Avatar
           ClipOval(
-            child: buildPropertyImage(
+            child: AppSession.buildAvatar(
               widget.avatar,
               width: 48,
               height: 48,
@@ -636,7 +636,7 @@ class _TheirBubble extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ClipOval(
-          child: buildPropertyImage(
+          child: AppSession.buildAvatar(
             avatar,
             width: 44,
             height: 44,

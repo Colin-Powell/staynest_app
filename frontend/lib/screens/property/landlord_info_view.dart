@@ -5,6 +5,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/screens/theme.dart';
+import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/property_mapper.dart';
 import 'package:property_app/widgets/property_image.dart';
 
@@ -369,10 +370,7 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
             ),
           ),
           clipBehavior: Clip.antiAlias,
-          child: _landlordAvatar.isNotEmpty
-              ? buildPropertyImage(_landlordAvatar,
-                  width: 80, height: 80, fit: BoxFit.cover)
-              : const Icon(Icons.person, size: 40, color: Color(0xFF9CA3AF)),
+          child: AppSession.buildAvatar(_landlordAvatar, width: 80, height: 80),
         ),
         const SizedBox(width: 20),
         Expanded(
