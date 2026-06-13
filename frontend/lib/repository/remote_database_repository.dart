@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:property_app/models/property.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
@@ -332,7 +333,7 @@ class RemoteDatabaseRepository {
 
     final response = await apiClient.post(
       Uri.parse('${AppSession.apiBaseUrl}/auth/register'),
-      body: jsonEncode(payload),
+      body: payload,
     );
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
@@ -424,7 +425,7 @@ class RemoteDatabaseRepository {
       ttl: CacheTTL.profile,
       networkFetcher: () async {
         final response = await apiClient.get(
-          Uri.parse('${AppSession.apiBaseUrl}/me'),
+          Uri.parse('${AppSession.apiBaseUrl}/users/profile'),
         );
         return _decodeData(response);
       },
@@ -433,16 +434,23 @@ class RemoteDatabaseRepository {
   }
 
   Future<Map<String, dynamic>> loadCurrentUser() async {
-    final response =
-        await apiClient.get(Uri.parse('${AppSession.apiBaseUrl}/me'));
+    final response = await apiClient.get(
+      Uri.parse('${AppSession.apiBaseUrl}/users/profile'),
+    );
     return _decodeData(response);
   }
 
   Future<Map<String, dynamic>> updateCurrentUser({
     required Map<String, dynamic> update,
   }) async {
+    // Backend route is mounted as: app.use('/api/users', usersRouter)
+    // and the handler is: router.patch('/profile', ...)
+    final url = '${AppSession.apiBaseUrl}/users/profile';
+    if (kDebugMode)
+      debugPrint('[Repository] Updating user at: $url with $update');
+
     final response = await apiClient.patch(
-      Uri.parse('${AppSession.apiBaseUrl}/me'),
+      Uri.parse(url),
       body: update,
     );
 

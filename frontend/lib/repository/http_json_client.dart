@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:property_app/session/app_session.dart';
 
@@ -112,6 +113,13 @@ class HttpJsonClient {
     Future<http.Response> Function() send,
   ) async {
     final first = await send().timeout(timeout);
+
+    if (kDebugMode) {
+      debugPrint(
+        '[HTTP] ${first.request?.method} ${first.request?.url} -> ${first.statusCode}',
+      );
+    }
+
     if (first.statusCode >= 200 && first.statusCode < 300) return first;
 
     // Retry-once logic for 401.

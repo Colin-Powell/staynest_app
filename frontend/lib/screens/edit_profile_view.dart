@@ -82,7 +82,8 @@ class _EditProfileViewState extends State<EditProfileView>
       width: 120,
       height: 120,
       fit: BoxFit.cover,
-      errorPlaceholder: const Icon(Icons.person, size: 54, color: Color(0xFF9CA3AF)),
+      errorPlaceholder:
+          const Icon(Icons.person, size: 54, color: Color(0xFF9CA3AF)),
     );
   }
 
@@ -440,9 +441,10 @@ class _EditProfileViewState extends State<EditProfileView>
       widget.onSave();
     } catch (err) {
       if (!mounted) return;
-      final message = err is ApiException
-          ? 'Unable to save profile. ${err.responseBody}'
-          : 'Unable to save profile. Please try again.';
+      final message = (err is ApiException && err.responseBody != null)
+          ? 'Unable to save profile: ${err.message}'
+          : 'Unable to save profile. Please check your connection.';
+      debugPrint('Profile update failed: $err');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
