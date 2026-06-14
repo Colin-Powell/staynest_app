@@ -29,6 +29,14 @@ app.use('/api/properties', propertiesRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/uploads', uploadsRouter);
 app.use('/api/verifications', verificationsRouter);
+
+// Backward-compatible alias for older clients
+// (e.g. Flutter listing flow uses /api/landlord/verification)
+app.post('/api/landlord/verification', (req, res, next) => {
+  // Compatibility alias: forward to /api/verifications (POST '/')
+  // verificationsRouter has POST '/' handlers.
+  (verificationsRouter as any)(req, res, next);
+});
 app.use('/api/tenant_profiles', tenantProfilesRouter);
 app.use('/api/privacy', privacyRouter);
 app.use('/api/messages', messagesRouter);

@@ -52,6 +52,18 @@ function toNumber(value: unknown) {
 }
 
 router.post('/track', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  const logPrefix = `[AnalyticsTrack]`;
+  const { eventType, propertyId } = req.body as { eventType?: string; propertyId?: string };
+  console.log(`${logPrefix} start userId=${req.auth?.id} eventType=${eventType} propertyId=${propertyId}`);
+
+  // Validate propertyId early to avoid UUID cast errors from garbage values.
+  const propertyIdStr = typeof propertyId === 'string' ? propertyId : '';
+  const uuidV4ish = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+  if (!uuidV4ish.test(propertyIdStr)) {
+    console.warn(`${logPrefix} invalid propertyId. Ignoring event. propertyId=${propertyIdStr}`);
+    return res.status(400).json({ error: 'Invalid propertyId' });
+  }
+
   try {
     const {
       eventType,
