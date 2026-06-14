@@ -5,7 +5,7 @@ import { env } from './config.js';
 import { apiRateLimiter } from './middleware/rateLimiter.js';
 import { requestLogger } from './middleware/logger.js';
 import { errorHandler } from './middleware/errorHandler.js';
-import authRouter from './routes/auth.js';
+import authRouter from './routes/auth.js'; // Assuming requireAuth is imported here or available globally
 import propertiesRouter from './routes/properties.js';
 import usersRouter from './routes/users.js';
 import uploadsRouter from './routes/uploads.js';
@@ -15,6 +15,7 @@ import privacyRouter from './routes/privacy.js';
 import messagesRouter from './routes/messages.js';
 import bookingsRouter from './routes/bookings.js';
 import analyticsRouter from './routes/analytics.js';
+import { requireAuth } from './middleware/auth.js'; // Explicitly import requireAuth
 
 const app = express();
 
@@ -32,11 +33,9 @@ app.use('/api/verifications', verificationsRouter);
 
 // Backward-compatible alias for older clients
 // (e.g. Flutter listing flow uses /api/landlord/verification)
-app.post('/api/landlord/verification', (req, res, next) => {
-  // Compatibility alias: forward to /api/verifications (POST '/')
-  // verificationsRouter has POST '/' handlers.
-  (verificationsRouter as any)(req, res, next);
-});
+import { createVerificationHandler } from './routes/verifications.js';
+
+app.post('/api/landlord/verification', requireAuth, createVerificationHandler);
 app.use('/api/tenant_profiles', tenantProfilesRouter);
 app.use('/api/privacy', privacyRouter);
 app.use('/api/messages', messagesRouter);
