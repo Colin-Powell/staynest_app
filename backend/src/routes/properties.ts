@@ -593,6 +593,14 @@ router.post('/reviews/:id/report', requireAuth, async (req: Request, res: Respon
 });
 
 router.post('/', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
+  const logPrefix = `[PropertyCreate]`;
+  const userId = req.auth?.id;
+  const body = req.body as Record<string, unknown>;
+  const receivedKeys = Object.keys(body ?? {});
+
+  // IMPORTANT: don’t log huge fields (like base64/images). This endpoint expects URLs/arrays.
+  console.log(`${logPrefix} start userId=${userId} receivedKeys=${receivedKeys.join(',')}`);
+
   try {
     const {
       title,
@@ -609,41 +617,69 @@ router.post('/', requireAuth, authorize('landlord', 'host'), async (req: Request
       amenities,
       lat,
       lng,
-    } = req.body as Record<string, unknown>;
-    if (!title || !description || !category || !city || price == null || bedrooms == null || bathrooms == null || area == null || !image_url) {
-      return res.status(400).json({ error: 'All property fields are required.' });
+    } = body;
+
+    const missing: string[] = [];
+    if (!title) missing.push('title');
+    if (!description) missing.push('description');
+    if (!category) missing.push('category');
+    if (!city) missing.push('city');
+    if (price == null) missing.push('price');
+    if (bedrooms == null) missing.push('bedrooms');
+    if (bathrooms == null) missing.push('bathrooms');
+    if (area == null) missing.push('area');
+    if (!image_url) missing.push('image_url');
+
+    if (missing.length > 0) {
+      console.warn(`${logPrefix} missingFields userId=${userId} missing=${missing.join(',')}`);
+      return res.status(400).json({ error: 'All property fields are required.', missing });
     }
 
-    const imageList = Array.isArray(images) && images.length > 0
-      ? images
-      : [image_url];
+    const imageList = Array.isArray(images) && images.length > 0 ? images : [image_url];
     const amenityList = Array.isArray(amenities) ? amenities : [];
+
+    // Helpful validation logs
+    console.log(`${logPrefix} validated userId=${userId} title=${String(title).slice(0, 60)} city=${String(city)} category=${String(category)}`);
+    console.log(`${logPrefix} image_urlType=${typeof image_url} imagesIsArray=${Array.isArray(images)} imageCount=${Array.isArray(imageList) ? imageList.length : 0} amenitiesIsArray=${Array.isArray(amenities)} amenityCount=${Array.isArray(amenityList) ? amenityList.length : 0}`);
+
+    // If client sent images but image_url is missing/invalid, this will show it in logs.
+    if (Array.isArray(images) && images.length > 0) {
+      const first = images[0];
+      console.log(`${logPrefix} firstImagePreview=${typeof first === 'string' ? first.slice(0, 80) : typeof first}`);
+    }
+
+    const insertArgs = [
+      title,
+      description,
+      category,
+      city,
+      typeof address === 'string' ? address : null,
+      Number(price),
+      Number(bedrooms),
+      Number(bathrooms),
+      Number(area),
+      image_url,
+      JSON.stringify(imageList),
+      JSON.stringify(amenityList),
+      lat != null ? Number(lat) : null,
+      lng != null ? Number(lng) : null,
+      req.auth?.id,
+    ];
+
+    console.log(`${logPrefix} inserting userId=${userId} lat=${lat ?? null} lng=${lng ?? null} price=${Number(price)} area=${Number(area)}`);
 
     const result = await query(
       `INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, landlord_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, $15)
        RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, status, images, amenities, lat, lng`,
-      [
-        title,
-        description,
-        category,
-        city,
-        typeof address === 'string' ? address : null,
-        Number(price),
-        Number(bedrooms),
-        Number(bathrooms),
-        Number(area),
-        image_url,
-        JSON.stringify(imageList),
-        JSON.stringify(amenityList),
-        lat != null ? Number(lat) : null,
-        lng != null ? Number(lng) : null,
-        req.auth?.id,
-      ],
+      insertArgs,
     );
 
+    console.log(`${logPrefix} success userId=${userId} propertyId=${result.rows[0]?.id}`);
     res.status(201).json({ data: result.rows[0] });
   } catch (error) {
+    console.error(`${logPrefix} failed userId=${userId} error=`, error);
+    console.error(`${logPrefix} bodySample title=${typeof body?.title === 'string' ? body.title : null}`);
     next(error);
   }
 });

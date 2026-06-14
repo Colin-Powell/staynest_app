@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/utils/api_result.dart';
 
 import 'landlord_booking_detail_page.dart';
 import 'landlord_calendar_page.dart';
@@ -69,9 +70,9 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
         _allBookings = data.map((b) {
           return {
             'id': b['id']?.toString() ?? '',
-            'title':
-                b['title']?.toString() ?? b['property_title']?.toString() ??
-                    'Property',
+            'title': b['title']?.toString() ??
+                b['property_title']?.toString() ??
+                'Property',
             'location': b['city']?.toString() ?? '',
             'tenant_id': b['tenant_id']?.toString() ?? '',
             'tenant_name': b['tenant_name']?.toString() ?? 'Tenant',
@@ -80,10 +81,11 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
             'rawStatus': b['status']?.toString().toLowerCase() ?? '',
             'status': _mapStatus(b['status']?.toString() ?? ''),
             'image': b['image_url']?.toString() ?? '',
-            'price': (double.tryParse(b['total_price']?.toString() ?? '0') ??
-                    0)
+            'price': (double.tryParse(b['total_price']?.toString() ?? '0') ?? 0)
                 .toInt(),
-          'rating': (double.tryParse(b['average_rating']?.toString() ?? '0') ?? 0.0).toDouble(),
+            'rating':
+                (double.tryParse(b['average_rating']?.toString() ?? '0') ?? 0.0)
+                    .toDouble(),
             'reviews': int.tryParse(b['review_count']?.toString() ?? '0') ?? 0,
           };
         }).toList();
@@ -91,7 +93,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to load bookings: ${e.toString()}';
+        _errorMessage = ApiResult.mapError(e);
         _isLoading = false;
       });
     }
@@ -133,7 +135,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
               ),
             ),
           ),
-          
+
           SafeArea(
             bottom: false,
             child: Stack(
@@ -213,9 +215,13 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                                 onPressed: _loadBookings,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: primaryGreen,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
                                 ),
-                                child: Text('Retry', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
+                                child: Text('Retry',
+                                    style: GoogleFonts.poppins(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600)),
                               ),
                             ],
                           ),
@@ -244,13 +250,15 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                     else if (_filteredBookings.isEmpty)
                       SliverToBoxAdapter(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 40),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               _GlassContainer(
                                 padding: const EdgeInsets.all(24),
-                                child: Icon(PhosphorIcons.calendarBlank(), size: 48, color: textLight),
+                                child: Icon(PhosphorIcons.calendarBlank(),
+                                    size: 48, color: textLight),
                               ),
                               const SizedBox(height: 24),
                               Text(
@@ -281,7 +289,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                           24,
                           0,
                           24,
-                          MediaQuery.of(context).padding.bottom + 200, // Extra padding so cards don't hide behind floating button
+                          MediaQuery.of(context).padding.bottom +
+                              200, // Extra padding so cards don't hide behind floating button
                         ),
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
@@ -294,7 +303,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                                     final result = await Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => LandlordBookingDetailPage(
+                                        builder: (_) =>
+                                            LandlordBookingDetailPage(
                                           booking: booking,
                                         ),
                                       ),
@@ -320,7 +330,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                   alignment: Alignment.bottomCenter,
                   child: Padding(
                     padding: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).padding.bottom + 120, // Increased bottom padding
+                      bottom: MediaQuery.of(context).padding.bottom +
+                          120, // Increased bottom padding
                       left: 32,
                       right: 32,
                     ),
@@ -334,12 +345,15 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                           decoration: BoxDecoration(
                             color: primaryGreen.withOpacity(0.85),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withOpacity(0.4), width: 1.5),
+                            border: Border.all(
+                                color: Colors.white.withOpacity(0.4),
+                                width: 1.5),
                           ),
                           child: Material(
                             color: Colors.transparent,
                             child: InkWell(
-                              onTap: () => Navigator.of(context).push(LandlordCalendarPage.route()),
+                              onTap: () => Navigator.of(context)
+                                  .push(LandlordCalendarPage.route()),
                               child: Center(
                                 child: Text(
                                   'View Calendar',
@@ -380,7 +394,9 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
-          color: isActive ? primaryGreen.withOpacity(0.15) : Colors.white.withOpacity(0.6),
+          color: isActive
+              ? primaryGreen.withOpacity(0.15)
+              : Colors.white.withOpacity(0.6),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: isActive ? primaryGreen : Colors.white.withOpacity(0.8),
@@ -428,11 +444,12 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                   width: 120,
                   height: double.infinity,
                   color: const Color(0xFFE8F6EF),
-                  child: Icon(PhosphorIcons.house(), color: primaryGreen.withOpacity(0.5), size: 32),
+                  child: Icon(PhosphorIcons.house(),
+                      color: primaryGreen.withOpacity(0.5), size: 32),
                 ),
               ),
             ),
-            
+
             // Details on the right
             Expanded(
               child: Padding(
@@ -460,7 +477,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                       ],
                     ),
                     const SizedBox(height: 2),
-                    
+
                     // Location & Tenant Name
                     Text(
                       '${booking['location']} • ${booking['tenant_name']}',
@@ -472,15 +489,17 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                         color: textLight,
                       ),
                     ),
-                    
+
                     const SizedBox(height: 4),
                     if ((booking['reviews'] as int? ?? 0) > 0)
                       Row(
                         children: [
-                          const Icon(Icons.star_rounded, size: 14, color: Color(0xFFFBBF24)),
+                          const Icon(Icons.star_rounded,
+                              size: 14, color: Color(0xFFFBBF24)),
                           const SizedBox(width: 2),
                           Text(
-                            (booking['rating'] as double? ?? 0.0).toStringAsFixed(1),
+                            (booking['rating'] as double? ?? 0.0)
+                                .toStringAsFixed(1),
                             style: GoogleFonts.poppins(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -490,7 +509,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                         ],
                       ),
                     const Spacer(),
-                    
+
                     // Price
                     Text(
                       'Kes. ${booking['price']}',
@@ -501,7 +520,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    
+
                     // Date & Status Pill
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -519,7 +538,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
                             color: statusBg,
                             borderRadius: BorderRadius.circular(10),

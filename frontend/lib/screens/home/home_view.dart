@@ -1,6 +1,10 @@
+// START OF FILE
+import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/screens/communication/notifications_view.dart';
 import 'package:property_app/widgets/shared.dart';
@@ -124,15 +128,34 @@ class _HomeViewState extends State<HomeView> {
           textTheme: GoogleFonts.poppinsTextTheme(),
         ),
         child: Scaffold(
-          backgroundColor: _bg,
-          body: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(child: _buildHeader(context)),
-              SliverToBoxAdapter(child: _buildNearbySection()),
-              SliverToBoxAdapter(child: _buildRecommendedSection()),
-              const SliverToBoxAdapter(
-                child: SizedBox(height: 100),
+          extendBodyBehindAppBar: true,
+          body: Stack(
+            children: [
+              // Soft Background Gradient tailored to blend cleanly with _bg
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      _bg,
+                      Color(0xFFF3F4F6),
+                      Color(0xFFEEF2FF), // Very subtle hint of blue
+                    ],
+                    stops: [0.0, 0.5, 1.0],
+                  ),
+                ),
+              ),
+              CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(child: _buildHeader(context)),
+                  SliverToBoxAdapter(child: _buildNearbySection()),
+                  SliverToBoxAdapter(child: _buildRecommendedSection()),
+                  const SliverToBoxAdapter(
+                    child: SizedBox(height: 120), // Clearance for bottom nav
+                  ),
+                ],
               ),
             ],
           ),
@@ -171,7 +194,7 @@ class _HomeViewState extends State<HomeView> {
                   ),
                 ),
               ),
-              // Notification Bell
+              // Notification Bell (Glassmorphism style)
               GestureDetector(
                 onTap: () {
                   Navigator.push(
@@ -181,13 +204,9 @@ class _HomeViewState extends State<HomeView> {
                     ),
                   );
                 },
-                child: Container(
-                  width: 46,
-                  height: 46,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFE5E7EB),
-                    shape: BoxShape.circle,
-                  ),
+                child: _GlassContainer(
+                  padding: const EdgeInsets.all(10),
+                  borderRadius: BorderRadius.circular(24),
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
@@ -197,8 +216,8 @@ class _HomeViewState extends State<HomeView> {
                         color: _dark,
                       ),
                       Positioned(
-                        top: 10,
-                        right: 12,
+                        top: 2,
+                        right: 2,
                         child: Container(
                           width: 10,
                           height: 10,
@@ -206,7 +225,7 @@ class _HomeViewState extends State<HomeView> {
                             color: const Color(0xFFEF4444),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: const Color(0xFFE5E7EB),
+                              color: Colors.white,
                               width: 2,
                             ),
                           ),
@@ -217,13 +236,30 @@ class _HomeViewState extends State<HomeView> {
                 ),
               ),
               const SizedBox(width: 12),
-              // Avatar (tap to open Profile)
+              // Avatar (Cloudinary fix applied)
               GestureDetector(
                 onTap: () => Navigator.pushNamed(context, '/profile'),
-                child: Avatar(
-                  url: displayAvatar,
-                  name: displayName,
-                  size: 46,
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: AppSession.buildAvatar(
+                      displayAvatar,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -245,40 +281,33 @@ class _HomeViewState extends State<HomeView> {
 
           const SizedBox(height: 24),
 
-          // Search Bar
-          Container(
+          // Clean Magic Search Bar
+          _GlassContainer(
+            padding: EdgeInsets.zero,
             height: 54,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: Colors.grey.shade200,
-                width: 1.5,
-              ),
-            ),
+            borderRadius: BorderRadius.circular(28),
+            opacity: 0.6,
             child: Row(
               children: [
                 const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Icon(
-                    Icons.search_rounded,
-                    color: _dark,
-                    size: 22,
-                  ),
+                  padding: EdgeInsets.only(left: 16),
+                  child: Icon(Icons.search_rounded, color: _dark, size: 24),
                 ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: TextField(
                     controller: _searchController,
                     style: GoogleFonts.poppins(
-                      fontSize: 15,
-                      color: _dark,
+                      fontSize: 16,
                       fontWeight: FontWeight.w500,
+                      color: _dark,
                     ),
                     onSubmitted: (v) async {
                       AnalyticsService.resetSessionImpressions();
                       await PropertyService.instance.saveSearchTerm(v);
                       await _loadData();
                     },
+                    // Stripping all native fills and borders
                     decoration: InputDecoration(
                       hintText: 'Search locations, area...',
                       hintStyle: GoogleFonts.poppins(
@@ -286,18 +315,36 @@ class _HomeViewState extends State<HomeView> {
                         fontSize: 15,
                         fontWeight: FontWeight.w400,
                       ),
+                      filled: false,
+                      fillColor: Colors.transparent,
                       border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
                       isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
                 ),
-                const Padding(
-                  padding: EdgeInsets.only(right: 16),
-                  child: Icon(
-                    Icons.cancel_outlined,
-                    size: 22,
-                    color: _dark,
-                  ),
+                // ValueListenableBuilder dynamically shows/hides X without full rebuilds
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _searchController,
+                  builder: (context, value, child) {
+                    if (value.text.isNotEmpty) {
+                      return GestureDetector(
+                        onTap: () {
+                          _searchController.clear();
+                          FocusScope.of(context).unfocus();
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.only(right: 16, left: 8),
+                          child: Icon(Icons.cancel, color: _grey, size: 22),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
                 ),
               ],
             ),
@@ -305,9 +352,10 @@ class _HomeViewState extends State<HomeView> {
 
           const SizedBox(height: 24),
 
-          // Filter Chips
+          // Filter Chips (Upgraded to Glass Pills)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
             clipBehavior: Clip.none,
             child: Row(
               children: homeCategoryFilters.asMap().entries.map((e) {
@@ -320,24 +368,34 @@ class _HomeViewState extends State<HomeView> {
                       setState(() => _activeFilter = e.key);
                     },
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOutCubic,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        color: isActive ? _dark : Colors.white,
-                        borderRadius: BorderRadius.circular(999),
+                        color: isActive ? _dark : Colors.white.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: isActive ? _dark : Colors.grey.shade200,
+                          color: isActive ? _dark : Colors.white.withOpacity(0.8),
                           width: 1.5,
                         ),
+                        boxShadow: isActive
+                            ? [
+                                BoxShadow(
+                                  color: _dark.withOpacity(0.2),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                )
+                              ]
+                            : null,
                       ),
                       child: Text(
                         e.value,
                         style: GoogleFonts.poppins(
                           fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
                           color: isActive ? Colors.white : _dark,
                         ),
                       ),
@@ -370,7 +428,7 @@ class _HomeViewState extends State<HomeView> {
                 'Nearby You',
                 style: GoogleFonts.poppins(
                   fontSize: 22,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   color: _dark,
                   letterSpacing: -0.4,
                 ),
@@ -379,7 +437,7 @@ class _HomeViewState extends State<HomeView> {
                 'See all',
                 style: GoogleFonts.poppins(
                   fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                   color: _primaryText,
                 ),
               ),
@@ -390,7 +448,7 @@ class _HomeViewState extends State<HomeView> {
           _loadingNearby
               ? const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(child: CircularProgressIndicator(color: _primaryText)),
                 )
               : Padding(
                   padding:
@@ -445,26 +503,20 @@ class _HomeViewState extends State<HomeView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'Recommended For You',
-                style: GoogleFonts.poppins(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: _dark,
-                  letterSpacing: -0.4,
-                ),
-              ),
-            ],
+          Text(
+            'Recommended For You',
+            style: GoogleFonts.poppins(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: _dark,
+              letterSpacing: -0.4,
+            ),
           ),
           const SizedBox(height: 16),
           if (_loadingRecommended)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator(color: _primaryText)),
             )
           else if (_filteredRecommended.isEmpty)
             Padding(
@@ -479,7 +531,7 @@ class _HomeViewState extends State<HomeView> {
               final i = entry.key;
               final p = entry.value;
               return Padding(
-                padding: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.only(bottom: 16),
                 child: VisibilityDetector(
                   key: Key('recommended_impression_${p.id}'),
                   onVisibilityChanged: (info) {
@@ -554,28 +606,33 @@ class _NearbyCard extends StatelessWidget {
               Positioned(
                 top: 18,
                 left: 18,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.star_rounded,
-                          color: Color(0xFFFBBC05), size: 16),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${property.rating.toStringAsFixed(1)} (${property.reviews})',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: _dark,
-                        ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.white.withOpacity(0.4)),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.star_rounded, color: Color(0xFFFBBC05), size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${property.rating.toStringAsFixed(1)} (${property.reviews})',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -596,18 +653,17 @@ class _NearbyCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(
-                        fontSize: 26,
+                        fontSize: 24,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
                         letterSpacing: -0.4,
-                        height: 1.1,
+                        height: 1.2,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        const Icon(Icons.location_on_rounded,
-                            size: 16, color: Colors.white),
+                        Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill), size: 16, color: Colors.white70),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
@@ -617,7 +673,7 @@ class _NearbyCard extends StatelessWidget {
                             style: GoogleFonts.poppins(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
-                              color: Colors.white,
+                              color: Colors.white70,
                             ),
                           ),
                         ),
@@ -631,7 +687,7 @@ class _NearbyCard extends StatelessWidget {
                         Text(
                           formatPropertyPrice(property.price),
                           style: GoogleFonts.poppins(
-                            fontSize: 20,
+                            fontSize: 22,
                             fontWeight: FontWeight.w800,
                             color: _green,
                             letterSpacing: -0.3,
@@ -670,116 +726,162 @@ class _RecommendedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
+      child: _GlassContainer(
+        padding: EdgeInsets.zero, // Flush image to the edge
+        borderRadius: BorderRadius.circular(24),
         child: Row(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(24),
+                bottomLeft: Radius.circular(24),
+              ),
               child: buildPropertyImage(
                 property.image,
-                width: 90,
-                height: 90,
+                width: 110,
+                height: 110,
                 fit: BoxFit.cover,
+                errorPlaceholder: Container(width: 110, height: 110, color: const Color(0xFFE5E7EB)),
               ),
             ),
-            const SizedBox(width: 16),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    property.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: _dark,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_rounded,
-                          size: 14, color: _grey),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          property.location,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            color: _grey,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      property.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w800,
+                        color: _dark,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    runSpacing: 0,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Text(
-                            formatPropertyPrice(property.price),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill), size: 14, color: _grey),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            property.location,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: _dark,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                          Text(
-                            '/mo',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
+                              fontSize: 13,
                               color: _grey,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                        ],
-                      ),
-                      if (property.reviews > 0)
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
                           children: [
-                            const Icon(Icons.star_rounded,
-                                color: Color(0xFFFBBC05), size: 14),
-                            const SizedBox(width: 4),
                             Text(
-                              '${property.rating.toStringAsFixed(1)} (${property.reviews})',
+                              formatPropertyPrice(property.price),
                               style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
                                 color: _dark,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                            Text(
+                              '/mo',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: _grey,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],
                         ),
-                    ],
-                  ),
-                ],
+                        if (property.reviews > 0)
+                          Row(
+                            children: [
+                              const Icon(Icons.star_rounded, color: Color(0xFFFBBC05), size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${property.rating.toStringAsFixed(1)} (${property.reviews})',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: _dark,
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Glassmorphism Core Utility ──────────────────────────────────────────────
+class _GlassContainer extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final BorderRadius? borderRadius;
+  final double blur;
+  final double opacity;
+  final double borderWidth;
+  final double? height;
+
+  const _GlassContainer({
+    required this.child,
+    required this.padding,
+    this.borderRadius,
+    this.blur = 20.0,
+    this.opacity = 0.55,
+    this.borderWidth = 1.5,
+    this.height,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = borderRadius ?? BorderRadius.circular(24);
+
+    return ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        child: Container(
+          height: height,
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: opacity),
+            borderRadius: radius,
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.8),
+              width: borderWidth,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: child,
         ),
       ),
     );

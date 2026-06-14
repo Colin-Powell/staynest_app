@@ -71,8 +71,15 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
         _isLoading = false;
       });
     } catch (e) {
+      final errStr = e.toString().toLowerCase();
+      final bool isConnectionError = errStr.contains('socketexception') ||
+          errStr.contains('connection refused') ||
+          errStr.contains('connection timed out') ||
+          errStr.contains('clientexception');
       setState(() {
-        _errorMessage = 'Failed to load properties: ${e.toString()}';
+        _errorMessage = isConnectionError
+            ? 'Unable to sync data. Please check your internet connection.'
+            : 'We encountered an error loading your dashboard. Please try again.';
         _isLoading = false;
       });
     }

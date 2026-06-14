@@ -1,5 +1,8 @@
+// START OF FILE
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/socket_service.dart';
@@ -7,7 +10,7 @@ import 'package:property_app/services/message_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:property_app/models/communication_models.dart';
 
-const Color _primary = Color(0xFF3F37C9);
+const Color _primary = Color(0xFF3F37C9); // Tenant Blue Theme
 
 // ─── Main Widget ──────────────────────────────────────────────────────────────
 
@@ -81,11 +84,9 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     _fetchMessages();
 
     // State action: mark messages from this conversation partner as read
-    // so unread badges/conversation list state stay consistent.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         await MessageService.instance.markAsRead([widget.userId]);
-        // No local badge state exists here; MessagesViewScreen reloads on return.
       } catch (_) {
         // Ignore read-tracking failures to avoid breaking chat UI.
       }
@@ -93,21 +94,12 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
     // Listen to socket messages
     _socketSubscription = SocketService.instance.messages.listen((msg) {
-      // Debug: helps confirm whether the same socket payload is received multiple times.
-      // ignore: avoid_print
-      print(
-          'socket message recv: id=${msg.id} from=${msg.from} to=${msg.to} ts=${msg.ts} text=${msg.text}');
-
-      // Only handle messages FROM the person we are chatting with.
-      // For sender, we rely on optimistic UI + HTTP reconciliation.
       if (msg.from != widget.userId) return;
 
       final socketId = msg.id.trim();
       final socketText = msg.text.trim();
       final socketTime = msg.ts;
 
-      // Robust dedupe: prefer DB id, but also guard against empty/missing id
-      // and against duplicate events.
       final alreadyById =
           socketId.isNotEmpty && _messages.any((m) => m.id == socketId);
       if (alreadyById) return;
@@ -169,7 +161,6 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   }
 
   void _addMessage(ChatMessage msg) {
-    // Global ID check to prevent duplicates
     if (_messages.any((m) => m.id == msg.id)) return;
 
     setState(() {
@@ -222,7 +213,6 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
               _messages[idx].copyWith(status: MessageStatus.failed);
         });
       }
-      print('Failed to save message: $err');
     }
   }
 
@@ -243,13 +233,12 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
           await MessageService.instance.fetchConversation(widget.userId);
       if (!mounted) return;
 
-      // Ensure messages are sorted by creation date before adding to the UI list
       messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
       setState(() {
         for (final msg in messages) {
           final chatMsg = ChatMessage(
-            id: msg.id, // Use actual DB ID
+            id: msg.id,
             sender: msg.fromUserId == widget.userId
                 ? ChatSender.them
                 : ChatSender.me,
@@ -265,8 +254,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       _scrollToBottom();
     } catch (err) {
       setState(() {});
-      // ignore: avoid_print
-      print('Failed to fetch messages: $err');
+      debugPrint('Failed to fetch messages: $err');
     }
   }
 
@@ -368,9 +356,9 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
               children: [
                 Text(
                   widget.name,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
                     color: Colors.black,
                     letterSpacing: -0.5,
                   ),
@@ -383,14 +371,13 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                       height: 10,
                       decoration: BoxDecoration(
                         color: _isOtherTyping
-                            ? const Color(0xFF3B82F6)
-                            : const Color(0xFF22C55E),
+                            ? const Color(0xFF3B82F6) // Blue typing indicator
+                            : const Color(0xFF22C55E), // Green online indicator
                         shape: BoxShape.circle,
                         boxShadow: _isOtherTyping
                             ? [
                                 BoxShadow(
-                                    color: const Color(0xFF3B82F6)
-                                        .withOpacity(0.4),
+                                    color: const Color(0xFF3B82F6).withOpacity(0.4),
                                     blurRadius: 4,
                                     spreadRadius: 1)
                               ]
@@ -400,7 +387,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                     const SizedBox(width: 8),
                     Text(
                       _isOtherTyping ? 'typing...' : 'Online',
-                      style: TextStyle(
+                      style: GoogleFonts.poppins(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: _isOtherTyping
@@ -416,7 +403,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
           // Call button
           GestureDetector(
             onTap: widget.onCall,
-            child: const Icon(Icons.call, color: Colors.black, size: 28),
+            child: Icon(PhosphorIcons.phone(PhosphorIconsStyle.fill), color: Colors.black, size: 26),
           ),
         ],
       ),
@@ -426,6 +413,20 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   // ─── Chat Area ──────────────────────────────────────────────────────────────
 
   Widget _buildChatArea() {
+    if (_messages.isEmpty) {
+      return Center(
+        child: Text(
+          'No messages yet.\nSay hello!',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.poppins(
+            fontSize: 15,
+            color: const Color(0xFF9CA3AF),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
+    }
+
     return ListView.builder(
       controller: _scrollController,
       physics: const BouncingScrollPhysics(),
@@ -465,15 +466,15 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xFFE5E7EB),
+            color: const Color(0xFFF3F4F6),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
             label,
-            style: const TextStyle(
-              fontSize: 14,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: Colors.black,
+              color: const Color(0xFF9CA3AF),
             ),
           ),
         ),
@@ -481,140 +482,125 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     );
   }
 
-  // ─── Input Area ─────────────────────────────────────────────────────────────
+  // ─── Clean Minimal Input Area ─────────────────────────────────────────────
 
   Widget _buildInputArea(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(color: Colors.white),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_isTyping == false) _buildQuickReplies(),
-          _buildActualInput(context),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickReplies() {
-    final replies = ['Is it available?', 'When can I view?', 'Can we talk?'];
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        children: replies
-            .map((r) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ActionChip(
-                    label: Text(r,
-                        style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: _primary)),
-                    onPressed: () {
-                      _msgController.text = r;
-                      _sendMessage();
-                    },
-                  ),
-                ))
-            .toList(),
-      ),
-    );
-  }
-
-  Widget _buildActualInput(BuildContext context) {
-    return Container(
       padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 16,
-        bottom: MediaQuery.of(context).padding.bottom + 16,
+        left: 20,
+        right: 20,
+        top: 12,
+        bottom: MediaQuery.of(context).padding.bottom + 12,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
+          )
+        ],
       ),
       child: Row(
         children: [
           GestureDetector(
-            onTap: () {}, // Attachments
-            child: const Icon(
-              Icons.add_circle_outline_rounded,
-              color: Color(0xFF9CA3AF),
-              size: 30,
+            onTap: () {}, // Attachments Action
+            child: Icon(
+              PhosphorIcons.plusCircle(PhosphorIconsStyle.fill),
+              color: const Color(0xFF9CA3AF),
+              size: 32,
             ),
           ),
           const SizedBox(width: 12),
+          
+          // Clean Pill Input-Bar
           Expanded(
-            child: TextField(
-              controller: _msgController,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.black,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6), 
+                borderRadius: BorderRadius.circular(24),
               ),
-              decoration: const InputDecoration(
-                hintText: 'Type a message..',
-                hintStyle: TextStyle(
-                  color: Color(0xFF9CA3AF),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _msgController,
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black,
+                      ),
+                      // Absolutely no native fills or boundaries
+                      decoration: InputDecoration(
+                        hintText: 'Type a message...',
+                        hintStyle: GoogleFonts.poppins(
+                          color: const Color(0xFF9CA3AF),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
+                  ),
+                  if (!_isTyping)
+                    GestureDetector(
+                      onTap: () {}, // Camera Action
+                      child: Icon(
+                        PhosphorIcons.camera(), 
+                        color: const Color(0xFF9CA3AF), 
+                        size: 22
+                      ),
+                    ),
+                ],
               ),
-              onSubmitted: (_) => _sendMessage(),
             ),
           ),
-          // Action Icons
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              GestureDetector(
-                onTap: () {},
-                child: const Icon(
-                  Icons.sentiment_satisfied_alt_rounded,
-                  color: Color(0xFF9CA3AF),
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 16),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                transitionBuilder: (child, animation) => ScaleTransition(
-                  scale: animation,
-                  child: child,
-                ),
-                child: _isTyping
-                    ? GestureDetector(
-                        key: const ValueKey('send'),
-                        onTap: _sendMessage,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: _primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.send_rounded,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      )
-                    : GestureDetector(
-                        key: const ValueKey('camera'),
-                        onTap: () {},
-                        child: const Icon(
-                          Icons.camera_alt_outlined,
-                          color: Color(0xFF9CA3AF),
-                          size: 28,
-                        ),
+          const SizedBox(width: 12),
+          
+          // Send / Mic Button Switcher
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            transitionBuilder: (child, animation) =>
+                ScaleTransition(scale: animation, child: child),
+            child: _isTyping
+                ? GestureDetector(
+                    key: const ValueKey('send'),
+                    onTap: _sendMessage,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: _primary,
+                        shape: BoxShape.circle,
                       ),
-              ),
-            ],
+                      child: const Icon(Icons.send_rounded,
+                          color: Colors.white, size: 20),
+                    ),
+                  )
+                : GestureDetector(
+                    key: const ValueKey('mic'),
+                    onTap: () {}, // Mic Action
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF3F4F6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        PhosphorIcons.microphone(),
+                        color: const Color(0xFF9CA3AF), 
+                        size: 22
+                      ),
+                    ),
+                  ),
           ),
         ],
       ),
@@ -669,9 +655,9 @@ class _TheirBubble extends StatelessWidget {
               children: [
                 Text(
                   message.text,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w500,
                     color: Colors.black,
                     height: 1.4,
                   ),
@@ -681,10 +667,10 @@ class _TheirBubble extends StatelessWidget {
                   alignment: Alignment.centerRight,
                   child: Text(
                     message.time,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF9CA3AF),
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF9CA3AF),
                     ),
                   ),
                 ),
@@ -763,9 +749,9 @@ class _MyBubble extends StatelessWidget {
               children: [
                 Text(
                   message.text,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w500,
                     color: Colors.white,
                     height: 1.4,
                   ),
@@ -778,9 +764,9 @@ class _MyBubble extends StatelessWidget {
                     children: [
                       Text(
                         message.time,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
                           color: Colors.white.withOpacity(0.8),
                         ),
                       ),

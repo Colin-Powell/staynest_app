@@ -8,6 +8,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/utils/api_result.dart';
 
 class RegisterView extends StatefulWidget {
   const RegisterView({super.key});
@@ -194,19 +195,9 @@ class _RegisterViewState extends State<RegisterView>
         }
       }
     } catch (err) {
-      if (kDebugMode) {
-        debugPrint('Registration request failed: $err');
-      }
       if (mounted) {
         setState(() => _isLoading = false);
-        final bool isConnectionError = err is SocketException ||
-            err.toString().contains('Connection refused') ||
-            err.toString().contains('Connection timed out');
-        final message = isConnectionError
-            ? 'We\'re having trouble connecting to our server. Please check your internet and try again.'
-            : err is TimeoutException
-                ? 'The connection timed out. Please check your internet and try again.'
-                : 'Something went wrong. Please check your information and try again.';
+        final message = ApiResult.mapError(err);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),

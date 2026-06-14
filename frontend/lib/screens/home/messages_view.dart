@@ -5,8 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/services/message_service.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/session/app_session.dart';
-import 'package:property_app/widgets/property_image.dart';
 import 'dart:ui';
+import 'package:property_app/utils/api_result.dart';
 
 // ─── Local UI model (maps from ConversationModel) ────────────────────────────
 
@@ -176,7 +176,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to load conversations: ${e.toString()}';
+        _errorMessage = ApiResult.mapError(e);
         _isLoading = false;
       });
     }
@@ -273,7 +273,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to mark as read: ${e.toString()}')),
+        SnackBar(content: Text(ApiResult.mapError(e))),
       );
     }
   }
@@ -332,9 +332,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
                         secondChild: _buildSelectionHeader(displayList.length),
                       ),
                       const SizedBox(height: 24),
-                      _buildFilterChips(),
-                      const SizedBox(height: 16),
-                      // CLEAN SEARCH BAR UI
+
+                      // ULTRA CLEAN SEARCH BAR
                       _GlassContainer(
                         padding: EdgeInsets.zero,
                         height: 52,
@@ -384,7 +383,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
                                   FocusScope.of(context).unfocus();
                                 },
                                 child: const Padding(
-                                  padding: EdgeInsets.only(right: 16),
+                                  padding: EdgeInsets.only(right: 16, left: 16),
                                   child: Icon(
                                     Icons.cancel,
                                     color: Color(0xFF9CA3AF),
@@ -410,6 +409,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
                             : displayList.isEmpty
                                 ? _buildEmptyState()
                                 : RefreshIndicator(
+                                    color: _tenantPrimary,
                                     onRefresh: _loadConversations,
                                     child: ListView.builder(
                                       physics: const BouncingScrollPhysics(),
@@ -604,6 +604,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20)),
                         offset: const Offset(0, -160),
+                        color: Colors.white,
                         onSelected: (value) {
                           if (value == 'read') _markSelectedAsRead();
                           if (value == 'block' || value == 'pin') {
@@ -660,36 +661,6 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
     );
   }
 
-  Widget _buildFilterChips() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      child: Row(
-        children: _MessageFilter.values.map((filter) {
-          final isSelected = _currentFilter == filter;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              label:
-                  Text(filter.name[0].toUpperCase() + filter.name.substring(1)),
-              selected: isSelected,
-              onSelected: (val) => setState(() => _currentFilter = filter),
-              selectedColor: _tenantPrimary.withOpacity(0.2),
-              labelStyle: TextStyle(
-                color: isSelected ? _tenantPrimary : Colors.black54,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-              backgroundColor: Colors.white,
-              shape: StadiumBorder(
-                  side: BorderSide(
-                      color: isSelected ? _tenantPrimary : Colors.black12)),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
   // ── Headers ──────────────────────────────────────────────────────────────────
 
   Widget _buildNormalHeader(int total) {
@@ -706,38 +677,46 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
             letterSpacing: -0.5,
           ),
         ),
-        PopupMenuButton<String>(
+        // REPLACED PILLS WITH DROPDOWN MENU
+        PopupMenuButton<_MessageFilter>(
           icon: const Icon(Icons.more_vert_rounded,
               color: Colors.black, size: 28),
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          itemBuilder: (context) => [
-            PopupMenuItem(
-                value: 'read',
-                child: Text('Mark all ($total) as read',
-                    style: TextStyle(fontWeight: FontWeight.w600))),
-            PopupMenuItem(
-                value: 'unread',
-                child: Text(
-                    _currentFilter == _MessageFilter.unread
-                        ? 'Show all'
-                        : 'Filter by unread',
-                    style: const TextStyle(fontWeight: FontWeight.w600))),
-          ],
-          onSelected: (val) {
-            if (val == 'read') {
-              MessageService.instance
-                  .markAsRead(_chats.map((e) => e.id).toList())
-                  .then((_) => _loadConversations());
-            } else if (val == 'unread') {
-              // Legacy menu support
-              setState(() {
-                _currentFilter = _currentFilter == _MessageFilter.unread
-                    ? _MessageFilter.all
-                    : _MessageFilter.unread;
-              });
-            }
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          color: Colors.white,
+          elevation: 8,
+          onSelected: (filter) {
+            setState(() => _currentFilter = filter);
           },
+          itemBuilder: (context) => _MessageFilter.values.map((filter) {
+            final isSelected = _currentFilter == filter;
+            final name =
+                filter.name[0].toUpperCase() + filter.name.substring(1);
+            return PopupMenuItem(
+              value: filter,
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected
+                        ? Icons.check_circle_rounded
+                        : Icons.circle_outlined,
+                    color: isSelected ? _tenantPrimary : Colors.black54,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: isSelected ? _tenantPrimary : Colors.black,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
         ),
       ],
     );
@@ -883,7 +862,9 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: _loadConversations,
-            child: const Text('Retry'),
+            style: ElevatedButton.styleFrom(backgroundColor: _tenantPrimary),
+            child:
+                Text('Retry', style: GoogleFonts.poppins(color: Colors.white)),
           ),
         ],
       ),
@@ -921,7 +902,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
                         children: [
                           ClipOval(
                             child: AppSession.buildAvatar(
-                              contact.avatarUrl ?? '',
+                              contact.avatarUrl,
                               width: 60,
                               height: 60,
                               fit: BoxFit.cover,
@@ -1092,13 +1073,12 @@ class _ChatTileState extends State<_ChatTile>
                   Container(
                     width: 4,
                     height: 40,
+                    margin: const EdgeInsets.only(right: 12),
                     decoration: BoxDecoration(
                       color: _tenantPrimary,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                if (hasUnread && !widget.isSelectionMode)
-                  const SizedBox(width: 8),
 
                 // Selection checkbox
                 AnimatedSize(

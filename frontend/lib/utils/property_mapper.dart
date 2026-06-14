@@ -62,14 +62,18 @@ Property mapApiProperty(Map<String, dynamic> json) {
     propertyCount: _toInt(json['landlord_property_count']),
   );
 
-  final reviews = json['reviews'] is num
-      ? (json['reviews'] as num).toInt()
-      : int.tryParse(json['reviews']?.toString() ?? '') ?? 0;
-  final rating = json['rating'] is num
-      ? (json['rating'] as num).toDouble()
-      : (reviews > 0
-          ? double.tryParse(json['rating']?.toString() ?? '') ?? 0.0
-          : 0.0);
+  // Backend `/properties` returns `review_count` and `average_rating`.
+  // Keep backwards compatibility with legacy keys `reviews`/`rating`.
+  final reviews = (json['review_count'] ?? json['reviews']) is num
+      ? ((json['review_count'] ?? json['reviews']) as num).toInt()
+      : int.tryParse(
+              (json['review_count'] ?? json['reviews'])?.toString() ?? '') ??
+          0;
+
+  final ratingRaw = json['average_rating'] ?? json['rating'];
+  final rating = ratingRaw is num
+      ? ratingRaw.toDouble()
+      : double.tryParse(ratingRaw?.toString() ?? '') ?? 0.0;
 
   return Property(
     id: id,

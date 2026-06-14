@@ -88,8 +88,12 @@ class _MyBookingsViewState extends State<MyBookingsView>
                   'time': '10:00 AM',
                   'status': _mapStatus(b['status']?.toString() ?? ''),
                   'image': b['image_url']?.toString() ?? '',
-                  'rating': (double.tryParse(b['average_rating']?.toString() ?? '0') ?? 0.0).toDouble(),
-                  'reviews': int.tryParse(b['review_count']?.toString() ?? '0') ?? 0,
+                  'rating': (double.tryParse(
+                              b['average_rating']?.toString() ?? '0') ??
+                          0.0)
+                      .toDouble(),
+                  'reviews':
+                      int.tryParse(b['review_count']?.toString() ?? '0') ?? 0,
                 })
             .toList();
         _isLoading = false;
@@ -354,10 +358,12 @@ class _MyBookingsViewState extends State<MyBookingsView>
                     if ((booking['reviews'] as int? ?? 0) > 0)
                       Row(
                         children: [
-                          const Icon(Icons.star_rounded, size: 14, color: Color(0xFFFBBF24)),
+                          const Icon(Icons.star_rounded,
+                              size: 14, color: Color(0xFFFBBF24)),
                           const SizedBox(width: 2),
                           Text(
-                            (booking['rating'] as double? ?? 0.0).toStringAsFixed(1),
+                            (booking['rating'] as double? ?? 0.0)
+                                .toStringAsFixed(1),
                             style: GoogleFonts.poppins(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -604,7 +610,9 @@ class _BookingViewState extends State<BookingView> {
         lat: double.tryParse(raw['lat']?.toString() ?? '') ?? 0.0,
         lng: double.tryParse(raw['lng']?.toString() ?? '') ?? 0.0,
         price: (double.tryParse(raw['price']?.toString() ?? '') ?? 0).toInt(),
-        rating: (double.tryParse(raw['average_rating']?.toString() ?? '0') ?? 0.0).toDouble(),
+        rating:
+            (double.tryParse(raw['average_rating']?.toString() ?? '0') ?? 0.0)
+                .toDouble(),
         reviews: int.tryParse(raw['review_count']?.toString() ?? '0') ?? 0,
         category: raw['category']?.toString() ?? 'Apartment',
         image: raw['image_url']?.toString() ?? '',
@@ -635,8 +643,15 @@ class _BookingViewState extends State<BookingView> {
           source: 'booking_view');
     } catch (e) {
       if (!mounted) return;
+      final errStr = e.toString().toLowerCase();
+      final bool isConnectionError = errStr.contains('socketexception') ||
+          errStr.contains('connection refused') ||
+          errStr.contains('connection timed out') ||
+          errStr.contains('clientexception');
       setState(() {
-        _error = e.toString();
+        _error = isConnectionError
+            ? 'Connection error. Please check your network and try again.'
+            : 'Failed to load property details. Please try again.';
         _loading = false;
       });
     }
@@ -1120,8 +1135,8 @@ class BookingConfirmedPage extends StatelessWidget {
                                 decoration:
                                     const BoxDecoration(shape: BoxShape.circle),
                                 clipBehavior: Clip.antiAlias,
-                                child:
-                                    AppSession.buildAvatar(property.agent.avatar),
+                                child: AppSession.buildAvatar(
+                                    property.agent.avatar),
                               ),
                               const SizedBox(width: 8),
                               Text(

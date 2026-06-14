@@ -1,9 +1,8 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/app_theme.dart';
-import 'package:property_app/widgets/shared.dart';
-
-Color get _primary => AppTheme.primary;
-Color get _bgColor => AppTheme.background;
 
 class FilterView extends StatefulWidget {
   final VoidCallback onClose;
@@ -24,6 +23,11 @@ class _FilterViewState extends State<FilterView>
   late final AnimationController _animController;
   late final Animation<Offset> _slideAnim;
   late final Animation<double> _fadeAnim;
+
+  // Tenant Blue Accent
+  static const Color _primary = Color(0xFF3F37C9);
+  static const Color _textDark = Color(0xFF111827);
+  static const Color _textLight = Color(0xFF6B7280);
 
   String _selectedType = 'Apartment';
   RangeValues _priceRange = const RangeValues(10000, 200000);
@@ -50,10 +54,10 @@ class _FilterViewState extends State<FilterView>
   void initState() {
     super.initState();
     _animController = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 300));
+        vsync: this, duration: const Duration(milliseconds: 400));
     _slideAnim = Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
         .animate(
-            CurvedAnimation(parent: _animController, curve: Curves.easeOut));
+            CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
     _animController.forward();
   }
@@ -92,6 +96,10 @@ class _FilterViewState extends State<FilterView>
     });
   }
 
+  void _handleClose() {
+    _animController.reverse().then((_) => widget.onClose());
+  }
+
   @override
   Widget build(BuildContext context) {
     return SlideTransition(
@@ -99,37 +107,113 @@ class _FilterViewState extends State<FilterView>
       child: FadeTransition(
         opacity: _fadeAnim,
         child: Scaffold(
-          backgroundColor: _bgColor,
+          backgroundColor: Colors.transparent,
+          extendBodyBehindAppBar: true,
           body: Stack(
             children: [
-              Column(
-                children: [
-                  _buildHeader(),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSectionLabel('Property Type'),
-                          const SizedBox(height: 16),
-                          _buildPropertyTypes(),
-                          const SizedBox(height: 32),
-                          _buildSectionLabel('Price Range'),
-                          const SizedBox(height: 20),
-                          _buildPriceRange(),
-                          const SizedBox(height: 32),
-                          _buildSectionLabel('Amenities'),
-                          const SizedBox(height: 16),
-                          _buildAmenities(),
-                        ],
+              // 1. Soft Gradient Background (Tenant Theme)
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFFF5F7FF), // Soft icy blue
+                      Color(0xFFEBF0FF), // Light indigo
+                      Color(0xFFDCE4FF), // Deeper soft blue
+                    ],
+                    stops: [0.0, 0.5, 1.0],
+                  ),
+                ),
+              ),
+
+              // 2. Main Scrolling Content
+              SafeArea(
+                bottom: false,
+                child: Column(
+                  children: [
+                    _buildHeader(),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 140), // Clearance for bottom bar
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Property Type Section
+                            _buildSectionLabel('Property Type'),
+                            const SizedBox(height: 16),
+                            _buildPropertyTypes(),
+                            
+                            const SizedBox(height: 32),
+                            
+                            // Price Range Section
+                            _buildSectionLabel('Price Range (Monthly)'),
+                            const SizedBox(height: 16),
+                            _GlassContainer(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                              child: _buildPriceRange(),
+                            ),
+                            
+                            const SizedBox(height: 32),
+                            
+                            // Amenities Section
+                            _buildSectionLabel('Amenities'),
+                            const SizedBox(height: 16),
+                            _GlassContainer(
+                              padding: const EdgeInsets.all(20),
+                              child: _buildAmenities(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 3. Floating Glass Action Bar
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: ClipRRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                    child: Container(
+                      padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.6),
+                        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.8), width: 1.5)),
+                      ),
+                      child: GestureDetector(
+                        onTap: _applyFilters,
+                        child: Container(
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: _primary, 
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _primary.withOpacity(0.4),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'Apply Filters',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
-              Positioned(
-                  bottom: 0, left: 0, right: 0, child: _buildApplyButton()),
             ],
           ),
         ),
@@ -138,33 +222,47 @@ class _FilterViewState extends State<FilterView>
   }
 
   Widget _buildHeader() {
-    return Container(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 16,
-        bottom: 16,
-        left: 24,
-        right: 24,
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
-            'Filters',
-            style: TextStyle(
-              fontSize: 36, // As requested
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF111827),
-              letterSpacing: -1.0,
-            ),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: _handleClose,
+                behavior: HitTestBehavior.opaque,
+                child: const Icon(Icons.close_rounded, size: 28, color: _textDark),
+              ),
+              const SizedBox(width: 16),
+              Text(
+                'Filters',
+                style: GoogleFonts.poppins(
+                  fontSize: 28, 
+                  fontWeight: FontWeight.w800,
+                  color: _textDark,
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ],
           ),
           GestureDetector(
             onTap: _reset,
-            child: Text(
-              'Reset',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(color: _primary),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: _primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                'Reset',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _primary,
+                ),
+              ),
             ),
           ),
         ],
@@ -174,24 +272,60 @@ class _FilterViewState extends State<FilterView>
 
   Widget _buildSectionLabel(String text) => Text(
         text,
-        style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF111827)),
+        style: GoogleFonts.poppins(
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+          color: _textDark,
+        ),
       );
 
-  // Property Type Pills with Circle Icons
+  // Property Type Glass Pills
   Widget _buildPropertyTypes() {
     return Wrap(
-      spacing: 10,
+      spacing: 12,
       runSpacing: 12,
       children: _propertyTypes.map((type) {
         final isSelected = _selectedType == type['name'];
-        return PropertyPill(
-          label: type['name'] as String,
-          icon: type['icon'] as IconData,
-          selected: isSelected,
+        return GestureDetector(
           onTap: () => setState(() => _selectedType = type['name'] as String),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
+            decoration: BoxDecoration(
+              color: isSelected ? _primary : Colors.white.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(
+                color: isSelected ? _primary : Colors.white.withOpacity(0.8), 
+                width: 1.5,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: isSelected ? Colors.white.withOpacity(0.2) : Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    type['icon'] as IconData,
+                    size: 18,
+                    color: isSelected ? Colors.white : _textLight,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  type['name'] as String,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? Colors.white : _textDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       }).toList(),
     );
@@ -200,13 +334,36 @@ class _FilterViewState extends State<FilterView>
   Widget _buildPriceRange() {
     return Column(
       children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Ksh. ${_priceRange.start.toInt()}',
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _primary,
+              ),
+            ),
+            Text(
+              'Ksh. ${_priceRange.end.toInt()}${_priceRange.end >= 200000 ? '+' : ''}',
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _primary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
-            rangeThumbShape:
-                const RoundRangeSliderThumbShape(enabledThumbRadius: 11),
+            rangeThumbShape: const RoundRangeSliderThumbShape(enabledThumbRadius: 12),
             activeTrackColor: _primary,
-            inactiveTrackColor: const Color(0xFFE5E7EB),
+            inactiveTrackColor: Colors.white.withOpacity(0.8),
+            thumbColor: Colors.white,
             trackHeight: 6,
+            overlayColor: _primary.withOpacity(0.2),
           ),
           child: RangeSlider(
             values: _priceRange,
@@ -215,59 +372,61 @@ class _FilterViewState extends State<FilterView>
             onChanged: (values) => setState(() => _priceRange = values),
           ),
         ),
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Ksh. ${_priceRange.start.toInt()}',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            Text(
-                'Ksh. ${_priceRange.end.toInt()}${_priceRange.end >= 200000 ? '+' : ''}',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-          ],
-        ),
       ],
     );
   }
 
   Widget _buildAmenities() {
     return Column(
-      children: _amenities.map((amenity) {
+      children: _amenities.asMap().entries.map((entry) {
+        final int index = entry.key;
+        final String amenity = entry.value;
         final isSelected = _selectedAmenities.contains(amenity);
+        
         return GestureDetector(
           onTap: () => _toggleAmenity(amenity),
+          behavior: HitTestBehavior.opaque,
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 22),
+            padding: EdgeInsets.only(bottom: index == _amenities.length - 1 ? 0 : 24),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: [
-                    Icon(_getAmenityIcon(amenity),
-                        size: 24, color: const Color(0xFF4B5563)),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.8),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(_getAmenityIcon(amenity), size: 18, color: _primary),
+                    ),
                     const SizedBox(width: 14),
                     Text(
                       amenity,
-                      style: const TextStyle(
-                          fontSize: 15.5,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF374151)),
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: _textDark,
+                      ),
                     ),
                   ],
                 ),
-                Container(
-                  width: 26,
-                  height: 26,
+                // Modern Circular Checkbox
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 24,
+                  height: 24,
                   decoration: BoxDecoration(
-                    color: isSelected ? _primary : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
+                    color: isSelected ? _primary : Colors.transparent,
+                    shape: BoxShape.circle,
                     border: Border.all(
-                        color: isSelected ? _primary : const Color(0xFFD1D5DB),
-                        width: 2),
+                      color: isSelected ? _primary : _textLight.withOpacity(0.5),
+                      width: 2,
+                    ),
                   ),
                   child: isSelected
-                      ? const Icon(Icons.check_rounded,
-                          color: Colors.white, size: 18)
+                      ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
                       : null,
                 ),
               ],
@@ -281,51 +440,69 @@ class _FilterViewState extends State<FilterView>
   IconData _getAmenityIcon(String amenity) {
     switch (amenity) {
       case 'WiFi':
-        return Icons.wifi;
+        return PhosphorIcons.wifiHigh();
       case 'Water included':
-        return Icons.water_drop_outlined;
+        return PhosphorIcons.drop();
       case 'Electricity included':
-        return Icons.electric_bolt;
+        return PhosphorIcons.lightning();
       case 'Furnished':
-        return Icons.chair_alt;
+        return PhosphorIcons.armchair();
       case 'Parking':
-        return Icons.local_parking;
+        return PhosphorIcons.car();
       case 'Security':
-        return Icons.security;
+        return PhosphorIcons.shieldCheck();
       case 'CCTV':
-        return Icons.videocam_outlined;
+        return PhosphorIcons.videoCamera();
       default:
-        return Icons.check_circle_outline;
+        return PhosphorIcons.checkCircle();
     }
   }
+}
 
-  Widget _buildApplyButton() {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-          24, 16, 24, MediaQuery.of(context).padding.bottom + 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 20,
-              offset: const Offset(0, -10))
-        ],
-      ),
-      child: GestureDetector(
-        onTap: _applyFilters,
+// ─── Glassmorphism Core Utility ──────────────────────────────────────────────
+class _GlassContainer extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final BorderRadius? borderRadius;
+  final double blur;
+  final double opacity;
+  final double borderWidth;
+
+  const _GlassContainer({
+    required this.child,
+    required this.padding,
+    this.borderRadius,
+    this.blur = 20.0,
+    this.opacity = 0.55,
+    this.borderWidth = 1.5,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = borderRadius ?? BorderRadius.circular(24);
+
+    return ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
         child: Container(
-          height: 58,
+          padding: padding,
           decoration: BoxDecoration(
-              color: _primary, borderRadius: BorderRadius.circular(16)),
-          alignment: Alignment.center,
-          child: Text(
-            'Apply Filters',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(color: Colors.white),
+            color: Colors.white.withValues(alpha: opacity),
+            borderRadius: radius,
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.8),
+              width: borderWidth,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
+          child: child,
         ),
       ),
     );

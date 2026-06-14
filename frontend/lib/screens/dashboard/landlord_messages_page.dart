@@ -9,6 +9,7 @@ import 'package:property_app/services/socket_service.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'landlord_chat_view.dart';
 import 'package:uuid/uuid.dart';
+import 'package:property_app/utils/api_result.dart';
 
 const Color _landlordPrimary = Color(0xFF059669);
 const Color _textDark = Color(0xFF111827);
@@ -116,7 +117,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to load messages: ${e.toString()}';
+        _errorMessage = ApiResult.mapError(e);
         _isLoading = false;
       });
     }
@@ -348,7 +349,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       _loadConversations();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to mark as read: $e')),
+        SnackBar(content: Text(ApiResult.mapError(e))),
       );
     }
   }
@@ -407,14 +408,16 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                   secondChild: _buildSelectionHeader(),
                 ),
               ),
-              
+
               // Clean Search Bar UI
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                 child: _GlassContainer(
                   padding: EdgeInsets.zero,
                   opacity: 0.6,
-                  borderRadius: BorderRadius.circular(26), // Smooth rounded pill
+                  borderRadius:
+                      BorderRadius.circular(26), // Smooth rounded pill
                   child: SizedBox(
                     height: 52,
                     child: Row(
@@ -427,7 +430,8 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                         Expanded(
                           child: TextField(
                             controller: _searchController,
-                            onChanged: (value) => setState(() => _searchQuery = value),
+                            onChanged: (value) =>
+                                setState(() => _searchQuery = value),
                             style: GoogleFonts.poppins(
                               fontSize: 16,
                               fontWeight: FontWeight.w500,
@@ -448,7 +452,8 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                               focusedBorder: InputBorder.none,
                               errorBorder: InputBorder.none,
                               disabledBorder: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                              contentPadding:
+                                  const EdgeInsets.symmetric(vertical: 14),
                               isDense: true,
                             ),
                           ),
@@ -458,11 +463,13 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                             onTap: () {
                               _searchController.clear();
                               setState(() => _searchQuery = '');
-                              FocusScope.of(context).unfocus(); // Drops the keyboard
+                              FocusScope.of(context)
+                                  .unfocus(); // Drops the keyboard
                             },
                             child: const Padding(
                               padding: EdgeInsets.only(right: 16, left: 16),
-                              child: Icon(Icons.cancel, color: _textLight, size: 22),
+                              child: Icon(Icons.cancel,
+                                  color: _textLight, size: 22),
                             ),
                           ),
                       ],
@@ -488,15 +495,13 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
         Text(
           'Messages',
           style: GoogleFonts.poppins(
-            fontSize: 32, 
-            fontWeight: FontWeight.w800, 
-            color: _textDark
-          ),
+              fontSize: 32, fontWeight: FontWeight.w800, color: _textDark),
         ),
         // Filter pills replaced with this clean Top-Right Popup Menu
         PopupMenuButton<_LandlordFilter>(
           icon: const Icon(Icons.more_vert_rounded, color: _textDark, size: 28),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           color: Colors.white,
           elevation: 8,
           onSelected: (filter) {
@@ -504,13 +509,16 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
           },
           itemBuilder: (context) => _LandlordFilter.values.map((filter) {
             final isSelected = _currentFilter == filter;
-            final name = filter.name[0].toUpperCase() + filter.name.substring(1);
+            final name =
+                filter.name[0].toUpperCase() + filter.name.substring(1);
             return PopupMenuItem(
               value: filter,
               child: Row(
                 children: [
                   Icon(
-                    isSelected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                    isSelected
+                        ? Icons.check_circle_rounded
+                        : Icons.circle_outlined,
                     color: isSelected ? _landlordPrimary : _textLight,
                     size: 20,
                   ),
@@ -518,7 +526,8 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                   Text(
                     name,
                     style: GoogleFonts.poppins(
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.w500,
                       color: isSelected ? _landlordPrimary : _textDark,
                       fontSize: 15,
                     ),
@@ -844,17 +853,18 @@ class _ConversationTile extends StatelessWidget {
   /// IDs, full URLs, and local asset paths all render correctly and
   /// consistently with profile screens elsewhere in the app.
   Widget _buildAvatar() {
-    final Widget avatarWidget = avatarUrl != null && avatarUrl!.trim().isNotEmpty
-        ? AppSession.buildAvatar(
-            avatarUrl,
-            width: 64,
-            height: 64,
-            fit: BoxFit.cover,
-          )
-        : Container(
-            color: const Color(0xFFF3F4F6),
-            child: const Icon(Icons.person, color: _textLight, size: 32),
-          );
+    final Widget avatarWidget =
+        avatarUrl != null && avatarUrl!.trim().isNotEmpty
+            ? AppSession.buildAvatar(
+                avatarUrl,
+                width: 64,
+                height: 64,
+                fit: BoxFit.cover,
+              )
+            : Container(
+                color: const Color(0xFFF3F4F6),
+                child: const Icon(Icons.person, color: _textLight, size: 32),
+              );
 
     return Stack(
       clipBehavior: Clip.none,

@@ -15,6 +15,7 @@ import 'package:property_app/services/avatar_service.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/screens/home/how_it_works_view.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/utils/api_result.dart';
 import 'landlord_analytics_page.dart';
 
 // --- MAIN SETTINGS PAGE ---
@@ -624,9 +625,9 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
       Navigator.pop(context);
     } catch (err) {
       if (!mounted) return;
-      debugPrint('Profile update failed: $err');
+      final message = ApiResult.mapError(err);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to update profile')),
+        SnackBar(content: Text(message)),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -780,9 +781,9 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
       Navigator.pop(context);
     } catch (err) {
       if (!mounted) return;
-      debugPrint('Business info update failed: $err');
+      final message = ApiResult.mapError(err);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to update business info')),
+        SnackBar(content: Text(message)),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -1092,7 +1093,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res['error'] ?? 'Failed to update password')),
+          SnackBar(
+            content: Text(
+              (res['error'] != null)
+                  ? ApiResult.mapError(res['error'])
+                  : (res['error'] ?? 'Failed to update password'),
+            ),
+          ),
         );
       }
     }
@@ -1167,11 +1174,11 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
       });
       AppSession.updateCurrentUser(updatedUser);
     } catch (err) {
-      debugPrint('2FA update failed: $err');
       if (mounted) {
+        final message = ApiResult.mapError(err);
         setState(() => is2faEnabled = !value); // revert on failure
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to update 2FA setting')),
+          SnackBar(content: Text(message)),
         );
       }
     } finally {

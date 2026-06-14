@@ -7,6 +7,7 @@ import 'package:property_app/services/api_client.dart';
 import 'package:property_app/services/avatar_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/utils/api_result.dart';
 
 const Color _primary = Color(0xFF3F37C9);
 const Color _bgColor = Colors.white;
@@ -439,9 +440,8 @@ class _EditProfileViewState extends State<EditProfileView>
       widget.onSave();
     } catch (err) {
       if (!mounted) return;
-      final message = (err is ApiException && err.responseBody != null)
-          ? 'Unable to save profile: ${err.message}'
-          : 'Unable to save profile. Please check your connection.';
+      final message = ApiResult.mapError(err);
+
       debugPrint('Profile update failed: $err');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
