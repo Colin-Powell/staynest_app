@@ -6,27 +6,31 @@ import { env } from '../config.js';
 const router = Router();
 
 export const createVerificationHandler = async (req: Request, res: Response, next: NextFunction) => {
-  const { documents, property } = req.body as { documents?: any; property?: any };
-  if (!documents || !property) {
-    return res.status(400).json({ error: 'Documents and property data are required.' });
+  try {
+    const { documents, property } = req.body as { documents?: any; property?: any };
+    if (!documents || !property) {
+      return res.status(400).json({ error: 'Documents and property data are required.' });
+    }
+
+    // Determine initial status - skip admin verification if configured for testing
+    const initialStatus = env.skipAdminVerification ? 'approved' : 'submitted';
+
+    const result = await query(
+      `INSERT INTO verifications (user_id, status, documents, property_data)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb)
+       RETURNING id, user_id, status, documents, property_data, admin_notes, created_at, updated_at`,
+      [req.auth!.id, initialStatus, JSON.stringify(documents), JSON.stringify(property)],
+    );
+
+    // If auto-approved, update user's verified status
+    if (initialStatus === 'approved') {
+      await query(`UPDATE users SET verified = true WHERE id = $1`, [req.auth!.id]);
+    }
+
+    return res.status(201).json({ data: result.rows[0] });
+  } catch (error) {
+    next(error);
   }
-
-  // Determine initial status - skip admin verification if configured for testing
-  const initialStatus = env.skipAdminVerification ? 'approved' : 'submitted';
-
-  const result = await query(
-    `INSERT INTO verifications (user_id, status, documents, property_data)
-     VALUES ($1, $2, $3::jsonb, $4::jsonb)
-     RETURNING id, user_id, status, documents, property_data, admin_notes, created_at, updated_at`,
-    [req.auth!.id, initialStatus, JSON.stringify(documents), JSON.stringify(property)],
-  );
-
-  // If auto-approved, update user's verified status
-  if (initialStatus === 'approved') {
-    await query(`UPDATE users SET verified = true WHERE id = $1`, [req.auth!.id]);
-  }
-
-  return res.status(201).json({ data: result.rows[0] });
 };
 
 router.post('/', requireAuth, createVerificationHandler);
