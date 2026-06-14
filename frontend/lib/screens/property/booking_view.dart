@@ -9,6 +9,7 @@ import 'package:property_app/screens/dashboard/analytics_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/booking_service.dart';
+import 'package:property_app/utils/api_result.dart';
 
 class MyBookingsView extends StatefulWidget {
   final VoidCallback onBack;
@@ -643,15 +644,8 @@ class _BookingViewState extends State<BookingView> {
           source: 'booking_view');
     } catch (e) {
       if (!mounted) return;
-      final errStr = e.toString().toLowerCase();
-      final bool isConnectionError = errStr.contains('socketexception') ||
-          errStr.contains('connection refused') ||
-          errStr.contains('connection timed out') ||
-          errStr.contains('clientexception');
       setState(() {
-        _error = isConnectionError
-            ? 'Connection error. Please check your network and try again.'
-            : 'Failed to load property details. Please try again.';
+        _error = ApiResult.mapError(e);
         _loading = false;
       });
     }

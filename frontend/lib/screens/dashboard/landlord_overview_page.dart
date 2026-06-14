@@ -5,6 +5,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/screens/dashboard/landlord_notifications_page.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/properties_api.dart';
+import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/property_mapper.dart';
 import 'analytics_service.dart';
 
@@ -71,15 +72,8 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
         _isLoading = false;
       });
     } catch (e) {
-      final errStr = e.toString().toLowerCase();
-      final bool isConnectionError = errStr.contains('socketexception') ||
-          errStr.contains('connection refused') ||
-          errStr.contains('connection timed out') ||
-          errStr.contains('clientexception');
       setState(() {
-        _errorMessage = isConnectionError
-            ? 'Unable to sync data. Please check your internet connection.'
-            : 'We encountered an error loading your dashboard. Please try again.';
+        _errorMessage = ApiResult.mapError(e);
         _isLoading = false;
       });
     }

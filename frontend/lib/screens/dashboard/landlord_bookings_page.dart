@@ -61,13 +61,15 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
       _errorMessage = null;
     });
 
-    try {
-      final data = await BookingService.fetchBookings(isLandlord: true);
+    final result = await ApiResult.run(
+      () => BookingService.fetchBookings(isLandlord: true),
+    );
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      setState(() {
-        _allBookings = data.map((b) {
+    setState(() {
+      if (result.isSuccess) {
+        _allBookings = result.data!.map((b) {
           return {
             'id': b['id']?.toString() ?? '',
             'title': b['title']?.toString() ??
@@ -89,14 +91,11 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
             'reviews': int.tryParse(b['review_count']?.toString() ?? '0') ?? 0,
           };
         }).toList();
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = ApiResult.mapError(e);
-        _isLoading = false;
-      });
-    }
+      } else {
+        _errorMessage = result.error;
+      }
+      _isLoading = false;
+    });
   }
 
   String _mapStatus(String apiStatus) {

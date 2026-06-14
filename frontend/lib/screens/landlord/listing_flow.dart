@@ -12,6 +12,7 @@ import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/services/uploads.dart';
+import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/geocoding.dart';
 
 class AddListingFlow extends StatefulWidget {
@@ -351,8 +352,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
       };
 
       final documents = {'photos': uploadedUrls};
-      await repo.submitVerification(
-          verificationPayload: propertyVerificationPayload);
+
+      await repo.submitVerification(verificationPayload: {
+        'documents': documents,
+        'property': propertyVerificationPayload,
+      });
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_draftKey);
@@ -369,11 +373,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
       );
     } catch (e) {
       if (mounted) {
-        // Show real error in debug, generic in release
+        final message = ApiResult.mapError(e);
         ModalUtils.showError(
           context,
           "Oops! We hit a snag",
-          e.toString(),
+          message,
         );
       }
     } finally {
