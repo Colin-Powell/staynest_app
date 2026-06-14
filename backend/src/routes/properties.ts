@@ -25,6 +25,7 @@ function normalizePropertyRow(property: Record<string, unknown>): Record<string,
       images = [];
     }
   }
+
   if (!Array.isArray(images) || images.length === 0) {
     if (property.image_url) {
       property.images = [property.image_url];
@@ -310,7 +311,7 @@ router.get('/:id/availability-check', async (req: Request, res: Response, next: 
        WHERE property_id = $1 
        AND status = 'confirmed' 
        AND (check_in_date, check_out_date) OVERLAPS ($2::date, $3::date)`,
-      [propertyId, start, end]
+      [propertyId, start, end],
     );
 
     if (bookingCheck.rowCount! > 0) {
@@ -324,7 +325,7 @@ router.get('/:id/availability-check', async (req: Request, res: Response, next: 
        AND available = false 
        AND block_date >= $2::date 
        AND block_date < $3::date`,
-      [propertyId, start, end]
+      [propertyId, start, end],
     );
 
     res.json({ available: blockCheck.rowCount === 0 });
@@ -400,7 +401,7 @@ router.patch('/:id/status', requireAuth, authorize('landlord', 'host'), async (r
 
     const result = await query(
       'UPDATE properties SET status = $1 WHERE id = $2 AND landlord_id = $3 RETURNING *',
-      [status, propertyId, userId]
+      [status, propertyId, userId],
     );
 
     console.log(`[PropertyStatusUpdate] Query result rowCount: ${result.rowCount}`);
@@ -431,7 +432,7 @@ router.post('/:id/availability', requireAuth, authorize('landlord', 'host'), asy
     // Verify ownership
     const propCheck = await query(
       'SELECT id FROM properties WHERE id = $1 AND landlord_id = $2',
-      [propertyId, req.auth?.id]
+      [propertyId, req.auth?.id],
     );
 
     if (propCheck.rowCount === 0) {
@@ -443,7 +444,7 @@ router.post('/:id/availability', requireAuth, authorize('landlord', 'host'), asy
        VALUES ($1, $2::date, $3)
        ON CONFLICT (property_id, block_date) 
        DO UPDATE SET available = EXCLUDED.available, updated_at = now()`,
-      [propertyId, date, available]
+      [propertyId, date, available],
     );
 
     res.json({ success: true });
@@ -466,7 +467,7 @@ router.get('/:id/review-eligibility', requireAuth, async (req: Request, res: Res
       `SELECT id FROM bookings 
        WHERE property_id = $1 AND tenant_id = $2 AND status = 'completed'
        ORDER BY check_out_date DESC LIMIT 1`,
-      [propertyId, userId]
+      [propertyId, userId],
     );
 
     if (bookingRes.rowCount === 0) {
@@ -478,7 +479,7 @@ router.get('/:id/review-eligibility', requireAuth, async (req: Request, res: Res
     // Check if user has already reviewed this specific booking
     const reviewRes = await query(
       "SELECT id FROM reviews WHERE booking_id = $1",
-      [bookingId]
+      [bookingId],
     );
 
     const reviewExists = (reviewRes.rowCount ?? 0) > 0;
@@ -507,7 +508,7 @@ router.get('/:id/reviews', async (req: Request, res: Response, next: NextFunctio
        JOIN users u ON u.id = r.reviewer_id
        WHERE r.property_id = $1
        ORDER BY r.created_at DESC`,
-      [req.params.id]
+      [req.params.id],
     );
     res.json({ data: result.rows });
   } catch (error) {
@@ -535,7 +536,7 @@ router.post('/reviews', requireAuth, async (req: Request, res: Response, next: N
     // Verify the booking exists, belongs to the user, the property, and is 'completed'
     const bookingCheck = await query(
       "SELECT id FROM bookings WHERE id = $1 AND tenant_id = $2 AND property_id = $3 AND status = 'completed' LIMIT 1",
-      [bookingId, req.auth?.id, propertyId]
+      [bookingId, req.auth?.id, propertyId],
     );
 
     if (bookingCheck.rowCount === 0) {
@@ -552,7 +553,7 @@ router.post('/reviews', requireAuth, async (req: Request, res: Response, next: N
       `INSERT INTO reviews (booking_id, property_id, reviewer_id, rating, comment)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [bookingId, propertyId, req.auth?.id, rating, comment]
+      [bookingId, propertyId, req.auth?.id, rating, comment],
     );
 
     res.status(201).json({ data: result.rows[0] });
@@ -583,7 +584,7 @@ router.post('/reviews/:id/report', requireAuth, async (req: Request, res: Respon
     await query(
       `INSERT INTO review_reports (review_id, reporter_id, reason, status)
        VALUES ($1, $2, $3, 'pending')`,
-      [reviewId, req.auth!.id, reason]
+      [reviewId, req.auth!.id, reason],
     );
 
     res.status(201).json({ message: 'Review reported successfully.' });
@@ -592,8 +593,75 @@ router.post('/reviews/:id/report', requireAuth, async (req: Request, res: Respon
   }
 });
 
-router.post('/', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
-  const logPrefix = `[PropertyCreate]`;
+function createPropertyInsertArgs(body: Record<string, unknown>) {
+  const {
+    title,
+    description,
+    category,
+    city,
+    address,
+    price,
+    bedrooms,
+    bathrooms,
+    area,
+    image_url,
+    images,
+    amenities,
+    lat,
+    lng,
+  } = body;
+
+  const imageList = Array.isArray(images) && images.length > 0 ? images : [image_url];
+  const amenityList = Array.isArray(amenities) ? amenities : [];
+
+  return [
+    title,
+    description,
+    category,
+    city,
+    typeof address === 'string' ? address : null,
+    Number(price),
+    Number(bedrooms),
+    Number(bathrooms),
+    Number(area),
+    image_url,
+    JSON.stringify(imageList),
+    JSON.stringify(amenityList),
+    lat != null ? Number(lat) : null,
+    lng != null ? Number(lng) : null,
+    (body as any).__userId,
+  ];
+}
+
+function validatePropertyCreateBody(body: Record<string, unknown>) {
+  const {
+    title,
+    description,
+    category,
+    city,
+    price,
+    bedrooms,
+    bathrooms,
+    area,
+    image_url,
+  } = body;
+
+  const missing: string[] = [];
+  if (!title) missing.push('title');
+  if (!description) missing.push('description');
+  if (!category) missing.push('category');
+  if (!city) missing.push('city');
+  if (price == null) missing.push('price');
+  if (bedrooms == null) missing.push('bedrooms');
+  if (bathrooms == null) missing.push('bathrooms');
+  if (area == null) missing.push('area');
+  if (!image_url) missing.push('image_url');
+
+  return missing;
+}
+
+async function handleCreateProperty(req: Request, res: Response, next: NextFunction, logRouteName: string) {
+  const logPrefix = `[${logRouteName}]`;
   const userId = req.auth?.id;
   const body = req.body as Record<string, unknown>;
   const receivedKeys = Object.keys(body ?? {});
@@ -602,71 +670,29 @@ router.post('/', requireAuth, authorize('landlord', 'host'), async (req: Request
   console.log(`${logPrefix} start userId=${userId} receivedKeys=${receivedKeys.join(',')}`);
 
   try {
-    const {
-      title,
-      description,
-      category,
-      city,
-      address,
-      price,
-      bedrooms,
-      bathrooms,
-      area,
-      image_url,
-      images,
-      amenities,
-      lat,
-      lng,
-    } = body;
-
-    const missing: string[] = [];
-    if (!title) missing.push('title');
-    if (!description) missing.push('description');
-    if (!category) missing.push('category');
-    if (!city) missing.push('city');
-    if (price == null) missing.push('price');
-    if (bedrooms == null) missing.push('bedrooms');
-    if (bathrooms == null) missing.push('bathrooms');
-    if (area == null) missing.push('area');
-    if (!image_url) missing.push('image_url');
-
+    const missing = validatePropertyCreateBody(body);
     if (missing.length > 0) {
       console.warn(`${logPrefix} missingFields userId=${userId} missing=${missing.join(',')}`);
       return res.status(400).json({ error: 'All property fields are required.', missing });
     }
 
-    const imageList = Array.isArray(images) && images.length > 0 ? images : [image_url];
-    const amenityList = Array.isArray(amenities) ? amenities : [];
+    const imageList = Array.isArray(body.images) && body.images.length > 0 ? body.images : [body.image_url];
+    const amenityList = Array.isArray(body.amenities) ? body.amenities : [];
 
-    // Helpful validation logs
-    console.log(`${logPrefix} validated userId=${userId} title=${String(title).slice(0, 60)} city=${String(city)} category=${String(category)}`);
-    console.log(`${logPrefix} image_urlType=${typeof image_url} imagesIsArray=${Array.isArray(images)} imageCount=${Array.isArray(imageList) ? imageList.length : 0} amenitiesIsArray=${Array.isArray(amenities)} amenityCount=${Array.isArray(amenityList) ? amenityList.length : 0}`);
+    console.log(
+      `${logPrefix} image_urlType=${typeof body.image_url} imagesIsArray=${Array.isArray(body.images)} imageCount=${Array.isArray(imageList) ? imageList.length : 0} amenitiesIsArray=${Array.isArray(body.amenities)} amenityCount=${Array.isArray(amenityList) ? amenityList.length : 0}`,
+    );
 
-    // If client sent images but image_url is missing/invalid, this will show it in logs.
-    if (Array.isArray(images) && images.length > 0) {
-      const first = images[0];
+    if (Array.isArray(body.images) && body.images.length > 0) {
+      const first = body.images[0];
       console.log(`${logPrefix} firstImagePreview=${typeof first === 'string' ? first.slice(0, 80) : typeof first}`);
     }
 
-    const insertArgs = [
-      title,
-      description,
-      category,
-      city,
-      typeof address === 'string' ? address : null,
-      Number(price),
-      Number(bedrooms),
-      Number(bathrooms),
-      Number(area),
-      image_url,
-      JSON.stringify(imageList),
-      JSON.stringify(amenityList),
-      lat != null ? Number(lat) : null,
-      lng != null ? Number(lng) : null,
-      req.auth?.id,
-    ];
+    const insertArgs = createPropertyInsertArgs({ ...body, __userId: userId });
 
-    console.log(`${logPrefix} inserting userId=${userId} lat=${lat ?? null} lng=${lng ?? null} price=${Number(price)} area=${Number(area)}`);
+    console.log(
+      `${logPrefix} inserting userId=${userId} lat=${body.lat ?? null} lng=${body.lng ?? null} price=${Number(body.price)} area=${Number(body.area)}`,
+    );
 
     const result = await query(
       `INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, landlord_id)
@@ -679,9 +705,19 @@ router.post('/', requireAuth, authorize('landlord', 'host'), async (req: Request
     res.status(201).json({ data: result.rows[0] });
   } catch (error) {
     console.error(`${logPrefix} failed userId=${userId} error=`, error);
-    console.error(`${logPrefix} bodySample title=${typeof body?.title === 'string' ? body.title : null}`);
     next(error);
   }
+}
+
+// Existing route (kept)
+router.post('/', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
+  await handleCreateProperty(req, res, next, 'PropertyCreate');
+});
+
+// Route required by the current Flutter listing flow
+router.post('/from-listing', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
+  await handleCreateProperty(req, res, next, 'PropertyCreateFromListing');
 });
 
 export default router;
+
