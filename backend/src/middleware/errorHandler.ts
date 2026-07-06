@@ -1,12 +1,31 @@
 import { Request, Response, NextFunction } from 'express';
 
-export function errorHandler(
-  error: Error,
-  _req: Request,
-  res: Response,
-  _next: NextFunction,
-) {
-
-  console.error('API error:', error);
-  res.status(500).json({ error: 'Internal server error.' });
+export interface AppError extends Error {
+  statusCode?: number;
+  code?: string;
+  details?: any;
 }
+
+/**
+ * Centralized error handler to ensure all API errors follow the same format.
+ */
+export const errorHandler = (
+  err: AppError,
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const statusCode = err.statusCode || 500;
+  const errorCode = err.code || 'INTERNAL_SERVER_ERROR';
+
+  // Log error for server-side monitoring
+  console.error(`[Error] ${req.method} ${req.path} - ${statusCode}: ${err.message}`);
+
+  res.status(statusCode).json({
+    success: false,
+    code: errorCode,
+    message: err.message || 'An unexpected error occurred',
+    details: err.details || null,
+    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
+  });
+};

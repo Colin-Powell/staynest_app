@@ -239,7 +239,7 @@ class _MapViewScreenState extends State<MapViewScreen>
                 urlTemplate:
                     'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
                 subdomains: const ['a', 'b', 'c', 'd'],
-                userAgentPackageName: 'com.example.property_app',
+                userAgentPackageName: 'com.rashoti.staynest',
               ),
               if (widget.isNavigation)
                 PolylineLayer(

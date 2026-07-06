@@ -1,8 +1,12 @@
 // START OF FILE
+import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
+import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/session/app_session.dart';
@@ -29,11 +33,14 @@ const _green = Color(0xFF22C55E);
 class HomeView extends StatefulWidget {
   final void Function(String id)? onSelectProperty;
   final VoidCallback? onNotifications;
+  final VoidCallback?
+      onSeeAllNearby; // Optional callback to switch to search tab in AppShell
 
   const HomeView({
     super.key,
     this.onSelectProperty,
     this.onNotifications,
+    this.onSeeAllNearby,
   });
 
   @override
@@ -43,8 +50,13 @@ class HomeView extends StatefulWidget {
 class _HomeViewState extends State<HomeView> {
   int _activeFilter = 0;
   final _searchController = TextEditingController();
+
+  // Carousel State
   final PageController _carouselController =
       PageController(viewportFraction: 0.88);
+  Timer? _carouselTimer;
+  int _currentCarouselPage = 0;
+
   List<Property> _nearby = [];
   List<Property> _recommended = [];
   bool _loadingNearby = true;
@@ -65,16 +77,17 @@ class _HomeViewState extends State<HomeView> {
   }
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    _carouselController.dispose();
-    super.dispose();
-  }
-
-  @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _carouselTimer?.cancel();
+    _searchController.dispose();
+    _carouselController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -84,23 +97,70 @@ class _HomeViewState extends State<HomeView> {
     });
 
     try {
-      final allProperties = await PropertiesApi.getAllProperties();
+      // 1. Determine user location for the "Nearby" algorithm
+      Position? position;
+      try {
+        position = await _getCurrentLocation();
+      } catch (e) {
+        debugPrint('HomeView: Location detection skipped ($e)');
+      }
 
-      if (allProperties.isNotEmpty) {
-        final properties = allProperties.map(mapApiProperty).toList();
+      List<dynamic> rawNearby = [];
+
+      // 2. Fetch properties centered around user location if coordinates are available
+      if (position != null) {
+        final response = await http.get(
+          Uri.parse(
+              '${AppSession.apiBaseUrl}/properties/nearby?lat=${position.latitude}&lng=${position.longitude}&radius=50'),
+          headers: {
+            'Authorization': 'Bearer ${AppSession.apiToken}',
+            'Content-Type': 'application/json',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          rawNearby = jsonDecode(response.body);
+        }
+      }
+
+      // Fallback to global properties if location is off or no nearby results found
+      if (rawNearby.isEmpty) {
+        rawNearby = await PropertiesApi.getAllProperties();
+      }
+
+      if (rawNearby.isNotEmpty) {
+        final properties = rawNearby
+            .map((e) => mapApiProperty(e as Map<String, dynamic>))
+            .toList();
 
         final rec = await PropertiesApi.getRecommendations();
+
         final recMapped = rec.isNotEmpty
             ? rec.map(mapApiProperty).toList()
             : properties.take(3).toList();
 
-        setState(() {
-          _nearby = properties;
-          _recommended = recMapped;
-          _loadingNearby = false;
-          _loadingRecommended = false;
-        });
+        if (mounted) {
+          setState(() {
+            _nearby = properties;
+            _recommended = recMapped;
+            _loadingNearby = false;
+            _loadingRecommended = false;
+          });
+          _startAutoScroll(); // Start the 5-second news-update scroll
+        }
       } else {
+        if (mounted) {
+          setState(() {
+            _nearby = [];
+            _recommended = [];
+            _loadingNearby = false;
+            _loadingRecommended = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading properties: $e');
+      if (mounted) {
         setState(() {
           _nearby = [];
           _recommended = [];
@@ -108,15 +168,49 @@ class _HomeViewState extends State<HomeView> {
           _loadingRecommended = false;
         });
       }
-    } catch (e) {
-      debugPrint('Error loading properties: $e');
-      setState(() {
-        _nearby = [];
-        _recommended = [];
-        _loadingNearby = false;
-        _loadingRecommended = false;
-      });
     }
+  }
+
+  /// Requests location permissions and returns current position
+  Future<Position> _getCurrentLocation() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return Future.error('Location services are disabled.');
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        return Future.error('Location permissions are denied');
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      return Future.error('Location permissions are permanently denied.');
+    }
+
+    return await Geolocator.getCurrentPosition();
+  }
+
+  // Auto-scrolling logic for the nearby property cards
+  void _startAutoScroll() {
+    _carouselTimer?.cancel();
+    if (_filteredNearby.isEmpty) return;
+
+    _carouselTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (_carouselController.hasClients && _filteredNearby.isNotEmpty) {
+        _currentCarouselPage++;
+        _carouselController.animateToPage(
+          _currentCarouselPage,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.easeInOutCubic,
+        );
+      }
+    });
   }
 
   @override
@@ -365,7 +459,15 @@ class _HomeViewState extends State<HomeView> {
                   child: GestureDetector(
                     onTap: () {
                       AnalyticsService.resetSessionImpressions();
-                      setState(() => _activeFilter = e.key);
+                      setState(() {
+                        _activeFilter = e.key;
+                        _currentCarouselPage =
+                            0; // Reset scroll index when filter changes
+                        if (_carouselController.hasClients) {
+                          _carouselController.jumpToPage(0);
+                        }
+                      });
+                      _startAutoScroll();
                     },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
@@ -378,7 +480,8 @@ class _HomeViewState extends State<HomeView> {
                         color: isActive ? _dark : Colors.white.withOpacity(0.6),
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: isActive ? _dark : Colors.white.withOpacity(0.8),
+                          color:
+                              isActive ? _dark : Colors.white.withOpacity(0.8),
                           width: 1.5,
                         ),
                         boxShadow: isActive
@@ -395,7 +498,8 @@ class _HomeViewState extends State<HomeView> {
                         e.value,
                         style: GoogleFonts.poppins(
                           fontSize: 14,
-                          fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                          fontWeight:
+                              isActive ? FontWeight.w700 : FontWeight.w600,
                           color: isActive ? Colors.white : _dark,
                         ),
                       ),
@@ -433,12 +537,24 @@ class _HomeViewState extends State<HomeView> {
                   letterSpacing: -0.4,
                 ),
               ),
-              Text(
-                'See all',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: _primaryText,
+              GestureDetector(
+                onTap: () {
+                  // If wired to AppShell, trigger tab change.
+                  // If not, default fallback pushes SearchView onto stack.
+                  if (widget.onSeeAllNearby != null) {
+                    widget.onSeeAllNearby!();
+                  } else {
+                    Navigator.pushNamed(context, '/search');
+                  }
+                },
+                behavior: HitTestBehavior.opaque,
+                child: Text(
+                  'See all',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _primaryText,
+                  ),
                 ),
               ),
             ],
@@ -448,7 +564,8 @@ class _HomeViewState extends State<HomeView> {
           _loadingNearby
               ? const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator(color: _primaryText)),
+                  child: Center(
+                      child: CircularProgressIndicator(color: _primaryText)),
                 )
               : Padding(
                   padding:
@@ -467,18 +584,29 @@ class _HomeViewState extends State<HomeView> {
               controller: _carouselController,
               clipBehavior: Clip.none,
               physics: const BouncingScrollPhysics(),
-              itemCount: _filteredNearby.length,
+              onPageChanged: (index) {
+                // Keep track if user swipes manually so the timer continues cleanly
+                _currentCarouselPage = index;
+              },
+              // Removed itemCount to allow infinite scrolling effect
               itemBuilder: (context, i) {
-                final property = _filteredNearby[i];
+                if (_filteredNearby.isEmpty) return const SizedBox();
+
+                // Modulo ensures we loop back to 0 cleanly for infinite scrolling
+                final actualIndex = i % _filteredNearby.length;
+                final property = _filteredNearby[actualIndex];
+
+
+
                 return Padding(
                   padding: const EdgeInsets.only(right: 16),
                   child: VisibilityDetector(
-                    key: Key('nearby_impression_${property.id}'),
+                    key: Key('nearby_impression_${property.id}_$i'),
                     onVisibilityChanged: (info) {
                       if (info.visibleFraction > 0.5) {
                         AnalyticsService.trackFeaturedPropertyImpression(
                           property.id,
-                          position: i,
+                          position: actualIndex,
                         );
                       }
                     },
@@ -516,7 +644,8 @@ class _HomeViewState extends State<HomeView> {
           if (_loadingRecommended)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: CircularProgressIndicator(color: _primaryText)),
+              child:
+                  Center(child: CircularProgressIndicator(color: _primaryText)),
             )
           else if (_filteredRecommended.isEmpty)
             Padding(
@@ -611,16 +740,19 @@ class _NearbyCard extends StatelessWidget {
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.25),
                         borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.white.withOpacity(0.4)),
+                        border:
+                            Border.all(color: Colors.white.withOpacity(0.4)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.star_rounded, color: Color(0xFFFBBC05), size: 16),
+                          const Icon(Icons.star_rounded,
+                              color: Color(0xFFFBBC05), size: 16),
                           const SizedBox(width: 6),
                           Text(
                             '${property.rating.toStringAsFixed(1)} (${property.reviews})',
@@ -663,7 +795,8 @@ class _NearbyCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill), size: 16, color: Colors.white70),
+                        Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill),
+                            size: 16, color: Colors.white70),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
@@ -741,12 +874,14 @@ class _RecommendedCard extends StatelessWidget {
                 width: 110,
                 height: 110,
                 fit: BoxFit.cover,
-                errorPlaceholder: Container(width: 110, height: 110, color: const Color(0xFFE5E7EB)),
+                errorPlaceholder: Container(
+                    width: 110, height: 110, color: const Color(0xFFE5E7EB)),
               ),
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -763,7 +898,8 @@ class _RecommendedCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill), size: 14, color: _grey),
+                        Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill),
+                            size: 14, color: _grey),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
@@ -810,7 +946,8 @@ class _RecommendedCard extends StatelessWidget {
                         if (property.reviews > 0)
                           Row(
                             children: [
-                              const Icon(Icons.star_rounded, color: Color(0xFFFBBC05), size: 16),
+                              const Icon(Icons.star_rounded,
+                                  color: Color(0xFFFBBC05), size: 16),
                               const SizedBox(width: 4),
                               Text(
                                 '${property.rating.toStringAsFixed(1)} (${property.reviews})',

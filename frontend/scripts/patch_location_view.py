@@ -10,7 +10,7 @@ replacements = [
     ),
     (
         "                            TileLayer(\n                              urlTemplate:\n                                  'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png',\n                              userAgentPackageName: 'com.example.rental_app',\n                            ),\n",
-        "                            TileLayer(\n                              urlTemplate:\n                                  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',\n                              subdomains: const ['a', 'b', 'c'],\n                              userAgentPackageName: 'com.example.property_app',\n                            ),\n",
+        "                            TileLayer(\n                              urlTemplate:\n                                  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',\n                              subdomains: const ['a', 'b', 'c'],\n                              userAgentPackageName: 'com.rashoti.staynest',\n                            ),\n",
     ),
     (
         "                                                            Text(\n                                                                'Ksh.\x00\"+prop.price.toString()+\"/month',\n                                                                style: const TextStyle(\n                                                                    fontWeight:\n                                                                        FontWeight\n                                                                            .w900)),\n",

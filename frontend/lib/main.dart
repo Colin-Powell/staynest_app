@@ -10,6 +10,7 @@ import 'data.dart';
 import 'models/property.dart';
 import 'screens/screens.dart'
     hide LandlordVerificationEntry, VerificationCenter;
+import 'services/google_auth_service.dart';
 import 'screens/dashboard/landlord_property_management_page.dart';
 import 'screens/dashboard/analytics_service.dart';
 import 'screens/dashboard/landlord_tenants_page.dart';
@@ -20,7 +21,9 @@ import 'screens/dashboard/landlord_bookings_page.dart'
     hide LandlordBookingsView;
 import 'screens/privacy_policy.dart';
 import 'screens/auth/tenant_survey.dart';
+import 'repository/remote_database_repository.dart';
 import 'screens/notification_settings_view.dart';
+
 import 'services/property_service.dart';
 import 'services/socket_service.dart';
 import 'services/fcm_service.dart';
@@ -115,6 +118,42 @@ class _PropertyAppState extends State<PropertyApp> {
     super.dispose();
   }
 
+  Future<void> _enforceTenantPreferencesIfMissing(BuildContext context) async {
+    if (AppSession.isLandlord) return;
+    // If user is not verified, the app routes to OTP/verification first.
+    if (!AppSession.currentUserVerified) return;
+
+    final repo = RemoteDatabaseRepository();
+
+    try {
+      final tenantProfile = await repo.fetchTenantProfileMe();
+      final hasPrefs = tenantProfile != null;
+
+      if (!hasPrefs) {
+        // Strict: un-dismissible bottom sheet
+        await showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          isDismissible: false,
+          enableDrag: false,
+          useSafeArea: true,
+          backgroundColor: Colors.transparent,
+          builder: (sheetContext) {
+            return WillPopScope(
+              onWillPop: () async => false,
+              child: Material(
+                color: Colors.transparent,
+                child: const TenantSurveyView(),
+              ),
+            );
+          },
+        );
+      }
+    } catch (_) {
+      // Fail-safe: do nothing if preferences cannot be checked.
+    }
+  }
+
   void _handleRoleChange() {
     if (mounted) {
       setState(() {
@@ -134,19 +173,35 @@ class _PropertyAppState extends State<PropertyApp> {
       routes: {
         '/': (context) => const SplashView(),
         '/login': (context) => LoginView(
-              // After successful login, sync FCM token
-              onLogin: () {
+              onLogin: () async {
                 if (!AppSession.currentUserVerified) {
                   Navigator.pushReplacementNamed(context, '/otp');
-                } else if (AppSession.isLandlord) {
-                  Navigator.pushReplacementNamed(context, '/portal');
-                } else {
-                  Navigator.pushReplacementNamed(context, '/home');
-                  AuthService.instance.syncFCMToken(); // Sync FCM token
+                  return;
                 }
+
+                // Landlords bypass tenant preferences
+                if (AppSession.isLandlord) {
+                  Navigator.pushReplacementNamed(context, '/portal');
+                  return;
+                }
+
+                // Tenants: enforce preferences via strict, un-dismissible modal
+                await _enforceTenantPreferencesIfMissing(context);
+
+                // Once modal is shown (or preferences already exist), go home.
+                Navigator.pushReplacementNamed(context, '/home');
+                AuthService.instance.syncFCMToken(); // Sync FCM token
               },
               onRegister: () => Navigator.pushNamed(context, '/register'),
+              onGoogleSignIn: () async {
+                final success =
+                    await GoogleAuthService.instance.signInWithGoogle();
+                if (success) {
+                  Navigator.pushReplacementNamed(context, '/home');
+                }
+              },
             ),
+
         '/register': (context) => RoleSelectionView(
             onBack: () => Navigator.pop(context),
             onSelect: (r) {
@@ -217,6 +272,12 @@ class _PropertyAppState extends State<PropertyApp> {
         '/portal': (context) => LandlordPortalView(
               onAddProperty: () =>
                   Navigator.pushNamed(context, '/list_property'),
+            ),
+        '/search': (context) => SearchView(
+              onSelectProperty: (id) {}, // Placeholder
+              onToggleMap: (visible) {}, // Placeholder
+              onOpenFilters: () {}, // Placeholder
+              activeFilters: const {}, // Placeholder
             ),
         '/landlord_properties': (context) => LandlordPropertiesView(
               onAddProperty: () =>
@@ -544,6 +605,7 @@ class _AppShellState extends State<AppShell> {
         return HomeView(
           key: const ValueKey('home'),
           onSelectProperty: _openProperty,
+          onSeeAllNearby: () => _goTo(_AppScreen.search),
           onNotifications: () {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Notifications tapped')),

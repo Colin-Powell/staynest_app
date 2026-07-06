@@ -46,4 +46,11 @@ export const env = {
   cloudinaryApiKey: cloudinaryConfig.cloudinaryApiKey,
   cloudinaryApiSecret: cloudinaryConfig.cloudinaryApiSecret,
   skipAdminVerification: process.env.SKIP_ADMIN_VERIFICATION === 'true',
+  // SMTP / Email
+  smtpHost: process.env.SMTP_HOST || '',
+  smtpPort: parseIntOrDefault(process.env.SMTP_PORT, 587),
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPass: process.env.SMTP_PASS || '',
+  emailFrom: process.env.EMAIL_FROM || 'StayNest <no-reply@staynest.app>',
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
 };

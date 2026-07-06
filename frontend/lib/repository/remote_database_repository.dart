@@ -20,6 +20,10 @@ class RemoteDatabaseRepository {
             apiClient ?? HttpJsonClient(timeout: const Duration(seconds: 15));
 
   Future<Map<String, dynamic>> _decodeData(http.Response response) async {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Request failed with status: ${response.statusCode}');
+    }
+
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final data = decoded['data'];
     if (data is Map<String, dynamic>) {
@@ -34,6 +38,10 @@ class RemoteDatabaseRepository {
 
   Future<List<Map<String, dynamic>>> _decodeListData(
       http.Response response) async {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Request failed with status: ${response.statusCode}');
+    }
+
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final rows = decoded['data'] as List<dynamic>? ?? const [];
     return rows.map((item) => Map<String, dynamic>.from(item as Map)).toList();
@@ -258,8 +266,8 @@ class RemoteDatabaseRepository {
     try {
       final reviews = await fetchPropertyReviews(propertyId);
       if (reviews.isEmpty) return (rating: 0.0, count: 0);
-      final avg = reviews.map((r) => r.rating).reduce((a, b) => a + b) /
-          reviews.length;
+      final avg =
+          reviews.map((r) => r.rating).reduce((a, b) => a + b) / reviews.length;
       return (rating: avg, count: reviews.length);
     } catch (_) {
       return (rating: 0.0, count: 0);
@@ -423,15 +431,32 @@ class RemoteDatabaseRepository {
     return result;
   }
 
+  /// Returns the current authenticated tenant profile (preferences), or `null` if missing.
+  /// Backend: GET /api/tenant_profiles/me
+  Future<Map<String, dynamic>?> fetchTenantProfileMe() async {
+    final response = await apiClient.get(
+      Uri.parse('${AppSession.apiBaseUrl}/tenant_profiles/me'),
+    );
+
+    if (response.body.isEmpty) return null;
+
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final data = decoded['data'];
+    if (data == null) return null;
+    if (data is Map<String, dynamic>) return data;
+    return null;
+  }
+
   Future<Map<String, dynamic>?> saveTenantProfile(
     Map<String, dynamic> tenantPayload,
   ) async {
+    // NOTE: backend expects POST /api/tenant_profiles (router root)
     final response = await apiClient.post(
-      Uri.parse('${AppSession.apiBaseUrl}/tenants/profile'),
+      Uri.parse('${AppSession.apiBaseUrl}/tenant_profiles'),
       body: tenantPayload,
     );
 
-    if (response.body.isEmpty) return const {};
+    if (response.statusCode < 200 || response.statusCode >= 300) return null;
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final data = decoded['data'];

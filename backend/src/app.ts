@@ -10,6 +10,8 @@ import propertiesRouter from './routes/properties.js';
 import usersRouter from './routes/users.js';
 import uploadsRouter from './routes/uploads.js';
 import verificationsRouter from './routes/verifications.js';
+import emailRouter from './routes/email.js';
+import googleAuthRouter from './routes/google_auth.js';
 import tenantProfilesRouter from './routes/tenant_profiles.js';
 import privacyRouter from './routes/privacy.js';
 import messagesRouter from './routes/messages.js';
@@ -30,6 +32,8 @@ app.use('/api/properties', propertiesRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/uploads', uploadsRouter);
 app.use('/api/verifications', verificationsRouter);
+app.use('/api/email', emailRouter);
+app.use('/api/auth/google', googleAuthRouter);
 
 // Backward-compatible alias for older clients
 // (e.g. Flutter listing flow uses /api/landlord/verification)

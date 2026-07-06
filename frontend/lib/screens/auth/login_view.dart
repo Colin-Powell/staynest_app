@@ -26,7 +26,6 @@ class LoginView extends StatefulWidget {
   final VoidCallback onRegister;
   final VoidCallback? onForgotPassword;
   final VoidCallback? onGoogleSignIn;
-  final VoidCallback? onAppleSignIn;
 
   const LoginView({
     super.key,
@@ -34,7 +33,6 @@ class LoginView extends StatefulWidget {
     required this.onRegister,
     this.onForgotPassword,
     this.onGoogleSignIn,
-    this.onAppleSignIn,
   });
 
   @override
@@ -378,11 +376,6 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                           _SocialCircle(
                             type: _SocialType.google,
                             onTap: widget.onGoogleSignIn ?? () {},
-                          ),
-                          const SizedBox(width: 24),
-                          _SocialCircle(
-                            type: _SocialType.mac,
-                            onTap: widget.onAppleSignIn ?? () {},
                           ),
                         ],
                       ),
@@ -743,7 +736,7 @@ class _OrDivider extends StatelessWidget {
 // ─── Social circles ───────────────────────────────────────────────────────────
 // PDF: circular buttons (not rectangular cards), centered side by side
 
-enum _SocialType { google, mac }
+enum _SocialType { google }
 
 class _SocialSvg extends StatelessWidget {
   final _SocialType type;
@@ -753,9 +746,7 @@ class _SocialSvg extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SvgPicture.asset(
-      type == _SocialType.google
-          ? 'assets/images/google.svg'
-          : 'assets/images/apple.svg',
+      'assets/images/google.svg',
       width: 28,
       height: 28,
     );

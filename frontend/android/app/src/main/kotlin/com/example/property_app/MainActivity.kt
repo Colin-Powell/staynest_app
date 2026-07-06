@@ -1,4 +1,4 @@
-package com.example.property_app
+package com.rashoti.staynest
 
 import io.flutter.embedding.android.FlutterActivity
 

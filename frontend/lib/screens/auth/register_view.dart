@@ -152,8 +152,8 @@ class _RegisterViewState extends State<RegisterView>
                 'business_description':
                     _businessDescriptionController.text.trim(),
                 'tax_id': _taxIdController.text.trim(),
-                'years_in_business': int.tryParse(
-                        _yearsInBusinessController.text.trim()),
+                'years_in_business':
+                    int.tryParse(_yearsInBusinessController.text.trim()),
               }
             : null,
       );
@@ -519,15 +519,6 @@ class _RegisterViewState extends State<RegisterView>
                           onTap: () {},
                           child: SvgPicture.asset(
                             'assets/images/google.svg',
-                            width: 28,
-                            height: 28,
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-                        _SocialButton(
-                          onTap: () {},
-                          child: SvgPicture.asset(
-                            'assets/images/apple.svg',
                             width: 28,
                             height: 28,
                           ),
