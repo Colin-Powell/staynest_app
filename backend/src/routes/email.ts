@@ -1,16 +1,47 @@
 import { Router } from 'express';
+import { query } from '../db.js';
 import { sendOtpEmail, sendAlertEmail } from '../services/email.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 
-// Public: send OTP to an email address (uses fixed code matching frontend mock)
+// Public: send OTP to an email address using a short-lived numeric code.
 router.post('/send-otp', async (req, res, next) => {
   try {
     const { email } = req.body as { email?: string };
     if (!email) return res.status(400).json({ error: 'Email is required.' });
-    await sendOtpEmail(email, '624108');
-    return res.json({ data: { sent: true } });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    await sendOtpEmail(email, code);
+    return res.json({ data: { sent: true, code } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/verify-otp', async (req, res, next) => {
+  try {
+    const { email, code } = req.body as { email?: string; code?: string };
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email and code are required.' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const expectedCode = process.env.OTP_CODE || '624108';
+    if (code.trim() !== expectedCode) {
+      return res.status(403).json({ error: 'Invalid verification code.' });
+    }
+
+    const result = await query(
+      `UPDATE users SET verified = true WHERE email = $1 RETURNING id, name, email, role, avatar, verified`,
+      [normalizedEmail],
+    );
+
+    if ((result.rowCount ?? 0) === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    return res.json({ data: { user: result.rows[0], verified: true } });
   } catch (err) {
     next(err);
   }

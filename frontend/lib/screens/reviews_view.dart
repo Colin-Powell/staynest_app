@@ -1066,9 +1066,9 @@ class _StarRating extends StatelessWidget {
 
   const _StarRating({
     required this.rating,
-    this.size = 32,
-    this.color = const Color(0xFFFBBF24),
-    this.backgroundColor = const Color(0xFFD1D5DB),
+    this.size = 16,
+    this.color = const Color(0xFFFFC107),
+    this.backgroundColor = const Color(0xFFE5E7EB),
   });
 
   @override
@@ -1113,7 +1113,7 @@ class _StarPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final textPainter = TextPainter(textDirection: ui.TextDirection.ltr);
-    final iconData = Icons.star_rounded;
+    const iconData = Icons.star_rounded;
     final textStyle = TextStyle(
       fontSize: size.width,
       fontFamily: iconData.fontFamily,

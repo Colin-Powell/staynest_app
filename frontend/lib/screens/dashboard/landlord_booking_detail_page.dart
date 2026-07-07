@@ -44,10 +44,11 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
     );
 
     if (mounted) {
-      if (success)
+      if (success) {
         Navigator.pop(context, true);
-      else
+      } else {
         setState(() => _isProcessing = false);
+      }
     }
   }
 
@@ -557,9 +558,9 @@ class _GlassContainer extends StatelessWidget {
     required this.child,
     required this.padding,
     this.borderRadius,
-    this.blur = 20.0,
+    this.blur = 15.0,
     this.opacity = 0.55,
-    this.borderWidth = 1.5,
+    this.borderWidth = 1.0,
   });
 
   @override

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470.51 118.91">
+  <defs>
+    <style>
+      .cls-1 {
+        font-family: Montserrat-Medium, Montserrat;
+        font-size: 21px;
+        font-variation-settings: 'wght' 500;
+        font-weight: 500;
+      }
+
+      .cls-1, .cls-2, .cls-3, .cls-4 {
+        fill: #0f172a;
+      }
+
+      .cls-5 {
+        letter-spacing: .03em;
+      }
+
+      .cls-6 {
+        fill: none;
+        stroke: #2563eb;
+        stroke-miterlimit: 10;
+        stroke-width: 13.26px;
+      }
+
+      .cls-2 {
+        letter-spacing: -.02em;
+      }
+
+      .cls-7 {
+        fill: #2563eb;
+      }
+
+      .cls-3 {
+        letter-spacing: 0em;
+      }
+
+      .cls-8 {
+        letter-spacing: .05em;
+      }
+
+      .cls-9 {
+        font-family: Montserrat-ExtraBold, Montserrat;
+        font-size: 65.91px;
+        font-variation-settings: 'wght' 800;
+        font-weight: 700;
+      }
+
+      .cls-10 {
+        letter-spacing: .05em;
+      }
+    </style>
+  </defs>
+  <g id="Layer_1-2" data-name="Layer 1">
+    <g>
+      <path class="cls-6" d="M109.9,71.72h-7.47v34.54c0,3.33-2.69,6.02-6.02,6.02H26.16c-3.33,0-6.02-2.69-6.02-6.02v-34.54h-7.47c-5.24,0-7.98-6.22-4.44-10.09L56.84,8.58c2.39-2.6,6.49-2.6,8.88,0l48.62,53.05c3.54,3.86.8,10.09-4.44,10.09Z"/>
+      <g>
+        <text class="cls-9" transform="translate(156.05 61.81)"><tspan class="cls-4" x="0" y="0">S</tspan><tspan class="cls-2" x="42.64" y="0">t</tspan><tspan class="cls-3" x="70.98" y="0">a</tspan><tspan class="cls-4" x="112.04" y="0">y</tspan><tspan class="cls-7" x="152.91" y="0">Nest</tspan></text>
+        <text class="cls-1" transform="translate(158.43 103.61)"><tspan class="cls-10" x="0" y="0">Student Housing &amp; Ren</tspan><tspan class="cls-5" x="271.72" y="0">t</tspan><tspan class="cls-8" x="281.04" y="0">als</tspan></text>
+      </g>
+    </g>
+  </g>
+</svg>

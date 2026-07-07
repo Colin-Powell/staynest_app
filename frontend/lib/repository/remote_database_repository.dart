@@ -67,7 +67,7 @@ class RemoteDatabaseRepository {
     int limit = 20,
     required Function(List<Map<String, dynamic>> data, bool isFromCache) onData,
   }) async {
-    final cacheKey = '${CacheKeys.propertyList}_p${page}_l${limit}';
+    final cacheKey = '${CacheKeys.propertyList}_p${page}_l$limit';
 
     await CacheEngine.instance.handle<List<Map<String, dynamic>>>(
       key: cacheKey,
@@ -410,14 +410,21 @@ class RemoteDatabaseRepository {
     return result;
   }
 
-  Future<Map<String, dynamic>?> verifyPhoneCode(String code) async {
-    if (code == '624108') {
-      return <String, dynamic>{'verified': true, 'status': 'success'};
-    }
-
+  Future<Map<String, dynamic>?> sendOtpToEmail(String email) async {
     final response = await apiClient.post(
-      Uri.parse('${AppSession.apiBaseUrl}/auth/verify-phone'),
-      body: {'code': code},
+      Uri.parse('${AppSession.apiBaseUrl}/email/send-otp'),
+      body: {'email': email},
+    );
+
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final data = decoded['data'];
+    return data is Map<String, dynamic> ? data : decoded;
+  }
+
+  Future<Map<String, dynamic>?> verifyOtpCode(String email, String code) async {
+    final response = await apiClient.post(
+      Uri.parse('${AppSession.apiBaseUrl}/email/verify-otp'),
+      body: {'email': email, 'code': code},
     );
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
@@ -429,6 +436,14 @@ class RemoteDatabaseRepository {
       return {...result, ...userMap};
     }
     return result;
+  }
+
+  Future<Map<String, dynamic>?> verifyPhoneCode(String code) async {
+    final email = AppSession.currentUserEmail?.trim();
+    if (email == null || email.isEmpty) {
+      return <String, dynamic>{'verified': false, 'status': 'missing_email'};
+    }
+    return verifyOtpCode(email, code);
   }
 
   /// Returns the current authenticated tenant profile (preferences), or `null` if missing.

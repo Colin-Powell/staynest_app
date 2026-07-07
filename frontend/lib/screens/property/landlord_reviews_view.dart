@@ -6,7 +6,6 @@ import 'package:property_app/widgets/shared.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:property_app/screens/home/map_view.dart';
 import 'package:property_app/session/app_session.dart';
-import 'package:property_app/widgets/property_image.dart';
 
 class LandlordReviewsView extends StatefulWidget {
   final VoidCallback onClose;

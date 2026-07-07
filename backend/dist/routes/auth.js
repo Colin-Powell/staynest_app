@@ -38,13 +38,57 @@ router.post('/register', async (req, res, next) => {
                 ]);
             }
         }
-        const token = jwt.sign({
+        const accessToken = jwt.sign({
             id: created.id,
             email: created.email,
             role: created.role,
             verified: created.verified,
-        }, env.jwtSecret, { expiresIn: '6h' });
-        return res.status(201).json({ data: { token, user: created } });
+        }, env.jwtSecret, { expiresIn: '15m' });
+        const refreshToken = jwt.sign({ id: created.id }, env.jwtSecret, { expiresIn: '30d' });
+        return res.status(201).json({ data: { token: accessToken, accessToken, refreshToken, user: created } });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+router.post('/refresh', async (req, res, next) => {
+    try {
+        const { refreshToken } = req.body;
+        if (!refreshToken) {
+            return res.status(400).json({ error: 'Refresh token is required.' });
+        }
+        const payload = jwt.verify(refreshToken, env.jwtSecret);
+        if (!payload.id) {
+            return res.status(401).json({ error: 'Invalid refresh token.' });
+        }
+        const result = await query('SELECT id, name, email, phone, avatar, role, verified FROM users WHERE id = $1 LIMIT 1', [payload.id]);
+        const user = result.rows[0];
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid refresh token.' });
+        }
+        const accessToken = jwt.sign({
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            verified: user.verified,
+        }, env.jwtSecret, { expiresIn: '15m' });
+        const nextRefreshToken = jwt.sign({ id: user.id }, env.jwtSecret, { expiresIn: '30d' });
+        return res.json({
+            data: {
+                token: accessToken,
+                accessToken,
+                refreshToken: nextRefreshToken,
+                user: {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    phone: user.phone,
+                    avatar: user.avatar,
+                    role: user.role,
+                    verified: user.verified,
+                },
+            },
+        });
     }
     catch (error) {
         next(error);
@@ -88,15 +132,18 @@ router.post('/login', async (req, res, next) => {
         if (!isValid) {
             return res.status(401).json({ error: 'Invalid credentials.' });
         }
-        const token = jwt.sign({
+        const accessToken = jwt.sign({
             id: user.id,
             email: user.email,
             role: user.role,
             verified: user.verified,
-        }, env.jwtSecret, { expiresIn: '6h' });
+        }, env.jwtSecret, { expiresIn: '15m' });
+        const refreshToken = jwt.sign({ id: user.id }, env.jwtSecret, { expiresIn: '30d' });
         return res.json({
             data: {
-                token,
+                token: accessToken,
+                accessToken,
+                refreshToken,
                 user: {
                     id: user.id,
                     name: user.name,

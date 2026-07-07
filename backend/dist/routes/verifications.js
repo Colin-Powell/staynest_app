@@ -3,7 +3,7 @@ import { query } from '../db.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
 import { env } from '../config.js';
 const router = Router();
-router.post('/', requireAuth, async (req, res, next) => {
+export const createVerificationHandler = async (req, res, next) => {
     try {
         const { documents, property } = req.body;
         if (!documents || !property) {
@@ -23,7 +23,8 @@ router.post('/', requireAuth, async (req, res, next) => {
     catch (error) {
         next(error);
     }
-});
+};
+router.post('/', requireAuth, createVerificationHandler);
 // Get current user's latest verification
 router.get('/me', requireAuth, async (req, res, next) => {
     try {

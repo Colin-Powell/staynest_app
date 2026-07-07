@@ -56,8 +56,8 @@ class _FilterViewState extends State<FilterView>
     _animController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 400));
     _slideAnim = Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
-        .animate(
-            CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
+        .animate(CurvedAnimation(
+            parent: _animController, curve: Curves.easeOutCubic));
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
     _animController.forward();
   }
@@ -136,7 +136,8 @@ class _FilterViewState extends State<FilterView>
                     Expanded(
                       child: SingleChildScrollView(
                         physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 140), // Clearance for bottom bar
+                        padding: const EdgeInsets.fromLTRB(
+                            24, 8, 24, 140), // Clearance for bottom bar
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -144,19 +145,20 @@ class _FilterViewState extends State<FilterView>
                             _buildSectionLabel('Property Type'),
                             const SizedBox(height: 16),
                             _buildPropertyTypes(),
-                            
+
                             const SizedBox(height: 32),
-                            
+
                             // Price Range Section
                             _buildSectionLabel('Price Range (Monthly)'),
                             const SizedBox(height: 16),
                             _GlassContainer(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 24),
                               child: _buildPriceRange(),
                             ),
-                            
+
                             const SizedBox(height: 32),
-                            
+
                             // Amenities Section
                             _buildSectionLabel('Amenities'),
                             const SizedBox(height: 16),
@@ -179,17 +181,21 @@ class _FilterViewState extends State<FilterView>
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                     child: Container(
-                      padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
+                      padding: EdgeInsets.fromLTRB(24, 16, 24,
+                          MediaQuery.of(context).padding.bottom + 16),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.6),
-                        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.8), width: 1.5)),
+                        border: Border(
+                            top: BorderSide(
+                                color: Colors.white.withOpacity(0.8),
+                                width: 1.5)),
                       ),
                       child: GestureDetector(
                         onTap: _applyFilters,
                         child: Container(
                           height: 56,
                           decoration: BoxDecoration(
-                            color: _primary, 
+                            color: _primary,
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
@@ -232,13 +238,14 @@ class _FilterViewState extends State<FilterView>
               GestureDetector(
                 onTap: _handleClose,
                 behavior: HitTestBehavior.opaque,
-                child: const Icon(Icons.close_rounded, size: 28, color: _textDark),
+                child:
+                    const Icon(Icons.close_rounded, size: 28, color: _textDark),
               ),
               const SizedBox(width: 16),
               Text(
                 'Filters',
                 style: GoogleFonts.poppins(
-                  fontSize: 28, 
+                  fontSize: 28,
                   fontWeight: FontWeight.w800,
                   color: _textDark,
                   letterSpacing: -0.5,
@@ -290,12 +297,13 @@ class _FilterViewState extends State<FilterView>
           onTap: () => setState(() => _selectedType = type['name'] as String),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
+            padding:
+                const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
             decoration: BoxDecoration(
               color: isSelected ? _primary : Colors.white.withOpacity(0.6),
               borderRadius: BorderRadius.circular(30),
               border: Border.all(
-                color: isSelected ? _primary : Colors.white.withOpacity(0.8), 
+                color: isSelected ? _primary : Colors.white.withOpacity(0.8),
                 width: 1.5,
               ),
             ),
@@ -305,7 +313,9 @@ class _FilterViewState extends State<FilterView>
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: isSelected ? Colors.white.withOpacity(0.2) : Colors.white,
+                    color: isSelected
+                        ? Colors.white.withOpacity(0.2)
+                        : Colors.white,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -358,7 +368,8 @@ class _FilterViewState extends State<FilterView>
         const SizedBox(height: 16),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
-            rangeThumbShape: const RoundRangeSliderThumbShape(enabledThumbRadius: 12),
+            rangeThumbShape:
+                const RoundRangeSliderThumbShape(enabledThumbRadius: 12),
             activeTrackColor: _primary,
             inactiveTrackColor: Colors.white.withOpacity(0.8),
             thumbColor: Colors.white,
@@ -382,12 +393,13 @@ class _FilterViewState extends State<FilterView>
         final int index = entry.key;
         final String amenity = entry.value;
         final isSelected = _selectedAmenities.contains(amenity);
-        
+
         return GestureDetector(
           onTap: () => _toggleAmenity(amenity),
           behavior: HitTestBehavior.opaque,
           child: Padding(
-            padding: EdgeInsets.only(bottom: index == _amenities.length - 1 ? 0 : 24),
+            padding: EdgeInsets.only(
+                bottom: index == _amenities.length - 1 ? 0 : 24),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -399,7 +411,8 @@ class _FilterViewState extends State<FilterView>
                         color: Colors.white.withOpacity(0.8),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(_getAmenityIcon(amenity), size: 18, color: _primary),
+                      child: Icon(_getAmenityIcon(amenity),
+                          size: 18, color: _primary),
                     ),
                     const SizedBox(width: 14),
                     Text(
@@ -421,12 +434,14 @@ class _FilterViewState extends State<FilterView>
                     color: isSelected ? _primary : Colors.transparent,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: isSelected ? _primary : _textLight.withOpacity(0.5),
+                      color:
+                          isSelected ? _primary : _textLight.withOpacity(0.5),
                       width: 2,
                     ),
                   ),
                   child: isSelected
-                      ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
+                      ? const Icon(Icons.check_rounded,
+                          color: Colors.white, size: 16)
                       : null,
                 ),
               ],
@@ -472,9 +487,9 @@ class _GlassContainer extends StatelessWidget {
     required this.child,
     required this.padding,
     this.borderRadius,
-    this.blur = 20.0,
+    this.blur = 15.0,
     this.opacity = 0.55,
-    this.borderWidth = 1.5,
+    this.borderWidth = 1.0,
   });
 
   @override

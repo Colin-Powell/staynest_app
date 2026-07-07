@@ -32,9 +32,10 @@ router.post('/google', async (req, res, next) => {
       await query(`UPDATE users SET name = COALESCE(NULLIF($1, ''), name), avatar = COALESCE($2, avatar) WHERE id = $3`, [name, avatar, user.id]);
     }
 
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role, verified: user.verified }, env.jwtSecret, { expiresIn: '6h' });
+    const accessToken = jwt.sign({ id: user.id, email: user.email, role: user.role, verified: user.verified }, env.jwtSecret, { expiresIn: '15m' });
+    const refreshToken = jwt.sign({ id: user.id }, env.jwtSecret, { expiresIn: '30d' });
 
-    return res.json({ data: { token, user } });
+    return res.json({ data: { token: accessToken, accessToken, refreshToken, user } });
   } catch (err) {
     next(err);
   }

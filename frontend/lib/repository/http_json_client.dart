@@ -42,49 +42,56 @@ class HttpJsonClient {
       return;
     }
 
-    // If the app doesn't have a refresh token, can't refresh.
-    if (AppSession.refreshToken == null) {
+    if (AppSession.refreshToken == null ||
+        AppSession.refreshToken!.trim().isEmpty) {
       throw ApiException(401, 'Missing refresh token');
     }
 
     _refreshing = () async {
       final refreshToken = AppSession.refreshToken!;
-      final response = await _client.post(
-        Uri.parse('${AppSession.apiBaseUrl}/auth/refresh'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'refreshToken': refreshToken}),
-      );
+      try {
+        final response = await _client.post(
+          Uri.parse('${AppSession.apiBaseUrl}/auth/refresh'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'refreshToken': refreshToken}),
+        );
 
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw ApiException(response.statusCode, 'Token refresh failed');
-      }
-
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final data = decoded['data'];
-
-      // Expected backend shape: { data: { accessToken, refreshToken? , user? } }
-      if (data is Map<String, dynamic>) {
-        final newAccess = data['accessToken']?.toString();
-        final newRefresh = data['refreshToken']?.toString();
-        if (newAccess != null && newAccess.isNotEmpty) {
-          AppSession.apiToken = newAccess;
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw ApiException(response.statusCode, 'Token refresh failed');
         }
-        if (newRefresh != null && newRefresh.isNotEmpty) {
-          AppSession.refreshToken = newRefresh;
-        }
-        return;
-      }
 
-      // Some backends may return tokens at root.
-      final newAccessRoot = decoded['accessToken']?.toString();
-      final newRefreshRoot = decoded['refreshToken']?.toString();
-      if (newAccessRoot != null && newAccessRoot.isNotEmpty) {
-        AppSession.apiToken = newAccessRoot;
-      }
-      if (newRefreshRoot != null && newRefreshRoot.isNotEmpty) {
-        AppSession.refreshToken = newRefreshRoot;
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        final data = decoded['data'];
+
+        if (data is Map<String, dynamic>) {
+          final newAccess =
+              data['accessToken']?.toString() ?? data['token']?.toString();
+          final newRefresh = data['refreshToken']?.toString();
+          if (newAccess != null && newAccess.isNotEmpty) {
+            AppSession.apiToken = newAccess;
+            await AppSession.persistSession();
+          }
+          if (newRefresh != null && newRefresh.isNotEmpty) {
+            AppSession.refreshToken = newRefresh;
+            await AppSession.persistSession();
+          }
+          return;
+        }
+
+        final newAccessRoot =
+            decoded['accessToken']?.toString() ?? decoded['token']?.toString();
+        final newRefreshRoot = decoded['refreshToken']?.toString();
+        if (newAccessRoot != null && newAccessRoot.isNotEmpty) {
+          AppSession.apiToken = newAccessRoot;
+          await AppSession.persistSession();
+        }
+        if (newRefreshRoot != null && newRefreshRoot.isNotEmpty) {
+          AppSession.refreshToken = newRefreshRoot;
+          await AppSession.persistSession();
+        }
+      } catch (error) {
+        if (error is ApiException) rethrow;
+        throw ApiException(401, 'Token refresh failed');
       }
     }();
 

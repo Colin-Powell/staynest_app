@@ -28,8 +28,10 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
 
   bool _hasError = false;
   bool _isVerifying = false;
+  bool _isSendingCode = false;
   int _remainingSeconds = 30;
   Timer? _timer;
+  String _emailAddress = '';
 
   late final AnimationController _shakeController;
   late final Animation<double> _shakeAnimation;
@@ -52,7 +54,9 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
       curve: Curves.easeInOut,
     ));
 
+    _emailAddress = AppSession.currentUserEmail?.trim() ?? '';
     _startCountdown();
+    unawaited(_requestOtpCode());
 
     for (final focusNode in _focusNodes) {
       focusNode.addListener(() {
@@ -92,6 +96,38 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
     }
   }
 
+  Future<void> _requestOtpCode() async {
+    if (_emailAddress.isEmpty) return;
+
+    setState(() => _isSendingCode = true);
+    try {
+      final repository = RemoteDatabaseRepository();
+      await repository.sendOtpToEmail(_emailAddress);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('A verification code was sent to your email.'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Color(0xFF16A34A),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'We could not resend the verification code. Please try again.'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Color(0xFFE53935),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSendingCode = false);
+    }
+  }
+
   Future<void> _verify() async {
     final code = _controllers.map((c) => c.text).join();
     if (code.length < 6) return;
@@ -109,6 +145,7 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
       }
 
       AppSession.currentUserVerified = true;
+      await AppSession.persistSession();
 
       if (!mounted) return;
       // Role-based routing after verification
@@ -170,13 +207,14 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
     return 'Verification failed. Please try again.';
   }
 
-  void _onResend() {
+  Future<void> _onResend() async {
     if (_remainingSeconds > 0) return;
     for (final controller in _controllers) {
       controller.clear();
     }
     _resetError();
     _startCountdown();
+    await _requestOtpCode();
     _focusNodes[0].requestFocus();
   }
 
@@ -266,7 +304,7 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
               ),
               const SizedBox(height: 36),
               Text(
-                'Verify Your Phone',
+                'Verify Your Email',
                 style: GoogleFonts.poppins(
                   fontSize: 34,
                   fontWeight: FontWeight.w800,
@@ -285,7 +323,7 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
               ),
               const SizedBox(height: 8),
               Text(
-                '+254 712 345 678',
+                _emailAddress.isNotEmpty ? _emailAddress : 'your email',
                 style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
@@ -311,7 +349,9 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
               const SizedBox(height: 32),
               Center(
                 child: TextButton(
-                  onPressed: _remainingSeconds == 0 ? _onResend : null,
+                  onPressed: (_remainingSeconds == 0 && !_isSendingCode)
+                      ? _onResend
+                      : null,
                   style: TextButton.styleFrom(
                     padding: EdgeInsets.zero,
                     minimumSize: const Size(1, 1),

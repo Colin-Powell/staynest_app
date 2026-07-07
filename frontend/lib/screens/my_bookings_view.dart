@@ -60,11 +60,13 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
     setState(() {
       _allBookings = bookings.map((b) {
         String uiStatus = 'Upcoming';
-        if (b['status'] == 'confirmed' || b['status'] == 'pending')
+        if (b['status'] == 'confirmed' || b['status'] == 'pending') {
           uiStatus = 'Upcoming';
+        }
         if (b['status'] == 'completed') uiStatus = 'Completed';
-        if (b['status'] == 'cancelled' || b['status'] == 'rejected')
+        if (b['status'] == 'cancelled' || b['status'] == 'rejected') {
           uiStatus = 'Cancelled';
+        }
 
         final checkIn = DateTime.parse(b['check_in_date']);
         final dateStr = "${checkIn.day}/${checkIn.month}/${checkIn.year}";

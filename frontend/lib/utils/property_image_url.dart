@@ -1,5 +1,11 @@
 import 'package:property_app/session/app_session.dart';
 
+String _withCloudinaryOptimizations(String url) {
+  if (!url.contains('cloudinary.com/')) return url;
+  final separator = url.contains('?') ? '&' : '?';
+  return '$url${separator}f_auto,q_auto,fl_progressive,w_900,h_600';
+}
+
 /// Resolves property image paths from API responses into loadable URLs.
 String resolvePropertyImageUrl(String url) {
   final trimmed = url.trim();
@@ -18,7 +24,7 @@ String resolvePropertyImageUrl(String url) {
       // - Your failing requests were for the same URL with only `.jpg`
       // So: for Cloudinary URLs, preserve `.jpg.jpg` and `.jpg` as-is.
       // Do NOT strip any trailing `.jpg` for Cloudinary.
-      return trimmed;
+      return _withCloudinaryOptimizations(trimmed);
     }
 
     return trimmed;
@@ -42,6 +48,15 @@ String resolvePropertyImageUrl(String url) {
         ? base.substring(0, base.length - 4)
         : base.replaceAll(RegExp(r'/api/?$'), '');
     return '$origin/$trimmed';
+  }
+
+  // Cloudinary public IDs may come through as a relative ID such as
+  // `staynest/listing-123` or `staynest/listing-123.jpg`.
+  if (trimmed.contains('/') &&
+      !trimmed.startsWith('assets/') &&
+      !trimmed.startsWith('http')) {
+    final publicId = trimmed.contains('.') ? trimmed : '$trimmed.jpg';
+    return '${AppSession.cloudinaryBaseUrl}/$publicId';
   }
 
   return trimmed;

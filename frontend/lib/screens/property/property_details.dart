@@ -53,8 +53,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   // ─── Computed getters — single source of truth for rating & count ──────────
   double get _avgRating => _reviews.isEmpty
       ? widget.property.rating
-      : _reviews.map((r) => r.rating).reduce((a, b) => a + b) /
-          _reviews.length;
+      : _reviews.map((r) => r.rating).reduce((a, b) => a + b) / _reviews.length;
 
   int get _reviewCount =>
       _reviews.isEmpty ? widget.property.reviews : _reviews.length;
@@ -211,7 +210,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                 // Top Navigation Row
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -222,9 +222,12 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                         _GlassCircleButton(
                           icon: PhosphorIcons.shareNetwork(),
                           onTap: () {
-                            AnalyticsService.trackPropertyShare(widget.property.id);
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                                content: Text('Listing link copied to clipboard.')));
+                            AnalyticsService.trackPropertyShare(
+                                widget.property.id);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text(
+                                        'Listing link copied to clipboard.')));
                           },
                         ),
                       ],
@@ -238,7 +241,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                 // Content
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 140), // Bottom padding for fixed buttons
+                    padding: const EdgeInsets.fromLTRB(
+                        20, 0, 20, 140), // Bottom padding for fixed buttons
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -282,11 +286,18 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                 ],
                               ),
                               const SizedBox(height: 16),
-                              Divider(color: Colors.white.withOpacity(0.6), height: 1, thickness: 1.5),
+                              Divider(
+                                  color: Colors.white.withOpacity(0.6),
+                                  height: 1,
+                                  thickness: 1.5),
                               const SizedBox(height: 16),
                               Row(
                                 children: [
-                                  Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill), size: 18, color: textLight),
+                                  Icon(
+                                      PhosphorIcons.mapPin(
+                                          PhosphorIconsStyle.fill),
+                                      size: 18,
+                                      color: textLight),
                                   const SizedBox(width: 6),
                                   Expanded(
                                     child: Text(
@@ -321,7 +332,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                 behavior: HitTestBehavior.opaque,
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 20),
+                                    const Icon(Icons.star_rounded,
+                                        color: Color(0xFFFBBF24), size: 20),
                                     const SizedBox(width: 6),
                                     if (_reviewCount > 0) ...[
                                       Text(
@@ -364,11 +376,17 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                           spacing: 10,
                           runSpacing: 10,
                           children: [
-                            _buildTag(Icons.apartment_rounded, widget.property.category, true),
-                            _buildTag(Icons.door_front_door_rounded, '${widget.property.features.rooms} Room', false),
-                            _buildTag(Icons.bed_rounded, '${widget.property.features.beds} beds', false),
+                            _buildTag(Icons.apartment_rounded,
+                                widget.property.category, true),
+                            _buildTag(
+                                Icons.door_front_door_rounded,
+                                '${widget.property.features.rooms} Room',
+                                false),
+                            _buildTag(Icons.bed_rounded,
+                                '${widget.property.features.beds} beds', false),
                             if (widget.property.features.furnished)
-                              _buildTag(Icons.weekend_rounded, 'Furnished', false),
+                              _buildTag(
+                                  Icons.weekend_rounded, 'Furnished', false),
                           ],
                         ),
 
@@ -380,10 +398,22 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                           physics: const BouncingScrollPhysics(),
                           child: Row(
                             children: [
-                              _ShortcutPill(icon: PhosphorIcons.image(), label: 'Gallery', onTap: widget.onViewGallery ?? () {}),
-                              _ShortcutPill(icon: PhosphorIcons.listChecks(), label: 'Amenities', onTap: widget.onViewAmenities ?? () {}),
-                              _ShortcutPill(icon: PhosphorIcons.mapTrifold(), label: 'Location', onTap: widget.onViewLocation ?? () {}),
-                              _ShortcutPill(icon: PhosphorIcons.userCircle(), label: 'Landlord', onTap: widget.onViewLandlord ?? () {}),
+                              _ShortcutPill(
+                                  icon: PhosphorIcons.image(),
+                                  label: 'Gallery',
+                                  onTap: widget.onViewGallery ?? () {}),
+                              _ShortcutPill(
+                                  icon: PhosphorIcons.listChecks(),
+                                  label: 'Amenities',
+                                  onTap: widget.onViewAmenities ?? () {}),
+                              _ShortcutPill(
+                                  icon: PhosphorIcons.mapTrifold(),
+                                  label: 'Location',
+                                  onTap: widget.onViewLocation ?? () {}),
+                              _ShortcutPill(
+                                  icon: PhosphorIcons.userCircle(),
+                                  label: 'Landlord',
+                                  onTap: widget.onViewLandlord ?? () {}),
                             ],
                           ),
                         ),
@@ -393,7 +423,10 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                         // --- About Property Section ---
                         Text(
                           'About Property',
-                          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w800, color: textDark),
+                          style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: textDark),
                         ),
                         const SizedBox(height: 16),
                         _GlassContainer(
@@ -416,7 +449,10 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                         // --- Spacious Rooms Area ---
                         Text(
                           'Interior Preview',
-                          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w800, color: textDark),
+                          style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: textDark),
                         ),
                         const SizedBox(height: 16),
                         _GlassContainer(
@@ -429,8 +465,10 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                   children: widget.property.amenities
                                       .take(2)
                                       .map((a) => Padding(
-                                            padding: const EdgeInsets.only(bottom: 12),
-                                            child: _buildWhiteCircleIcon(PhosphorIcons.checkCircle()),
+                                            padding: const EdgeInsets.only(
+                                                bottom: 12),
+                                            child: _buildWhiteCircleIcon(
+                                                PhosphorIcons.checkCircle()),
                                           ))
                                       .toList(),
                                 )
@@ -450,11 +488,20 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                   onTap: widget.onViewGallery,
                                   child: Row(
                                     children: [
-                                      Expanded(child: _buildRoomImage(previewPhotos[0], height: 110)),
+                                      Expanded(
+                                          child: _buildRoomImage(
+                                              previewPhotos[0],
+                                              height: 110)),
                                       const SizedBox(width: 10),
-                                      Expanded(child: _buildRoomImage(previewPhotos[1], height: 110)),
+                                      Expanded(
+                                          child: _buildRoomImage(
+                                              previewPhotos[1],
+                                              height: 110)),
                                       const SizedBox(width: 10),
-                                      Expanded(child: _buildRoomImage(previewPhotos[2], height: 110)),
+                                      Expanded(
+                                          child: _buildRoomImage(
+                                              previewPhotos[2],
+                                              height: 110)),
                                     ],
                                   ),
                                 ),
@@ -502,7 +549,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
           Align(
             alignment: Alignment.bottomCenter,
             child: Padding(
-              padding: EdgeInsets.fromLTRB(24, 0, 24, MediaQuery.of(context).padding.bottom + 24),
+              padding: EdgeInsets.fromLTRB(
+                  24, 0, 24, MediaQuery.of(context).padding.bottom + 24),
               child: Row(
                 children: [
                   Expanded(
@@ -738,7 +786,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                     ),
                     Row(
                       children: [
-                        const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 16),
+                        const Icon(Icons.star_rounded,
+                            color: Color(0xFFFBBF24), size: 16),
                         const SizedBox(width: 4),
                         Text(
                           review.rating.toStringAsFixed(1),
@@ -783,7 +832,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
       padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
       decoration: BoxDecoration(
         color: isPrimary ? tenantPrimary : Colors.white.withOpacity(0.6),
-        border: Border.all(color: isPrimary ? tenantPrimary : Colors.white, width: 1.5),
+        border: Border.all(
+            color: isPrimary ? tenantPrimary : Colors.white, width: 1.5),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Row(
@@ -917,9 +967,9 @@ class _GlassContainer extends StatelessWidget {
     required this.child,
     required this.padding,
     this.borderRadius,
-    this.blur = 20.0,
+    this.blur = 15.0,
     this.opacity = 0.55,
-    this.borderWidth = 1.5,
+    this.borderWidth = 1.0,
   });
 
   @override

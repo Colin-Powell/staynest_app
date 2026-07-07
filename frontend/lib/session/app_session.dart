@@ -1,14 +1,15 @@
-import 'package:flutter/foundation.dart';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:property_app/screens/dashboard/analytics_service.dart';
 import 'package:property_app/screens/home/cache_engine.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppSession {
+  static const String _prefsKey = 'staynest.session';
+
   static String currentRole = 'tenant';
   static final ValueNotifier<String> currentRoleNotifier =
       ValueNotifier(currentRole);
@@ -106,7 +107,8 @@ class AppSession {
 
   /// Cloudinary configuration for image assets
   static const String cloudinaryCloudName = 'dxcht5cls';
-  static const String cloudinaryBaseUrl = 'https://res.cloudinary.com/$cloudinaryCloudName/image/upload';
+  static const String cloudinaryBaseUrl =
+      'https://res.cloudinary.com/$cloudinaryCloudName/image/upload';
 
   /// Resolves any avatar path or Cloudinary ID into a usable [ImageProvider].
   /// Handles full URLs, local asset paths, and relative server upload IDs.
@@ -129,11 +131,24 @@ class AppSession {
   }
 
   /// Returns the [ImageProvider] for the currently authenticated user's avatar.
-  static ImageProvider get currentUserAvatarProvider => getAvatarProvider(currentUserAvatar);
+  static ImageProvider get currentUserAvatarProvider =>
+      getAvatarProvider(currentUserAvatar);
 
   /// Builds a [Widget] for displaying an avatar with a shimmer loading effect.
-  static Widget buildAvatar(String? path, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
-    final avatar = (path?.trim().isNotEmpty == true) ? path!.trim() : 'assets/images/profile.jpg';
+  static Widget buildAvatar(String? path,
+      {double? width, double? height, BoxFit fit = BoxFit.cover}) {
+    final avatar = (path?.trim().isNotEmpty == true) ? path!.trim() : '';
+    final hasRealAvatar =
+        avatar.isNotEmpty && !avatar.startsWith('assets/images/profile.jpg');
+
+    if (!hasRealAvatar) {
+      return Image.asset(
+        'assets/images/profile.jpg',
+        width: width,
+        height: height,
+        fit: fit,
+      );
+    }
 
     if (avatar.startsWith('assets/')) {
       return Image.asset(avatar, width: width, height: height, fit: fit);
@@ -148,6 +163,8 @@ class AppSession {
       width: width,
       height: height,
       fit: fit,
+      cacheWidth: width != null ? (width * 2).toInt() : null,
+      cacheHeight: height != null ? (height * 2).toInt() : null,
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
         return const _ShimmerPlaceholder();
@@ -167,6 +184,70 @@ class AppSession {
     return '${role[0].toUpperCase()}${role.substring(1)}';
   }
 
+  static Map<String, dynamic> toSessionSnapshot() => {
+        'user': {
+          'id': currentUserId,
+          'name': currentUserName,
+          'email': currentUserEmail,
+          'phone': currentUserPhone,
+          'avatar': currentUserAvatar,
+          'role': currentRole,
+          'verified': currentUserVerified,
+        },
+        'tokens': {
+          'apiToken': apiToken,
+          'refreshToken': refreshToken,
+        },
+      };
+
+  static Future<void> persistSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsKey, jsonEncode(toSessionSnapshot()));
+  }
+
+  static Future<void> restoreSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_prefsKey);
+    if (raw == null || raw.isEmpty) return;
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        await prefs.remove(_prefsKey);
+        return;
+      }
+
+      final user = decoded['user'];
+      final tokens = decoded['tokens'];
+      if (user is Map) {
+        updateCurrentUser(Map<String, dynamic>.from(user as Map));
+      }
+      if (tokens is Map) {
+        apiToken = tokens['apiToken']?.toString();
+        refreshToken = tokens['refreshToken']?.toString();
+      }
+    } catch (_) {
+      await prefs.remove(_prefsKey);
+    }
+  }
+
+  static Future<void> clearPersistedSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefsKey);
+  }
+
+  static void applySessionSnapshot(Map<String, dynamic> snapshot) {
+    final user = snapshot['user'];
+    final tokens = snapshot['tokens'];
+    if (user is Map) {
+      updateCurrentUser(Map<String, dynamic>.from(user));
+    }
+    if (tokens is Map) {
+      apiToken = tokens['apiToken']?.toString();
+      refreshToken = tokens['refreshToken']?.toString();
+    }
+  }
+
   static void updateCurrentUser(Map<String, dynamic> user) {
     currentUserId = user['id']?.toString();
     currentUserName = user['name']?.toString();
@@ -180,7 +261,7 @@ class AppSession {
   static bool get isLandlord =>
       currentRole == 'landlord' || currentRole == 'host';
 
-  static void reset() {
+  static Future<void> reset() async {
     currentRole = 'tenant';
     currentUserId = null;
     currentUserName = null;
@@ -190,7 +271,9 @@ class AppSession {
     currentUserVerified = false;
     apiToken = null;
     refreshToken = null;
-    CacheEngine.instance.clearAll(); // Critical: Invalidate cache on logout
+    await clearPersistedSession();
+    await CacheEngine.instance
+        .clearAll(); // Critical: Invalidate cache on logout
   }
 }
 

@@ -39,7 +39,7 @@ class FCMService {
       _notificationsController.stream;
 
   // Define the Android Notification Channel for high importance
-  static final AndroidNotificationChannel _channel = AndroidNotificationChannel(
+  static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'high_importance_channel',
     'High Importance Notifications',
     description: 'This channel is used for important notifications.',
@@ -50,67 +50,91 @@ class FCMService {
   GlobalKey<NavigatorState>? navigatorKey;
 
   Future<void> initialize() async {
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    try {
+      FirebaseMessaging.onBackgroundMessage(
+          _firebaseMessagingBackgroundHandler);
 
-    // Set iOS foreground presentation options
-    await _messaging.setForegroundNotificationPresentationOptions(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+      // Set iOS foreground presentation options
+      await _messaging.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
 
-    // 1. Request Permissions (iOS/Android 13+)
-    await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+      // 1. Request Permissions (iOS/Android 13+)
+      await _messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
 
-    // 2. Setup Local Notifications for Foreground
-    const androidInit = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
-    const iosInit = DarwinInitializationSettings();
+      // 2. Setup Local Notifications for Foreground
+      const androidInit = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
+      const iosInit = DarwinInitializationSettings();
 
-    await _localNotifications.initialize(
-      settings: const InitializationSettings(
-        android: androidInit,
-        iOS: iosInit,
-      ),
-    );
+      await _localNotifications.initialize(
+        settings: const InitializationSettings(
+          android: androidInit,
+          iOS: iosInit,
+        ),
+      );
 
-    // Note: createNotificationChannel requires a platform-specific plugin
-    // resolve API which differs across flutter_local_notifications versions.
-    // If channel creation fails to compile, we safely skip it here; the
-    // channel will still be usable with valid Android channel identifiers.
+      // Note: createNotificationChannel requires a platform-specific plugin
+      // resolve API which differs across flutter_local_notifications versions.
+      // If channel creation fails to compile, we safely skip it here; the
+      // channel will still be usable with valid Android channel identifiers.
 
-    // 3. Handle Foreground Messages & Trigger Modal
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      _notificationsController.add(message);
-      _showLocalNotification(message);
-      _showIncomingModal(message);
-    });
+      // 3. Handle Foreground Messages & Trigger Modal
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        _notificationsController.add(message);
+        _showLocalNotification(message);
+        _showIncomingModal(message);
+      });
 
-    // 4. Handle Notification Clicks (App in background)
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageAction);
+      // 4. Handle Notification Clicks (App in background)
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageAction);
 
-    // 5. Handle App start from terminated state
-    RemoteMessage? initialMessage = await _messaging.getInitialMessage();
-    if (initialMessage != null) _handleMessageAction(initialMessage);
+      // 5. Handle App start from terminated state
+      RemoteMessage? initialMessage = await _messaging.getInitialMessage();
+      if (initialMessage != null) _handleMessageAction(initialMessage);
 
-    // 6. Token Refresh
-    _messaging.onTokenRefresh.listen((newToken) {
-      AuthService.instance
-          .syncFCMToken(newToken: newToken); // Sync new token to backend
-    });
+      // 6. Token Refresh
+      _messaging.onTokenRefresh.listen((newToken) {
+        AuthService.instance
+            .syncFCMToken(newToken: newToken); // Sync new token to backend
+      });
 
-    // Print token for testing purposes
-    final token = await getToken();
-    debugPrint("FCM Token: $token");
+      // Print token for testing purposes
+      final token = await getToken();
+      debugPrint("FCM Token: $token");
+    } catch (error, stackTrace) {
+      debugPrint('[FCM] initialization failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   Future<String?> getToken() async {
-    return await _messaging.getToken();
+    return FCMService.runWithFallback<String?>(
+      action: () async => _messaging.getToken(),
+      label: 'FCM token',
+      fallback: null,
+    );
+  }
+
+  static Future<T?> runWithFallback<T>({
+    required Future<T> Function() action,
+    required String label,
+    T? fallback,
+  }) async {
+    try {
+      return await action();
+    } catch (error, stackTrace) {
+      debugPrint('[$label] failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      return fallback;
+    }
   }
 
   bool _isNavigatingFromNotification = false;
@@ -172,7 +196,7 @@ class FCMService {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
+                boxShadow: const [
                   BoxShadow(
                       color: Colors.black26,
                       blurRadius: 10,

@@ -28,7 +28,7 @@ class _PrivacyPolicyViewState extends State<PrivacyPolicyView> {
       // The _decodeData method already extracts 'data' if present,
       // so 'res' should directly contain the policy map or an empty map.
       final payload = res;
-      setState(() => _policy = payload is Map && payload['policy'] != null
+      setState(() => _policy = payload['policy'] != null
           ? payload['policy'].toString()
           : payload.toString());
     } catch (_) {
@@ -64,7 +64,7 @@ class _PrivacyPolicyViewState extends State<PrivacyPolicyView> {
           await _repo.requestDataDeletion(reason: reasonController.text);
       if (!mounted) return;
       final payload = res;
-      if (payload is Map && payload['id'] != null) {
+      if (payload['id'] != null) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Deletion request submitted.')));
       } else {

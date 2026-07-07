@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
-import 'package:property_app/widgets/property_image.dart';
 
 class ProfileView extends StatefulWidget {
   final VoidCallback? onViewBookings;
   final VoidCallback? onSwitchRole;
   final void Function(String name)? onSetting;
-  final VoidCallback? onViewSaved;
   final VoidCallback? onLogout;
   final VoidCallback? onEditProfile;
   final VoidCallback? onRefer;
@@ -20,7 +18,6 @@ class ProfileView extends StatefulWidget {
     this.onViewBookings,
     this.onSwitchRole,
     this.onSetting,
-    this.onViewSaved,
     this.onLogout,
     this.onEditProfile,
     this.onRefer,
@@ -145,11 +142,11 @@ class _ProfileViewState extends State<ProfileView>
                 // Header
                 _buildStaggered(
                   index: 0,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                  child: const Padding(
+                    padding: EdgeInsets.fromLTRB(24, 16, 24, 24),
                     child: Row(
                       children: [
-                        const Text(
+                        Text(
                           'Profile',
                           style: TextStyle(
                             fontSize: 28,
@@ -184,12 +181,13 @@ class _ProfileViewState extends State<ProfileView>
                                   child: Container(
                                     width: 72,
                                     height: 72,
-                                    decoration: BoxDecoration(
+                                    decoration: const BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: const Color(0xFFE5E7EB),
+                                      color: Color(0xFFE5E7EB),
                                     ),
                                     clipBehavior: Clip.antiAlias,
-                                    child: AppSession.buildAvatar(_avatarPath, width: 72, height: 72),
+                                    child: AppSession.buildAvatar(_avatarPath,
+                                        width: 72, height: 72),
                                   ),
                                 ),
                                 const SizedBox(width: 20),
@@ -257,34 +255,18 @@ class _ProfileViewState extends State<ProfileView>
                         _buildStaggered(
                           index: 3,
                           child: _MenuItem(
-                            icon: Icons.bookmark,
-                            label: 'Saved Properties',
-                            onTap: widget.onViewSaved,
-                          ),
-                        ),
-                        _buildStaggered(
-                          index: 4,
-                          child: _MenuItem(
                             icon: Icons.event_available_rounded,
                             label: 'My Bookings',
                             onTap: widget.onViewBookings,
                           ),
                         ),
                         _buildStaggered(
-                          index: 5,
+                          index: 4,
                           child: _MenuItem(
                             icon: Icons.credit_card,
                             label: 'Payment Methods',
                             onTap: () =>
                                 widget.onSetting?.call('Payment Methods'),
-                          ),
-                        ),
-                        _buildStaggered(
-                          index: 6,
-                          child: _MenuItem(
-                            icon: Icons.star,
-                            label: 'Reviews',
-                            onTap: () => widget.onSetting?.call('Reviews'),
                           ),
                         ),
                         _buildStaggered(
@@ -325,18 +307,19 @@ class _ProfileViewState extends State<ProfileView>
                                 },
                           ),
                         ),
-                        _buildStaggered(
-                          index: 11,
-                          child: _MenuItem(
-                            icon: Icons.verified,
-                            label: 'Verification Center',
-                            onTap: widget.onVerificationCenter ??
-                                () {
-                                  Navigator.pushNamed(
-                                      context, '/verification_center');
-                                },
+                        if (AppSession.isLandlord)
+                          _buildStaggered(
+                            index: 11,
+                            child: _MenuItem(
+                              icon: Icons.verified,
+                              label: 'Verification Center',
+                              onTap: widget.onVerificationCenter ??
+                                  () {
+                                    Navigator.pushNamed(
+                                        context, '/verification_center');
+                                  },
+                            ),
                           ),
-                        ),
 
                         const SizedBox(height: 32),
 

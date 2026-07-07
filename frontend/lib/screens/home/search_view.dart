@@ -43,7 +43,8 @@ class _SearchViewState extends State<SearchView> {
   String query = '';
   final TextEditingController _searchController = TextEditingController();
 
-  String _sortBy = 'recommended'; // recommended, price_low, price_high, rating, name
+  String _sortBy =
+      'recommended'; // recommended, price_low, price_high, rating, name
   Map<String, dynamic> _activeFilters = {};
 
   final _propertyService = PropertyService.instance;
@@ -146,14 +147,18 @@ class _SearchViewState extends State<SearchView> {
       final amenities = _activeFilters['amenities'];
 
       if (minPrice != null) {
-        final min = (minPrice is num) ? minPrice.toInt() : int.tryParse(minPrice.toString());
+        final min = (minPrice is num)
+            ? minPrice.toInt()
+            : int.tryParse(minPrice.toString());
         if (min != null) {
           filtered = filtered.where((p) => p.price >= min).toList();
         }
       }
 
       if (maxPrice != null) {
-        final max = (maxPrice is num) ? maxPrice.toInt() : int.tryParse(maxPrice.toString());
+        final max = (maxPrice is num)
+            ? maxPrice.toInt()
+            : int.tryParse(maxPrice.toString());
         if (max != null) {
           filtered = filtered.where((p) => p.price <= max).toList();
         }
@@ -171,7 +176,8 @@ class _SearchViewState extends State<SearchView> {
             bool categoryMatches = false;
             if (cat.isNotEmpty) {
               // Accept either exact match or partial match (e.g. 'one bedroom').
-              categoryMatches = cat == normalizedType || cat.contains(normalizedType);
+              categoryMatches =
+                  cat == normalizedType || cat.contains(normalizedType);
             }
 
             // Fallback to beds-based heuristics.
@@ -211,7 +217,8 @@ class _SearchViewState extends State<SearchView> {
 
         if (selectedAmenities.isNotEmpty) {
           filtered = filtered.where((p) {
-            final propAmenities = p.amenities.map((a) => a.toLowerCase().trim()).toSet();
+            final propAmenities =
+                p.amenities.map((a) => a.toLowerCase().trim()).toSet();
             for (final a in selectedAmenities) {
               if (!propAmenities.contains(a.toLowerCase())) {
                 return false;
@@ -257,9 +264,16 @@ class _SearchViewState extends State<SearchView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2))),
+              Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(2))),
               const SizedBox(height: 24),
-              Text('Sort By', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w800, color: _dark)),
+              Text('Sort By',
+                  style: GoogleFonts.poppins(
+                      fontSize: 20, fontWeight: FontWeight.w800, color: _dark)),
               const SizedBox(height: 16),
               _buildSortOption('Recommended', 'recommended'),
               _buildSortOption('Price: Low to High', 'price_low'),
@@ -274,6 +288,56 @@ class _SearchViewState extends State<SearchView> {
     );
   }
 
+  Widget _buildEmptyState() {
+    final hasFilter = _activeFilters.isNotEmpty;
+    final hasQuery = query.trim().isNotEmpty;
+    final title = hasFilter && hasQuery
+        ? 'No homes match your search'
+        : hasFilter
+            ? 'No homes match the selected filters'
+            : 'No homes found';
+    final subtitle = hasFilter && hasQuery
+        ? 'Try a different location, adjust the price range, or clear some filters.'
+        : hasFilter
+            ? 'Try clearing a few filters or widening the price range.'
+            : 'Try searching for another location or browse nearby homes.';
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEEF2FF),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: const Icon(Icons.search_off_rounded,
+                  size: 40, color: _primaryText),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                  fontSize: 20, fontWeight: FontWeight.w700, color: _dark),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                  fontSize: 14, fontWeight: FontWeight.w500, color: _grey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSortOption(String title, String value) {
     final isSelected = _sortBy == value;
     return ListTile(
@@ -282,8 +346,9 @@ class _SearchViewState extends State<SearchView> {
               fontSize: 15,
               color: isSelected ? _primaryText : _dark,
               fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500)),
-      trailing:
-          isSelected ? const Icon(Icons.check_circle_rounded, color: _primaryText) : null,
+      trailing: isSelected
+          ? const Icon(Icons.check_circle_rounded, color: _primaryText)
+          : null,
       onTap: () {
         setState(() => _sortBy = value);
         Navigator.pop(context);
@@ -312,7 +377,7 @@ class _SearchViewState extends State<SearchView> {
               ),
             ),
           ),
-          
+
           SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -376,7 +441,8 @@ class _SearchViewState extends State<SearchView> {
                             // Disable native lines and fills
                             decoration: InputDecoration(
                               hintText: 'Kilifi, Kenya',
-                              hintStyle: GoogleFonts.poppins(color: _grey, fontSize: 16),
+                              hintStyle: GoogleFonts.poppins(
+                                  color: _grey, fontSize: 16),
                               filled: false,
                               fillColor: Colors.transparent,
                               border: InputBorder.none,
@@ -385,7 +451,8 @@ class _SearchViewState extends State<SearchView> {
                               errorBorder: InputBorder.none,
                               disabledBorder: InputBorder.none,
                               isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 15),
                             ),
                           ),
                         ),
@@ -401,7 +468,8 @@ class _SearchViewState extends State<SearchView> {
                                   FocusScope.of(context).unfocus();
                                 },
                                 child: Padding(
-                                  padding: const EdgeInsets.only(right: 16, left: 8),
+                                  padding:
+                                      const EdgeInsets.only(right: 16, left: 8),
                                   child: SvgPicture.string(xCircleSvg,
                                       width: 22,
                                       height: 22,
@@ -483,176 +551,296 @@ class _SearchViewState extends State<SearchView> {
                 /// RESULTS
                 Expanded(
                   child: _loading
-                      ? const Center(child: CircularProgressIndicator(color: _primaryText))
-                      : ListView.builder(
-                          physics: const BouncingScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 120), // Bottom clearance
-                          itemCount: results.length,
-                          itemBuilder: (context, index) {
-                            final property = results[index];
-                            final isSaved = AppSession.isSaved(property.id);
-                            return TweenAnimationBuilder<double>(
-                              tween: Tween(begin: 0.0, end: 1.0),
-                              duration: Duration(milliseconds: 400 + (index * 60)),
-                              curve: Curves.easeOutCubic,
-                              builder: (context, value, child) {
-                                return Transform.translate(
-                                  offset: Offset(0, 30 * (1 - value)),
-                                  child: Opacity(
-                                    opacity: value,
-                                    child: child,
-                                  ),
-                                );
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.only(bottom: 20),
-                                child: VisibilityDetector(
-                                  key: Key('search_impression_${property.id}'),
-                                  onVisibilityChanged: (info) {
-                                    if (info.visibleFraction > 0.5) {
-                                      AnalyticsService.trackPropertyImpression(
-                                        property.id,
-                                        source: 'search',
-                                        position: index,
-                                        query: query,
-                                        filters: _activeFilters,
-                                      );
-                                    }
+                      ? const Center(
+                          child: CircularProgressIndicator(color: _primaryText))
+                      : results.isEmpty
+                          ? _buildEmptyState()
+                          : ListView.builder(
+                              physics: const BouncingScrollPhysics(),
+                              padding: const EdgeInsets.fromLTRB(
+                                  24, 0, 24, 120), // Bottom clearance
+                              itemCount: results.length,
+                              itemBuilder: (context, index) {
+                                final property = results[index];
+                                final isSaved = AppSession.isSaved(property.id);
+                                return TweenAnimationBuilder<double>(
+                                  tween: Tween(begin: 0.0, end: 1.0),
+                                  duration: Duration(
+                                      milliseconds: 400 + (index * 60)),
+                                  curve: Curves.easeOutCubic,
+                                  builder: (context, value, child) {
+                                    return Transform.translate(
+                                      offset: Offset(0, 30 * (1 - value)),
+                                      child: Opacity(
+                                        opacity: value,
+                                        child: child,
+                                      ),
+                                    );
                                   },
-                                  child: GestureDetector(
-                                    onTap: () => widget.onSelectProperty?.call(property.id),
-                                    child: SizedBox(
-                                      height: 140,
-                                      child: _GlassContainer(
-                                        padding: EdgeInsets.zero, // Flush edge padding
-                                        borderRadius: BorderRadius.circular(24),
-                                        child: Row(
-                                          children: [
-                                            // Flush Image to the left side
-                                            ClipRRect(
-                                              borderRadius: const BorderRadius.only(
-                                                topLeft: Radius.circular(24),
-                                                bottomLeft: Radius.circular(24),
-                                              ),
-                                              child: buildPropertyImage(
-                                                property.image,
-                                                width: 120,
-                                                height: double.infinity,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            ),
-                                            Expanded(
-                                              child: Padding(
-                                                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Row(
-                                                      children: [
-                                                        Expanded(
-                                                          child: Text(
-                                                            property.name,
-                                                            style: GoogleFonts.poppins(
-                                                              fontWeight: FontWeight.w800,
-                                                              fontSize: 16,
-                                                              color: _dark,
-                                                            ),
-                                                            maxLines: 1,
-                                                            overflow: TextOverflow.ellipsis,
-                                                          ),
-                                                        ),
-                                                        GestureDetector(
-                                                          onTap: () {
-                                                            _toggleSave(property.id).then((_) => setState(() {}));
-                                                          },
-                                                          child: Icon(
-                                                            isSaved ? AppIcons.heart : AppIcons.heartOutline,
-                                                            size: 24,
-                                                            color: isSaved ? const Color(0xFFEC4899) : const Color(0xFFD1D5DB),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Row(
-                                                      children: [
-                                                        const Icon(AppIcons.location, size: 14, color: _grey),
-                                                        const SizedBox(width: 4),
-                                                        Expanded(
-                                                          child: Text(
-                                                            property.location,
-                                                            style: GoogleFonts.poppins(
-                                                              fontSize: 13,
-                                                              color: _grey,
-                                                              fontWeight: FontWeight.w500,
-                                                            ),
-                                                            maxLines: 1,
-                                                            overflow: TextOverflow.ellipsis,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 6),
-                                                    Text(
-                                                      'Kes. ${property.price ~/ 1000}k/mo',
-                                                      style: GoogleFonts.poppins(
-                                                        fontSize: 16,
-                                                        fontWeight: FontWeight.w800,
-                                                        color: _dark,
-                                                      ),
-                                                    ),
-                                                    const Spacer(),
-                                                    Row(
-                                                      children: [
-                                                        if (property.reviews > 0)
-                                                          Container(
-                                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                            decoration: BoxDecoration(
-                                                              color: Colors.white.withOpacity(0.8),
-                                                              borderRadius: BorderRadius.circular(10),
-                                                              border: Border.all(color: Colors.white),
-                                                            ),
-                                                            child: Row(
-                                                              mainAxisSize: MainAxisSize.min,
-                                                              children: [
-                                                                const Icon(Icons.star_rounded, size: 15, color: Color(0xFFF59E42)),
-                                                                const SizedBox(width: 4),
-                                                                Text(
-                                                                  property.rating.toStringAsFixed(1),
-                                                                  style: GoogleFonts.poppins(
-                                                                    fontSize: 12,
-                                                                    fontWeight: FontWeight.w700,
-                                                                    color: _dark,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        const Spacer(),
-                                                        Text(
-                                                          '${property.features.beds} Beds',
-                                                          style: GoogleFonts.poppins(
-                                                            fontSize: 13,
-                                                            color: _grey,
-                                                            fontWeight: FontWeight.w600,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ],
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(bottom: 20),
+                                    child: VisibilityDetector(
+                                      key: Key(
+                                          'search_impression_${property.id}'),
+                                      onVisibilityChanged: (info) {
+                                        if (info.visibleFraction > 0.5) {
+                                          AnalyticsService
+                                              .trackPropertyImpression(
+                                            property.id,
+                                            source: 'search',
+                                            position: index,
+                                            query: query,
+                                            filters: _activeFilters,
+                                          );
+                                        }
+                                      },
+                                      child: GestureDetector(
+                                        onTap: () => widget.onSelectProperty
+                                            ?.call(property.id),
+                                        child: SizedBox(
+                                          height: 140,
+                                          child: _GlassContainer(
+                                            padding: EdgeInsets
+                                                .zero, // Flush edge padding
+                                            borderRadius:
+                                                BorderRadius.circular(24),
+                                            child: Row(
+                                              children: [
+                                                // Flush Image to the left side
+                                                ClipRRect(
+                                                  borderRadius:
+                                                      const BorderRadius.only(
+                                                    topLeft:
+                                                        Radius.circular(24),
+                                                    bottomLeft:
+                                                        Radius.circular(24),
+                                                  ),
+                                                  child: buildPropertyImage(
+                                                    property.image,
+                                                    width: 120,
+                                                    height: double.infinity,
+                                                    fit: BoxFit.cover,
+                                                  ),
                                                 ),
-                                              ),
+                                                Expanded(
+                                                  child: Padding(
+                                                    padding: const EdgeInsets
+                                                        .fromLTRB(
+                                                        16, 14, 16, 14),
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Row(
+                                                          children: [
+                                                            Expanded(
+                                                              child: Text(
+                                                                property.name,
+                                                                style:
+                                                                    GoogleFonts
+                                                                        .poppins(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w800,
+                                                                  fontSize: 16,
+                                                                  color: _dark,
+                                                                ),
+                                                                maxLines: 1,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
+                                                              ),
+                                                            ),
+                                                            GestureDetector(
+                                                              onTap: () {
+                                                                _toggleSave(
+                                                                        property
+                                                                            .id)
+                                                                    .then((_) =>
+                                                                        setState(
+                                                                            () {}));
+                                                              },
+                                                              child: Icon(
+                                                                isSaved
+                                                                    ? AppIcons
+                                                                        .heart
+                                                                    : AppIcons
+                                                                        .heartOutline,
+                                                                size: 24,
+                                                                color: isSaved
+                                                                    ? const Color(
+                                                                        0xFFEC4899)
+                                                                    : const Color(
+                                                                        0xFFD1D5DB),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        const SizedBox(
+                                                            height: 4),
+                                                        Row(
+                                                          children: [
+                                                            const Icon(
+                                                                AppIcons
+                                                                    .location,
+                                                                size: 14,
+                                                                color: _grey),
+                                                            const SizedBox(
+                                                                width: 4),
+                                                            Expanded(
+                                                              child: Text(
+                                                                property
+                                                                    .location,
+                                                                style:
+                                                                    GoogleFonts
+                                                                        .poppins(
+                                                                  fontSize: 13,
+                                                                  color: _grey,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w500,
+                                                                ),
+                                                                maxLines: 1,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        const SizedBox(
+                                                            height: 6),
+                                                        Text(
+                                                          'Kes. ${property.price ~/ 1000}k/mo',
+                                                          style: GoogleFonts
+                                                              .poppins(
+                                                            fontSize: 16,
+                                                            fontWeight:
+                                                                FontWeight.w800,
+                                                            color: _dark,
+                                                          ),
+                                                        ),
+                                                        const Spacer(),
+                                                        Row(
+                                                          children: [
+                                                            if (property
+                                                                    .reviews >
+                                                                0)
+                                                              Container(
+                                                                padding: const EdgeInsets
+                                                                    .symmetric(
+                                                                    horizontal:
+                                                                        8,
+                                                                    vertical:
+                                                                        4),
+                                                                decoration:
+                                                                    BoxDecoration(
+                                                                  color: Colors
+                                                                      .white
+                                                                      .withOpacity(
+                                                                          0.8),
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              10),
+                                                                  border: Border.all(
+                                                                      color: Colors
+                                                                          .white),
+                                                                ),
+                                                                child: Row(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    const Icon(
+                                                                        Icons
+                                                                            .star_rounded,
+                                                                        size:
+                                                                            15,
+                                                                        color: Color(
+                                                                            0xFFF59E42)),
+                                                                    const SizedBox(
+                                                                        width:
+                                                                            4),
+                                                                    Text(
+                                                                      property
+                                                                          .rating
+                                                                          .toStringAsFixed(
+                                                                              1),
+                                                                      style: GoogleFonts
+                                                                          .poppins(
+                                                                        fontSize:
+                                                                            12,
+                                                                        fontWeight:
+                                                                            FontWeight.w700,
+                                                                        color:
+                                                                            _dark,
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            const SizedBox(
+                                                                width: 10),
+                                                            Container(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .symmetric(
+                                                                      horizontal:
+                                                                          8,
+                                                                      vertical:
+                                                                          4),
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                color: const Color(
+                                                                    0xFFE0F2FE),
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            10),
+                                                              ),
+                                                              child: const Text(
+                                                                'Crowd Sourced',
+                                                                style:
+                                                                    TextStyle(
+                                                                  fontSize: 11,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w700,
+                                                                  color: Color(
+                                                                      0xFF0369A1),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                            const Spacer(),
+                                                            Text(
+                                                              '${property.features.beds} Beds',
+                                                              style: GoogleFonts
+                                                                  .poppins(
+                                                                fontSize: 13,
+                                                                color: _grey,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          ],
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                                );
+                              },
+                            ),
                 ),
               ],
             ),
@@ -677,9 +865,9 @@ class _GlassContainer extends StatelessWidget {
     required this.child,
     required this.padding,
     this.borderRadius,
-    this.blur = 20.0,
+    this.blur = 15.0,
     this.opacity = 0.55,
-    this.borderWidth = 1.5,
+    this.borderWidth = 1.0,
     this.height,
   });
 

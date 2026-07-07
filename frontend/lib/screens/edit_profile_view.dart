@@ -3,10 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
-import 'package:property_app/services/api_client.dart';
 import 'package:property_app/services/avatar_service.dart';
 import 'package:property_app/session/app_session.dart';
-import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/utils/api_result.dart';
 
 const Color _primary = Color(0xFF3F37C9);

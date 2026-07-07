@@ -34,9 +34,14 @@ Widget buildPropertyImage(
       width: width,
       height: height,
       fit: fit,
+      cacheWidth: width != null ? (width * 2).toInt() : null,
+      cacheHeight: height != null ? (height * 2).toInt() : null,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return placeholder;
+      },
       errorBuilder: (context, error, stackTrace) {
-        // TEMP DEBUG: reveals the exact resolved URL and the underlying network error
-        // so we can pinpoint why utility pages are still showing placeholders.
+        // TODO: Remove debug logging after image stability is confirmed.
         // ignore: avoid_print
         print('IMAGE ERROR: $resolved\nERROR: $error\nSTACK: $stackTrace');
         return placeholder;

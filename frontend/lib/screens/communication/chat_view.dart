@@ -703,7 +703,7 @@ class _MyBubble extends StatelessWidget {
         );
       case MessageStatus.sent:
         // The double-tick color logic
-        final isSeen = false; // Mock seen state
+        const isSeen = false; // Mock seen state
         return Icon(Icons.done_all,
             size: 16, color: isSeen ? const Color(0xFF4ADE80) : Colors.white70);
       case MessageStatus.failed:

@@ -75,7 +75,7 @@ class _WriteReviewViewState extends State<WriteReviewView> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text('Review ${widget.propertyName}',
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800)),
+            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
@@ -123,9 +123,9 @@ class _WriteReviewViewState extends State<WriteReviewView> {
             const SizedBox(height: 40),
 
             // Comment Field
-            Align(
+            const Align(
               alignment: Alignment.centerLeft,
-              child: const Text(
+              child: Text(
                 'Your Feedback',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),

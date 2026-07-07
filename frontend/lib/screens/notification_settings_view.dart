@@ -67,7 +67,7 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
           style: GoogleFonts.poppins(fontSize: 13, color: AppColors.gray500)),
       value: value,
       onChanged: onChanged,
-      activeColor: AppColors.primary,
+      activeThumbColor: AppColors.primary,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
     );
   }

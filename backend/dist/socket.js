@@ -65,6 +65,28 @@ export function initSocket(server) {
                 socket.emit('error', { message: 'Failed to save message' });
             }
         });
+        // Typing indicator: client emits { to, isTyping }
+        // Forward to recipient room so UI can show typing status.
+        socket.on('typing', (data) => {
+            if (!uid)
+                return;
+            const to = data?.to;
+            if (!to)
+                return;
+            const isTyping = data?.isTyping === true;
+            io.to(`user:${to}`).emit('typing', { userId: uid, isTyping });
+        });
+        // Seen receipts: client emits { to, messageIds }
+        // For now we forward receipt event to the recipient; DB persistence is handled by REST `mark-read`.
+        socket.on('mark_seen', (data) => {
+            if (!uid)
+                return;
+            const to = data?.to;
+            if (!to)
+                return;
+            const messageIds = (data?.messageIds ?? []).map((x) => x?.toString()).filter(Boolean);
+            io.to(`user:${to}`).emit('mark_seen', { userId: uid, messageIds });
+        });
         // Signaling events for WebRTC: offer/answer/ice
         socket.on('offer', (data) => {
             const to = data.to;

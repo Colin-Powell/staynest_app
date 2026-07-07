@@ -721,7 +721,7 @@ class _MyBubble extends StatelessWidget {
         );
       case MessageStatus.sent:
         // Mock seen state indicator
-        final isSeen = false; 
+        const isSeen = false; 
         return Icon(Icons.done_all,
             size: 16, color: isSeen ? const Color(0xFF4ADE80) : Colors.white70);
       case MessageStatus.failed:

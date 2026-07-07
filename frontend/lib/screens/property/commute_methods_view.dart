@@ -298,11 +298,12 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
   }
 
   void _finishLoadingLocation(String fallback) {
-    if (mounted)
+    if (mounted) {
       setState(() {
         _fetchingLocation = false;
         _fromController.text = fallback;
       });
+    }
   }
 
   // Placeholder for a function to get LatLng from a city name
@@ -771,7 +772,7 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                       strokeWidth: 2, color: _primaryText),
                 )
               else
-                Icon(Icons.my_location_rounded, color: _primaryText, size: 18),
+                const Icon(Icons.my_location_rounded, color: _primaryText, size: 18),
             ],
           ),
         ),
@@ -828,10 +829,10 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                     _activeProperty = null;
                     _toController.clear();
                   }),
-                  child: Icon(Icons.close_rounded, color: _grey, size: 18),
+                  child: const Icon(Icons.close_rounded, color: _grey, size: 18),
                 )
               else
-                Icon(Icons.search_rounded, color: _grey, size: 18),
+                const Icon(Icons.search_rounded, color: _grey, size: 18),
             ],
           ),
         ),
@@ -862,7 +863,7 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                       .join(', ');
                   return ListTile(
                     dense: true,
-                    leading: Icon(Icons.place_outlined,
+                    leading: const Icon(Icons.place_outlined,
                         color: _primaryText, size: 20),
                     title: Text(name,
                         style: GoogleFonts.poppins(

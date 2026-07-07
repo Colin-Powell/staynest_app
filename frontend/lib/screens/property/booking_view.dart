@@ -594,14 +594,6 @@ class _BookingViewState extends State<BookingView> {
     try {
       final raw = await _repo.loadPropertyById(widget.propertyId);
       if (!mounted) return;
-      if (raw == null) {
-        setState(() {
-          _property = null;
-          _error = 'Property not found';
-          _loading = false;
-        });
-        return;
-      }
 
       // Map API payload -> Property model
       final property = Property(

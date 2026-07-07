@@ -40,7 +40,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
   bool _isSelectionMode = false;
   _LandlordFilter _currentFilter = _LandlordFilter.all;
   Set<String> _selectedIds = {};
-  Set<String> _onlineUserIds = {};
+  final Set<String> _onlineUserIds = {};
 
   List<ConversationModel> _conversations = [];
   List<ConversationModel> _suggestedTenants = [];
@@ -603,8 +603,9 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                   final ids = _selectedIds.toList();
                   setState(() => _conversations
                       .removeWhere((c) => ids.contains(c.userId)));
-                  for (var id in ids)
+                  for (var id in ids) {
                     await MessageService.instance.deleteConversation(id);
+                  }
                   _exitSelectionMode();
                 },
               ),
@@ -655,6 +656,7 @@ class _GlassContainer extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final BorderRadius? borderRadius;
+  final double blur;
   final double opacity;
   final double borderWidth;
 
@@ -662,8 +664,9 @@ class _GlassContainer extends StatelessWidget {
     required this.child,
     required this.padding,
     this.borderRadius,
+    this.blur = 15.0,
     this.opacity = 0.55,
-    this.borderWidth = 1.5,
+    this.borderWidth = 1.0,
   });
 
   @override
@@ -672,7 +675,7 @@ class _GlassContainer extends StatelessWidget {
     return ClipRRect(
       borderRadius: radius,
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
         child: Container(
           padding: padding,
           decoration: BoxDecoration(

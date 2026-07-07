@@ -26,8 +26,11 @@ class GoogleAuthService {
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body);
       final data = body['data'];
-      AppSession.apiToken = data['token'];
+      AppSession.apiToken =
+          data['token']?.toString() ?? data['accessToken']?.toString();
+      AppSession.refreshToken = data['refreshToken']?.toString();
       AppSession.updateCurrentUser(data['user']);
+      await AppSession.persistSession();
       return true;
     }
 

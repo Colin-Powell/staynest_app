@@ -7,6 +7,10 @@ import { env } from '../config.js';
 const router = Router();
 function normalizePropertyRow(property) {
     let images = property.images;
+    // Ensure status is always defined for the frontend, defaulting to 'Available'
+    if (!property.status) {
+        property.status = 'Available';
+    }
     // FIX 1: null guard — pg returns null for empty jsonb, not undefined
     if (images === null)
         images = undefined;
@@ -56,6 +60,7 @@ const PROPERTY_SELECT = `p.id,
               p.bathrooms,
               p.area,
               p.image_url,
+              p.status,
               p.images,
               p.amenities,
               p.lat,
@@ -321,6 +326,31 @@ router.get('/:id', async (req, res, next) => {
         next(error);
     }
 });
+router.patch('/:id/status', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
+    try {
+        const { status } = req.body;
+        const propertyId = req.params.id;
+        const userId = req.auth?.id;
+        console.log(`[PropertyStatusUpdate] Request to update property ${propertyId} to status "${status}" by user ${userId}`);
+        if (!status) {
+            return res.status(400).json({ error: 'Status is required.' });
+        }
+        console.log(`[PropertyStatusUpdate] Query Params: status=${status}, propertyId=${propertyId}, userId=${userId}`);
+        const result = await query('UPDATE properties SET status = $1 WHERE id = $2 AND landlord_id = $3 RETURNING *', [status, propertyId, userId]);
+        console.log(`[PropertyStatusUpdate] Query result rowCount: ${result.rowCount}`);
+        if (result.rowCount === 0) {
+            console.warn(`[PropertyStatusUpdate] No rows updated. Either property ${propertyId} doesn't exist or user ${userId} is not the landlord.`);
+            return res.status(404).json({ error: 'Property not found or access denied.' });
+        }
+        console.log(`[PropertyStatusUpdate] Successfully updated property ${propertyId}`);
+        res.json({ data: normalizePropertyRow(result.rows[0]) });
+    }
+    catch (error) {
+        const propertyId = req.params.id;
+        console.error(`[PropertyStatusUpdate] Database Error updating property ${propertyId}:`, error);
+        next(error);
+    }
+});
 router.post('/:id/availability', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
     try {
         const propertyId = req.params.id;
@@ -445,40 +475,91 @@ router.post('/reviews/:id/report', requireAuth, async (req, res, next) => {
         next(error);
     }
 });
-router.post('/', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
+function createPropertyInsertArgs(body) {
+    const { title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, } = body;
+    const imageList = Array.isArray(images) && images.length > 0 ? images : [image_url];
+    const amenityList = Array.isArray(amenities) ? amenities : [];
+    return [
+        title,
+        description,
+        category,
+        city,
+        typeof address === 'string' ? address : null,
+        Number(price),
+        Number(bedrooms),
+        Number(bathrooms),
+        Number(area),
+        image_url,
+        JSON.stringify(imageList),
+        JSON.stringify(amenityList),
+        lat != null ? Number(lat) : null,
+        lng != null ? Number(lng) : null,
+        body.__userId,
+    ];
+}
+function validatePropertyCreateBody(body) {
+    const { title, description, category, city, price, bedrooms, bathrooms, area, image_url, } = body;
+    const missing = [];
+    if (!title)
+        missing.push('title');
+    if (!description)
+        missing.push('description');
+    if (!category)
+        missing.push('category');
+    if (!city)
+        missing.push('city');
+    if (price == null)
+        missing.push('price');
+    if (bedrooms == null)
+        missing.push('bedrooms');
+    if (bathrooms == null)
+        missing.push('bathrooms');
+    if (area == null)
+        missing.push('area');
+    if (!image_url)
+        missing.push('image_url');
+    return missing;
+}
+async function handleCreateProperty(req, res, next, logRouteName) {
+    const logPrefix = `[${logRouteName}]`;
+    const userId = req.auth?.id;
+    const body = req.body;
+    const receivedKeys = Object.keys(body ?? {});
+    // IMPORTANT: don’t log huge fields (like base64/images). This endpoint expects URLs/arrays.
+    console.log(`${logPrefix} start userId=${userId} receivedKeys=${receivedKeys.join(',')}`);
     try {
-        const { title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, } = req.body;
-        if (!title || !description || !category || !city || price == null || bedrooms == null || bathrooms == null || area == null || !image_url) {
-            return res.status(400).json({ error: 'All property fields are required.' });
+        const missing = validatePropertyCreateBody(body);
+        if (missing.length > 0) {
+            console.warn(`${logPrefix} missingFields userId=${userId} missing=${missing.join(',')}`);
+            return res.status(400).json({ error: 'All property fields are required.', missing });
         }
-        const imageList = Array.isArray(images) && images.length > 0
-            ? images
-            : [image_url];
-        const amenityList = Array.isArray(amenities) ? amenities : [];
+        const imageList = Array.isArray(body.images) && body.images.length > 0 ? body.images : [body.image_url];
+        const amenityList = Array.isArray(body.amenities) ? body.amenities : [];
+        console.log(`${logPrefix} image_urlType=${typeof body.image_url} imagesIsArray=${Array.isArray(body.images)} imageCount=${Array.isArray(imageList) ? imageList.length : 0} amenitiesIsArray=${Array.isArray(body.amenities)} amenityCount=${Array.isArray(amenityList) ? amenityList.length : 0}`);
+        if (Array.isArray(body.images) && body.images.length > 0) {
+            const first = body.images[0];
+            console.log(`${logPrefix} firstImagePreview=${typeof first === 'string' ? first.slice(0, 80) : typeof first}`);
+        }
+        const insertArgs = createPropertyInsertArgs({ ...body, __userId: userId });
+        console.log(`${logPrefix} inserting userId=${userId} lat=${body.lat ?? null} lng=${body.lng ?? null} price=${Number(body.price)} area=${Number(body.area)}`);
         const result = await query(`INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, landlord_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, $15)
-       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng`, [
-            title,
-            description,
-            category,
-            city,
-            typeof address === 'string' ? address : null,
-            Number(price),
-            Number(bedrooms),
-            Number(bathrooms),
-            Number(area),
-            image_url,
-            JSON.stringify(imageList),
-            JSON.stringify(amenityList),
-            lat != null ? Number(lat) : null,
-            lng != null ? Number(lng) : null,
-            req.auth?.id,
-        ]);
+       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, status, images, amenities, lat, lng`, insertArgs);
+        console.log(`${logPrefix} success userId=${userId} propertyId=${result.rows[0]?.id}`);
         res.status(201).json({ data: result.rows[0] });
     }
     catch (error) {
+        console.error(`${logPrefix} failed userId=${userId} error=`, error);
         next(error);
     }
+}
+// Existing route (kept)
+router.post('/', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
+    await handleCreateProperty(req, res, next, 'PropertyCreate');
+});
+// Route required by the current Flutter listing flow
+router.post('/from-listing', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
+    await handleCreateProperty(req, res, next, 'PropertyCreateFromListing');
 });
 export default router;
 //# sourceMappingURL=properties.js.map

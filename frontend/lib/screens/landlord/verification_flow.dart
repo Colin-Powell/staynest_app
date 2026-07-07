@@ -80,6 +80,46 @@ class _VerificationCenterState extends State<VerificationCenter> {
 
   @override
   Widget build(BuildContext context) {
+    if (!AppSession.isLandlord) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: AppColors.gray900),
+          title: Text('Access Denied',
+              style: GoogleFonts.poppins(
+                  color: AppColors.gray900,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20)),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  'Verification center is available for landlords only.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    color: AppColors.gray700,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Go Back'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(

@@ -625,7 +625,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
                                       TextStyle(fontWeight: FontWeight.w600)),
                             ]),
                           ),
-                          PopupMenuItem(
+                          const PopupMenuItem(
                             value: 'read',
                             child: Row(children: [
                               Icon(Icons.mark_chat_read_outlined,
@@ -636,7 +636,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
                                       TextStyle(fontWeight: FontWeight.w600)),
                             ]),
                           ),
-                          PopupMenuItem(
+                          const PopupMenuItem(
                             value: 'block',
                             child: Row(children: [
                               Icon(Icons.block_outlined,
@@ -970,7 +970,7 @@ class _GlassContainer extends StatelessWidget {
     required this.child,
     required this.padding,
     this.borderRadius,
-    this.blur = 20.0,
+    this.blur = 15.0,
     this.opacity = 0.55,
     this.borderWidth = 1.5,
     this.height,

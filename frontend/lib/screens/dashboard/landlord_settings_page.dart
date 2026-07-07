@@ -140,7 +140,8 @@ class LandlordSettingsPage extends StatelessWidget {
                         color: primaryGreen.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.edit_rounded, color: primaryGreen, size: 20),
+                      child: const Icon(Icons.edit_rounded,
+                          color: primaryGreen, size: 20),
                     )
                   ],
                 ),
@@ -165,19 +166,22 @@ class LandlordSettingsPage extends StatelessWidget {
                     _buildSettingRow(
                       title: 'Performance & Insights',
                       icon: PhosphorIcons.chartLineUp(PhosphorIconsStyle.fill),
-                      onTap: () => _navigateTo(context, const LandlordAnalyticsPage()),
+                      onTap: () =>
+                          _navigateTo(context, const LandlordAnalyticsPage()),
                     ),
                     _buildDivider(),
                     _buildSettingRow(
                       title: 'Business Information',
                       icon: PhosphorIcons.buildings(PhosphorIconsStyle.fill),
-                      onTap: () => _navigateTo(context, const BusinessInfoPage()),
+                      onTap: () =>
+                          _navigateTo(context, const BusinessInfoPage()),
                     ),
                     _buildDivider(),
                     _buildSettingRow(
                       title: 'Bank Details',
                       icon: PhosphorIcons.creditCard(PhosphorIconsStyle.fill),
-                      onTap: () => _navigateTo(context, const BankDetailsPage()),
+                      onTap: () =>
+                          _navigateTo(context, const BankDetailsPage()),
                     ),
                   ],
                 ),
@@ -202,26 +206,32 @@ class LandlordSettingsPage extends StatelessWidget {
                     _buildSettingRow(
                       title: 'Personal Information',
                       icon: PhosphorIcons.user(PhosphorIconsStyle.fill),
-                      onTap: () => _navigateTo(context, const PersonalInfoPage()),
+                      onTap: () =>
+                          _navigateTo(context, const PersonalInfoPage()),
                     ),
                     _buildDivider(),
                     _buildSettingRow(
                       title: 'Notification Settings',
                       icon: PhosphorIcons.bell(PhosphorIconsStyle.fill),
-                      onTap: () => _navigateTo(context, const NotificationSettingsPage()),
+                      onTap: () => _navigateTo(
+                          context, const NotificationSettingsPage()),
                     ),
                     _buildDivider(),
                     _buildSettingRow(
                       title: 'Change Password',
                       icon: PhosphorIcons.lockKey(PhosphorIconsStyle.fill),
-                      onTap: () => _navigateTo(context, const ChangePasswordPage()),
+                      onTap: () =>
+                          _navigateTo(context, const ChangePasswordPage()),
                     ),
                     _buildDivider(),
                     _buildSettingRow(
                       title: 'Two-Factor Authentication',
                       icon: PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill),
-                      trailingText: (user['settings']?['two_factor'] ?? false) ? 'On' : 'Off',
-                      onTap: () => _navigateTo(context, const TwoFactorAuthPage()),
+                      trailingText: (user['settings']?['two_factor'] ?? false)
+                          ? 'On'
+                          : 'Off',
+                      onTap: () =>
+                          _navigateTo(context, const TwoFactorAuthPage()),
                     ),
                   ],
                 ),
@@ -247,19 +257,21 @@ class LandlordSettingsPage extends StatelessWidget {
                       title: 'Help & Support',
                       icon: PhosphorIcons.question(PhosphorIconsStyle.fill),
                       onTap: () => _navigateTo(
-                        context,
-                        const HowItWorksView(
-                          title: 'Landlord Support',
-                          subtitle: 'Managing your properties and tenants on StayNest.',
-                          details: 'Find comprehensive guides on optimizing your listings, managing booking requests, and tracking your business performance analytics.',
-                        )
-                      ),
+                          context,
+                          const HowItWorksView(
+                            title: 'Landlord Support',
+                            subtitle:
+                                'Managing your properties and tenants on StayNest.',
+                            details:
+                                'Find comprehensive guides on optimizing your listings, managing booking requests, and tracking your business performance analytics.',
+                          )),
                     ),
                     _buildDivider(),
                     _buildSettingRow(
                       title: 'Privacy Policy',
                       icon: PhosphorIcons.fileLock(PhosphorIconsStyle.fill),
-                      onTap: () => _navigateTo(context, const PrivacyPolicyPage()),
+                      onTap: () =>
+                          _navigateTo(context, const PrivacyPolicyPage()),
                     ),
                   ],
                 ),
@@ -275,11 +287,13 @@ class LandlordSettingsPage extends StatelessWidget {
                 },
                 behavior: HitTestBehavior.opaque,
                 child: _GlassContainer(
-                  padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(PhosphorIcons.signOut(), color: const Color(0xFFEF4444), size: 24),
+                      Icon(PhosphorIcons.signOut(),
+                          color: const Color(0xFFEF4444), size: 24),
                       const SizedBox(width: 12),
                       Text(
                         'Logout',
@@ -485,7 +499,8 @@ Widget _buildTextField(String label,
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.white.withOpacity(0.8), width: 1.5),
+              borderSide:
+                  BorderSide(color: Colors.white.withOpacity(0.8), width: 1.5),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
@@ -509,18 +524,24 @@ Widget _buildSaveButton(BuildContext context,
             24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.55),
-          border: Border(top: BorderSide(color: Colors.white.withOpacity(0.8), width: 1.5)),
+          border: Border(
+              top:
+                  BorderSide(color: Colors.white.withOpacity(0.8), width: 1.5)),
         ),
         child: ElevatedButton(
           onPressed: onPressed ?? () => Navigator.pop(context),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF059669),
             elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             padding: const EdgeInsets.symmetric(vertical: 16),
             minimumSize: const Size(double.infinity, 56),
           ),
-          child: onPressed == null && text != "Save Changes" && text != "Update Password" && text != "Save Bank Details"
+          child: onPressed == null &&
+                  text != "Save Changes" &&
+                  text != "Update Password" &&
+                  text != "Save Bank Details"
               ? const SizedBox(
                   height: 22,
                   width: 22,
@@ -962,14 +983,17 @@ class BankDetailsPage extends StatelessWidget {
                       color: const Color(0xFF059669).withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(PhosphorIcons.info(PhosphorIconsStyle.fill), color: const Color(0xFF059669), size: 24),
+                    child: Icon(PhosphorIcons.info(PhosphorIconsStyle.fill),
+                        color: const Color(0xFF059669), size: 24),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(
                       'These details will be used to process your rental payouts.',
                       style: GoogleFonts.poppins(
-                          fontSize: 13.5, fontWeight: FontWeight.w500, color: const Color(0xFF374151)),
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF374151)),
                     ),
                   ),
                 ],
@@ -1018,7 +1042,10 @@ class PrivacyPolicyPage extends StatelessWidget {
               Text(
                 'We collect information to provide better services to all our users. Information collected includes your name, email address, phone number, and properties managed.\n\nYour data is securely stored and never shared with third parties without your explicit consent.',
                 style: GoogleFonts.poppins(
-                    fontSize: 14.5, color: const Color(0xFF4B5563), height: 1.6, fontWeight: FontWeight.w500),
+                    fontSize: 14.5,
+                    color: const Color(0xFF4B5563),
+                    height: 1.6,
+                    fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 24),
               Text(
@@ -1032,7 +1059,10 @@ class PrivacyPolicyPage extends StatelessWidget {
               Text(
                 'You have the right to request access to the data we hold about you. You can also request deletion of your account and associated data at any time from the account settings.',
                 style: GoogleFonts.poppins(
-                    fontSize: 14.5, color: const Color(0xFF4B5563), height: 1.6, fontWeight: FontWeight.w500),
+                    fontSize: 14.5,
+                    color: const Color(0xFF4B5563),
+                    height: 1.6,
+                    fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 32),
               Text(
@@ -1203,7 +1233,9 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: is2faEnabled ? const Color(0xFF059669).withOpacity(0.15) : const Color(0xFFF3F4F6),
+                      color: is2faEnabled
+                          ? const Color(0xFF059669).withOpacity(0.15)
+                          : const Color(0xFFF3F4F6),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -1238,7 +1270,8 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
                   ),
                   const SizedBox(height: 32),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
@@ -1259,7 +1292,8 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
                             ? const SizedBox(
                                 width: 24,
                                 height: 24,
-                                child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF059669)),
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2.5, color: Color(0xFF059669)),
                               )
                             : CupertinoSwitch(
                                 value: is2faEnabled,
@@ -1292,9 +1326,9 @@ class _GlassContainer extends StatelessWidget {
     required this.child,
     required this.padding,
     this.borderRadius,
-    this.blur = 20.0,
+    this.blur = 15.0,
     this.opacity = 0.55,
-    this.borderWidth = 1.5,
+    this.borderWidth = 1.0,
   });
 
   @override

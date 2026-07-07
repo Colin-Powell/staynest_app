@@ -5,13 +5,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path/path.dart' as path;
 
 // Your project imports
 import 'package:property_app/repository/http_json_client.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
-import 'package:property_app/services/uploads.dart';
+import 'package:property_app/services/image_upload_service.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/geocoding.dart';
 
@@ -25,6 +26,9 @@ class AddListingFlow extends StatefulWidget {
 class _AddListingFlowState extends State<AddListingFlow> {
   bool _loadingDraft = true;
   bool _submitting = false;
+  bool _isUploadingImages = false;
+  double _uploadProgress = 0.0;
+  List<UploadProgress> _imageUploadStatus = [];
 
   final PageController _pageController = PageController();
   int _currentStep = 1;
@@ -288,14 +292,32 @@ class _AddListingFlowState extends State<AddListingFlow> {
       return;
     }
 
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _isUploadingImages = true;
+      _uploadProgress = 0.0;
+      _imageUploadStatus = _photos
+          .map((photo) => UploadProgress(
+              file: photo, progress: 0.0, url: null, status: 'queued'))
+          .toList();
+    });
+
     try {
-      // 1) Upload photos
-      final uploadedUrls = <String>[];
-      for (final photo in _photos) {
-        final url = await UploadsService.uploadFile(photo, token: token);
-        uploadedUrls.add(url);
-      }
+      // 1) Compress selected photos and upload them in parallel
+      final compressedPhotos =
+          await ImageUploadService.compressSelectedImages(_photos);
+      final uploadedUrls =
+          await ImageUploadService.uploadImages(compressedPhotos, (progress) {
+        if (!mounted) return;
+        setState(() {
+          _imageUploadStatus = progress;
+          _uploadProgress = progress.isEmpty
+              ? 0.0
+              : progress.map((item) => item.progress).reduce((a, b) => a + b) /
+                  progress.length;
+        });
+      });
+
       if (uploadedUrls.isEmpty) throw Exception('No photos uploaded');
 
       // 2) Build address + geocode
@@ -381,7 +403,13 @@ class _AddListingFlowState extends State<AddListingFlow> {
         );
       }
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+          _isUploadingImages = false;
+          _uploadProgress = 0.0;
+        });
+      }
     }
   }
 
@@ -389,17 +417,20 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // NAVIGATION
   // ==========================================
   void _nextStep() {
-    if (_currentStep == 1 && !(_step1Key.currentState?.validate() ?? false))
+    if (_currentStep == 1 && !(_step1Key.currentState?.validate() ?? false)) {
       return;
-    if (_currentStep == 2 && !(_step2Key.currentState?.validate() ?? false))
+    }
+    if (_currentStep == 2 && !(_step2Key.currentState?.validate() ?? false)) {
       return;
+    }
     if (_currentStep == 4 && _photos.isEmpty) {
       ModalUtils.showError(context, "Photos Required",
           "Let's show off your property! Please upload at least one photo to continue.");
       return;
     }
-    if (_currentStep == 5 && !(_step5Key.currentState?.validate() ?? false))
+    if (_currentStep == 5 && !(_step5Key.currentState?.validate() ?? false)) {
       return;
+    }
 
     if (_currentStep < _totalSteps) {
       setState(() => _currentStep++);
@@ -1078,6 +1109,43 @@ class _AddListingFlowState extends State<AddListingFlow> {
           ),
 
           const SizedBox(height: 40),
+          if (_isUploadingImages || _imageUploadStatus.isNotEmpty) ...[
+            Text('Image upload status',
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
+                    ?.copyWith(color: AppColors.gray900)),
+            const SizedBox(height: 16),
+            LinearProgressIndicator(value: _uploadProgress),
+            const SizedBox(height: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _imageUploadStatus.map((item) {
+                final percent =
+                    (item.progress * 100).clamp(0, 100).toStringAsFixed(0);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          path.basename(item.file.path),
+                          style: GoogleFonts.poppins(
+                              color: AppColors.gray900, fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text('$percent%',
+                          style: GoogleFonts.poppins(
+                              color: AppColors.gray500, fontSize: 13)),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 32),
+          ],
           Text('Details',
               style: Theme.of(context)
                   .textTheme

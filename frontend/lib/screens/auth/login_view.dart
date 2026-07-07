@@ -50,6 +50,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   bool _passwordFocused = false;
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _isGoogleSigningIn = false;
 
   // ── Animation controllers ──────────────────────────────────────────────────
 
@@ -157,6 +158,16 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
+  Future<void> _handleGoogleSignIn() async {
+    if (_isGoogleSigningIn) return;
+    setState(() => _isGoogleSigningIn = true);
+    try {
+      widget.onGoogleSignIn?.call();
+    } finally {
+      if (mounted) setState(() => _isGoogleSigningIn = false);
+    }
+  }
+
   Future<void> _handleLogin() async {
     // Basic validation — shake if fields empty
     if (_emailCtrl.text.trim().isEmpty || _passwordCtrl.text.isEmpty) {
@@ -201,6 +212,9 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
       AppSession.apiToken = user['token']?.toString() ??
           user['accessToken']?.toString() ??
           AppSession.apiToken;
+      AppSession.refreshToken =
+          user['refreshToken']?.toString() ?? AppSession.refreshToken;
+      await AppSession.persistSession();
 
       if (AppSession.currentUserId != null && AppSession.apiToken != null) {
         final favoriteRepository = RemoteDatabaseRepository();
@@ -375,7 +389,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                         children: [
                           _SocialCircle(
                             type: _SocialType.google,
-                            onTap: widget.onGoogleSignIn ?? () {},
+                            isLoading: _isGoogleSigningIn,
+                            onTap: _handleGoogleSignIn,
                           ),
                         ],
                       ),
@@ -756,8 +771,10 @@ class _SocialSvg extends StatelessWidget {
 class _SocialCircle extends StatefulWidget {
   final _SocialType type;
   final VoidCallback onTap;
+  final bool isLoading;
 
-  const _SocialCircle({required this.type, required this.onTap});
+  const _SocialCircle(
+      {required this.type, required this.onTap, this.isLoading = false});
 
   @override
   State<_SocialCircle> createState() => _SocialCircleState();
@@ -789,19 +806,25 @@ class _SocialCircleState extends State<_SocialCircle>
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) {
-        _ctrl.reverse();
-        setState(() => _pressed = true);
-      },
-      onTapUp: (_) {
-        _ctrl.forward();
-        setState(() => _pressed = false);
-        widget.onTap();
-      },
-      onTapCancel: () {
-        _ctrl.forward();
-        setState(() => _pressed = false);
-      },
+      onTapDown: widget.isLoading
+          ? null
+          : (_) {
+              _ctrl.reverse();
+              setState(() => _pressed = true);
+            },
+      onTapUp: widget.isLoading
+          ? null
+          : (_) {
+              _ctrl.forward();
+              setState(() => _pressed = false);
+              widget.onTap();
+            },
+      onTapCancel: widget.isLoading
+          ? null
+          : () {
+              _ctrl.forward();
+              setState(() => _pressed = false);
+            },
       child: ScaleTransition(
         scale: _ctrl,
         child: AnimatedContainer(
@@ -817,7 +840,14 @@ class _SocialCircleState extends State<_SocialCircle>
             ),
           ),
           child: Center(
-            child: _SocialSvg(type: widget.type),
+            child: widget.isLoading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.2, color: StayNestColors.primary),
+                  )
+                : _SocialSvg(type: widget.type),
           ),
         ),
       ),

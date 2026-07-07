@@ -83,10 +83,8 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
     try {
       final repo = RemoteDatabaseRepository();
       final userData = await repo.loadCurrentUser();
-      if (userData != null) {
-        AppSession.updateCurrentUser(userData);
-      }
-    } catch (_) {
+      AppSession.updateCurrentUser(userData);
+        } catch (_) {
       // Silently fail, user data is already loaded
     }
   }
@@ -264,7 +262,7 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   Widget _getLegacyPage() {
     switch (_selectedNav) {
 case 'Bookings':
-        return LandlordBookingsPage();
+        return const LandlordBookingsPage();
       case 'Messages':
         return LandlordMessagesPage(
           onChatOpen: _handleChatOpen,

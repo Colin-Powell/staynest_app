@@ -41,7 +41,8 @@ class _LandlordPropertyManagementPageState
   List<int> _blockedDays = [];
   String _healthStatus = 'HEALTHY';
 
-  final PageController _bookingPageController = PageController(viewportFraction: 0.93);
+  final PageController _bookingPageController =
+      PageController(viewportFraction: 0.93);
 
   @override
   void initState() {
@@ -184,7 +185,8 @@ class _LandlordPropertyManagementPageState
         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
         child: AlertDialog(
           backgroundColor: Colors.white.withOpacity(0.9),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: Text('Remove Property?',
               style: GoogleFonts.poppins(fontWeight: FontWeight.w800)),
           content: Text(
@@ -193,7 +195,9 @@ class _LandlordPropertyManagementPageState
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text('Cancel', style: GoogleFonts.poppins(color: textDark, fontWeight: FontWeight.w600))),
+                child: Text('Cancel',
+                    style: GoogleFonts.poppins(
+                        color: textDark, fontWeight: FontWeight.w600))),
             TextButton(
               onPressed: () async {
                 Navigator.pop(context);
@@ -201,7 +205,7 @@ class _LandlordPropertyManagementPageState
                 final success =
                     await AnalyticsService.deleteProperty(_property['id']);
                 if (success && mounted) {
-                  Navigator.pop(context, true); 
+                  Navigator.pop(context, true);
                 } else if (mounted) {
                   setState(() => _isLoading = false);
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -223,7 +227,7 @@ class _LandlordPropertyManagementPageState
     final success = await BookingService.updateStatus(bookingId, apiAction);
     if (success && mounted) {
       _showActionSuccess('Booking request successfully $action.');
-      _fetchInitialData(); 
+      _fetchInitialData();
     }
   }
 
@@ -235,7 +239,12 @@ class _LandlordPropertyManagementPageState
         padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2))),
+          Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(2))),
           const SizedBox(height: 24),
           _buildStatusOption('Available', primaryGreen),
           _buildStatusOption('Pending booking', Colors.orange),
@@ -288,7 +297,8 @@ class _LandlordPropertyManagementPageState
                 fit: StackFit.expand,
                 children: [
                   buildPropertyImage(
-                    (_property['image_url'] ?? _property['image'] ?? '').toString(),
+                    (_property['image_url'] ?? _property['image'] ?? '')
+                        .toString(),
                     fit: BoxFit.cover,
                   ),
                   if (_isPreviewMode)
@@ -331,7 +341,8 @@ class _LandlordPropertyManagementPageState
                 // Top Navigation Row
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -344,15 +355,17 @@ class _LandlordPropertyManagementPageState
                           onTap: () {
                             AnalyticsService.trackPropertyShare(
                                 _property['id']?.toString() ?? '');
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                                content: Text('Listing link copied to clipboard.')));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text(
+                                        'Listing link copied to clipboard.')));
                           },
                         ),
                       ],
                     ),
                   ),
                 ),
-                
+
                 // Spacer to push content down into the faded area of the image
                 const SliverToBoxAdapter(child: SizedBox(height: 200)),
 
@@ -438,10 +451,12 @@ class _LandlordPropertyManagementPageState
         const SizedBox(height: 12),
         Row(
           children: [
-            Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill), size: 18, color: textLight),
+            Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill),
+                size: 18, color: textLight),
             const SizedBox(width: 6),
             Text(
-              (_property['city'] ?? _property['location'] ?? 'Location').toString(),
+              (_property['city'] ?? _property['location'] ?? 'Location')
+                  .toString(),
               style: GoogleFonts.poppins(
                 fontSize: 15,
                 color: textLight,
@@ -453,7 +468,8 @@ class _LandlordPropertyManagementPageState
         const SizedBox(height: 16),
         GestureDetector(
           onTap: _showStatusPicker,
-          child: _StatusBadge(status: (_property['status'] ?? 'Available') as String),
+          child: _StatusBadge(
+              status: (_property['status'] ?? 'Available') as String),
         ),
       ],
     );
@@ -468,7 +484,9 @@ class _LandlordPropertyManagementPageState
       child: Row(
         children: [
           Icon(
-            isHealthy ? PhosphorIcons.trendUp(PhosphorIconsStyle.bold) : PhosphorIcons.trendDown(PhosphorIconsStyle.bold),
+            isHealthy
+                ? PhosphorIcons.trendUp(PhosphorIconsStyle.bold)
+                : PhosphorIcons.trendDown(PhosphorIconsStyle.bold),
             size: 14,
             color: isHealthy ? primaryGreen : Colors.redAccent,
           ),
@@ -495,18 +513,19 @@ class _LandlordPropertyManagementPageState
           _ShortcutPill(
             icon: PhosphorIcons.pencilLine(),
             label: 'Edit',
-            onTap: () => Navigator.pushNamed(context, '/list_property', arguments: _property),
+            onTap: () => Navigator.pushNamed(context, '/list_property',
+                arguments: _property),
           ),
           _ShortcutPill(
-            icon: PhosphorIcons.usersThree(),
-            label: 'Bookings',
-            onTap: () => Navigator.pushNamed(context, '/landlord_bookings')
-          ),
+              icon: PhosphorIcons.usersThree(),
+              label: 'Bookings',
+              onTap: () => Navigator.pushNamed(context, '/landlord_bookings')),
           _ShortcutPill(
-            icon: _isPreviewMode ? PhosphorIcons.eyeSlash() : PhosphorIcons.eye(),
-            label: _isPreviewMode ? 'Exit Preview' : 'Tenant View',
-            onTap: () => setState(() => _isPreviewMode = !_isPreviewMode)
-          ),
+              icon: _isPreviewMode
+                  ? PhosphorIcons.eyeSlash()
+                  : PhosphorIcons.eye(),
+              label: _isPreviewMode ? 'Exit Preview' : 'Tenant View',
+              onTap: () => setState(() => _isPreviewMode = !_isPreviewMode)),
         ],
       ),
     );
@@ -519,15 +538,28 @@ class _LandlordPropertyManagementPageState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Quick Snapshot (7d)',
-              style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w800, color: textDark)),
+              style: GoogleFonts.poppins(
+                  fontSize: 16, fontWeight: FontWeight.w800, color: textDark)),
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _CompactStat(label: 'Views', value: _stats['views'], icon: PhosphorIcons.eye()),
-              _CompactStat(label: 'Chats', value: _stats['chats'], icon: PhosphorIcons.chatCircleText()),
-              _CompactStat(label: 'Pending', value: _stats['pending'], icon: PhosphorIcons.calendarCheck()),
-              _CompactStat(label: 'Saves', value: _stats['saves'], icon: PhosphorIcons.heart()),
+              _CompactStat(
+                  label: 'Views',
+                  value: _stats['views'],
+                  icon: PhosphorIcons.eye()),
+              _CompactStat(
+                  label: 'Chats',
+                  value: _stats['chats'],
+                  icon: PhosphorIcons.chatCircleText()),
+              _CompactStat(
+                  label: 'Pending',
+                  value: _stats['pending'],
+                  icon: PhosphorIcons.calendarCheck()),
+              _CompactStat(
+                  label: 'Saves',
+                  value: _stats['saves'],
+                  icon: PhosphorIcons.heart()),
             ],
           ),
         ],
@@ -543,11 +575,17 @@ class _LandlordPropertyManagementPageState
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('Booking Requests',
-                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w800, color: textDark)),
+                style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: textDark)),
             GestureDetector(
               onTap: () => Navigator.pushNamed(context, '/landlord_bookings'),
               child: Text('View all',
-                  style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700, color: primaryGreen)),
+                  style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: primaryGreen)),
             ),
           ],
         ),
@@ -560,7 +598,10 @@ class _LandlordPropertyManagementPageState
                 Icon(PhosphorIcons.calendarBlank(), color: textLight, size: 28),
                 const SizedBox(width: 16),
                 Text('No pending booking requests.',
-                    style: GoogleFonts.poppins(color: textLight, fontSize: 14, fontWeight: FontWeight.w500)),
+                    style: GoogleFonts.poppins(
+                        color: textLight,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500)),
               ],
             ),
           )
@@ -598,40 +639,60 @@ class _LandlordPropertyManagementPageState
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(booking['tenant_name'] ?? 'Guest',
-                                      style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: textDark, fontSize: 15),
-                                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                                  Text('${booking['check_in']} - ${booking['check_out']}',
-                                      style: GoogleFonts.poppins(fontSize: 12, color: textLight)),
+                                      style: GoogleFonts.poppins(
+                                          fontWeight: FontWeight.w700,
+                                          color: textDark,
+                                          fontSize: 15),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
+                                  Text(
+                                      '${booking['check_in']} - ${booking['check_out']}',
+                                      style: GoogleFonts.poppins(
+                                          fontSize: 12, color: textLight)),
                                 ],
                               ),
                             ),
                             Text('Kes. ${booking['total_price']}',
-                                style: GoogleFonts.poppins(fontWeight: FontWeight.w800, color: primaryGreen)),
+                                style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w800,
+                                    color: primaryGreen)),
                           ],
                         ),
                         Row(
                           children: [
                             Expanded(
                               child: TextButton(
-                                onPressed: () => _handleBookingRequest(booking['id'], 'Rejected'),
+                                onPressed: () => _handleBookingRequest(
+                                    booking['id'], 'Rejected'),
                                 style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
                                 ),
-                                child: Text('Reject', style: GoogleFonts.poppins(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+                                child: Text('Reject',
+                                    style: GoogleFonts.poppins(
+                                        color: Colors.redAccent,
+                                        fontWeight: FontWeight.w600)),
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () => _handleBookingRequest(booking['id'], 'Accepted'),
+                                onPressed: () => _handleBookingRequest(
+                                    booking['id'], 'Accepted'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: primaryGreen,
                                   elevation: 0,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
                                 ),
-                                child: Text('Accept', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
+                                child: Text('Accept',
+                                    style: GoogleFonts.poppins(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600)),
                               ),
                             ),
                           ],
@@ -657,7 +718,10 @@ class _LandlordPropertyManagementPageState
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Availability',
-                  style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w800, color: textDark)),
+                  style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: textDark)),
               GestureDetector(
                 onTap: () => Navigator.push(
                     context,
@@ -666,7 +730,10 @@ class _LandlordPropertyManagementPageState
                       propertyTitle: _property['title'] ?? '',
                     )),
                 child: Text('Full Calendar',
-                    style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700, color: primaryGreen)),
+                    style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: primaryGreen)),
               ),
             ],
           ),
@@ -685,12 +752,15 @@ class _LandlordPropertyManagementPageState
                   width: 48,
                   margin: const EdgeInsets.only(right: 10),
                   decoration: BoxDecoration(
-                    color: isBlocked ? Colors.redAccent.withOpacity(0.1) : Colors.white.withOpacity(0.6),
+                    color: isBlocked
+                        ? Colors.redAccent.withOpacity(0.1)
+                        : Colors.white.withOpacity(0.6),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: isBlocked ? Colors.redAccent.withOpacity(0.3) : Colors.white,
-                      width: 1.5
-                    ),
+                        color: isBlocked
+                            ? Colors.redAccent.withOpacity(0.3)
+                            : Colors.white,
+                        width: 1.5),
                   ),
                   child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -699,13 +769,23 @@ class _LandlordPropertyManagementPageState
                             style: GoogleFonts.poppins(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
-                                color: isBlocked ? Colors.redAccent : textDark)),
+                                color:
+                                    isBlocked ? Colors.redAccent : textDark)),
                         Text(
-                            ['S', 'M', 'T', 'W', 'T', 'F', 'S'][(date.weekday - 1) % 7],
+                            [
+                              'S',
+                              'M',
+                              'T',
+                              'W',
+                              'T',
+                              'F',
+                              'S'
+                            ][(date.weekday - 1) % 7],
                             style: GoogleFonts.poppins(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: isBlocked ? Colors.redAccent : textLight)),
+                                color:
+                                    isBlocked ? Colors.redAccent : textLight)),
                       ]),
                 );
               },
@@ -723,7 +803,8 @@ class _LandlordPropertyManagementPageState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Hot Leads',
-              style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w800, color: textDark)),
+              style: GoogleFonts.poppins(
+                  fontSize: 16, fontWeight: FontWeight.w800, color: textDark)),
           const SizedBox(height: 16),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -732,7 +813,8 @@ class _LandlordPropertyManagementPageState
                 children: _leads.isEmpty
                     ? [
                         Text('No high-intent leads yet.',
-                            style: GoogleFonts.poppins(fontSize: 13, color: textLight))
+                            style: GoogleFonts.poppins(
+                                fontSize: 13, color: textLight))
                       ]
                     : _leads
                         .map((lead) => _LeadAvatar(
@@ -753,17 +835,20 @@ class _LandlordPropertyManagementPageState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Live Activity',
-              style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w800, color: textDark)),
+              style: GoogleFonts.poppins(
+                  fontSize: 16, fontWeight: FontWeight.w800, color: textDark)),
           const SizedBox(height: 16),
           if (_activity.isEmpty)
-             Text('No recent activity.',
-                 style: GoogleFonts.poppins(fontSize: 13, color: textLight))
+            Text('No recent activity.',
+                style: GoogleFonts.poppins(fontSize: 13, color: textLight))
           else
             ..._activity.take(4).map((act) => _ActivityRow(
-              icon: act['type'] == 'property_view' ? PhosphorIcons.eye() : PhosphorIcons.heart(),
-              text: 'Property ${act['type'].replaceAll('property_', '')} interaction',
-              time: 'Recently'
-            )),
+                icon: act['type'] == 'property_view'
+                    ? PhosphorIcons.eye()
+                    : PhosphorIcons.heart(),
+                text:
+                    'Property ${act['type'].replaceAll('property_', '')} interaction',
+                time: 'Recently')),
         ],
       ),
     );
@@ -779,8 +864,11 @@ class _LandlordPropertyManagementPageState
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: primaryGreen.withOpacity(0.15), shape: BoxShape.circle),
-                child: Icon(PhosphorIcons.megaphone(PhosphorIconsStyle.fill), color: primaryGreen, size: 28),
+                decoration: BoxDecoration(
+                    color: primaryGreen.withOpacity(0.15),
+                    shape: BoxShape.circle),
+                child: Icon(PhosphorIcons.megaphone(PhosphorIconsStyle.fill),
+                    color: primaryGreen, size: 28),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -788,9 +876,13 @@ class _LandlordPropertyManagementPageState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Boost Listing',
-                          style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w800, color: textDark)),
+                          style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: textDark)),
                       Text('Get seen by 5x more tenants.',
-                          style: GoogleFonts.poppins(fontSize: 13, color: textLight)),
+                          style: GoogleFonts.poppins(
+                              fontSize: 13, color: textLight)),
                     ]),
               ),
             ],
@@ -804,9 +896,11 @@ class _LandlordPropertyManagementPageState
                   backgroundColor: primaryGreen,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16))),
               child: Text('Boost Now',
-                  style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w700)),
+                  style: GoogleFonts.poppins(
+                      color: Colors.white, fontWeight: FontWeight.w700)),
             ),
           ),
         ],
@@ -821,7 +915,8 @@ class _LandlordPropertyManagementPageState
             filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
             child: AlertDialog(
               backgroundColor: Colors.white.withOpacity(0.9),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24)),
               title: Text('Mark as $status?',
                   style: GoogleFonts.poppins(fontWeight: FontWeight.w800)),
               content: Text(
@@ -831,11 +926,13 @@ class _LandlordPropertyManagementPageState
                 TextButton(
                     onPressed: () => Navigator.pop(context, false),
                     child: Text('Cancel',
-                        style: GoogleFonts.poppins(color: textDark, fontWeight: FontWeight.w600))),
+                        style: GoogleFonts.poppins(
+                            color: textDark, fontWeight: FontWeight.w600))),
                 TextButton(
                   onPressed: () => Navigator.pop(context, true),
                   child: Text('Confirm',
-                      style: GoogleFonts.poppins(color: primaryGreen, fontWeight: FontWeight.bold)),
+                      style: GoogleFonts.poppins(
+                          color: primaryGreen, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -848,7 +945,8 @@ class _LandlordPropertyManagementPageState
     return ListTile(
       leading: Icon(Icons.circle, color: color, size: 14),
       title: Text(label,
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: textDark, fontSize: 15)),
+          style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w600, color: textDark, fontSize: 15)),
       onTap: () async {
         if (label == 'Rented') {
           final confirmed = await _showStatusConfirmationDialog(label);
@@ -920,7 +1018,9 @@ class _ShortcutPill extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: Colors.white, width: 1.5)),
         child: Row(children: [
-          Icon(icon, size: 18, color: _LandlordPropertyManagementPageState.primaryGreen),
+          Icon(icon,
+              size: 18,
+              color: _LandlordPropertyManagementPageState.primaryGreen),
           const SizedBox(width: 8),
           Text(label,
               style: GoogleFonts.poppins(
@@ -949,7 +1049,9 @@ class _CompactStat extends StatelessWidget {
             color: Colors.white.withOpacity(0.7),
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: _LandlordPropertyManagementPageState.primaryGreen, size: 20),
+          child: Icon(icon,
+              color: _LandlordPropertyManagementPageState.primaryGreen,
+              size: 20),
         ),
         const SizedBox(height: 8),
         Text(value,
@@ -1019,8 +1121,11 @@ class _ActivityRow extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.6), shape: BoxShape.circle),
-            child: Icon(icon, size: 16, color: _LandlordPropertyManagementPageState.primaryGreen),
+            decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.6), shape: BoxShape.circle),
+            child: Icon(icon,
+                size: 16,
+                color: _LandlordPropertyManagementPageState.primaryGreen),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1048,10 +1153,12 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: _LandlordPropertyManagementPageState.primaryGreen.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _LandlordPropertyManagementPageState.primaryGreen.withOpacity(0.3))
-      ),
+          color: _LandlordPropertyManagementPageState.primaryGreen
+              .withOpacity(0.15),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: _LandlordPropertyManagementPageState.primaryGreen
+                  .withOpacity(0.3))),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

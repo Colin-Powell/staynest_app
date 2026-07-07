@@ -397,12 +397,15 @@ class _LocationViewState extends State<LocationView> {
     final types = place['types'];
     if (types is List && types.contains('property')) return _tenantPrimary;
     final name = (place['name'] ?? '').toString().toLowerCase();
-    if (name.contains('school') || name.contains('university'))
+    if (name.contains('school') || name.contains('university')) {
       return const Color(0xFFF59E0B);
-    if (name.contains('hospital') || name.contains('clinic'))
+    }
+    if (name.contains('hospital') || name.contains('clinic')) {
       return const Color(0xFFEF4444);
-    if (name.contains('police') || name.contains('security'))
+    }
+    if (name.contains('police') || name.contains('security')) {
       return _tenantPrimary;
+    }
     return const Color(0xFF6B7280);
   }
 
@@ -427,7 +430,7 @@ class _LocationViewState extends State<LocationView> {
     return Container(
       color: const Color(0xFFF3F4F6),
       child: Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill),
-          color: Color(0xFF9CA3AF), size: 20),
+          color: const Color(0xFF9CA3AF), size: 20),
     );
   }
 

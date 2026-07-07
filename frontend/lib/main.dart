@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -33,6 +34,8 @@ import 'screens/landlord/landlord_dashboard_view.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  GoogleFonts.config.allowRuntimeFetching = false;
+
   // Must be called before accessing any Firebase services (FCM, etc.)
   await Firebase.initializeApp();
 
@@ -51,6 +54,8 @@ Future<void> main() async {
   } catch (err) {
     debugPrint('dotenv load failed: $err');
   }
+
+  await AppSession.restoreSession();
 
   if (kDebugMode) {
     debugPrint('Effective API_BASE_URL = ${AppSession.apiBaseUrl}');
@@ -71,18 +76,36 @@ Future<void> main() async {
     );
   }
 
-  // Initialize FCM early (before runApp so logs/navigation wiring work)
-  await FCMService.instance.initialize();
-
-  FirebaseMessaging.onMessage.listen((m) => logFcm(m, source: 'onMessage'));
-  FirebaseMessaging.onMessageOpenedApp
-      .listen((m) => logFcm(m, source: 'onMessageOpenedApp'));
-
-  // Assign the global navigator key to FCMService
+  // Assign the global navigator key to FCMService before initialization so
+  // any foreground message callbacks can resolve navigation safely.
   FCMService.instance.navigatorKey = navigatorKey;
 
-  final initial = await FirebaseMessaging.instance.getInitialMessage();
-  if (initial != null) logFcm(initial, source: 'getInitialMessage');
+  // Initialize FCM early (before runApp so logs/navigation wiring work).
+  // If Firebase or the device network is temporarily unavailable, continue
+  // launching the app instead of crashing on splash.
+  try {
+    await FCMService.instance.initialize();
+  } catch (err, stackTrace) {
+    debugPrint('FCM initialization failed; continuing without it: $err');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+
+  try {
+    FirebaseMessaging.onMessage.listen((m) => logFcm(m, source: 'onMessage'));
+    FirebaseMessaging.onMessageOpenedApp
+        .listen((m) => logFcm(m, source: 'onMessageOpenedApp'));
+  } catch (err, stackTrace) {
+    debugPrint('FCM listeners setup failed: $err');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+
+  try {
+    final initial = await FirebaseMessaging.instance.getInitialMessage();
+    if (initial != null) logFcm(initial, source: 'getInitialMessage');
+  } catch (err, stackTrace) {
+    debugPrint('Initial FCM message lookup failed: $err');
+    debugPrintStack(stackTrace: stackTrace);
+  }
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -141,9 +164,9 @@ class _PropertyAppState extends State<PropertyApp> {
           builder: (sheetContext) {
             return WillPopScope(
               onWillPop: () async => false,
-              child: Material(
+              child: const Material(
                 color: Colors.transparent,
-                child: const TenantSurveyView(),
+                child: TenantSurveyView(),
               ),
             );
           },
@@ -232,7 +255,6 @@ class _PropertyAppState extends State<PropertyApp> {
                   Navigator.pushNamed(context, '/tenant_bookings');
                 }
               },
-              onViewSaved: () => Navigator.pushNamed(context, '/saved'),
               onEditProfile: () =>
                   Navigator.pushNamed(context, '/edit_profile'),
               onRefer: () => Navigator.pushNamed(context, '/referral'),
@@ -640,7 +662,6 @@ class _AppShellState extends State<AppShell> {
           key: const ValueKey('profile'),
           onBack: () => _goTo(_AppScreen.home),
           onViewBookings: () => Navigator.pushNamed(context, '/my_bookings'),
-          onViewSaved: () => Navigator.pushNamed(context, '/saved'),
           onEditProfile: () => Navigator.pushNamed(context, '/edit_profile'),
           onRefer: () => Navigator.pushNamed(context, '/referral'),
           onSetting: (setting) {
