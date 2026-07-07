@@ -51,7 +51,7 @@ class ImageUploadService {
       'staynest_compressed_${DateTime.now().millisecondsSinceEpoch}_${path.basename(input.path)}',
     );
 
-    final result = await FlutterImageCompress.compressAndGetFile(
+    final xfile = await FlutterImageCompress.compressAndGetFile(
       input.absolute.path,
       targetPath,
       quality: 82,
@@ -61,7 +61,7 @@ class ImageUploadService {
       minHeight: 720,
     );
 
-    return result ?? input;
+    return xfile == null ? input : File(xfile.path);
   }
 
   static Future<List<File>> compressSelectedImages(List<File> selected) async {
