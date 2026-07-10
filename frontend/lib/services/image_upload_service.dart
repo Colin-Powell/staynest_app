@@ -86,10 +86,8 @@ class ImageUploadService {
     };
 
     void emitProgress() {
-      if (onProgress != null) {
-        onProgress(progressState.values.toList());
-      }
-    }
+      onProgress(progressState.values.toList());
+        }
 
     Future<void> startUpload(File file) async {
       final task = UploadsService.uploadFileWithProgress(

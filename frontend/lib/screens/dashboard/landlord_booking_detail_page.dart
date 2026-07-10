@@ -558,10 +558,11 @@ class _GlassContainer extends StatelessWidget {
     required this.child,
     required this.padding,
     this.borderRadius,
-    this.blur = 15.0,
+    this.blur = 12,
     this.opacity = 0.55,
-    this.borderWidth = 1.0,
+    this.borderWidth = 1.5,
   });
+
 
   @override
   Widget build(BuildContext context) {

@@ -3,11 +3,129 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>StayNest — Find. Rent. Live.</title>
-    <meta
-      name="description"
-      content="StayNest connects tenants, landlords and property managers on one secure platform."
-    />
+
+    <!-- ═══════════════════════════════════════════
+         PRIMARY SEO
+    ═══════════════════════════════════════════ -->
+    <title>StayNest — Find, Rent &amp; Live | Verified Rental Listings</title>
+    <meta name="description" content="StayNest connects tenants, landlords and property managers on one secure platform. Browse verified rental listings, pay rent online, and manage your property — all in one place." />
+    <meta name="keywords" content="rent apartment, find rental, verified listings, property management app, landlord app, tenant app, rental platform, StayNest" />
+    <meta name="author" content="StayNest" />
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <link rel="canonical" href="https://www.staynest.rashoti.com/" />
+
+    <!-- ═══════════════════════════════════════════
+         OPEN GRAPH (Facebook / LinkedIn / WhatsApp)
+    ═══════════════════════════════════════════ -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="StayNest" />
+    <meta property="og:title" content="StayNest — Find, Rent &amp; Live | Verified Rental Listings" />
+    <meta property="og:description" content="StayNest connects tenants, landlords and property managers on one secure platform. Browse verified listings, pay rent online, and manage your property in one place." />
+    <meta property="og:url" content="https://www.staynest.rashoti.com/" />
+    <meta property="og:image" content="https://www.staynest.rashoti.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="StayNest — Find. Rent. Live." />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- ═══════════════════════════════════════════
+         TWITTER / X CARD
+    ═══════════════════════════════════════════ -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@StayNestApp" />
+    <meta name="twitter:creator" content="@StayNestApp" />
+    <meta name="twitter:title" content="StayNest — Find, Rent &amp; Live" />
+    <meta name="twitter:description" content="Browse verified rentals, pay rent, and manage properties — all in one trusted platform." />
+    <meta name="twitter:image" content="https://www.staynest.rashoti.com/og-image.png" />
+    <meta name="twitter:image:alt" content="StayNest — Find. Rent. Live." />
+
+    <!-- ═══════════════════════════════════════════
+         STRUCTURED DATA — JSON-LD
+    ═══════════════════════════════════════════ -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://www.staynest.rashoti.com/#website",
+          "url": "https://www.staynest.rashoti.com/",
+          "name": "StayNest",
+          "description": "StayNest connects tenants, landlords and property managers on one secure platform.",
+          "inLanguage": "en-US",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://www.staynest.rashoti.com/?s={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://www.staynest.rashoti.com/#organization",
+          "name": "StayNest",
+          "url": "https://www.staynest.rashoti.com/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://www.staynest.rashoti.com/logo.svg",
+            "width": 200,
+            "height": 60
+          },
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "email": "support@staynest.app",
+            "contactType": "customer support",
+            "availableLanguage": "English"
+          },
+          "sameAs": [
+            "https://twitter.com/StayNestApp",
+            "https://www.instagram.com/StayNestApp",
+            "https://www.linkedin.com/company/staynest"
+          ]
+        },
+        {
+          "@type": "MobileApplication",
+          "@id": "https://www.staynest.rashoti.com/#app",
+          "name": "StayNest",
+          "operatingSystem": ["iOS", "Android"],
+          "applicationCategory": "LifestyleApplication",
+          "description": "Browse verified rental listings, pay rent online, and manage properties — all in one trusted app.",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.8",
+            "reviewCount": "1240"
+          }
+        },
+        {
+          "@type": "WebPage",
+          "@id": "https://www.staynest.rashoti.com/#webpage",
+          "url": "https://www.staynest.rashoti.com/",
+          "name": "StayNest — Find, Rent & Live | Verified Rental Listings",
+          "description": "StayNest connects tenants, landlords and property managers on one secure platform.",
+          "isPartOf": { "@id": "https://www.staynest.rashoti.com/#website" },
+          "publisher": { "@id": "https://www.staynest.rashoti.com/#organization" },
+          "breadcrumb": {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://www.staynest.rashoti.com/"
+              }
+            ]
+          }
+        }
+      ]
+    }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -98,9 +216,10 @@
 
         <div class="flex items-center gap-4">
           <a
-            href="#download"
+            href="#join-waitlist"
+            data-waitlist-open
             class="hidden md:inline-block px-6 py-3 bg-primary text-white font-semibold rounded-2xl shadow-strong hover:scale-105 transition-all duration-300"
-            >Download App</a
+            >Join the Waitlist</a
           >
           <!-- Mobile Menu Button -->
           <button
@@ -146,9 +265,10 @@
             >Contact</a
           >
           <a
-            href="#download"
+            href="#join-waitlist"
+            data-waitlist-open
             class="mobile-link block mt-2 text-center px-6 py-3 bg-primary text-white font-semibold rounded-xl shadow-soft"
-            >Download App</a
+            >Join the Waitlist</a
           >
         </div>
       </div>
@@ -193,10 +313,11 @@
             class="mt-10 flex flex-col sm:flex-row gap-4 justify-center items-center"
           >
             <a
-              href="#download"
+              href="#join-waitlist"
+              data-waitlist-open
               class="px-8 py-4 bg-primary text-white rounded-2xl font-bold shadow-strong hover:scale-105 transition-transform duration-300 w-full sm:w-auto"
             >
-              Download App
+              Join the Waitlist
             </a>
             <a
               href="features.html"
@@ -673,6 +794,8 @@
 
       <!-- Download Section -->
       <section id="download" class="py-24 bg-white">
+        
+        
         <div class="max-w-6xl mx-auto px-6">
           <div
             class="bg-gradient-to-br from-primary to-[#2a24b0] rounded-[3rem] shadow-strong relative overflow-hidden flex flex-col md:flex-row items-stretch"
@@ -727,10 +850,11 @@
 
               <div>
                 <a
-                  href="download.html"
+                  href="#join-waitlist"
+                  data-waitlist-open
                   class="inline-block bg-white text-primary px-8 py-4 rounded-2xl font-bold shadow-lg hover:scale-105 transition-transform duration-300"
                 >
-                  Get started for free
+                  Join the Waitlist
                 </a>
               </div>
             </div>
@@ -800,10 +924,10 @@
           <h4 class="font-bold text-dark mb-4">Developers</h4>
           <ul class="space-y-3 text-sm text-graycustom">
             <li>
-              <a href="features.html" class="hover:text-primary transition-colors">API</a>
+              <a href="#join-waitlist" data-waitlist-open class="hover:text-primary transition-colors">API</a>
             </li>
             <li>
-              <a href="features.html" class="hover:text-primary transition-colors"
+              <a href="#join-waitlist" data-waitlist-open class="hover:text-primary transition-colors"
                 >Documentation</a
               >
             </li>

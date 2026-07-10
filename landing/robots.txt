@@ -1,0 +1,8 @@
+# StayNest — Robots Directives
+# Allow all reputable crawlers full access
+
+User-agent: *
+Allow: /
+
+# Point crawlers to the sitemap
+Sitemap: https://www.staynest.rashoti.com/sitemap.xml

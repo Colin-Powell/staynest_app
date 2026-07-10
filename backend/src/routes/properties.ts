@@ -63,7 +63,7 @@ const PROPERTY_SELECT = `p.id,
               p.bathrooms,
               p.area,
               p.image_url,
-              p.status,
+
               p.images,
               p.amenities,
               p.lat,
