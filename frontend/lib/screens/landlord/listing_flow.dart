@@ -1110,39 +1110,86 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
           const SizedBox(height: 40),
           if (_isUploadingImages || _imageUploadStatus.isNotEmpty) ...[
-            Text('Image upload status',
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineSmall
-                    ?.copyWith(color: AppColors.gray900)),
-            const SizedBox(height: 16),
-            LinearProgressIndicator(value: _uploadProgress),
-            const SizedBox(height: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: _imageUploadStatus.map((item) {
-                final percent =
-                    (item.progress * 100).clamp(0, 100).toStringAsFixed(0);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10.0),
-                  child: Row(
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 20),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  )
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
+                      Icon(Icons.cloud_upload_outlined, color: AppColors.primary, size: 28),
+                      const SizedBox(width: 16),
                       Expanded(
-                        child: Text(
-                          path.basename(item.file.path),
-                          style: GoogleFonts.poppins(
-                              color: AppColors.gray900, fontSize: 13),
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _uploadProgress < 1.0 ? 'Optimizing & Uploading...' : 'Upload Complete',
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                                color: AppColors.gray900,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${(_uploadProgress * 100).toStringAsFixed(0)}% • ${_imageUploadStatus.length} photos',
+                              style: GoogleFonts.poppins(
+                                color: AppColors.gray500,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Text('$percent%',
-                          style: GoogleFonts.poppins(
-                              color: AppColors.gray500, fontSize: 13)),
                     ],
                   ),
-                );
-              }).toList(),
+                  const SizedBox(height: 20),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: _uploadProgress,
+                      minHeight: 8,
+                      backgroundColor: const Color(0xFFE5E7EB),
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                    ),
+                  ),
+                  if (_imageUploadStatus.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    ..._imageUploadStatus.map((item) {
+                      final percent = (item.progress * 100).clamp(0, 100).toStringAsFixed(0);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                path.basename(item.file.path),
+                                style: GoogleFonts.poppins(color: AppColors.gray600, fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text('$percent%',
+                                style: GoogleFonts.poppins(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      );
+                    }),
+                  ]
+                ],
+              ),
             ),
             const SizedBox(height: 32),
           ],

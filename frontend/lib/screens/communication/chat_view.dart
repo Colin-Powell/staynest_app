@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/services/message_service.dart';

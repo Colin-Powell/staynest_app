@@ -6,10 +6,8 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/services/message_service.dart';
 import 'package:property_app/session/app_session.dart';
-import 'package:property_app/services/fcm_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:property_app/models/communication_models.dart';
-import 'package:property_app/widgets/property_image.dart';
 
 const Color _landlordPrimary = Color(0xFF059669);
 

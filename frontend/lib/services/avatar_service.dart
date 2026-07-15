@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/services/image_upload_service.dart';
 
 class AvatarService {
   /// Upload avatar image to backend `/api/uploads`.
@@ -14,12 +15,14 @@ class AvatarService {
     final request = http.MultipartRequest('POST', uri);
     request.headers['Authorization'] = 'Bearer ${AppSession.apiToken ?? ''}';
 
-    final length = await file.length();
+    final compressedFile = await ImageUploadService.compressImageFile(file);
+
+    final length = await compressedFile.length();
     if (length == 0) {
       throw Exception('Selected image is empty');
     }
 
-    final multipartFile = await http.MultipartFile.fromPath('file', file.path);
+    final multipartFile = await http.MultipartFile.fromPath('file', compressedFile.path);
     request.files.add(multipartFile);
 
     final streamed = await request.send();

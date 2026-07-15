@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder: flutter_launcher_icons should generate the required foreground.
+     This file exists only to prevent missing-resource errors if builds reference it. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/ic_launcher_monochrome_foreground"
+    android:gravity="center" />
+

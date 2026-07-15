@@ -261,6 +261,13 @@ class AppSession {
   static bool get isLandlord =>
       currentRole == 'landlord' || currentRole == 'host';
 
+  static bool get isAdmin {
+    final normalized = currentRole.toLowerCase();
+    return normalized == 'admin' ||
+        normalized == 'super_admin' ||
+        normalized == 'administrator';
+  }
+
   static Future<void> reset() async {
     currentRole = 'tenant';
     currentUserId = null;

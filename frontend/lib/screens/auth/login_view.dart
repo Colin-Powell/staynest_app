@@ -8,6 +8,8 @@ import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/services/api_client.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
+import 'package:property_app/core/responsive/breakpoints.dart';
+import 'package:property_app/utils/responsive_layout.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  StayNest — Login Screen
@@ -279,129 +281,140 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      resizeToAvoidBottomInset: true,
-      body: SafeArea(
+    final isCompactScreen = ResponsiveLayout.isCompact(context);
+    final isDesktop = ResponsiveLayout.isDesktopOrLarger(context);
+
+    return _LoginPageShell(
+      isDesktop: isDesktop,
+      child: SafeArea(
         child: GestureDetector(
           onTap: () => FocusScope.of(context).unfocus(),
           behavior: HitTestBehavior.opaque,
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(26, 52, 26, 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── [0] Header ───────────────────────────────────
-                _Entrance(
-                  fade: _fadeAnims[0],
-                  slide: _slideAnims[0],
-                  child: _Header(waveAnim: _waveAnim),
-                ),
-
-                const SizedBox(height: 40),
-
-                // ── [1] Email field ──────────────────────────────
-                _Entrance(
-                  fade: _fadeAnims[1],
-                  slide: _slideAnims[1],
-                  child: _InputField(
-                    controller: _emailCtrl,
-                    focusNode: _emailFocus,
-                    isFocused: _emailFocused,
-                    placeholder: 'Phone number or Email',
-                    keyboardType: TextInputType.emailAddress,
+            padding: EdgeInsets.fromLTRB(
+              isCompactScreen ? 24 : 32,
+              isCompactScreen ? 48 : 56,
+              isCompactScreen ? 24 : 32,
+              isCompactScreen ? 32 : 40,
+            ),
+            child: ResponsiveLayout.authShell(
+              context: context,
+              maxWidth: AppBreakpoints.loginMaxWidth,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── [0] Header ───────────────────────────────────
+                  _Entrance(
+                    fade: _fadeAnims[0],
+                    slide: _slideAnims[0],
+                    child: _Header(waveAnim: _waveAnim),
                   ),
-                ),
 
-                const SizedBox(height: 14),
+                  SizedBox(height: isCompactScreen ? 32 : 40),
 
-                // ── [2] Password field ───────────────────────────
-                _Entrance(
-                  fade: _fadeAnims[2],
-                  slide: _slideAnims[2],
-                  child: AnimatedBuilder(
-                    animation: _shakeAnim,
-                    builder: (_, child) => Transform.translate(
-                      offset: Offset(_shakeAnim.value, 0),
-                      child: child,
-                    ),
+                  // ── [1] Email field ──────────────────────────────
+                  _Entrance(
+                    fade: _fadeAnims[1],
+                    slide: _slideAnims[1],
                     child: _InputField(
-                      controller: _passwordCtrl,
-                      focusNode: _passwordFocus,
-                      isFocused: _passwordFocused,
-                      placeholder: 'Password',
-                      obscure: _obscurePassword,
-                      suffixWidget: _EyeToggle(
+                      controller: _emailCtrl,
+                      focusNode: _emailFocus,
+                      isFocused: _emailFocused,
+                      placeholder: 'Phone number or Email',
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // ── [2] Password field ───────────────────────────
+                  _Entrance(
+                    fade: _fadeAnims[2],
+                    slide: _slideAnims[2],
+                    child: AnimatedBuilder(
+                      animation: _shakeAnim,
+                      builder: (_, child) => Transform.translate(
+                        offset: Offset(_shakeAnim.value, 0),
+                        child: child,
+                      ),
+                      child: _InputField(
+                        controller: _passwordCtrl,
+                        focusNode: _passwordFocus,
+                        isFocused: _passwordFocused,
+                        placeholder: 'Password',
                         obscure: _obscurePassword,
-                        onToggle: () => setState(
-                            () => _obscurePassword = !_obscurePassword),
+                        suffixWidget: _EyeToggle(
+                          obscure: _obscurePassword,
+                          onToggle: () => setState(
+                              () => _obscurePassword = !_obscurePassword),
+                        ),
                       ),
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 12),
+                  const SizedBox(height: 12),
 
-                // ── [3] Forgot password ──────────────────────────
-                _Entrance(
-                  fade: _fadeAnims[3],
-                  slide: _slideAnims[3],
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: _ForgotButton(
-                      onTap: widget.onForgotPassword ?? () {},
+                  // ── [3] Forgot password ──────────────────────────
+                  _Entrance(
+                    fade: _fadeAnims[3],
+                    slide: _slideAnims[3],
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _ForgotButton(
+                        onTap: widget.onForgotPassword ?? () {},
+                      ),
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 28),
+                  const SizedBox(height: 28),
 
-                // ── [4] Login button ─────────────────────────────
-                _Entrance(
-                  fade: _fadeAnims[4],
-                  slide: _slideAnims[4],
-                  child: _LoginButton(
-                    isLoading: _isLoading,
-                    onPressed: _handleLogin,
+                  // ── [4] Login button ─────────────────────────────
+                  _Entrance(
+                    fade: _fadeAnims[4],
+                    slide: _slideAnims[4],
+                    child: _LoginButton(
+                      isLoading: _isLoading,
+                      onPressed: _handleLogin,
+                    ),
                   ),
-                ),
 
-                const SizedBox(height: 32),
+                  const SizedBox(height: 32),
 
-                // ── [5] Divider ──────────────────────────────────
-                _Entrance(
-                  fade: _fadeAnims[5],
-                  slide: _slideAnims[5],
-                  child: const _OrDivider(),
-                ),
-
-                const SizedBox(height: 28),
-
-                // ── [6] Social sign-in ──────────────────────────
-                _Entrance(
-                  fade: _fadeAnims[6],
-                  slide: _slideAnims[6],
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _SocialCircle(
-                            type: _SocialType.google,
-                            isLoading: _isGoogleSigningIn,
-                            onTap: _handleGoogleSignIn,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      _SignUpLink(onTap: widget.onRegister),
-                    ],
+                  // ── [5] Divider ──────────────────────────────────
+                  _Entrance(
+                    fade: _fadeAnims[5],
+                    slide: _slideAnims[5],
+                    child: const _OrDivider(),
                   ),
-                ),
 
-                const SizedBox(height: 16),
-              ],
+                  const SizedBox(height: 28),
+
+                  // ── [6] Social sign-in ──────────────────────────
+                  _Entrance(
+                    fade: _fadeAnims[6],
+                    slide: _slideAnims[6],
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _SocialCircle(
+                              type: _SocialType.google,
+                              isLoading: _isGoogleSigningIn,
+                              onTap: _handleGoogleSignIn,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        _SignUpLink(onTap: widget.onRegister),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+                ],
+              ),
             ),
           ),
         ),
@@ -412,6 +425,146 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
 
 // ─── Entrance wrapper ─────────────────────────────────────────────────────────
 // DRY helper: wraps any child in fade + slide-up animation
+
+class _LoginPageShell extends StatelessWidget {
+  const _LoginPageShell({
+    required this.isDesktop,
+    required this.child,
+  });
+
+  final bool isDesktop;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isDesktop) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        resizeToAvoidBottomInset: true,
+        body: child,
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      resizeToAvoidBottomInset: true,
+      body: Row(
+        children: [
+          const Expanded(
+            flex: 6,
+            child: _LoginBrandPanel(),
+          ),
+          Expanded(
+            flex: 5,
+            child: ColoredBox(
+              color: Colors.white,
+              child: child,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoginBrandPanel extends StatelessWidget {
+  const _LoginBrandPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppBreakpoints.spacingXxl),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF1A1BAA),
+            Color(0xFF3D3EDB),
+            Color(0xFF2BBFB3),
+          ],
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.32),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.home_work_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Text(
+                  'StayNest',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Image.asset(
+                  'assets/illustrations/slide_1_house.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            const Spacer(),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Find a better place to land.',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 44,
+                      fontWeight: FontWeight.w900,
+                      height: 1.08,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Browse verified homes, connect with trusted landlords, and manage your next move from one calm dashboard.',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white.withValues(alpha: 0.82),
+                      fontSize: 16,
+                      height: 1.6,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _Entrance extends StatelessWidget {
   final Animation<double> fade;

@@ -1,7 +1,21 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:property_app/theme.dart';
 
+// Local lightweight shadow to avoid coupling to theme internals.
+// (Some parts of the app don't expose a single AppShadow symbol.)
+List<BoxShadow> _smShadows() => const [
+      BoxShadow(
+        color: Color(0x14000000),
+        blurRadius: 20,
+        offset: Offset(0, 4),
+      ),
+    ];
+
+
+/// Reusable glassmorphism container used across the app.
+///
+/// Provides defaults for all visual parameters so callers never need to
+/// initialize every field (fixes "Final field ... is not initialized").
 class GlassContainer extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -9,7 +23,19 @@ class GlassContainer extends StatelessWidget {
   final Color? color;
   final BoxBorder? border;
   final VoidCallback? onTap;
+
+
+  /// Blur sigma for BackdropFilter.
   final double blur;
+
+  /// Background overlay opacity (0..1).
+  final double opacity;
+
+  /// Convenience for border width when [border] is not provided.
+  final double borderWidth;
+
+  /// Optional fixed height.
+  final double? height;
 
   const GlassContainer({
     super.key,
@@ -20,6 +46,9 @@ class GlassContainer extends StatelessWidget {
     this.border,
     this.onTap,
     this.blur = 24,
+    this.opacity = 0.20,
+    this.borderWidth = 1.2,
+    this.height,
   });
 
   @override
@@ -29,27 +58,29 @@ class GlassContainer extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
         child: Container(
+          height: height,
+          padding: padding,
           decoration: BoxDecoration(
-            color: color ?? Colors.white.withOpacity(0.20),
+            color: color ?? Colors.white.withOpacity(opacity),
             borderRadius: borderRadius,
             border: border ??
-                Border.all(color: Colors.white.withOpacity(0.18), width: 1.2),
-            boxShadow: AppShadow.sm,
+                Border.all(
+                  color: Colors.white.withOpacity(0.18),
+                  width: borderWidth,
+                ),
+            boxShadow: _smShadows(),
           ),
-          padding: padding,
           child: child,
         ),
       ),
     );
 
-    if (onTap == null) {
-      return content;
-    }
-
+    if (onTap == null) return content;
     return GestureDetector(onTap: onTap, child: content);
   }
 }
 
+/// Optional helper button that uses [GlassContainer].
 class GlassButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
@@ -77,10 +108,10 @@ class GlassButton extends StatelessWidget {
         child: Center(
           child: Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
-              color: Colors.white,
+              color: textColor,
             ),
           ),
         ),

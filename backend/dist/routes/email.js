@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db.js';
-import { sendOtpEmail, sendAlertEmail } from '../services/email.js';
+import { createOtp, sendOtpEmail, sendAlertEmail, verifyOtp } from '../services/email.js';
 import { requireAuth } from '../middleware/auth.js';
 const router = Router();
 // Public: send OTP to an email address using a short-lived numeric code.
@@ -9,7 +9,7 @@ router.post('/send-otp', async (req, res, next) => {
         const { email } = req.body;
         if (!email)
             return res.status(400).json({ error: 'Email is required.' });
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const { code } = createOtp(email);
         await sendOtpEmail(email, code);
         return res.json({ data: { sent: true, code } });
     }
@@ -24,8 +24,7 @@ router.post('/verify-otp', async (req, res, next) => {
             return res.status(400).json({ error: 'Email and code are required.' });
         }
         const normalizedEmail = email.trim().toLowerCase();
-        const expectedCode = process.env.OTP_CODE || '624108';
-        if (code.trim() !== expectedCode) {
+        if (!verifyOtp(normalizedEmail, code)) {
             return res.status(403).json({ error: 'Invalid verification code.' });
         }
         const result = await query(`UPDATE users SET verified = true WHERE email = $1 RETURNING id, name, email, role, avatar, verified`, [normalizedEmail]);

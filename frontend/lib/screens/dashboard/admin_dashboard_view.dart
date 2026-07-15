@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:property_app/app_theme.dart';
 import 'package:property_app/services/verification_api.dart';
+import 'package:property_app/session/app_session.dart';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -151,22 +152,34 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                   letterSpacing: -0.4,
                 ),
               ),
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: _primary.withOpacity(0.10),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: _primary.withOpacity(0.08),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+              Row(
+                children: [
+                  if (AppSession.isAdmin)
+                    TextButton.icon(
+                      onPressed: () =>
+                          Navigator.pushNamed(context, '/super_admin'),
+                      icon: const Icon(Icons.dashboard_customize_outlined),
+                      label: const Text('Open Super Admin'),
                     ),
-                  ],
-                ),
-                child: const Icon(Icons.shield_outlined,
-                    color: _primary, size: 20),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _primary.withOpacity(0.10),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: _primary.withOpacity(0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.shield_outlined,
+                        color: _primary, size: 20),
+                  ),
+                ],
               ),
             ],
           ),
@@ -285,8 +298,7 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
         alignment: Alignment.center,
         child: const Column(
           children: [
-            Icon(Icons.inbox_outlined,
-                color: Color(0xFFC4B5FD), size: 64),
+            Icon(Icons.inbox_outlined, color: Color(0xFFC4B5FD), size: 64),
             SizedBox(height: 16),
             Text(
               'No Pending Verifications',

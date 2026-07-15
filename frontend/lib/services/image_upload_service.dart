@@ -65,11 +65,8 @@ class ImageUploadService {
   }
 
   static Future<List<File>> compressSelectedImages(List<File> selected) async {
-    final compressed = <File>[];
-    for (final file in selected) {
-      compressed.add(await compute(_compressFile, file.path));
-    }
-    return compressed;
+    final futures = selected.map((file) => compute(_compressFile, file.path));
+    return Future.wait(futures);
   }
 
   static Future<List<String>> uploadImages(

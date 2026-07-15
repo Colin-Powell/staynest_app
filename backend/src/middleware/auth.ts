@@ -40,7 +40,12 @@ export function authorize(...allowedRoles: string[]) {
       return res.status(401).json({ error: 'Authentication required.' });
     }
 
-    if (allowedRoles.length > 0 && !allowedRoles.includes(authUser.role)) {
+    const normalizedRole = authUser.role?.toLowerCase() ?? '';
+    const normalizedAllowedRoles = allowedRoles.map((role) => role.toLowerCase());
+    const isAdminAlias = normalizedRole === 'admin' || normalizedRole === 'super_admin' || normalizedRole === 'administrator';
+    const isAllowed = normalizedAllowedRoles.length === 0 || normalizedAllowedRoles.includes(normalizedRole) || (normalizedAllowedRoles.includes('admin') && isAdminAlias);
+
+    if (!isAllowed) {
       return res.status(403).json({ error: 'Insufficient permissions.' });
     }
 

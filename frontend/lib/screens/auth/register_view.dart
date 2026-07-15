@@ -6,7 +6,9 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/core/responsive/breakpoints.dart';
 import 'package:property_app/utils/api_result.dart';
+import 'package:property_app/utils/responsive_layout.dart';
 
 class RegisterView extends StatefulWidget {
   const RegisterView({super.key});
@@ -210,202 +212,125 @@ class _RegisterViewState extends State<RegisterView>
 
   @override
   Widget build(BuildContext context) {
+    final isCompactScreen = ResponsiveLayout.isCompact(context);
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: _bg,
         body: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 16),
+            padding: EdgeInsets.symmetric(
+              horizontal: isCompactScreen ? 24 : 32,
+              vertical: isCompactScreen ? 16 : 24,
+            ),
+            child: ResponsiveLayout.authShell(
+              context: context,
+              maxWidth: AppBreakpoints.signupMaxWidth,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 16),
 
-                // Back arrow
-                FadeTransition(
-                  opacity: _headerFade,
-                  child: SlideTransition(
-                    position: _headerSlide,
-                    child: GestureDetector(
-                      onTap: () => Navigator.maybePop(context),
-                      child:
-                          const Icon(Icons.arrow_back, size: 24, color: _label),
+                  // Back arrow
+                  FadeTransition(
+                    opacity: _headerFade,
+                    child: SlideTransition(
+                      position: _headerSlide,
+                      child: GestureDetector(
+                        onTap: () => Navigator.maybePop(context),
+                        child: const Icon(
+                          Icons.arrow_back,
+                          size: 24,
+                          color: _label,
+                        ),
+                      ),
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 28),
+                  const SizedBox(height: 28),
 
-                // Title + subtitle
-                FadeTransition(
-                  opacity: _headerFade,
-                  child: SlideTransition(
-                    position: _headerSlide,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Create Account',
-                          style: GoogleFonts.poppins(
-                            fontSize: 48,
-                            fontWeight: FontWeight.w800,
-                            color: _label,
-                            letterSpacing: -0.5,
-                            height: 1.15,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Sign up to get started',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            color: _subtext,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // Form
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      _AnimatedField(
-                        fade: _field1Fade,
-                        slide: _field1Slide,
-                        child: _InputField(
-                          controller: _nameController,
-                          hint: 'Full name',
-                          keyboardType: TextInputType.name,
-                          textInputAction: TextInputAction.next,
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Enter your full name'
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _AnimatedField(
-                        fade: _field2Fade,
-                        slide: _field2Slide,
-                        child: _InputField(
-                          controller: _phoneController,
-                          hint: 'Phone number',
-                          keyboardType: TextInputType.phone,
-                          textInputAction: TextInputAction.next,
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Enter your phone number'
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _AnimatedField(
-                        fade: _field3Fade,
-                        slide: _field3Slide,
-                        child: _InputField(
-                          controller: _emailController,
-                          hint: 'Email Address',
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'Enter your email';
-                            }
-                            if (!v.contains('@')) return 'Enter a valid email';
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _AnimatedField(
-                        fade: _field4Fade,
-                        slide: _field4Slide,
-                        child: _InputField(
-                          controller: _passwordController,
-                          hint: 'Password',
-                          obscureText: _obscurePassword,
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => _onSignUp(),
-                          suffixIcon: GestureDetector(
-                            onTap: () => setState(
-                                () => _obscurePassword = !_obscurePassword),
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 180),
-                              child: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                key: ValueKey(_obscurePassword),
-                                size: 20,
-                                color: _hint,
-                              ),
+                  // Title + subtitle
+                  FadeTransition(
+                    opacity: _headerFade,
+                    child: SlideTransition(
+                      position: _headerSlide,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Create Account',
+                            style: GoogleFonts.poppins(
+                              fontSize: isCompactScreen ? 36 : 48,
+                              fontWeight: FontWeight.w800,
+                              color: _label,
+                              letterSpacing: -0.5,
+                              height: 1.15,
                             ),
                           ),
-                          validator: (v) => (v == null || v.length < 6)
-                              ? 'Password must be 6+ characters'
-                              : null,
-                        ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Sign up to get started',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              color: _subtext,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
                       ),
-                      if (_isLandlord) ...[
-                        const SizedBox(height: 16),
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Form
+                  Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
                         _AnimatedField(
-                          fade: _bottomFade,
-                          slide: _bottomSlide,
+                          fade: _field1Fade,
+                          slide: _field1Slide,
                           child: _InputField(
-                            controller: _businessNameController,
-                            hint: 'Business name',
+                            controller: _nameController,
+                            hint: 'Full name',
                             keyboardType: TextInputType.name,
+                            textInputAction: TextInputAction.next,
                             validator: (v) => (v == null || v.trim().isEmpty)
-                                ? 'Enter your business name'
+                                ? 'Enter your full name'
                                 : null,
                           ),
                         ),
                         const SizedBox(height: 16),
                         _AnimatedField(
-                          fade: _bottomFade,
-                          slide: _bottomSlide,
+                          fade: _field2Fade,
+                          slide: _field2Slide,
                           child: _InputField(
-                            controller: _businessTypeController,
-                            hint: 'Business type',
-                            keyboardType: TextInputType.text,
+                            controller: _phoneController,
+                            hint: 'Phone number',
+                            keyboardType: TextInputType.phone,
+                            textInputAction: TextInputAction.next,
                             validator: (v) => (v == null || v.trim().isEmpty)
-                                ? 'Enter your business type'
+                                ? 'Enter your phone number'
                                 : null,
                           ),
                         ),
                         const SizedBox(height: 16),
                         _AnimatedField(
-                          fade: _bottomFade,
-                          slide: _bottomSlide,
+                          fade: _field3Fade,
+                          slide: _field3Slide,
                           child: _InputField(
-                            controller: _taxIdController,
-                            hint: 'Business tax ID',
-                            keyboardType: TextInputType.text,
-                            validator: (v) => (v == null || v.trim().isEmpty)
-                                ? 'Enter your tax ID'
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        _AnimatedField(
-                          fade: _bottomFade,
-                          slide: _bottomSlide,
-                          child: _InputField(
-                            controller: _yearsInBusinessController,
-                            hint: 'Years in business',
-                            keyboardType: TextInputType.number,
+                            controller: _emailController,
+                            hint: 'Email Address',
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
                             validator: (v) {
                               if (v == null || v.trim().isEmpty) {
-                                return 'Enter years in business';
+                                return 'Enter your email';
                               }
-                              final parsed = int.tryParse(v);
-                              if (parsed == null || parsed < 0) {
-                                return 'Enter a valid number';
+                              if (!v.contains('@')) {
+                                return 'Enter a valid email';
                               }
                               return null;
                             },
@@ -413,149 +338,250 @@ class _RegisterViewState extends State<RegisterView>
                         ),
                         const SizedBox(height: 16),
                         _AnimatedField(
-                          fade: _bottomFade,
-                          slide: _bottomSlide,
+                          fade: _field4Fade,
+                          slide: _field4Slide,
                           child: _InputField(
-                            controller: _businessDescriptionController,
-                            hint: 'Business description',
-                            keyboardType: TextInputType.text,
-                            validator: (v) => (v == null || v.trim().isEmpty)
-                                ? 'Enter a short description'
+                            controller: _passwordController,
+                            hint: 'Password',
+                            obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _onSignUp(),
+                            suffixIcon: GestureDetector(
+                              onTap: () => setState(
+                                  () => _obscurePassword = !_obscurePassword),
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 180),
+                                child: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  key: ValueKey(_obscurePassword),
+                                  size: 20,
+                                  color: _hint,
+                                ),
+                              ),
+                            ),
+                            validator: (v) => (v == null || v.length < 6)
+                                ? 'Password must be 6+ characters'
                                 : null,
                           ),
                         ),
-                      ],
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 28),
-
-                // Sign Up button
-                FadeTransition(
-                  opacity: _bottomFade,
-                  child: SlideTransition(
-                    position: _bottomSlide,
-                    child: ScaleTransition(
-                      scale: _buttonScale,
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _onSignUp,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _primary,
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: _primary,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                        if (_isLandlord) ...[
+                          const SizedBox(height: 16),
+                          _AnimatedField(
+                            fade: _bottomFade,
+                            slide: _bottomSlide,
+                            child: _InputField(
+                              controller: _businessNameController,
+                              hint: 'Business name',
+                              keyboardType: TextInputType.name,
+                              validator: (v) => (v == null || v.trim().isEmpty)
+                                  ? 'Enter your business name'
+                                  : null,
                             ),
                           ),
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 220),
-                            child: _isLoading
-                                ? const SizedBox(
-                                    key: ValueKey('loader'),
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      valueColor:
-                                          AlwaysStoppedAnimation(Colors.white),
+                          const SizedBox(height: 16),
+                          _AnimatedField(
+                            fade: _bottomFade,
+                            slide: _bottomSlide,
+                            child: _InputField(
+                              controller: _businessTypeController,
+                              hint: 'Business type',
+                              keyboardType: TextInputType.text,
+                              validator: (v) => (v == null || v.trim().isEmpty)
+                                  ? 'Enter your business type'
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _AnimatedField(
+                            fade: _bottomFade,
+                            slide: _bottomSlide,
+                            child: _InputField(
+                              controller: _taxIdController,
+                              hint: 'Business tax ID',
+                              keyboardType: TextInputType.text,
+                              validator: (v) => (v == null || v.trim().isEmpty)
+                                  ? 'Enter your tax ID'
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _AnimatedField(
+                            fade: _bottomFade,
+                            slide: _bottomSlide,
+                            child: _InputField(
+                              controller: _yearsInBusinessController,
+                              hint: 'Years in business',
+                              keyboardType: TextInputType.number,
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Enter years in business';
+                                }
+                                final parsed = int.tryParse(v);
+                                if (parsed == null || parsed < 0) {
+                                  return 'Enter a valid number';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _AnimatedField(
+                            fade: _bottomFade,
+                            slide: _bottomSlide,
+                            child: _InputField(
+                              controller: _businessDescriptionController,
+                              hint: 'Business description',
+                              keyboardType: TextInputType.text,
+                              validator: (v) => (v == null || v.trim().isEmpty)
+                                  ? 'Enter a short description'
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  // Sign Up button
+                  FadeTransition(
+                    opacity: _bottomFade,
+                    child: SlideTransition(
+                      position: _bottomSlide,
+                      child: ScaleTransition(
+                        scale: _buttonScale,
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _onSignUp,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _primary,
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: _primary,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      key: ValueKey('loader'),
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        valueColor:
+                                            AlwaysStoppedAnimation(Colors.white),
+                                      ),
+                                    )
+                                  : Text(
+                                      'Sign Up',
+                                      key: const ValueKey('label'),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.3,
+                                      ),
                                     ),
-                                  )
-                                : Text(
-                                    'Sign Up',
-                                    key: const ValueKey('label'),
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 0.3,
-                                    ),
-                                  ),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 28),
+                  const SizedBox(height: 28),
 
-                // Divider
-                FadeTransition(
-                  opacity: _bottomFade,
-                  child: Row(
-                    children: [
-                      const Expanded(
+                  // Divider
+                  FadeTransition(
+                    opacity: _bottomFade,
+                    child: Row(
+                      children: [
+                        const Expanded(
                           child: Divider(
-                              color: _border, thickness: 1, endIndent: 12)),
-                      Text(
-                        'Or continue with',
-                        style:
-                            GoogleFonts.poppins(fontSize: 13, color: _subtext),
-                      ),
-                      const Expanded(
+                            color: _border,
+                            thickness: 1,
+                            endIndent: 12,
+                          ),
+                        ),
+                        Text(
+                          'Or continue with',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            color: _subtext,
+                          ),
+                        ),
+                        const Expanded(
                           child: Divider(
-                              color: _border, thickness: 1, indent: 12)),
-                    ],
+                            color: _border,
+                            thickness: 1,
+                            indent: 12,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
 
-                const SizedBox(height: 24),
+                  const SizedBox(height: 24),
 
-                // Social buttons
-                FadeTransition(
-                  opacity: _bottomFade,
-                  child: SlideTransition(
-                    position: _bottomSlide,
+                  // Social buttons
+                  FadeTransition(
+                    opacity: _bottomFade,
+                    child: SlideTransition(
+                      position: _bottomSlide,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _SocialButton(
+                            onTap: () {},
+                            child: SvgPicture.asset(
+                              'assets/images/google.svg',
+                              width: 28,
+                              height: 28,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  // Login prompt
+                  FadeTransition(
+                    opacity: _bottomFade,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _SocialButton(
-                          onTap: () {},
-                          child: SvgPicture.asset(
-                            'assets/images/google.svg',
-                            width: 28,
-                            height: 28,
+                        Text(
+                          'Already have an account? ',
+                          style:
+                              GoogleFonts.poppins(fontSize: 14, color: _subtext),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.pushNamed(context, '/login'),
+                          child: Text(
+                            'Login',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: _primary,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 28),
-
-                // Login prompt
-                FadeTransition(
-                  opacity: _bottomFade,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Already have an account? ',
-                        style:
-                            GoogleFonts.poppins(fontSize: 14, color: _subtext),
-                      ),
-                      GestureDetector(
-                        onTap: () => Navigator.pushNamed(context, '/login'),
-                        child: Text(
-                          'Login',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: _primary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-              ],
+                  const SizedBox(height: 32),
+                ],
+              ),
             ),
           ),
         ),

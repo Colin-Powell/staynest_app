@@ -30,6 +30,9 @@ import 'services/socket_service.dart';
 import 'services/fcm_service.dart';
 import 'services/auth_service.dart'; // Import AuthService
 import 'screens/landlord/landlord_dashboard_view.dart';
+import 'screens/super_admin/super_admin_shell.dart';
+import 'package:property_app/firebase_options.dart';
+import 'utils/responsive_layout.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,7 +40,14 @@ Future<void> main() async {
   GoogleFonts.config.allowRuntimeFetching = false;
 
   // Must be called before accessing any Firebase services (FCM, etc.)
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (err, stackTrace) {
+    debugPrint('Firebase initialization failed; continuing without it: $err');
+    debugPrintStack(stackTrace: stackTrace);
+  }
 
   // Extract + log the current FCM device registration token (helps debugging)
   try {
@@ -81,30 +91,34 @@ Future<void> main() async {
   FCMService.instance.navigatorKey = navigatorKey;
 
   // Initialize FCM early (before runApp so logs/navigation wiring work).
-  // If Firebase or the device network is temporarily unavailable, continue
-  // launching the app instead of crashing on splash.
-  try {
-    await FCMService.instance.initialize();
-  } catch (err, stackTrace) {
-    debugPrint('FCM initialization failed; continuing without it: $err');
-    debugPrintStack(stackTrace: stackTrace);
+  // Web builds do not have a configured Firebase app in this project, so we
+  // skip the FCM bootstrap there and keep the app shell available.
+  if (!kIsWeb) {
+    try {
+      await FCMService.instance.initialize();
+    } catch (err, stackTrace) {
+      debugPrint('FCM initialization failed; continuing without it: $err');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
-  try {
-    FirebaseMessaging.onMessage.listen((m) => logFcm(m, source: 'onMessage'));
-    FirebaseMessaging.onMessageOpenedApp
-        .listen((m) => logFcm(m, source: 'onMessageOpenedApp'));
-  } catch (err, stackTrace) {
-    debugPrint('FCM listeners setup failed: $err');
-    debugPrintStack(stackTrace: stackTrace);
-  }
+  if (!kIsWeb) {
+    try {
+      FirebaseMessaging.onMessage.listen((m) => logFcm(m, source: 'onMessage'));
+      FirebaseMessaging.onMessageOpenedApp
+          .listen((m) => logFcm(m, source: 'onMessageOpenedApp'));
+    } catch (err, stackTrace) {
+      debugPrint('FCM listeners setup failed: $err');
+      debugPrintStack(stackTrace: stackTrace);
+    }
 
-  try {
-    final initial = await FirebaseMessaging.instance.getInitialMessage();
-    if (initial != null) logFcm(initial, source: 'getInitialMessage');
-  } catch (err, stackTrace) {
-    debugPrint('Initial FCM message lookup failed: $err');
-    debugPrintStack(stackTrace: stackTrace);
+    try {
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) logFcm(initial, source: 'getInitialMessage');
+    } catch (err, stackTrace) {
+      debugPrint('Initial FCM message lookup failed: $err');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -379,6 +393,7 @@ class _PropertyAppState extends State<PropertyApp> {
             ),
         '/list_property': (context) => const AddListingFlow(),
         '/verification_center': (context) => const VerificationCenter(),
+        '/super_admin': (context) => const SuperAdminShell(),
         '/referral': (context) => const ReferralView(),
         '/reviews': (context) {
           final args = ModalRoute.of(context)!.settings.arguments
@@ -588,12 +603,52 @@ class _AppShellState extends State<AppShell> {
     );
 
     final bool hideBottomNav = _isOverlayOpen || _isMessageSelectionMode;
+    final isCompactScreen = ResponsiveLayout.isCompact(context);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          baseScreen,
+          Row(
+            children: [
+              if (!isCompactScreen)
+                NavigationRail(
+                  selectedIndex: _screen.index,
+                  onDestinationSelected: (index) =>
+                      _goTo(_AppScreen.values[index]),
+                  labelType: NavigationRailLabelType.selected,
+                  backgroundColor: AppColors.white,
+                  destinations: const [
+                    NavigationRailDestination(
+                      icon: Icon(Icons.home_outlined),
+                      selectedIcon: Icon(Icons.home_rounded),
+                      label: Text('Home'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.search_outlined),
+                      selectedIcon: Icon(Icons.search_rounded),
+                      label: Text('Search'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.bookmark_border),
+                      selectedIcon: Icon(Icons.bookmark),
+                      label: Text('Saved'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.chat_bubble_outline_rounded),
+                      selectedIcon: Icon(Icons.chat_bubble_rounded),
+                      label: Text('Messages'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.person_outline),
+                      selectedIcon: Icon(Icons.person),
+                      label: Text('Profile'),
+                    ),
+                  ],
+                ),
+              Expanded(child: baseScreen),
+            ],
+          ),
           if (_showFilter) _buildFilterOverlay(),
           if (_selectedPropertyId != null) _buildPropertyDetailsOverlay(),
           if (_showPhotoGallery) _buildPhotoGalleryOverlay(),
@@ -601,21 +656,22 @@ class _AppShellState extends State<AppShell> {
           if (_showLocation) _buildLocationOverlay(),
           if (_showLandlordInfo) _buildLandlordInfoOverlay(),
           if (_selectedChatName != null) _buildChatOverlay(),
-          Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 16,
-            left: 24,
-            right: 24,
-            child: AnimatedSlide(
-              offset: hideBottomNav ? const Offset(0, 1.5) : Offset.zero,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutQuad,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: hideBottomNav ? 0.0 : 1.0,
-                child: _BottomNav(current: _screen, onTap: _goTo),
+          if (isCompactScreen)
+            Positioned(
+              bottom: MediaQuery.of(context).padding.bottom + 16,
+              left: 24,
+              right: 24,
+              child: AnimatedSlide(
+                offset: hideBottomNav ? const Offset(0, 1.5) : Offset.zero,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutQuad,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: hideBottomNav ? 0.0 : 1.0,
+                  child: _BottomNav(current: _screen, onTap: _goTo),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

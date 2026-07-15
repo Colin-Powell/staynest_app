@@ -1068,7 +1068,7 @@ class _StarRating extends StatelessWidget {
     required this.rating,
     this.size = 18,
     this.color = const Color(0xFFFBBF24),
-    this.backgroundColor = const Color(0xFFD1D5DB),
+    this.backgroundColor = const Color(0xFFE5E7EB),
   });
 
 

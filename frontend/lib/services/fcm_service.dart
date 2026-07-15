@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -50,6 +52,12 @@ class FCMService {
   GlobalKey<NavigatorState>? navigatorKey;
 
   Future<void> initialize() async {
+    if (kIsWeb || Firebase.apps.isEmpty) {
+      debugPrint(
+          '[FCM] skipped because Firebase is unavailable on this platform.');
+      return;
+    }
+
     try {
       FirebaseMessaging.onBackgroundMessage(
           _firebaseMessagingBackgroundHandler);
@@ -70,8 +78,9 @@ class FCMService {
 
       // 2. Setup Local Notifications for Foreground
       const androidInit = AndroidInitializationSettings(
-        '@mipmap/ic_launcher',
+        '@drawable/ic_notification',
       );
+
       const iosInit = DarwinInitializationSettings();
 
       await _localNotifications.initialize(
@@ -241,8 +250,7 @@ class FCMService {
           channelDescription: _channel.description,
           importance: _channel.importance,
           priority: Priority.high,
-          icon:
-              '@mipmap/ic_launcher', // Ensure this icon exists in android/app/src/main/res/mipmap
+          icon: '@drawable/ic_notification',
         ),
       ),
       payload: message.data['chatId']?.toString(),

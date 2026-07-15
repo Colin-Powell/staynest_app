@@ -254,16 +254,30 @@ class _EditProfileViewState extends State<EditProfileView>
                     ],
                   ),
                   child: ClipOval(
-                    child: _selectedImage != null
-                        ? Image.file(
-                            _selectedImage!,
-                            width: 120,
-                            height: 120,
-                            fit: BoxFit.cover,
-                          )
-                        : _buildAvatarWidget(
-                            AppSession.displayAvatar,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _selectedImage != null
+                            ? Image.file(
+                                _selectedImage!,
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                              )
+                            : _buildAvatarWidget(
+                                AppSession.displayAvatar,
+                              ),
+                        if (_isSaving && _selectedImage != null)
+                          Container(
+                            color: Colors.black.withValues(alpha: 102), // 0.4 opacity
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            ),
                           ),
+                      ],
+                    ),
                   ),
                 ),
 

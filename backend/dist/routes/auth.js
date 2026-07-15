@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
 import { env } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
+import { verifyOtp } from '../services/email.js';
 const router = Router();
 // Register new user
 router.post('/register', async (req, res, next) => {
@@ -101,7 +102,7 @@ router.post('/verify', requireAuth, async (req, res, next) => {
             return res.status(400).json({ error: 'Verification code is required.' });
         }
         const normalizedCode = code.trim();
-        if (normalizedCode != '624108') {
+        if (!verifyOtp(req.auth.email, normalizedCode)) {
             return res.status(400).json({ error: 'Invalid verification code.' });
         }
         const result = await query(`UPDATE users
