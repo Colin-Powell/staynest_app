@@ -121,4 +121,53 @@ router.put('/:id/fcm-token', requireAuth, async (req: Request, res: Response, ne
   }
 });
 
+router.get('/:id/favorites', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.params.id;
+    if (req.auth?.id !== userId) return res.status(403).json({ error: 'Forbidden' });
+
+    const result = await query(
+      `SELECT property_id FROM favorites WHERE user_id = $1`,
+      [userId]
+    );
+    res.json({ data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/:id/favorites', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.params.id;
+    if (req.auth?.id !== userId) return res.status(403).json({ error: 'Forbidden' });
+
+    const { propertyId } = req.body;
+    if (!propertyId) return res.status(400).json({ error: 'propertyId is required' });
+
+    await query(
+      `INSERT INTO favorites (user_id, property_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [userId, propertyId]
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:id/favorites/:propertyId', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.params.id;
+    const { propertyId } = req.params;
+    if (req.auth?.id !== userId) return res.status(403).json({ error: 'Forbidden' });
+
+    await query(
+      `DELETE FROM favorites WHERE user_id = $1 AND property_id = $2`,
+      [userId, propertyId]
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
