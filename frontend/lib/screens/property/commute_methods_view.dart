@@ -1453,15 +1453,7 @@ class _GlassContainer extends StatelessWidget {
   final double? height;
   final bool isNavigating;
 
-  const _GlassContainer({
-    required this.child,
-    required this.padding,
-    this.borderRadius,
-    this.blur = 20.0,
-    this.opacity = 0.55,
-    this.height,
-    this.isNavigating = false,
-  });
+  const _GlassContainer({required this.child, this.padding = EdgeInsets.zero, this.borderRadius, this.blur = 16.0, this.opacity = 0.1, this.borderWidth = 1.0});
 
   @override
   Widget build(BuildContext context) {

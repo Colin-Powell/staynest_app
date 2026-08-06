@@ -61,6 +61,15 @@ router.patch('/profile', requireAuth, async (req: Request, res: Response, next: 
   }
 });
 
+router.get('/recent-contacts', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Placeholder response for the frontend's fetchRecentContacts call
+    res.json({ data: { contacts: [] } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
