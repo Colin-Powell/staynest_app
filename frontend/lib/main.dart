@@ -245,7 +245,15 @@ class _PropertyAppState extends State<PropertyApp> {
               AppSession.setRole(r);
               Navigator.pushReplacementNamed(context, '/register_form');
             }),
-        '/register_form': (context) => const RegisterView(),
+        '/register_form': (context) => RegisterView(
+              onGoogleSignIn: () async {
+                final success =
+                    await GoogleAuthService.instance.signInWithGoogle();
+                if (success) {
+                  Navigator.pushReplacementNamed(context, '/home');
+                }
+              },
+            ),
         '/survey': (context) => const TenantSurveyView(),
         '/privacy': (context) => const PrivacyPolicyView(),
         '/otp': (context) => const OtpView(),

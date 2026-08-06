@@ -11,7 +11,9 @@ import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/responsive_layout.dart';
 
 class RegisterView extends StatefulWidget {
-  const RegisterView({super.key});
+  final VoidCallback? onGoogleSignIn;
+
+  const RegisterView({super.key, this.onGoogleSignIn});
 
   @override
   State<RegisterView> createState() => _RegisterViewState();
@@ -33,6 +35,7 @@ class _RegisterViewState extends State<RegisterView>
 
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _isGoogleSigningIn = false;
 
   bool get _isLandlord => AppSession.isLandlord;
 
@@ -205,6 +208,18 @@ class _RegisterViewState extends State<RegisterView>
           ),
         );
       }
+    }
+  }
+
+  // ── Actions ────────────────────────────────────────────────────────────────
+
+  Future<void> _handleGoogleSignIn() async {
+    if (_isGoogleSigningIn) return;
+    setState(() => _isGoogleSigningIn = true);
+    try {
+      widget.onGoogleSignIn?.call();
+    } finally {
+      if (mounted) setState(() => _isGoogleSigningIn = false);
     }
   }
 
@@ -539,7 +554,8 @@ class _RegisterViewState extends State<RegisterView>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           _SocialButton(
-                            onTap: () {},
+                            onTap: _handleGoogleSignIn,
+                            isLoading: _isGoogleSigningIn,
                             child: SvgPicture.asset(
                               'assets/images/google.svg',
                               width: 28,
@@ -718,9 +734,10 @@ class _InputFieldState extends State<_InputField> {
 // ── Social button ──────────────────────────────────────────────────────────
 
 class _SocialButton extends StatefulWidget {
-  const _SocialButton({required this.onTap, required this.child});
+  const _SocialButton({required this.onTap, required this.child, this.isLoading = false});
   final VoidCallback onTap;
   final Widget child;
+  final bool isLoading;
 
   @override
   State<_SocialButton> createState() => _SocialButtonState();
@@ -759,14 +776,21 @@ class _SocialButtonState extends State<_SocialButton>
       child: ScaleTransition(
         scale: _scale,
         child: Container(
-          width: 64,
-          height: 64,
+          width: 56,
+          height: 56,
           decoration: BoxDecoration(
-            color: Colors.white,
             shape: BoxShape.circle,
-            border: Border.all(color: _RegisterViewState._border, width: 1.4),
+            border: Border.all(color: _border),
           ),
-          child: Center(child: widget.child),
+          alignment: Alignment.center,
+          child: widget.isLoading
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                )
+              : widget.child,
+        ),
         ),
       ),
     );
