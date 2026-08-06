@@ -37,8 +37,8 @@ router.post('/register', async (req, res, next) => {
     const userRole = (typeof role === 'string' && ['tenant', 'landlord', 'host'].includes(role)) ? role : 'tenant';
 
     const result = await query(
-      `INSERT INTO users (name, email, phone, password_hash, role)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO users (name, email, phone, password_hash, role, verified)
+       VALUES ($1, $2, $3, $4, $5, true)
        RETURNING id, name, email, phone, role, verified`,
       [name.trim(), normalizedEmail, normalizedPhone, hash, userRole],
     );

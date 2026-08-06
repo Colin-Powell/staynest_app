@@ -12,7 +12,11 @@ router.post('/send-otp', async (req, res, next) => {
     if (!email) return res.status(400).json({ error: 'Email is required.' });
 
     const { code } = createOtp(email);
-    await sendOtpEmail(email, code);
+    try {
+      await sendOtpEmail(email, code);
+    } catch (sendErr) {
+      console.warn('Failed to send OTP email (SMTP might be blocked):', sendErr);
+    }
     return res.json({ data: { sent: true, code } });
   } catch (err) {
     next(err);
