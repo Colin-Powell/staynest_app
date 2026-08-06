@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { query } from '../db.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
+import { sendPushToTopic } from '../services/firebase.js';
 
 const router = Router();
 
@@ -127,6 +128,36 @@ router.patch('/kyc/:id', requireAuth, authorize('admin'), async (req: Request, r
     await query(`UPDATE users SET verified = $1 WHERE id = $2`, [status === 'approved', verification.user_id]);
 
     res.json({ data: verification });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Broadcast a general alert to all users (topic: 'alerts')
+router.post('/broadcast-alert', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { title, body, data } = req.body;
+    if (!title || !body) return res.status(400).json({ error: 'title and body are required' });
+
+    await sendPushToTopic('alerts', title, body, data);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Broadcast trending properties alert to all users (topic: 'trending')
+router.post('/broadcast-trending', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { title, body, data } = req.body;
+    
+    // In a real scenario, this could query the DB for the top booked/viewed properties and construct the message automatically.
+    // For now, it allows the admin to supply the message or fallback to a default.
+    const alertTitle = title || 'Trending Properties 🔥';
+    const alertBody = body || 'Check out the most popular properties this week on StayNest!';
+
+    await sendPushToTopic('trending', alertTitle, alertBody, data);
+    res.json({ ok: true });
   } catch (error) {
     next(error);
   }

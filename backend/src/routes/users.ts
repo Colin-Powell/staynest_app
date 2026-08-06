@@ -102,4 +102,23 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response,
   }
 });
 
+router.put('/:id/fcm-token', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.params.id;
+    if (req.auth?.id !== userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { fcmToken } = req.body;
+    if (!fcmToken) {
+      return res.status(400).json({ error: 'fcmToken is required' });
+    }
+
+    await query('UPDATE users SET fcm_token = $1 WHERE id = $2', [fcmToken, userId]);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

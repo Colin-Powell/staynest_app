@@ -4,6 +4,7 @@ import { getCache, setCache } from '../services/cache.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../config.js';
+import { sendPushToTopic } from '../services/firebase.js';
 
 const router = Router();
 
@@ -732,6 +733,15 @@ async function handleCreateProperty(req: Request, res: Response, next: NextFunct
     );
 
     console.log(`${logPrefix} success userId=${userId} propertyId=${result.rows[0]?.id}`);
+    
+    // Broadcast push notification asynchronously
+    sendPushToTopic(
+      'new_listings', 
+      'New Property Listed!', 
+      `${result.rows[0]?.title} is now available in ${result.rows[0]?.city}. Check it out!`,
+      { propertyId: result.rows[0]?.id }
+    ).catch(e => console.error('Failed to broadcast new listing push', e));
+
     res.status(201).json({ data: result.rows[0] });
   } catch (error) {
     console.error(`${logPrefix} failed userId=${userId} error=`, error);

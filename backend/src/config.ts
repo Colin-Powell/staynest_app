@@ -53,4 +53,5 @@ export const env = {
   smtpPass: process.env.SMTP_PASS || '',
   emailFrom: process.env.EMAIL_FROM || 'StayNest <no-reply@staynest.app>',
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  firebaseServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT || '',
 };
