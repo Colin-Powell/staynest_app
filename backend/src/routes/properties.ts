@@ -334,6 +334,36 @@ router.get('/:id/availability-check', async (req: Request, res: Response, next: 
   }
 });
 
+// Nearby properties based on lat, lng, and radius (default 5km)
+router.get('/nearby', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const lat = typeof req.query.lat === 'string' ? Number(req.query.lat) : undefined;
+    const lng = typeof req.query.lng === 'string' ? Number(req.query.lng) : undefined;
+    const radius = typeof req.query.radius === 'string' ? Number(req.query.radius) : 5;
+
+    if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) {
+      return res.status(400).json({ error: 'lat and lng are required and must be valid numbers.' });
+    }
+
+    const result = await query(
+      `SELECT ${PROPERTY_SELECT},
+              (6371 * acos(cos(radians($1)) * cos(radians(p.lat)) * cos(radians(p.lng) - radians($2)) + sin(radians($1)) * sin(radians(p.lat)))) AS distance
+       FROM properties p
+       LEFT JOIN users u ON u.id = p.landlord_id
+       WHERE p.lat IS NOT NULL AND p.lng IS NOT NULL
+         AND (6371 * acos(cos(radians($1)) * cos(radians(p.lat)) * cos(radians(p.lng) - radians($2)) + sin(radians($1)) * sin(radians(p.lat)))) <= $3
+       ORDER BY distance ASC
+       LIMIT 50`,
+      [lat, lng, radius]
+    );
+
+    const rows = result.rows.map((row) => normalizePropertyRow(row as Record<string, unknown>));
+    res.json({ data: rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // /:id must be last among GET routes
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {

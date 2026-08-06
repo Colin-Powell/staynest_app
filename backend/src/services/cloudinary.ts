@@ -35,7 +35,7 @@ export async function uploadToCloudinary(
     const stream = cloudinary.uploader.upload_stream(
       {
         folder,
-        resource_type: 'auto',
+        resource_type: 'image',
         public_id: `${Date.now()}-${baseName}`,
       },
       (error, result) => {
