@@ -1,10 +1,11 @@
-import admin from 'firebase-admin';
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
 import { env } from '../config.js';
 import { query } from '../db.js';
 import fs from 'fs';
 
 function initFirebase() {
-  if (admin.apps.length > 0) return;
+  if (getApps().length > 0) return;
 
   if (env.firebaseServiceAccount) {
     try {
@@ -17,8 +18,8 @@ function initFirebase() {
         serviceAccount = JSON.parse(Buffer.from(env.firebaseServiceAccount, 'base64').toString('utf8'));
       }
       
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
+      initializeApp({
+        credential: cert(serviceAccount),
       });
       console.log('Firebase Admin initialized successfully.');
     } catch (e) {
@@ -37,7 +38,7 @@ export async function sendPushToUser(
   body: string,
   data?: Record<string, string>
 ): Promise<boolean> {
-  if (admin.apps.length === 0) return false;
+  if (getApps().length === 0) return false;
 
   try {
     const userRes = await query('SELECT fcm_token, settings FROM users WHERE id = $1', [userId]);
@@ -51,7 +52,7 @@ export async function sendPushToUser(
       if (settings.push === false) return false;
     }
 
-    await admin.messaging().send({
+    await getMessaging().send({
       token: user.fcm_token,
       notification: { title, body },
       data,
@@ -69,10 +70,10 @@ export async function sendPushToTopic(
   body: string,
   data?: Record<string, string>
 ): Promise<boolean> {
-  if (admin.apps.length === 0) return false;
+  if (getApps().length === 0) return false;
 
   try {
-    await admin.messaging().send({
+    await getMessaging().send({
       topic,
       notification: { title, body },
       data,
