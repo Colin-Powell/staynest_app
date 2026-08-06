@@ -74,15 +74,18 @@ CREATE TABLE IF NOT EXISTS favorites (
 
 ALTER TABLE favorites ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS favorites_owner_policy ON favorites;
 CREATE POLICY favorites_owner_policy ON favorites
   USING (user_id = current_setting('app.current_user_id', true)::uuid)
   WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
 
 ALTER TABLE properties ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS properties_read_all ON properties;
 CREATE POLICY properties_read_all ON properties
   USING (true);
 
+DROP POLICY IF EXISTS properties_manage_own ON properties;
 CREATE POLICY properties_manage_own ON properties
   USING (landlord_id = current_setting('app.current_user_id', true)::uuid)
   WITH CHECK (landlord_id = current_setting('app.current_user_id', true)::uuid);
@@ -328,6 +331,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to call the function after any INSERT, UPDATE, or DELETE on the reviews table
+DROP TRIGGER IF EXISTS after_review_change ON reviews;
 CREATE TRIGGER after_review_change
 AFTER INSERT OR UPDATE OR DELETE ON reviews
 FOR EACH ROW
