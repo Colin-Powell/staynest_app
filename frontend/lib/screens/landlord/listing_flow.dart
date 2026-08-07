@@ -15,6 +15,23 @@ import 'package:property_app/theme.dart';
 import 'package:property_app/services/image_upload_service.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/geocoding.dart';
+import 'package:property_app/services/uploads.dart';
+
+class PickedPhoto {
+  final File file;
+  String? url;
+  double progress;
+  bool isUploading;
+  String? error;
+
+  PickedPhoto(
+    this.file, {
+    this.url,
+    this.progress = 0.0,
+    this.isUploading = false,
+    this.error,
+  });
+}
 
 class AddListingFlow extends StatefulWidget {
   const AddListingFlow({super.key});
@@ -99,7 +116,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   };
 
   // --- Step 4: Photos ---
-  final List<File> _photos = [];
+  final List<PickedPhoto> _pickedPhotos = [];
 
   // --- Step 5: Pricing and Details ---
   final _rentPrice = TextEditingController();
@@ -112,7 +129,6 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
   // FIX: build a repo with a fresh token every time we need it
   RemoteDatabaseRepository _buildRepo() {
-    final token = AppSession.apiToken;
     return RemoteDatabaseRepository(
       apiClient: HttpJsonClient(),
     );
@@ -220,6 +236,38 @@ class _AddListingFlowState extends State<AddListingFlow> {
     }
   }
 
+  Future<void> _uploadPickedPhoto(PickedPhoto photo) async {
+    setState(() {
+      photo.isUploading = true;
+      photo.progress = 0.0;
+    });
+
+    try {
+      final compressed = await ImageUploadService.compressImageFile(photo.file);
+      final task = UploadsService.uploadFileWithProgress(compressed, (progress) {
+        if (!mounted) return;
+        setState(() {
+          photo.progress = progress;
+        });
+      });
+      final url = await task.future;
+      if (mounted) {
+        setState(() {
+          photo.url = url;
+          photo.isUploading = false;
+          photo.progress = 1.0;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          photo.error = e.toString();
+          photo.isUploading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _publishListing() async {
     if (AppSession.currentUserVerified != true) {
       await _saveDraft(showConfirmation: false);
@@ -278,7 +326,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
       return;
     }
 
-    if (_photos.isEmpty) {
+    if (_pickedPhotos.isEmpty) {
       ModalUtils.showError(context, "Photos Required",
           "Please add at least one photo of your amazing property.");
       return;
@@ -295,29 +343,20 @@ class _AddListingFlowState extends State<AddListingFlow> {
     setState(() {
       _submitting = true;
       _isUploadingImages = true;
-      _uploadProgress = 0.0;
-      _imageUploadStatus = _photos
-          .map((photo) => UploadProgress(
-              file: photo, progress: 0.0, url: null, status: 'queued'))
-          .toList();
+      _uploadProgress = 1.0;
     });
 
     try {
-      // 1) Compress selected photos and upload them in parallel
-      final compressedPhotos =
-          await ImageUploadService.compressSelectedImages(_photos);
-      final uploadedUrls =
-          await ImageUploadService.uploadImages(compressedPhotos, (progress) {
-        if (!mounted) return;
-        setState(() {
-          _imageUploadStatus = progress;
-          _uploadProgress = progress.isEmpty
-              ? 0.0
-              : progress.map((item) => item.progress).reduce((a, b) => a + b) /
-                  progress.length;
-        });
-      });
-
+      // 1) Verify all photos are uploaded
+      if (_pickedPhotos.any((p) => p.isUploading)) {
+        throw Exception('Please wait for all photos to finish uploading.');
+      }
+      final failedUploads = _pickedPhotos.where((p) => p.error != null).toList();
+      if (failedUploads.isNotEmpty) {
+        throw Exception('Some photos failed to upload. Please remove them or try again.');
+      }
+      
+      final uploadedUrls = _pickedPhotos.map((p) => p.url!).toList();
       if (uploadedUrls.isEmpty) throw Exception('No photos uploaded');
 
       // 2) Build address + geocode
@@ -392,7 +431,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
           Navigator.pop(context);
         },
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('Property publish error: $e');
+      debugPrint('Stack trace: $stackTrace');
       if (mounted) {
         final message = ApiResult.mapError(e);
         ModalUtils.showError(
@@ -422,7 +463,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
     if (_currentStep == 2 && !(_step2Key.currentState?.validate() ?? false)) {
       return;
     }
-    if (_currentStep == 4 && _photos.isEmpty) {
+    if (_currentStep == 4 && _pickedPhotos.isEmpty) {
       ModalUtils.showError(context, "Photos Required",
           "Let's show off your property! Please upload at least one photo to continue.");
       return;
@@ -819,16 +860,19 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
                 childAspectRatio: 1),
-            itemCount: _photos.length + 1,
+            itemCount: _pickedPhotos.length + 1,
             itemBuilder: (context, index) {
-              if (index == _photos.length) {
+              if (index == _pickedPhotos.length) {
                 return GestureDetector(
                   onTap: () async {
                     final picked =
                         await ImagePicker().pickMultiImage(imageQuality: 75);
                     if (picked.isNotEmpty) {
-                      setState(() =>
-                          _photos.addAll(picked.map((x) => File(x.path))));
+                      for (final x in picked) {
+                        final photo = PickedPhoto(File(x.path));
+                        setState(() => _pickedPhotos.add(photo));
+                        _uploadPickedPhoto(photo);
+                      }
                     }
                   },
                   child: Container(
@@ -852,25 +896,49 @@ class _AddListingFlowState extends State<AddListingFlow> {
                   ),
                 );
               }
+              final photo = _pickedPhotos[index];
               return Stack(
                 fit: StackFit.expand,
                 children: [
                   ClipRRect(
                       borderRadius: BorderRadius.circular(16),
-                      child: Image.file(_photos[index], fit: BoxFit.cover)),
+                      child: Image.file(photo.file, fit: BoxFit.cover)),
+                  if (photo.isUploading)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black45,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          value: photo.progress > 0 ? photo.progress : null,
+                          valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                    ),
+                  if (photo.error != null)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black45,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.error, color: Colors.redAccent, size: 32),
+                      ),
+                    ),
                   Positioned(
                     top: 8,
                     right: 8,
                     child: GestureDetector(
-                      onTap: () => setState(() => _photos.removeAt(index)),
+                      onTap: () => setState(() => _pickedPhotos.removeAt(index)),
                       child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                              color: Colors.black54, shape: BoxShape.circle),
-                          child: const Icon(Icons.close,
-                              color: Colors.white, size: 18)),
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                            color: Colors.white, shape: BoxShape.circle),
+                        child: const Icon(Icons.close, size: 16),
+                      ),
                     ),
-                  )
+                  ),
                 ],
               );
             },
@@ -1047,8 +1115,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 ClipRRect(
                   borderRadius:
                       const BorderRadius.horizontal(left: Radius.circular(24)),
-                  child: _photos.isNotEmpty
-                      ? Image.file(_photos.first,
+                  child: _pickedPhotos.isNotEmpty
+                      ? Image.file(_pickedPhotos.first.file,
                           width: 120, height: 120, fit: BoxFit.cover)
                       : Container(
                           width: 120,
