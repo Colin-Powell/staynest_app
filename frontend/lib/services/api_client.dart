@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -11,9 +11,7 @@ class ApiException implements Exception {
   ApiException(this.statusCode, this.message, {this.responseBody});
 
   @override
-  String toString() {
-    return 'ApiException(statusCode: $statusCode, message: $message, responseBody: $responseBody)';
-  }
+  String toString() => message;
 }
 
 class ApiClient {

@@ -414,11 +414,9 @@ class _RegisterViewState extends State<RegisterView>
                             slide: _bottomSlide,
                             child: _InputField(
                               controller: _taxIdController,
-                              hint: 'Business tax ID',
+                              hint: 'Business tax ID (Optional)',
                               keyboardType: TextInputType.text,
-                              validator: (v) => (v == null || v.trim().isEmpty)
-                                  ? 'Enter your tax ID'
-                                  : null,
+                              validator: (v) => null,
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -748,6 +746,8 @@ class _SocialButtonState extends State<_SocialButton>
   late final AnimationController _ctrl;
   late final Animation<double> _scale;
 
+  Color? get _border => null;
+
   @override
   void initState() {
     super.initState();
@@ -780,7 +780,7 @@ class _SocialButtonState extends State<_SocialButton>
           height: 56,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: _border),
+            border: Border.all(color: _border ?? Colors.transparent),
           ),
           alignment: Alignment.center,
           child: widget.isLoading
@@ -790,7 +790,6 @@ class _SocialButtonState extends State<_SocialButton>
                   child: CircularProgressIndicator(strokeWidth: 2.5),
                 )
               : widget.child,
-        ),
         ),
       ),
     );

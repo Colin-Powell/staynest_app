@@ -437,32 +437,10 @@ class _LoginPageShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!isDesktop) {
-      return Scaffold(
-        backgroundColor: Colors.white,
-        resizeToAvoidBottomInset: true,
-        body: child,
-      );
-    }
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       resizeToAvoidBottomInset: true,
-      body: Row(
-        children: [
-          const Expanded(
-            flex: 6,
-            child: _LoginBrandPanel(),
-          ),
-          Expanded(
-            flex: 5,
-            child: ColoredBox(
-              color: Colors.white,
-              child: child,
-            ),
-          ),
-        ],
-      ),
+      body: child,
     );
   }
 }

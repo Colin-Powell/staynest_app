@@ -194,16 +194,15 @@ class _VerificationCenterState extends State<VerificationCenter> {
                             fontSize: 16,
                             fontWeight: FontWeight.w600)),
                   ),
-                  if (kDebugMode)
-                    TextButton(
-                      onPressed: () =>
-                          Navigator.pushReplacementNamed(context, '/portal'),
-                      child: Text('Skip Verification (Debug)',
-                          style: GoogleFonts.poppins(
-                              color: AppColors.primary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600)),
-                    ),
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.pushReplacementNamed(context, '/portal'),
+                    child: Text('Skip for now (Admin Approval Required)',
+                        style: GoogleFonts.poppins(
+                            color: AppColors.primary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600)),
+                  ),
                 ],
               ),
             ),

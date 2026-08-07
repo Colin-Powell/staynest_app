@@ -102,14 +102,17 @@ class HttpJsonClient {
     }
   }
 
-  /// Creates an ApiException from an http.Response.
   ApiException _toApiException(http.Response response) {
     String message = 'Request failed with status ${response.statusCode}';
     dynamic body;
     try {
       body = jsonDecode(response.body);
-      if (body is Map && body['message'] != null) {
-        message = body['message'].toString();
+      if (body is Map) {
+        if (body['error'] != null) {
+          message = body['error'].toString();
+        } else if (body['message'] != null) {
+          message = body['message'].toString();
+        }
       }
     } catch (_) {}
 

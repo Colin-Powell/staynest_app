@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:property_app/session/app_session.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,8 +50,29 @@ abstract class _AppColor {
 
 // ─── Splash View ─────────────────────────────────────────────────────────────
 
-class SplashView extends StatelessWidget {
+class SplashView extends StatefulWidget {
   const SplashView({super.key});
+
+  @override
+  State<SplashView> createState() => _SplashViewState();
+}
+
+class _SplashViewState extends State<SplashView> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (AppSession.apiToken != null && AppSession.apiToken!.isNotEmpty) {
+        if (!AppSession.currentUserVerified) {
+          Navigator.pushReplacementNamed(context, '/otp');
+        } else if (AppSession.isLandlord) {
+          Navigator.pushReplacementNamed(context, '/portal');
+        } else {
+          Navigator.pushReplacementNamed(context, '/home');
+        }
+      }
+    });
+  }
 
   // ─── Navigation helpers ─────────────────────
   void _onGetStarted(BuildContext context) =>

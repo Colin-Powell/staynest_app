@@ -389,8 +389,10 @@ class RemoteDatabaseRepository {
       'email': email,
       'password': password,
       'role': role,
-      'businessFields': businessFields,
     };
+    if (businessFields != null) {
+      payload.addAll(businessFields);
+    }
 
     payload.removeWhere((_, v) => v == null);
 
