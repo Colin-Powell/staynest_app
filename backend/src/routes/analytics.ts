@@ -224,7 +224,7 @@ router.get('/landlord-overview', requireAuth, async (req: Request, res: Response
       query(
         `SELECT
            COALESCE(SUM(pa.views), 0) AS views,
-           COALESCE(SUM(pa.unique_viewers), 0) AS unique_viewers,
+           COALESCE(SUM(pa.unique_views), 0) AS unique_viewers,
            COALESCE(SUM(pa.saves), 0) AS saves,
            COALESCE(SUM(pa.shares), 0) AS shares,
            COALESCE(SUM(pa.impressions), 0) AS impressions,

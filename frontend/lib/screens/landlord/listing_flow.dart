@@ -373,12 +373,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'photos': uploadedUrls,
       };
 
-      final documents = {'photos': uploadedUrls};
-
-      await repo.submitVerification(verificationPayload: {
-        'documents': documents,
-        'property': propertyVerificationPayload,
-      });
+      await repo.submitVerification(
+          verificationPayload: {
+            'documents': uploadedUrls,
+            'property': propertyVerificationPayload,
+          });
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_draftKey);
