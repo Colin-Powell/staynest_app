@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/screens/communication/notifications_view.dart';
@@ -562,10 +563,29 @@ class _HomeViewState extends State<HomeView> {
         ),
         if (_filteredNearby.isEmpty)
           _loadingNearby
-              ? const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(
-                      child: CircularProgressIndicator(color: _primaryText)),
+              ? SizedBox(
+                  height: 380,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.only(left: 24),
+                    itemCount: 3,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 16),
+                        child: Shimmer.fromColors(
+                          baseColor: Colors.grey.shade200,
+                          highlightColor: Colors.grey.shade100,
+                          child: Container(
+                            width: 280,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(32),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 )
               : Padding(
                   padding:
@@ -640,10 +660,23 @@ class _HomeViewState extends State<HomeView> {
           ),
           const SizedBox(height: 16),
           if (_loadingRecommended)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child:
-                  Center(child: CircularProgressIndicator(color: _primaryText)),
+            Column(
+              children: List.generate(3, (index) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: Shimmer.fromColors(
+                    baseColor: Colors.grey.shade200,
+                    highlightColor: Colors.grey.shade100,
+                    child: Container(
+                      height: 140,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                  ),
+                );
+              }),
             )
           else if (_filteredRecommended.isEmpty)
             Padding(

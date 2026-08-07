@@ -96,6 +96,7 @@ Future<void> main() async {
   if (!kIsWeb) {
     try {
       await FCMService.instance.initialize();
+      await FCMService.instance.subscribeToTopic('new_listings');
     } catch (err, stackTrace) {
       debugPrint('FCM initialization failed; continuing without it: $err');
       debugPrintStack(stackTrace: stackTrace);

@@ -1,7 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:property_app/widgets/skeleton_property_card.dart';
 
 import 'package:property_app/models/property.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
@@ -102,10 +104,7 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
             opacity: _fadeAnim,
             child: ScaleTransition(
               scale: _scaleAnim,
-              child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(color: primaryGreen))
-                  : CustomScrollView(
+              child: CustomScrollView(
                       slivers: [
                         // Header
                         SliverToBoxAdapter(
@@ -251,10 +250,34 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
                           ),
                         ),
 
-                        // Property Cards List (filtered)
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
-                          sliver: SliverList(
+                        // Property Cards List (filtered or loading)
+                        if (_loading)
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
+                            sliver: SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) => const Padding(
+                                  padding: EdgeInsets.only(bottom: 20),
+                                  child: SkeletonPropertyCard(width: double.infinity, margin: EdgeInsets.zero),
+                                ),
+                                childCount: 3,
+                              ),
+                            ),
+                          )
+                        else if (_visibleProperties.isEmpty)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 40),
+                              child: Center(
+                                child: Text('No properties found.',
+                                    style: GoogleFonts.poppins(color: textLight)),
+                              ),
+                            ),
+                          )
+                        else
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
+                            sliver: SliverList(
                             delegate: SliverChildBuilderDelegate(
                               (context, index) {
                                 final property = _visibleProperties[index];

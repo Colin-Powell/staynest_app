@@ -99,13 +99,7 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
           ),
         ],
       ),
-      body: _loading
-          ? Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-              ),
-            )
-          : RefreshIndicator(
+      body: RefreshIndicator(
               onRefresh: _loadVerificationStatus,
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
@@ -228,6 +222,23 @@ class _LandlordDashboardViewState extends State<LandlordDashboardView> {
   }
 
   Widget _buildVerificationCard() {
+    if (_loading) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE4E6EF), width: 1),
+        ),
+        child: const Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      );
+    }
+
     final isVerified = _verificationStatus?['status']?.toString().toLowerCase() == 'approved';
     final isRejected = _verificationStatus?['status']?.toString().toLowerCase() == 'rejected';
 
