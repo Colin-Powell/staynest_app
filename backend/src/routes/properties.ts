@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { query } from '../db.js';
-import { getCache, setCache } from '../services/cache.js';
+import { getCache, setCache, clearCachePattern } from '../services/cache.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../config.js';
@@ -741,6 +741,9 @@ async function handleCreateProperty(req: Request, res: Response, next: NextFunct
       `${result.rows[0]?.title} is now available in ${result.rows[0]?.city}. Check it out!`,
       { propertyId: result.rows[0]?.id }
     ).catch(e => console.error('Failed to broadcast new listing push', e));
+
+    // Clear the properties cache so tenants see the new listing immediately
+    clearCachePattern('properties.all');
 
     res.status(201).json({ data: result.rows[0] });
   } catch (error) {

@@ -29,3 +29,12 @@ export function setCache<T>(key: string, value: T, ttlMs: number) {
 export function clearCache(key: string) {
   cache.delete(key);
 }
+
+export function clearCachePattern(pattern: string) {
+  for (const key of cache.keys()) {
+    if (key.startsWith(pattern)) {
+      cache.delete(key);
+    }
+  }
+}
+
