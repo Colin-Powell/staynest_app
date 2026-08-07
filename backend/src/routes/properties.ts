@@ -728,7 +728,7 @@ async function handleCreateProperty(req: Request, res: Response, next: NextFunct
     const result = await query(
       `INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, landlord_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, $15)
-       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, status, images, amenities, lat, lng`,
+       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng`,
       insertArgs,
     );
 
