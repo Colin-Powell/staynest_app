@@ -560,7 +560,7 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                     textBaseline: TextBaseline.alphabetic,
                     children: [
                       Text(
-                        'Kes. ${prop.price ~/ 1000}k',
+                        'Kes. ${prop.price}',
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           fontWeight: FontWeight.w900,

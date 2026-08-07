@@ -974,7 +974,7 @@ class _PropertyDrawerState extends State<_PropertyDrawer> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Ksh. ${prop.price ~/ 1000}k',
+                                  'Ksh. ${prop.price}',
                                   style: GoogleFonts.poppins(
                                       fontSize: 24,
                                       fontWeight: FontWeight.w900,

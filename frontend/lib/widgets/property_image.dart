@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:property_app/utils/property_image_url.dart';
 
+int? sanitizeImageDimension(double? value) {
+  if (value == null || value.isNaN || value.isInfinite || value <= 0) {
+    return null;
+  }
+
+  return value.toInt();
+}
+
 Widget buildPropertyImage(
   String imagePath, {
   double? width,
@@ -29,13 +37,16 @@ Widget buildPropertyImage(
   }
 
   if (isResolvableNetworkImage(resolved)) {
+    final safeWidth = sanitizeImageDimension(width);
+    final safeHeight = sanitizeImageDimension(height);
+
     return Image.network(
       resolved,
-      width: width,
-      height: height,
+      width: safeWidth?.toDouble(),
+      height: safeHeight?.toDouble(),
       fit: fit,
-      cacheWidth: width != null ? (width * 2).toInt() : null,
-      cacheHeight: height != null ? (height * 2).toInt() : null,
+      cacheWidth: safeWidth != null ? (safeWidth * 2) : null,
+      cacheHeight: safeHeight != null ? (safeHeight * 2) : null,
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
         return placeholder;

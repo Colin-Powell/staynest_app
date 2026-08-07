@@ -64,9 +64,9 @@ class PropertyCard extends StatelessWidget {
                                 color: const Color(0xFFE0F2FE),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Text(
-                                'Crowd Sourced',
-                                style: TextStyle(
+                              child: Text(
+                                property.agent.name,
+                                style: const TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
                                   color: Color(0xFF0369A1),

@@ -83,9 +83,14 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
       return res.status(400).json({ error: 'eventType and propertyId are required.' });
     }
 
-    const propertyExists = await query('SELECT 1 FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
+    const propertyExists = await query('SELECT landlord_id FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
     if (propertyExists.rowCount === 0) {
       return res.status(404).json({ error: 'Property not found.' });
+    }
+
+    if (userId && userId === propertyExists.rows[0].landlord_id) {
+      // Don't track interactions if the landlord is viewing their own property
+      return res.status(200).json({ ok: true, ignored: true, reason: 'landlord_own_property' });
     }
 
     await query('BEGIN');
@@ -94,15 +99,26 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
       const isSaveEvent = eventType === 'property_save';
 
       let isFirstAction = true;
-      if (userId && propertyId && (isViewEvent || isSaveEvent)) {
-        const priorCheck = await query(
-          `SELECT 1 FROM engagement_events 
-           WHERE user_id = $1 AND property_id = $2 
-             AND event_type ${isViewEvent ? "IN ('property_view', 'property_detail_view')" : "= 'property_save'"}
-           LIMIT 1`,
-          [userId, propertyId],
-        );
-        isFirstAction = (priorCheck.rowCount ?? 0) === 0;
+      if (isViewEvent || isSaveEvent) {
+        if (userId) {
+          const priorCheck = await query(
+            `SELECT 1 FROM engagement_events 
+             WHERE user_id = $1 AND property_id = $2 
+               AND event_type ${isViewEvent ? "IN ('property_view', 'property_detail_view')" : "= 'property_save'"}
+             LIMIT 1`,
+            [userId, propertyId],
+          );
+          isFirstAction = (priorCheck.rowCount ?? 0) === 0;
+        } else if (sessionId) {
+          const priorCheck = await query(
+            `SELECT 1 FROM engagement_events 
+             WHERE session_id = $1 AND property_id = $2 
+               AND event_type ${isViewEvent ? "IN ('property_view', 'property_detail_view')" : "= 'property_save'"}
+             LIMIT 1`,
+            [sessionId, propertyId],
+          );
+          isFirstAction = (priorCheck.rowCount ?? 0) === 0;
+        }
       }
 
       await query(

@@ -1,5 +1,5 @@
 /// UI filter chips shown on the home screen.
-const homeCategoryFilters = ['Apertments', 'Bedsitter', 'Single Room'];
+const homeCategoryFilters = ['All', 'Apartments', 'Bedsitter', 'Single Room'];
 
 /// Listing-flow / backend category values landlords can pick.
 const listingCategories = [
@@ -40,7 +40,7 @@ String? uiFilterForCategory(String category) {
     'single',
   };
 
-  if (apartmentKeys.contains(key)) return 'Apertments';
+  if (apartmentKeys.contains(key)) return 'Apartments';
   if (bedsitterKeys.contains(key)) return 'Bedsitter';
   if (singleRoomKeys.contains(key)) return 'Single Room';
   return null;
@@ -48,6 +48,8 @@ String? uiFilterForCategory(String category) {
 
 /// Whether [propertyCategory] should appear under the selected [uiFilter] chip.
 bool categoryMatchesUiFilter(String propertyCategory, String uiFilter) {
+  if (uiFilter == 'All') return true;
+  
   final mapped = uiFilterForCategory(propertyCategory);
   if (mapped != null) return mapped == uiFilter;
 
@@ -58,6 +60,6 @@ bool categoryMatchesUiFilter(String propertyCategory, String uiFilter) {
 
 String formatPropertyPrice(int price) {
   if (price <= 0) return 'Kes. —';
-  if (price >= 1000) return 'Kes. ${price ~/ 1000}k';
+  if (price >= 1000) return 'Kes. ';
   return 'Kes. $price';
 }

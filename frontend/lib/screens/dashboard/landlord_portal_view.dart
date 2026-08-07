@@ -1,7 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:property_app/widgets/skeleton_property_card.dart';
 
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/verification_api.dart';
@@ -277,7 +279,16 @@ case 'Bookings':
 
   Widget _buildBodyContent() {
     if (_isLoadingStatus) {
-      return const Center(child: CircularProgressIndicator());
+      return ListView.builder(
+        padding: const EdgeInsets.all(24),
+        itemCount: 3,
+        itemBuilder: (context, index) {
+          return const Padding(
+            padding: EdgeInsets.only(bottom: 20),
+            child: SkeletonPropertyCard(width: double.infinity, margin: EdgeInsets.zero),
+          );
+        },
+      );
     }
 
     if (!_isLandlordRole) {

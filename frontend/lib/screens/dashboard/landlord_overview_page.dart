@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:property_app/widgets/skeleton_property_card.dart';
 import 'package:property_app/screens/dashboard/landlord_notifications_page.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/properties_api.dart';
@@ -81,7 +82,7 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (_isLoading && false) {
       return const Center(
         child: CircularProgressIndicator(color: textGreen),
       );
@@ -238,7 +239,7 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
 
             // --- RECENT PROPERTIES ---
             Text(
-              _properties.isEmpty ? 'No Properties Yet' : 'Your Properties',
+              _isLoading ? 'Your Properties' : (_properties.isEmpty ? 'No Properties Yet' : 'Your Properties'),
               style: GoogleFonts.poppins(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
@@ -246,7 +247,19 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
               ),
             ),
             const SizedBox(height: 16),
-            if (_properties.isEmpty)
+            if (_isLoading)
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: 2,
+                itemBuilder: (context, index) {
+                  return const Padding(
+                    padding: EdgeInsets.only(bottom: 20),
+                    child: SkeletonPropertyCard(width: double.infinity, margin: EdgeInsets.zero),
+                  );
+                },
+              )
+            else if (_properties.isEmpty)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 32.0),

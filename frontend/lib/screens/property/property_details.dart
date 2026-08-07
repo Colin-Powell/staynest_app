@@ -268,7 +268,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                 textBaseline: TextBaseline.alphabetic,
                                 children: [
                                   Text(
-                                    'Kes. ${widget.property.price ~/ 1000}k',
+                                    'Kes. ${widget.property.price}',
                                     style: GoogleFonts.poppins(
                                       fontSize: 26,
                                       fontWeight: FontWeight.w900,
