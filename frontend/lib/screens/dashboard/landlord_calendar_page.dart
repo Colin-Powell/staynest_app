@@ -337,7 +337,10 @@ class _GlassContainer extends StatelessWidget {
   final double opacity = 0.55;
   final double borderWidth = 1.5;
 
-  const _GlassContainer({required this.child, this.padding = EdgeInsets.zero, this.borderRadius, this.blur = 16.0, this.opacity = 0.1, this.borderWidth = 1.0});
+  const _GlassContainer({
+    required this.child,
+    required this.padding,
+  });
 
   @override
   Widget build(BuildContext context) {

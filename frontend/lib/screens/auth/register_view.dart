@@ -780,7 +780,7 @@ class _SocialButtonState extends State<_SocialButton>
           height: 56,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+            border: Border.all(color: _border),
           ),
           alignment: Alignment.center,
           child: widget.isLoading
@@ -790,6 +790,7 @@ class _SocialButtonState extends State<_SocialButton>
                   child: CircularProgressIndicator(strokeWidth: 2.5),
                 )
               : widget.child,
+        ),
         ),
       ),
     );
