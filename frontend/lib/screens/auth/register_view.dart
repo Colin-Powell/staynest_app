@@ -178,7 +178,7 @@ class _RegisterViewState extends State<RegisterView>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Registration successful. Please enter the OTP.'),
+            content: Text('Registration successful! Logging you in...'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -190,9 +190,9 @@ class _RegisterViewState extends State<RegisterView>
 
       if (mounted) {
         setState(() => _isLoading = false);
-        // Landlords go directly to OTP after registration; tenants continue to the survey
+        // Landlords bypass OTP since SMTP is disabled; tenants continue to the survey
         if (AppSession.isLandlord) {
-          Navigator.pushReplacementNamed(context, '/otp');
+          Navigator.pushReplacementNamed(context, '/portal');
         } else {
           Navigator.pushReplacementNamed(context, '/survey');
         }
