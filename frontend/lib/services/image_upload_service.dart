@@ -48,7 +48,7 @@ class ImageUploadService {
     final tempDir = await getTemporaryDirectory();
     final targetPath = path.join(
       tempDir.path,
-      'staynest_compressed_${DateTime.now().millisecondsSinceEpoch}_${path.basename(input.path)}',
+      'staynest_compressed_${DateTime.now().millisecondsSinceEpoch}_${path.basenameWithoutExtension(input.path)}.webp',
     );
 
     final xfile = await FlutterImageCompress.compressAndGetFile(

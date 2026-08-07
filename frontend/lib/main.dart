@@ -259,9 +259,11 @@ class _PropertyAppState extends State<PropertyApp> {
         '/otp': (context) => const OtpView(),
         '/home': (context) => const AppShell(),
         '/landlord_dashboard': (context) => LandlordDashboardView(
-              onLogout: () {
-                AppSession.reset();
-                Navigator.pushReplacementNamed(context, '/');
+              onLogout: () async {
+                await AppSession.reset();
+                if (context.mounted) {
+                  Navigator.pushReplacementNamed(context, '/');
+                }
               },
               onAddProperty: () =>
                   Navigator.pushNamed(context, '/list_property'),
@@ -302,6 +304,12 @@ class _PropertyAppState extends State<PropertyApp> {
                     break;
                   default:
                     break;
+                }
+              },
+              onLogout: () async {
+                await AppSession.reset();
+                if (context.mounted) {
+                  Navigator.pushReplacementNamed(context, '/');
                 }
               },
             ),
@@ -367,10 +375,12 @@ class _PropertyAppState extends State<PropertyApp> {
             HelpSupportView(onBack: () => Navigator.pop(context)),
         '/settings': (context) => SettingView(
               onBack: () => Navigator.pop(context),
-              onLogout: () {
-                AppSession.reset();
+              onLogout: () async {
+                await AppSession.reset();
                 // Consider clearing FCM token from backend on logout
-                Navigator.pushReplacementNamed(context, '/');
+                if (context.mounted) {
+                  Navigator.pushReplacementNamed(context, '/');
+                }
               },
               onItemTap: (title) {
                 if (title == 'Help & Support') {
@@ -749,7 +759,12 @@ class _AppShellState extends State<AppShell> {
                 break;
             }
           },
-          onLogout: () => Navigator.pushReplacementNamed(context, '/'),
+          onLogout: () async {
+            await AppSession.reset();
+            if (context.mounted) {
+              Navigator.pushReplacementNamed(context, '/');
+            }
+          },
           onListProperty: () => Navigator.pushNamed(context, '/list_property'),
           onVerificationCenter: () =>
               Navigator.pushNamed(context, '/verification_center'),

@@ -295,18 +295,19 @@ class _ProfileViewState extends State<ProfileView>
                           ),
                         ),
 
-                        _buildStaggered(
-                          index: 10,
-                          child: _MenuItem(
-                            icon: Icons.add_business_rounded,
-                            label: 'List a Property',
-                            onTap: widget.onListProperty ??
-                                () {
-                                  Navigator.pushNamed(
-                                      context, '/list_property');
-                                },
+                        if (AppSession.isLandlord)
+                          _buildStaggered(
+                            index: 10,
+                            child: _MenuItem(
+                              icon: Icons.add_business_rounded,
+                              label: 'List a Property',
+                              onTap: widget.onListProperty ??
+                                  () {
+                                    Navigator.pushNamed(
+                                        context, '/list_property');
+                                  },
+                            ),
                           ),
-                        ),
                         if (AppSession.isLandlord)
                           _buildStaggered(
                             index: 11,

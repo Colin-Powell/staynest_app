@@ -142,11 +142,18 @@ class AppSession {
         avatar.isNotEmpty && !avatar.startsWith('assets/images/profile.jpg');
 
     if (!hasRealAvatar) {
-      return Image.asset(
-        'assets/images/profile.jpg',
-        width: width,
-        height: height,
-        fit: fit,
+      return Container(
+        width: width ?? 40,
+        height: height ?? 40,
+        decoration: BoxDecoration(
+          color: Colors.grey[200],
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          Icons.person,
+          color: Colors.grey[500],
+          size: (width ?? 40) * 0.6,
+        ),
       );
     }
 
@@ -169,11 +176,18 @@ class AppSession {
         if (loadingProgress == null) return child;
         return const _ShimmerPlaceholder();
       },
-      errorBuilder: (context, error, stackTrace) => Image.asset(
-        'assets/images/profile.jpg',
-        width: width,
-        height: height,
-        fit: fit,
+      errorBuilder: (context, error, stackTrace) => Container(
+        width: width ?? 40,
+        height: height ?? 40,
+        decoration: BoxDecoration(
+          color: Colors.grey[200],
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          Icons.person,
+          color: Colors.grey[500],
+          size: (width ?? 40) * 0.6,
+        ),
       ),
     );
   }
