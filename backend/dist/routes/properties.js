@@ -8,9 +8,9 @@ import { sendPushToTopic } from '../services/firebase.js';
 const router = Router();
 function normalizePropertyRow(property) {
     let images = property.images;
-    // Ensure status is always defined for the frontend, defaulting to 'Available'
+    // Ensure status is always defined for the frontend.
     if (!property.status) {
-        property.status = 'Available';
+        property.status = 'available';
     }
     // FIX 1: null guard — pg returns null for empty jsonb, not undefined
     if (images === null)
@@ -66,6 +66,7 @@ const PROPERTY_SELECT = `p.id,
               p.amenities,
               p.lat,
               p.lng,
+              p.status,
               u.id AS landlord_id,
               u.name AS landlord_name,
               u.email AS landlord_email,
@@ -319,7 +320,7 @@ router.get('/nearby', async (req, res, next) => {
     }
 });
 // /:id must be last among GET routes
-router.get('/:id', async (req, res, next) => {
+router.get('/:id([0-9a-fA-F-]{36})', async (req, res, next) => {
     try {
         const result = await query(`SELECT ${PROPERTY_SELECT}
        FROM properties p
@@ -364,8 +365,9 @@ router.patch('/:id/status', requireAuth, authorize('landlord', 'host'), async (r
         const propertyId = req.params.id;
         const userId = req.auth?.id;
         console.log(`[PropertyStatusUpdate] Request to update property ${propertyId} to status "${status}" by user ${userId}`);
-        if (!status) {
-            return res.status(400).json({ error: 'Status is required.' });
+        const allowedStatuses = ['available', 'pending_booking', 'fully_booked', 'rented', 'maintenance'];
+        if (typeof status !== 'string' || !allowedStatuses.includes(status)) {
+            return res.status(400).json({ error: `Status must be one of: ${allowedStatuses.join(', ')}.` });
         }
         console.log(`[PropertyStatusUpdate] Query Params: status=${status}, propertyId=${propertyId}, userId=${userId}`);
         const result = await query('UPDATE properties SET status = $1 WHERE id = $2 AND landlord_id = $3 RETURNING *', [status, propertyId, userId]);
@@ -380,6 +382,36 @@ router.patch('/:id/status', requireAuth, authorize('landlord', 'host'), async (r
     catch (error) {
         const propertyId = req.params.id;
         console.error(`[PropertyStatusUpdate] Database Error updating property ${propertyId}:`, error);
+        next(error);
+    }
+});
+router.delete('/:id', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
+    try {
+        const result = await query('DELETE FROM properties WHERE id = $1 AND landlord_id = $2 RETURNING id', [req.params.id, req.auth?.id]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Property not found or access denied.' });
+        }
+        clearCachePattern('properties.');
+        res.json({ data: { id: result.rows[0].id, deleted: true } });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+router.get('/:id/availability', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
+    try {
+        const property = await query('SELECT id FROM properties WHERE id = $1 AND landlord_id = $2 LIMIT 1', [req.params.id, req.auth?.id]);
+        if (property.rowCount === 0) {
+            return res.status(404).json({ error: 'Property not found or access denied.' });
+        }
+        const result = await query(`SELECT EXTRACT(DAY FROM block_date)::integer AS day
+       FROM property_availability
+       WHERE property_id = $1 AND available = false
+       AND block_date >= CURRENT_DATE AND block_date < CURRENT_DATE + INTERVAL '14 days'
+       ORDER BY block_date`, [req.params.id]);
+        res.json({ blocked_days: result.rows.map((row) => row.day) });
+    }
+    catch (error) {
         next(error);
     }
 });
@@ -596,6 +628,30 @@ router.post('/', requireAuth, authorize('landlord', 'host'), async (req, res, ne
 // Route required by the current Flutter listing flow
 router.post('/from-listing', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
     await handleCreateProperty(req, res, next, 'PropertyCreateFromListing');
+});
+router.put('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
+    try {
+        const fields = ['title', 'description', 'category', 'city', 'address', 'price', 'bedrooms', 'bathrooms', 'area', 'image_url', 'images', 'amenities', 'lat', 'lng'];
+        const updates = [];
+        const values = [];
+        for (const field of fields) {
+            if (req.body[field] !== undefined) {
+                values.push(field === 'images' || field === 'amenities' ? JSON.stringify(req.body[field]) : req.body[field]);
+                updates.push(`${field} = $${values.length}`);
+            }
+        }
+        if (updates.length === 0)
+            return res.status(400).json({ error: 'No property fields supplied.' });
+        values.push(req.params.id, req.auth?.id);
+        const result = await query(`UPDATE properties SET ${updates.join(', ')} WHERE id = $${values.length - 1} AND landlord_id = $${values.length} RETURNING *`, values);
+        if (result.rowCount === 0)
+            return res.status(404).json({ error: 'Property not found or access denied.' });
+        clearCachePattern('properties.');
+        res.json({ data: normalizePropertyRow(result.rows[0]) });
+    }
+    catch (error) {
+        next(error);
+    }
 });
 export default router;
 //# sourceMappingURL=properties.js.map

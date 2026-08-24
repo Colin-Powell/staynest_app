@@ -18,8 +18,7 @@ import 'screens/dashboard/landlord_tenants_page.dart';
 import 'screens/landlord/verification_flow.dart' show VerificationCenter;
 import 'app_theme.dart';
 import 'session/app_session.dart';
-import 'screens/dashboard/landlord_bookings_page.dart'
-    hide LandlordBookingsView;
+import 'screens/dashboard/landlord_bookings_page.dart';
 import 'screens/privacy_policy.dart';
 import 'screens/auth/tenant_survey.dart';
 import 'repository/remote_database_repository.dart';
@@ -39,6 +38,7 @@ void _initializeFirebaseAsync() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    await AnalyticsService.initialize();
 
     void logFcm(RemoteMessage m, {String source = 'unknown'}) {
       final data = m.data;
@@ -383,11 +383,6 @@ class _PropertyAppState extends State<PropertyApp> {
                       'subtitle': title,
                     },
                   );
-                } else {
-                  Navigator.pushNamed(context, '/how_it_works', arguments: {
-                    'title': title,
-                    'subtitle': title,
-                  });
                 }
               },
             ),
@@ -398,7 +393,10 @@ class _PropertyAppState extends State<PropertyApp> {
               onBack: () => Navigator.pop(context),
               onSave: () => Navigator.pop(context),
             ),
-        '/list_property': (context) => const AddListingFlow(),
+        '/list_property': (context) => AddListingFlow(
+              property: ModalRoute.of(context)?.settings.arguments
+                  as Map<String, dynamic>?,
+            ),
         '/verification_center': (context) => const VerificationCenter(),
         '/super_admin': (context) => const SuperAdminShell(),
         '/referral': (context) => const ReferralView(),

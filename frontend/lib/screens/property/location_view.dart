@@ -282,9 +282,7 @@ class _LocationViewState extends State<LocationView> {
   // ─────────────────────────────────────────────
 
   Future<void> fetchNearbyPlaces([LatLng? target]) async {
-    final location = target ??
-        _currentLocation ??
-        _activePropertyLocation;
+    final location = target ?? _currentLocation ?? _activePropertyLocation;
 
     if (location == null) {
       if (mounted) setState(() => nearbyPlaces = []);

@@ -17,6 +17,7 @@ import 'package:property_app/services/image_upload_service.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/geocoding.dart';
 import 'package:property_app/services/uploads.dart';
+import 'package:property_app/widgets/property_image.dart';
 
 class PickedPhoto {
   final File file;
@@ -35,7 +36,11 @@ class PickedPhoto {
 }
 
 class AddListingFlow extends StatefulWidget {
-  const AddListingFlow({super.key});
+  final Map<String, dynamic>? property;
+
+  const AddListingFlow({super.key, this.property});
+
+  bool get isEditing => property?['id'] != null;
 
   @override
   State<AddListingFlow> createState() => _AddListingFlowState();
@@ -175,6 +180,42 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // DRAFT & SUBMISSION LOGIC
   // ==========================================
   Future<void> _loadDraft() async {
+    final existing = widget.property;
+    if (existing != null && existing.isNotEmpty) {
+      _title.text = existing['title']?.toString() ?? '';
+      _description.text = existing['description']?.toString() ?? '';
+      _propertyType = existing['category']?.toString() ?? _propertyType;
+      _bedrooms = (existing['bedrooms'] as num?)?.toInt() ?? _bedrooms;
+      _bathrooms = (existing['bathrooms'] as num?)?.toInt() ?? _bathrooms;
+      _selectedCity = existing['city']?.toString() ?? _selectedCity;
+      _neighborhood.text = existing['address']?.toString() ?? '';
+      _locationSearch.text = existing['address']?.toString() ?? '';
+      _rentPrice.text = existing['price']?.toString() ?? '';
+      _selectedLatitude = (existing['lat'] as num?)?.toDouble();
+      _selectedLongitude = (existing['lng'] as num?)?.toDouble();
+      _selectedLocationLabel = _locationSearch.text;
+      final existingImages = existing['images'];
+      if (existingImages is List) {
+        for (final image in existingImages) {
+          final url = image?.toString();
+          if (url != null && url.isNotEmpty) {
+            _pickedPhotos.add(PickedPhoto(File(''), url: url, progress: 1.0));
+          }
+        }
+      } else if (existing['image_url'] != null) {
+        _pickedPhotos.add(PickedPhoto(File(''),
+            url: existing['image_url'].toString(), progress: 1.0));
+      }
+      final existingAmenities = existing['amenities'];
+      if (existingAmenities is List) {
+        for (final amenity in existingAmenities) {
+          final name = amenity.toString();
+          if (_amenities.containsKey(name)) _amenities[name] = true;
+        }
+      }
+      if (mounted) setState(() => _loadingDraft = false);
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_draftKey);
     if (raw != null) {
@@ -458,7 +499,15 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'lng': selectedLongitude,
       };
 
-      await repo.createPropertyFromListing(listingPayload: propertyPayload);
+      final existingPropertyId = widget.property?['id']?.toString();
+      if (existingPropertyId != null && existingPropertyId.isNotEmpty) {
+        await repo.updatePropertyFromListing(
+          propertyId: existingPropertyId,
+          listingPayload: propertyPayload,
+        );
+      } else {
+        await repo.createPropertyFromListing(listingPayload: propertyPayload);
+      }
 
       // 4) Submit verification record
       final propertyVerificationPayload = {
@@ -472,10 +521,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'photos': uploadedUrls,
       };
 
-      await repo.submitVerification(verificationPayload: {
-        'documents': uploadedUrls,
-        'property': propertyVerificationPayload,
-      });
+      if (!widget.isEditing) {
+        await repo.submitVerification(verificationPayload: {
+          'documents': uploadedUrls,
+          'property': propertyVerificationPayload,
+        });
+      }
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_draftKey);
@@ -483,8 +534,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
       if (!mounted) return;
       ModalUtils.showSuccess(
         context,
-        "Hooray! Listing Published",
-        "Your property is now live and ready to be discovered by amazing tenants.",
+        widget.isEditing ? "Listing Updated" : "Hooray! Listing Published",
+        widget.isEditing
+            ? "Your property details were updated successfully."
+            : "Your property is now live and ready to be discovered by amazing tenants.",
         onOk: () {
           Navigator.pop(context);
           Navigator.pop(context);
@@ -1024,7 +1077,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 children: [
                   ClipRRect(
                       borderRadius: BorderRadius.circular(16),
-                      child: Image.file(photo.file, fit: BoxFit.cover)),
+                      child: photo.url != null
+                          ? buildPropertyImage(photo.url!, fit: BoxFit.cover)
+                          : Image.file(photo.file, fit: BoxFit.cover)),
                   if (photo.isUploading)
                     Container(
                       decoration: BoxDecoration(
@@ -1241,8 +1296,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
                   borderRadius:
                       const BorderRadius.horizontal(left: Radius.circular(24)),
                   child: _pickedPhotos.isNotEmpty
-                      ? Image.file(_pickedPhotos.first.file,
-                          width: 120, height: 120, fit: BoxFit.cover)
+                      ? (_pickedPhotos.first.url != null
+                          ? buildPropertyImage(_pickedPhotos.first.url!,
+                              width: 120, height: 120, fit: BoxFit.cover)
+                          : Image.file(_pickedPhotos.first.file,
+                              width: 120, height: 120, fit: BoxFit.cover))
                       : Container(
                           width: 120,
                           height: 120,

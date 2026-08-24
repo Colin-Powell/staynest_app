@@ -1,7 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:uuid/uuid.dart';
@@ -42,9 +43,9 @@ class AppSession {
   static String? currentUserPhone;
   static String? currentUserAvatar;
   static bool currentUserVerified = false;
-  
+
   static final String sessionId = const Uuid().v4();
-  
+
   // Default to a production or robust staging URL
   static String get apiBaseUrl {
     // 1. Try to read from .env file first
@@ -60,7 +61,7 @@ class AppSession {
         defaultValue: 'http://localhost:8080/api',
       );
     }
-    
+
     // For local development on Android emulator, 10.0.2.2 points to host's localhost
     if (defaultTargetPlatform == TargetPlatform.android) {
       return const String.fromEnvironment(
@@ -68,7 +69,7 @@ class AppSession {
         defaultValue: 'http://10.0.2.2:8080/api',
       );
     }
-    
+
     // For iOS simulator, localhost works fine
     return const String.fromEnvironment(
       'API_BASE_URL',
@@ -235,7 +236,8 @@ class AppSession {
   static const _storage = FlutterSecureStorage();
 
   static Future<void> persistSession() async {
-    await _storage.write(key: _prefsKey, value: jsonEncode(toSessionSnapshot()));
+    await _storage.write(
+        key: _prefsKey, value: jsonEncode(toSessionSnapshot()));
   }
 
   static Future<void> restoreSession() async {
@@ -287,6 +289,7 @@ class AppSession {
     currentUserAvatar = user['avatar']?.toString();
     currentRole = user['role']?.toString() ?? currentRole;
     currentUserVerified = user['verified'] == true;
+    AnalyticsService.setUserId(currentUserId);
   }
 
   static bool get isLandlord =>
@@ -307,10 +310,12 @@ class AppSession {
     currentUserPhone = null;
     currentUserAvatar = null;
     currentUserVerified = false;
+    await AnalyticsService.clearUser();
     apiToken = null;
     refreshToken = null;
     await clearPersistedSession();
-    await CacheEngine.instance.clearAll(); // Critical: Invalidate cache on logout
+    await CacheEngine.instance
+        .clearAll(); // Critical: Invalidate cache on logout
     try {
       SocketService.instance.disconnect();
     } catch (_) {}

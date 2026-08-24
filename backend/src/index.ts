@@ -1,5 +1,6 @@
 import app from './app.js';
 import { env } from './config.js';
+import { startCronJobs } from './services/cron.js';
 
 async function startServer() {
   // Use an explicit HTTP server so we can attach Socket.IO
@@ -14,6 +15,8 @@ async function startServer() {
   } catch (err) {
     console.warn('Socket.IO initialization skipped or failed:', err);
   }
+
+  startCronJobs();
 
   server.listen(env.port, () => {
     console.log(`staynest backend listening on http://localhost:${env.port}`);

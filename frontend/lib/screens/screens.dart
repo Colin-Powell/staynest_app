@@ -13,10 +13,12 @@ export 'home/search_view.dart';
 export 'home/saved_view.dart';
 export 'home/messages_view.dart';
 export 'home/profile_view.dart';
-export 'home/setting_view.dart';
-export 'home/help_support_view.dart';
+
+export 'help_support_view.dart';
+export 'setting_view.dart';
 export 'home/how_it_works_view.dart';
-export 'home/referral_view.dart';
+export 'referral_view.dart';
+
 export 'home/nearby_services_view.dart';
 export 'home/map_view.dart';
 

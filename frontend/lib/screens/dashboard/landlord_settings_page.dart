@@ -760,15 +760,17 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
   void initState() {
     super.initState();
     final user = AppSession.currentUser;
-    final business = (user['businessInfo'] as Map?) ?? {};
-    _companyController =
-        TextEditingController(text: business['companyName']?.toString() ?? '');
+    final business = (user['businessInfo'] as Map?) ?? user;
+    _companyController = TextEditingController(
+        text:
+            (business['companyName'] ?? business['businessName'])?.toString() ??
+                '');
     _regNumberController = TextEditingController(
         text: business['registrationNumber']?.toString() ?? '');
     _addressController =
         TextEditingController(text: business['address']?.toString() ?? '');
-    _tinController =
-        TextEditingController(text: business['tin']?.toString() ?? '');
+    _tinController = TextEditingController(
+        text: (business['tin'] ?? business['taxId'])?.toString() ?? '');
   }
 
   @override
@@ -785,12 +787,9 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
     try {
       final repository = RemoteDatabaseRepository();
       final updatedUser = await repository.updateCurrentUser(update: {
-        'businessInfo': {
-          'companyName': _companyController.text.trim(),
-          'registrationNumber': _regNumberController.text.trim(),
-          'address': _addressController.text.trim(),
-          'tin': _tinController.text.trim(),
-        },
+        'businessName': _companyController.text.trim(),
+        'businessDescription': _addressController.text.trim(),
+        'taxId': _tinController.text.trim(),
       });
 
       AppSession.updateCurrentUser(updatedUser);
@@ -1322,14 +1321,14 @@ class _GlassContainer extends StatelessWidget {
   final double opacity;
   final double borderWidth;
 
-const _GlassContainer({
-  required this.child,
-  this.padding = EdgeInsets.zero,
-  this.borderRadius,
-  this.blur = 24,
-  this.opacity = 0.18,
-  this.borderWidth = 1.2,
-});
+  const _GlassContainer({
+    required this.child,
+    this.padding = EdgeInsets.zero,
+    this.borderRadius,
+    this.blur = 24,
+    this.opacity = 0.18,
+    this.borderWidth = 1.2,
+  });
 
   @override
   Widget build(BuildContext context) {

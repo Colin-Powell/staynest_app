@@ -53,6 +53,7 @@ ALTER TABLE properties ADD COLUMN IF NOT EXISTS amenities jsonb DEFAULT '[]'::js
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS address text;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS average_rating numeric DEFAULT 0;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS review_count integer DEFAULT 0;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'available';
 
 CREATE TABLE IF NOT EXISTS verifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -24,7 +24,11 @@ class BookingActionService {
 
     // 2. Execute API Call
     final apiAction = action == 'Accepted' ? 'confirm' : 'reject';
-    final success = await BookingService.updateStatus(bookingId, apiAction);
+    final success = await BookingService.updateStatus(
+      bookingId,
+      apiAction,
+      reason: reason,
+    );
 
     if (!context.mounted) return success;
 
@@ -32,21 +36,23 @@ class BookingActionService {
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Booking $action successfully', 
+          content: Text('Booking $action successfully',
               style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
           backgroundColor: primaryGreen,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update booking status', 
+          content: Text('Failed to update booking status',
               style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     }
@@ -62,9 +68,11 @@ class BookingActionService {
         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
         child: AlertDialog(
           backgroundColor: Colors.white.withOpacity(0.95),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Text('Decline Request', 
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w800, color: textDark)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Text('Decline Request',
+              style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w800, color: textDark)),
           content: TextField(
             controller: controller,
             decoration: InputDecoration(
@@ -72,24 +80,28 @@ class BookingActionService {
               filled: true,
               fillColor: const Color(0xFFF3F4F6),
               border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none),
             ),
             maxLines: 3,
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Go Back', 
-                  style: GoogleFonts.poppins(color: textLight, fontWeight: FontWeight.w600)),
+              child: Text('Go Back',
+                  style: GoogleFonts.poppins(
+                      color: textLight, fontWeight: FontWeight.w600)),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, controller.text),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFEF4444),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
-              child: Text('Decline Now', 
-                  style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
+              child: Text('Decline Now',
+                  style: GoogleFonts.poppins(
+                      color: Colors.white, fontWeight: FontWeight.w600)),
             ),
           ],
         ),

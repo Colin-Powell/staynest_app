@@ -1,14 +1,61 @@
 import 'dart:convert';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:property_app/repository/http_json_client.dart';
-import 'package:uuid/uuid.dart';
 import 'package:property_app/session/app_session.dart';
 
 class AnalyticsService {
   static final HttpJsonClient _client = HttpJsonClient();
+  static FirebaseAnalytics? _firebase;
 
   static String get _baseUrl => '${AppSession.apiBaseUrl}/analytics';
 
   static String get sessionId => AppSession.sessionId;
+
+  static Future<void> initialize() async {
+    try {
+      _firebase = FirebaseAnalytics.instance;
+      await setUserId(AppSession.currentUserId);
+    } catch (e) {
+      print('Firebase Analytics initialization failed: $e');
+    }
+  }
+
+  static Future<void> clearUser() async {
+    await setUserId(null);
+  }
+
+  static Future<void> setUserId(String? userId) async {
+    try {
+      await _firebase?.setUserId(id: userId);
+    } catch (e) {
+      print('Firebase Analytics user reset failed: $e');
+    }
+  }
+
+  static String _firebaseEventName(String eventType) {
+    final normalized =
+        eventType.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '_');
+    return normalized.substring(
+        0, normalized.length > 40 ? 40 : normalized.length);
+  }
+
+  static Map<String, Object> _firebaseParameters(
+      Map<String, dynamic>? metadata) {
+    final parameters = <String, Object>{};
+    for (final entry in (metadata ?? {}).entries) {
+      if (entry.value == null) continue;
+      final key = entry.key.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+      if (key.isEmpty) continue;
+      final value = entry.value;
+      if (value is String || value is num || value is bool) {
+        parameters[key.substring(0, key.length > 40 ? 40 : key.length)] = value;
+      } else {
+        parameters[key.substring(0, key.length > 40 ? 40 : key.length)] =
+            value.toString();
+      }
+    }
+    return parameters;
+  }
 
   // Anti-duplication state: Source -> Set of Property IDs seen in this session
   static final Map<String, Set<String>> _sessionImpressions = {};
@@ -25,6 +72,22 @@ class AnalyticsService {
     required String propertyId,
     Map<String, dynamic>? metadata,
   }) async {
+    final firebase = _firebase;
+    if (firebase != null) {
+      try {
+        await firebase.logEvent(
+          name: _firebaseEventName(eventType),
+          parameters: {
+            'property_id': propertyId,
+            'session_id': sessionId,
+            ..._firebaseParameters(metadata),
+          },
+        );
+      } catch (e) {
+        print('Firebase Analytics event failed: $e');
+      }
+    }
+
     try {
       await _client.post(
         Uri.parse('$_baseUrl/track'),

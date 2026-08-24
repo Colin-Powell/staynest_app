@@ -147,6 +147,17 @@ class RemoteDatabaseRepository {
     AnalyticsService.logEvent(eventType: 'property_created', propertyId: 'new');
   }
 
+  Future<void> updatePropertyFromListing({
+    required String propertyId,
+    required Map<String, dynamic> listingPayload,
+  }) async {
+    await apiClient.put(
+      Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId'),
+      body: listingPayload,
+    );
+    await CacheEngine.instance.invalidate(CacheKeys.propertyList);
+  }
+
   Future<void> submitVerification({
     required Map<String, dynamic> verificationPayload,
   }) async {

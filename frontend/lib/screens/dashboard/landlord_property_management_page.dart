@@ -27,6 +27,7 @@ class _LandlordPropertyManagementPageState
   late Map<String, dynamic> _property;
   bool _isPreviewMode = false;
   bool _isLoading = true;
+  String? _loadError;
 
   // Wired State
   Map<String, dynamic> _stats = {
@@ -64,7 +65,10 @@ class _LandlordPropertyManagementPageState
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
 
     try {
       final results = await Future.wait([
@@ -107,6 +111,7 @@ class _LandlordPropertyManagementPageState
       }
     } catch (e) {
       debugPrint('Error loading dashboard data: $e');
+      if (mounted) setState(() => _loadError = 'Could not load property data.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -377,43 +382,62 @@ class _LandlordPropertyManagementPageState
                           padding: EdgeInsets.only(top: 100),
                           child: CircularProgressIndicator(color: primaryGreen),
                         ))
-                      : Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildHeaderSection(),
-                              const SizedBox(height: 24),
-                              _buildQuickActionShortcuts(),
-                              const SizedBox(height: 32),
-                              _buildQuickSnapshot(),
-                              const SizedBox(height: 32),
-                              _buildBookingActionPanel(),
-                              const SizedBox(height: 32),
-                              _buildAvailabilityPreview(),
-                              const SizedBox(height: 32),
-                              _buildHotLeadsSection(),
-                              const SizedBox(height: 32),
-                              _buildLiveActivityFeed(),
-                              const SizedBox(height: 32),
-                              _buildBoostBanner(),
-                              const SizedBox(height: 48),
-                              Center(
-                                child: TextButton(
-                                  onPressed: _confirmDelete,
-                                  child: Text(
-                                    'Remove Property from Portfolio',
-                                    style: GoogleFonts.poppins(
-                                      color: Colors.redAccent,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14,
+                      : _loadError != null
+                          ? Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(24, 80, 24, 100),
+                              child: Center(
+                                child: Column(
+                                  children: [
+                                    Text(_loadError!,
+                                        textAlign: TextAlign.center),
+                                    const SizedBox(height: 16),
+                                    ElevatedButton(
+                                      onPressed: _fetchInitialData,
+                                      child: const Text('Retry'),
                                     ),
-                                  ),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
+                            )
+                          : Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildHeaderSection(),
+                                  const SizedBox(height: 24),
+                                  _buildQuickActionShortcuts(),
+                                  const SizedBox(height: 32),
+                                  _buildQuickSnapshot(),
+                                  const SizedBox(height: 32),
+                                  _buildBookingActionPanel(),
+                                  const SizedBox(height: 32),
+                                  _buildAvailabilityPreview(),
+                                  const SizedBox(height: 32),
+                                  _buildHotLeadsSection(),
+                                  const SizedBox(height: 32),
+                                  _buildLiveActivityFeed(),
+                                  const SizedBox(height: 32),
+                                  _buildBoostBanner(),
+                                  const SizedBox(height: 48),
+                                  Center(
+                                    child: TextButton(
+                                      onPressed: _confirmDelete,
+                                      child: Text(
+                                        'Remove Property from Portfolio',
+                                        style: GoogleFonts.poppins(
+                                          color: Colors.redAccent,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                 ),
               ],
             ),
@@ -469,7 +493,14 @@ class _LandlordPropertyManagementPageState
         GestureDetector(
           onTap: _showStatusPicker,
           child: _StatusBadge(
-              status: (_property['status'] ?? 'Available') as String),
+              status: {
+                    'available': 'Available',
+                    'pending_booking': 'Pending booking',
+                    'fully_booked': 'Fully booked',
+                    'rented': 'Rented',
+                    'maintenance': 'Under maintenance',
+                  }[_property['status']?.toString()] ??
+                  (_property['status']?.toString() ?? 'Available')),
         ),
       ],
     );
@@ -953,8 +984,17 @@ class _LandlordPropertyManagementPageState
           if (!confirmed) return;
         }
 
-        final success =
-            await AnalyticsService.updatePropertyStatus(_property['id'], label);
+        final statusCode = {
+          'Available': 'available',
+          'Pending booking': 'pending_booking',
+          'Fully booked': 'fully_booked',
+          'Rented': 'rented',
+          'Under maintenance': 'maintenance',
+        }[label];
+        if (statusCode == null) return;
+
+        final success = await AnalyticsService.updatePropertyStatus(
+            _property['id'].toString(), statusCode);
         if (success && mounted) {
           setState(() => _property['status'] = label);
           _showActionSuccess('Property status updated to $label.');
@@ -1198,7 +1238,6 @@ class _GlassContainer extends StatelessWidget {
     this.opacity = 0.55,
     this.borderWidth = 1.2,
   });
-
 
   @override
   Widget build(BuildContext context) {
