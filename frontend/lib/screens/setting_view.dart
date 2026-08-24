@@ -37,7 +37,8 @@ class _SettingViewState extends State<SettingView>
     );
 
     _pageSlide = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _pageCtrl, curve: Curves.easeOutCubic));
+        .animate(
+            CurvedAnimation(parent: _pageCtrl, curve: Curves.easeOutCubic));
     _pageFade = CurvedAnimation(parent: _pageCtrl, curve: Curves.easeOut);
 
     _pageCtrl.forward().then((_) => _staggerCtrl.forward());
@@ -108,7 +109,8 @@ class _SettingViewState extends State<SettingView>
                       children: [
                         IconButton(
                           onPressed: widget.onBack,
-                          icon: const Icon(Icons.chevron_left_rounded, size: 32, color: Colors.black),
+                          icon: const Icon(Icons.chevron_left_rounded,
+                              size: 32, color: Colors.black),
                         ),
                         const SizedBox(width: 4),
                         const Text(
@@ -144,7 +146,8 @@ class _SettingViewState extends State<SettingView>
                             icon: Icons.notifications_outlined,
                             label: 'Notifications',
                             onTap: () {
-                              Navigator.pushNamed(context, '/notification_settings');
+                              Navigator.pushNamed(
+                                  context, '/notification_settings');
                             },
                           ),
                         ),
@@ -158,7 +161,6 @@ class _SettingViewState extends State<SettingView>
                             },
                           ),
                         ),
-                        
                         _buildStaggered(
                           index: 7,
                           child: _MenuItem(
@@ -174,7 +176,6 @@ class _SettingViewState extends State<SettingView>
                             },
                           ),
                         ),
-
                         if (widget.onLogout != null) ...[
                           const SizedBox(height: 32),
                           _buildStaggered(
@@ -298,7 +299,8 @@ class AboutView extends StatelessWidget {
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.chevron_left_rounded, size: 32, color: Colors.black),
+          icon: const Icon(Icons.chevron_left_rounded,
+              size: 32, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
@@ -325,7 +327,7 @@ class AboutView extends StatelessWidget {
               fit: BoxFit.contain,
             ),
             const SizedBox(height: 32),
-            
+
             // App Name
             const Text(
               'StayNest',
@@ -337,7 +339,7 @@ class AboutView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            
+
             // Version Info
             const Text(
               'Version 1.0.0',
@@ -348,7 +350,7 @@ class AboutView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 48),
-            
+
             // Contact Support
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -372,9 +374,9 @@ class AboutView extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const Spacer(),
-            
+
             // Copyright at the bottom
             Padding(
               padding: EdgeInsets.only(

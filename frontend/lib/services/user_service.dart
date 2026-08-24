@@ -1,3 +1,4 @@
+import 'package:property_app/services/api_client.dart';
 import 'dart:convert';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/repository/http_json_client.dart';

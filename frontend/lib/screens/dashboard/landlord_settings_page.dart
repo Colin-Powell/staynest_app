@@ -859,11 +859,63 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   bool pushNewBooking = true;
   bool pushMessages = false;
   bool smsAlerts = false;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = AppSession.currentUser;
+    final notifs = user['settings']?['notifications'] ?? {};
+    emailNewBooking = notifs['email_new_booking'] ?? true;
+    emailMessages = notifs['email_messages'] ?? true;
+    pushNewBooking = notifs['push_new_booking'] ?? true;
+    pushMessages = notifs['push_messages'] ?? false;
+    smsAlerts = notifs['sms_alerts'] ?? false;
+  }
+
+  Future<void> _handleSave() async {
+    setState(() => _isSaving = true);
+    try {
+      final repo = RemoteDatabaseRepository();
+      final updated = await repo.updateCurrentUser(update: {
+        'settings': {
+          ...(AppSession.currentUser['settings'] ?? {}),
+          'notifications': {
+            'email_new_booking': emailNewBooking,
+            'email_messages': emailMessages,
+            'push_new_booking': pushNewBooking,
+            'push_messages': pushMessages,
+            'sms_alerts': smsAlerts,
+          }
+        }
+      });
+      AppSession.updateCurrentUser(updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Notification settings updated')),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ApiResult.mapError(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return SettingsPageLayout(
       title: 'Notifications',
+      bottomNavigationBar: _buildSaveButton(
+        context,
+        text: _isSaving ? "Saving..." : "Save Settings",
+        onPressed: _isSaving ? null : _handleSave,
+      ),
       child: ListView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -958,14 +1010,73 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
 }
 
 // --- 4. BANK DETAILS PAGE ---
-class BankDetailsPage extends StatelessWidget {
+class BankDetailsPage extends StatefulWidget {
   const BankDetailsPage({super.key});
+
+  @override
+  State<BankDetailsPage> createState() => _BankDetailsPageState();
+}
+
+class _BankDetailsPageState extends State<BankDetailsPage> {
+  final _bankNameController = TextEditingController();
+  final _holderController = TextEditingController();
+  final _accountController = TextEditingController();
+  final _routingController = TextEditingController();
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = AppSession.currentUser;
+    final bank = user['settings']?['bank_details'] ?? {};
+    _bankNameController.text = bank['bank_name'] ?? '';
+    _holderController.text = bank['account_holder'] ?? '';
+    _accountController.text = bank['account_number'] ?? '';
+    _routingController.text = bank['routing_number'] ?? '';
+  }
+
+  Future<void> _handleSave() async {
+    setState(() => _isSaving = true);
+    try {
+      final repo = RemoteDatabaseRepository();
+      final updated = await repo.updateCurrentUser(update: {
+        'settings': {
+          ...(AppSession.currentUser['settings'] ?? {}),
+          'bank_details': {
+            'bank_name': _bankNameController.text.trim(),
+            'account_holder': _holderController.text.trim(),
+            'account_number': _accountController.text.trim(),
+            'routing_number': _routingController.text.trim(),
+          }
+        }
+      });
+      AppSession.updateCurrentUser(updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bank details updated')),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ApiResult.mapError(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return SettingsPageLayout(
       title: 'Bank Details',
-      bottomNavigationBar: _buildSaveButton(context, text: "Save Bank Details"),
+      bottomNavigationBar: _buildSaveButton(
+        context, 
+        text: _isSaving ? "Saving..." : "Save Bank Details",
+        onPressed: _isSaving ? null : _handleSave,
+      ),
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -1000,11 +1111,13 @@ class BankDetailsPage extends StatelessWidget {
             ),
             const SizedBox(height: 32),
             _buildTextField('Bank Name',
+                controller: _bankNameController,
                 hintText: 'e.g. Chase Bank', prefixIcon: PhosphorIcons.bank()),
             _buildTextField('Account Holder Name',
+                controller: _holderController,
                 hintText: 'Jomison Real Estate'),
-            _buildTextField('Account Number', hintText: '1234567890'),
-            _buildTextField('Routing Number', hintText: '098765432'),
+            _buildTextField('Account Number', controller: _accountController, hintText: '1234567890'),
+            _buildTextField('Routing Number', controller: _routingController, hintText: '098765432'),
             const SizedBox(height: 40),
           ],
         ),
@@ -1013,8 +1126,7 @@ class BankDetailsPage extends StatelessWidget {
   }
 }
 
-// --- 5. PRIVACY POLICY PAGE ---
-class PrivacyPolicyPage extends StatelessWidget {
+// --- 5. PRIVACY POLICY PAGE extends StatelessWidget {
   const PrivacyPolicyPage({super.key});
 
   @override
