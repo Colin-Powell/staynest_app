@@ -122,7 +122,13 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     if (lat != null && lng != null) {
       params.push(lat, lng);
       orderParts.push(`(CASE WHEN p.lat IS NULL OR p.lng IS NULL THEN 1 ELSE 0 END)`);
-      orderParts.push(`(ABS(COALESCE(p.lat,0) - $${params.length - 1}) + ABS(COALESCE(p.lng,0) - $${params.length}))`);
+      orderParts.push(`(
+        6371 * 2 * ASIN(SQRT(
+          POWER(SIN(RADIANS(p.lat - $${params.length - 1}) / 2), 2) +
+          COS(RADIANS($${params.length - 1})) * COS(RADIANS(p.lat)) *
+          POWER(SIN(RADIANS(p.lng - $${params.length}) / 2), 2)
+        ))
+      )`);
     }
 
     const orderClause = orderParts.length > 0 ? `${orderParts.join(', ')}, p.created_at DESC` : 'p.created_at DESC';

@@ -318,11 +318,4 @@ class _PaymentCard extends StatelessWidget {
   }
 }
 
-class AppScrollBehavior extends ScrollBehavior {
-  const AppScrollBehavior();
-  @override
-  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) => child;
-  @override
-  ScrollPhysics getScrollPhysics(BuildContext context) =>
-      const BouncingScrollPhysics(decelerationRate: ScrollDecelerationRate.fast);
-}
+

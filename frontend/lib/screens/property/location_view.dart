@@ -37,7 +37,6 @@ class LocationView extends StatefulWidget {
 class _LocationViewState extends State<LocationView> {
   final MapController _mapController = MapController();
 
-  static const LatLng _fallbackLocation = LatLng(-3.6305, 39.8499); // Kilifi
   static const Color _tenantPrimary = Color(0xFF3F37C9); // Tenant Blue
   static const Color _textDark = Color(0xFF111827);
 
@@ -103,12 +102,13 @@ class _LocationViewState extends State<LocationView> {
           _activePropertyLocation =
               LatLng(_activeProperty!.lat, _activeProperty!.lng);
         }
-        // Force fallback if geocoding returns null so the marker ALWAYS renders
-        _activePropertyLocation ??= _fallbackLocation;
       }
 
-      final targetLocation =
-          _currentLocation ?? _activePropertyLocation ?? _fallbackLocation;
+      final targetLocation = _currentLocation ?? _activePropertyLocation;
+
+      if (targetLocation == null) {
+        throw Exception('Property location is unavailable.');
+      }
 
       // Fit bounds if we have both current location and a property location
       if (_currentLocation != null && _activePropertyLocation != null) {
@@ -284,8 +284,12 @@ class _LocationViewState extends State<LocationView> {
   Future<void> fetchNearbyPlaces([LatLng? target]) async {
     final location = target ??
         _currentLocation ??
-        _activePropertyLocation ??
-        _fallbackLocation;
+        _activePropertyLocation;
+
+    if (location == null) {
+      if (mounted) setState(() => nearbyPlaces = []);
+      return;
+    }
 
     setState(() => _loadingPlaces = true);
 
@@ -439,8 +443,37 @@ class _LocationViewState extends State<LocationView> {
 
   @override
   Widget build(BuildContext context) {
-    final location =
-        _currentLocation ?? _activePropertyLocation ?? _fallbackLocation;
+    final location = _currentLocation ?? _activePropertyLocation;
+
+    if (location == null) {
+      return Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: widget.onClose,
+          ),
+          title: const Text('Location unavailable'),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.location_off_outlined, size: 48),
+                const SizedBox(height: 12),
+                const Text('This property does not have a valid map location.'),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _initializeLocation,
+                  child: const Text('Try again'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       extendBodyBehindAppBar: true,

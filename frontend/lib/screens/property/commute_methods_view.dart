@@ -229,10 +229,19 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
       _toController.text = widget.targetName!;
     }
 
+    final propertyLocation = widget.targetProperty;
+    final hasPropertyCoordinates = propertyLocation != null &&
+        propertyLocation.lat.isFinite &&
+        propertyLocation.lng.isFinite &&
+        propertyLocation.lat >= -90 &&
+        propertyLocation.lat <= 90 &&
+        propertyLocation.lng >= -180 &&
+        propertyLocation.lng <= 180 &&
+        (propertyLocation.lat != 0 || propertyLocation.lng != 0);
     _destination = widget.targetLocation ??
-        (widget.targetProperty != null
-            ? LatLng(widget.targetProperty!.lat, widget.targetProperty!.lng)
-            : const LatLng(-3.6305, 39.8499));
+        (hasPropertyCoordinates
+            ? LatLng(propertyLocation!.lat, propertyLocation.lng)
+            : const LatLng(double.nan, double.nan));
 
     _animController.forward();
     _initializeData();
@@ -255,6 +264,11 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
 
   Future<void> _initializeData() async {
     setState(() => _fetchingLocation = true);
+
+    if (!_destination.latitude.isFinite || !_destination.longitude.isFinite) {
+      _finishLoadingLocation('Property location unavailable');
+      return;
+    }
 
     // Load nearby properties in parallel with location
     try {
@@ -326,7 +340,8 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
       if (modeData.mode == _TransportMode.matatu) {
         result = await _fetchMatatuRoute(origin, _destination);
       } else {
-        result = await _fetchOsrmRoute(origin, _destination, modeData.osrmProfile);
+        result =
+            await _fetchOsrmRoute(origin, _destination, modeData.osrmProfile);
       }
 
       if (mounted) {
@@ -772,7 +787,8 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                       strokeWidth: 2, color: _primaryText),
                 )
               else
-                const Icon(Icons.my_location_rounded, color: _primaryText, size: 18),
+                const Icon(Icons.my_location_rounded,
+                    color: _primaryText, size: 18),
             ],
           ),
         ),
@@ -829,7 +845,8 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                     _activeProperty = null;
                     _toController.clear();
                   }),
-                  child: const Icon(Icons.close_rounded, color: _grey, size: 18),
+                  child:
+                      const Icon(Icons.close_rounded, color: _grey, size: 18),
                 )
               else
                 const Icon(Icons.search_rounded, color: _grey, size: 18),
@@ -1387,7 +1404,7 @@ class _HeadingConePainter extends CustomPainter {
       ..color = const Color(0xFF3F37C9).withOpacity(0.5)
       ..style = ui.PaintingStyle.fill;
 
-     final path = ui.Path()
+    final path = ui.Path()
       ..moveTo(size.width / 2, 0)
       ..lineTo(0, size.height)
       ..lineTo(size.width, size.height)
@@ -1399,7 +1416,6 @@ class _HeadingConePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
 
 // ─── Glass UI Utilities ───────────────────────────────────────────────────────
 

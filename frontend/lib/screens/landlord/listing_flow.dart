@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -70,6 +71,13 @@ class _AddListingFlowState extends State<AddListingFlow> {
   final _street = TextEditingController();
   final _building = TextEditingController();
   final _zip = TextEditingController();
+  final _locationSearch = TextEditingController();
+  Timer? _locationSearchTimer;
+  int _locationSearchRequest = 0;
+  List<GeocodingSuggestion> _locationSuggestions = [];
+  double? _selectedLatitude;
+  double? _selectedLongitude;
+  String? _selectedLocationLabel;
 
   final List<String> _countries = [
     'Kenya',
@@ -155,6 +163,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
     _street.dispose();
     _building.dispose();
     _zip.dispose();
+    _locationSearch.dispose();
+    _locationSearchTimer?.cancel();
     _rentPrice.dispose();
     _serviceCharges.dispose();
     _securityDeposit.dispose();
@@ -187,6 +197,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
         _neighborhood.text = data['neighborhood'] ?? '';
         _street.text = data['street'] ?? '';
         _building.text = data['building'] ?? '';
+        _locationSearch.text = data['locationSearch'] ?? '';
+        _selectedLatitude = (data['latitude'] as num?)?.toDouble();
+        _selectedLongitude = (data['longitude'] as num?)?.toDouble();
+        _selectedLocationLabel = _locationSearch.text;
 
         _rentPrice.text = data['rentPrice'] ?? '';
         _serviceCharges.text = data['serviceCharges'] ?? '';
@@ -223,6 +237,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
           'neighborhood': _neighborhood.text.trim(),
           'street': _street.text.trim(),
           'building': _building.text.trim(),
+          'locationSearch': _locationSearch.text.trim(),
+          'latitude': _selectedLatitude,
+          'longitude': _selectedLongitude,
           'rentPrice': _rentPrice.text.trim(),
           'serviceCharges': _serviceCharges.text.trim(),
           'securityDeposit': _securityDeposit.text.trim(),
@@ -236,6 +253,41 @@ class _AddListingFlowState extends State<AddListingFlow> {
     }
   }
 
+  void _searchLocations(String value) {
+    _locationSearchTimer?.cancel();
+    final request = ++_locationSearchRequest;
+    if (_selectedLocationLabel != value.trim()) {
+      _selectedLatitude = null;
+      _selectedLongitude = null;
+    }
+    if (value.trim().length < 3) {
+      setState(() => _locationSuggestions = []);
+      return;
+    }
+
+    _locationSearchTimer = Timer(const Duration(milliseconds: 450), () async {
+      final suggestions = await searchAddressSuggestions(
+        '${value.trim()}, ${_selectedCity ?? ''}, ${_selectedCountry ?? ''}',
+      );
+      if (!mounted || request != _locationSearchRequest) return;
+      setState(() => _locationSuggestions = suggestions);
+    });
+  }
+
+  void _selectLocation(GeocodingSuggestion suggestion) {
+    setState(() {
+      _locationSearch.text = suggestion.displayName;
+      _locationSearch.selection = TextSelection.collapsed(
+        offset: _locationSearch.text.length,
+      );
+      _selectedLatitude = suggestion.lat;
+      _selectedLongitude = suggestion.lng;
+      _selectedLocationLabel = suggestion.displayName.trim();
+      _neighborhood.text = suggestion.displayName.split(',').first.trim();
+      _locationSuggestions = [];
+    });
+  }
+
   Future<void> _uploadPickedPhoto(PickedPhoto photo) async {
     setState(() {
       photo.isUploading = true;
@@ -244,7 +296,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
     try {
       final compressed = await ImageUploadService.compressImageFile(photo.file);
-      final task = UploadsService.uploadFileWithProgress(compressed, (progress) {
+      final task =
+          UploadsService.uploadFileWithProgress(compressed, (progress) {
         if (!mounted) return;
         setState(() {
           photo.progress = progress;
@@ -351,15 +404,17 @@ class _AddListingFlowState extends State<AddListingFlow> {
       if (_pickedPhotos.any((p) => p.isUploading)) {
         throw Exception('Please wait for all photos to finish uploading.');
       }
-      final failedUploads = _pickedPhotos.where((p) => p.error != null).toList();
+      final failedUploads =
+          _pickedPhotos.where((p) => p.error != null).toList();
       if (failedUploads.isNotEmpty) {
-        throw Exception('Some photos failed to upload. Please remove them or try again.');
+        throw Exception(
+            'Some photos failed to upload. Please remove them or try again.');
       }
-      
+
       final uploadedUrls = _pickedPhotos.map((p) => p.url!).toList();
       if (uploadedUrls.isEmpty) throw Exception('No photos uploaded');
 
-      // 2) Build address + geocode
+      // 2) Build address from the explicitly selected location.
       final addressParts = [
         _building.text.trim(),
         _street.text.trim(),
@@ -373,7 +428,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
         _selectedCountry,
       ].whereType<String>().where((p) => p.isNotEmpty).join(', ');
 
-      final coords = await geocodeAddress(geocodeQuery);
+      final selectedLatitude = _selectedLatitude;
+      final selectedLongitude = _selectedLongitude;
+      if (selectedLatitude == null || selectedLongitude == null) {
+        throw Exception(
+            'Select a location from the address suggestions before publishing.');
+      }
       final selectedAmenities =
           _amenities.entries.where((e) => e.value).map((e) => e.key).toList();
       final estimatedArea = (_bedrooms * 35).clamp(30, 500);
@@ -394,8 +454,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'image_url': uploadedUrls.first,
         'images': uploadedUrls,
         'amenities': selectedAmenities,
-        'lat': coords?.lat,
-        'lng': coords?.lng,
+        'lat': selectedLatitude,
+        'lng': selectedLongitude,
       };
 
       await repo.createPropertyFromListing(listingPayload: propertyPayload);
@@ -412,11 +472,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'photos': uploadedUrls,
       };
 
-      await repo.submitVerification(
-          verificationPayload: {
-            'documents': uploadedUrls,
-            'property': propertyVerificationPayload,
-          });
+      await repo.submitVerification(verificationPayload: {
+        'documents': uploadedUrls,
+        'property': propertyVerificationPayload,
+      });
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_draftKey);
@@ -726,8 +785,71 @@ class _AddListingFlowState extends State<AddListingFlow> {
               value: _selectedCity,
               items: _citiesByCountry[_selectedCountry] ?? [],
               hint: 'Select City',
-              onChanged: (val) => setState(() => _selectedCity = val),
+              onChanged: (val) => setState(() {
+                _selectedCity = val;
+                _selectedLatitude = null;
+                _selectedLongitude = null;
+                _selectedLocationLabel = null;
+                _locationSuggestions = [];
+              }),
             ),
+            const SizedBox(height: 20),
+            _buildLabel('Search exact location'),
+            TextFormField(
+              controller: _locationSearch,
+              onChanged: _searchLocations,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Start typing an address or landmark',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _selectedLatitude != null
+                    ? const Icon(Icons.check_circle, color: Colors.green)
+                    : null,
+                filled: true,
+                fillColor: AppColors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            if (_locationSuggestions.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(top: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black12, blurRadius: 8),
+                  ],
+                ),
+                child: Column(
+                  children: _locationSuggestions.map((suggestion) {
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.location_on_outlined),
+                      title: Text(
+                        suggestion.displayName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () => _selectLocation(suggestion),
+                    );
+                  }).toList(),
+                ),
+              ),
+            if (_locationSearch.text.isNotEmpty &&
+                _selectedLatitude == null &&
+                _locationSuggestions.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Choose a suggested location to place the property accurately.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.gray500,
+                      ),
+                ),
+              ),
             const SizedBox(height: 20),
             _buildLabel('Area / Neighborhood'),
             _buildTextField(_neighborhood, 'Kilimani'),
@@ -912,7 +1034,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
                       child: Center(
                         child: CircularProgressIndicator(
                           value: photo.progress > 0 ? photo.progress : null,
-                          valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor:
+                              const AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       ),
                     ),
@@ -923,14 +1046,16 @@ class _AddListingFlowState extends State<AddListingFlow> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Center(
-                        child: Icon(Icons.error, color: Colors.redAccent, size: 32),
+                        child: Icon(Icons.error,
+                            color: Colors.redAccent, size: 32),
                       ),
                     ),
                   Positioned(
                     top: 8,
                     right: 8,
                     child: GestureDetector(
-                      onTap: () => setState(() => _pickedPhotos.removeAt(index)),
+                      onTap: () =>
+                          setState(() => _pickedPhotos.removeAt(index)),
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: const BoxDecoration(
@@ -1195,14 +1320,17 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.cloud_upload_outlined, color: AppColors.primary, size: 28),
+                      Icon(Icons.cloud_upload_outlined,
+                          color: AppColors.primary, size: 28),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _uploadProgress < 1.0 ? 'Optimizing & Uploading...' : 'Upload Complete',
+                              _uploadProgress < 1.0
+                                  ? 'Optimizing & Uploading...'
+                                  : 'Upload Complete',
                               style: GoogleFonts.poppins(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 16,
@@ -1229,13 +1357,16 @@ class _AddListingFlowState extends State<AddListingFlow> {
                       value: _uploadProgress,
                       minHeight: 8,
                       backgroundColor: const Color(0xFFE5E7EB),
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(AppColors.primary),
                     ),
                   ),
                   if (_imageUploadStatus.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     ..._imageUploadStatus.map((item) {
-                      final percent = (item.progress * 100).clamp(0, 100).toStringAsFixed(0);
+                      final percent = (item.progress * 100)
+                          .clamp(0, 100)
+                          .toStringAsFixed(0);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: Row(
@@ -1243,13 +1374,17 @@ class _AddListingFlowState extends State<AddListingFlow> {
                             Expanded(
                               child: Text(
                                 path.basename(item.file.path),
-                                style: GoogleFonts.poppins(color: AppColors.gray600, fontSize: 13),
+                                style: GoogleFonts.poppins(
+                                    color: AppColors.gray600, fontSize: 13),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 10),
                             Text('$percent%',
-                                style: GoogleFonts.poppins(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                                style: GoogleFonts.poppins(
+                                    color: AppColors.primary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600)),
                           ],
                         ),
                       );
