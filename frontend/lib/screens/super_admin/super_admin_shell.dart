@@ -76,51 +76,124 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: isDesktop ? null : AppBar(
-        backgroundColor: AppTheme.background,
-        elevation: 0,
-        title: Text('Super Admin',
-            style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: AppColors.gray900)),
-      ),
-      body: Row(
+      body: Column(
         children: [
-          if (isDesktop)
-            NavigationRail(
-              backgroundColor: AppColors.white,
-              extended: ResponsiveLayout.isLargeDesktop(context),
-              minExtendedWidth: 240,
-              selectedIndex: _selectedIndex,
-              onDestinationSelected: (index) => setState(() => _selectedIndex = index),
-              leading: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24.0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+          // Global Top Header
+          Container(
+            height: 72,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: const Border(bottom: BorderSide(color: AppColors.outlineLight)),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))
+              ],
+            ),
+            child: Row(
+              children: [
+                // Logo & Brand
+                if (isDesktop) ...[
+                  Icon(PhosphorIcons.buildings(PhosphorIconsStyle.fill), color: AppColors.primary, size: 28),
+                  const SizedBox(width: 12),
+                  Text('StayNest Admin', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.gray900)),
+                  const SizedBox(width: 48),
+                ],
+                
+                // Global Search Bar
+                Expanded(
+                  child: Container(
+                    height: 40,
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    decoration: BoxDecoration(
+                      color: AppColors.gray50,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.outlineLight),
+                    ),
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search users, properties, or records...',
+                        hintStyle: GoogleFonts.poppins(fontSize: 13, color: AppColors.gray500),
+                        prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.gray500),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      ),
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(width: 16),
+                
+                // Notification Bell
+                Stack(
+                  alignment: Alignment.topRight,
                   children: [
-                    Icon(PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill), color: AppColors.primary, size: 28),
-                    if (ResponsiveLayout.isLargeDesktop(context)) ...[
-                      const SizedBox(width: 12),
-                      Text('Admin',
-                          style: GoogleFonts.poppins(
-                              fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.gray900)),
+                    IconButton(
+                      icon: Icon(PhosphorIcons.bell(PhosphorIconsStyle.fill), color: AppColors.gray600),
+                      onPressed: () {},
+                    ),
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: AppColors.red500,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(width: 12),
+                
+                // Admin Profile Dropdown
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                      child: Text(AppSession.currentUser?.name.substring(0, 1).toUpperCase() ?? 'A',
+                        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
+                    ),
+                    if (isDesktop) ...[
+                      const SizedBox(width: 8),
+                      Text(AppSession.currentUser?.name ?? 'Admin', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13)),
+                      const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.gray600),
                     ]
                   ],
                 ),
-              ),
-              destinations: _navItems.map((item) {
-                return NavigationRailDestination(
-                  icon: Icon(item.icon),
-                  label: Text(item.label, style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
-                );
-              }).toList(),
+              ],
             ),
+          ),
           
-          if (isDesktop) const VerticalDivider(thickness: 1, width: 1, color: AppColors.outlineLight),
-          
+          // Main Content
           Expanded(
-            child: _pages[_selectedIndex],
+            child: Row(
+              children: [
+                if (isDesktop)
+                  NavigationRail(
+                    backgroundColor: AppColors.white,
+                    extended: ResponsiveLayout.isLargeDesktop(context),
+                    minExtendedWidth: 220,
+                    selectedIndex: _selectedIndex,
+                    onDestinationSelected: (index) => setState(() => _selectedIndex = index),
+                    destinations: _navItems.map((item) {
+                      return NavigationRailDestination(
+                        icon: Icon(item.icon),
+                        label: Text(item.label, style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                      );
+                    }).toList(),
+                  ),
+                
+                if (isDesktop) const VerticalDivider(thickness: 1, width: 1, color: AppColors.outlineLight),
+                
+                Expanded(
+                  child: _pages[_selectedIndex],
+                ),
+              ],
+            ),
           ),
         ],
       ),

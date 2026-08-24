@@ -137,7 +137,7 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
                 backgroundColor: AppColors.primary.withValues(alpha: 0.12),
                 child: Icon(PhosphorIcons.identificationBadge(PhosphorIconsStyle.fill), color: AppColors.primary)),
             title: Text(name, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14)),
-            subtitle: Text('$email • $date', style: GoogleFonts.poppins(fontSize: 12, color: AppColors.gray500)),
+            subtitle: Text('$email ï¿½ $date', style: GoogleFonts.poppins(fontSize: 12, color: AppColors.gray500)),
             trailing: Chip(
                 label: Text(status.toUpperCase(), style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600)),
                 backgroundColor: status == 'approved'
@@ -300,6 +300,37 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
                 Text('KYC Verification Queue', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
                 Text('Review landlord documents and approve them to allow listing creation.', style: GoogleFonts.poppins(color: AppColors.gray500)),
+                const SizedBox(height: 16),
+                // Local Filters
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        decoration: InputDecoration(
+                          hintText: 'Filter by name or email...',
+                          prefixIcon: const Icon(Icons.search, color: AppColors.gray500),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.outlineLight)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                        onChanged: (value) {},
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      flex: 1,
+                      child: DropdownButtonFormField<String>(
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.outlineLight)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                        value: 'All',
+                        items: ['All', 'Pending', 'Approved', 'Rejected'].map((status) => DropdownMenuItem(value: status, child: Text(status))).toList(),
+                        onChanged: (value) {},
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 24),
                 
                 Expanded(
