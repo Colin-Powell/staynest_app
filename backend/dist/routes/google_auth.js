@@ -22,7 +22,7 @@ router.post('/google', async (req, res, next) => {
         const exists = await query('SELECT id, name, email, phone, role, verified FROM users WHERE email = $1 LIMIT 1', [email]);
         let user = exists.rows[0];
         if (!user) {
-            const result = await query(`INSERT INTO users (name, email, avatar, verified) VALUES ($1, $2, $3, true) RETURNING id, name, email, phone, role, verified`, [name, email, avatar]);
+            const result = await query(`INSERT INTO users (name, email, avatar, verified, password_hash) VALUES ($1, $2, $3, true, '*') RETURNING id, name, email, phone, role, verified`, [name, email, avatar]);
             user = result.rows[0];
         }
         else {

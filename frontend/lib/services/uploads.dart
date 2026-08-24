@@ -20,13 +20,16 @@ class UploadCancelledException implements Exception {
 
 class UploadsService {
   /// Uploads a single file to the backend `/uploads` endpoint and returns the public URL.
-  static Future<String> uploadFile(File file, {String? token}) async {
+  static Future<String> uploadFile(File file, {String? token, String? idempotencyKey}) async {
     final base = AppSession.apiBaseUrl; // e.g. http://10.0.2.2:8080/api
     final uri = Uri.parse('$base/uploads');
     final request = http.MultipartRequest('POST', uri);
     if ((token ?? AppSession.apiToken) != null) {
       request.headers['Authorization'] =
           'Bearer ${token ?? AppSession.apiToken}';
+    }
+    if (idempotencyKey != null) {
+      request.headers['Idempotency-Key'] = idempotencyKey;
     }
     final multipart = await http.MultipartFile.fromPath('file', file.path);
     request.files.add(multipart);
@@ -49,7 +52,7 @@ class UploadsService {
   /// Returns an [UploadTask] with a `future` and a `cancel()` method.
   static UploadTask uploadFileWithProgress(
       File file, void Function(double) onProgress,
-      {String? token}) {
+      {String? token, String? idempotencyKey}) {
     final client = http.Client();
     final completer = Completer<String>();
 
@@ -60,6 +63,9 @@ class UploadsService {
       if ((token ?? AppSession.apiToken) != null) {
         request.headers['Authorization'] =
             'Bearer ${token ?? AppSession.apiToken}';
+      }
+      if (idempotencyKey != null) {
+        request.headers['Idempotency-Key'] = idempotencyKey;
       }
 
       try {

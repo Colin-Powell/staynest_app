@@ -39,6 +39,7 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
   );
   List<BookingWrapper> _allBookings = [];
   bool _loading = true;
+  bool _hasError = false;
 
   late final AnimationController _animController;
 
@@ -53,52 +54,62 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
   }
 
   Future<void> _loadData() async {
-    setState(() => _loading = true);
-    final bookings = await BookingService.fetchBookings(isLandlord: false);
-    if (!mounted) return;
-
     setState(() {
-      _allBookings = bookings.map((b) {
-        String uiStatus = 'Upcoming';
-        if (b['status'] == 'confirmed' || b['status'] == 'pending') {
-          uiStatus = 'Upcoming';
-        }
-        if (b['status'] == 'completed') uiStatus = 'Completed';
-        if (b['status'] == 'cancelled' || b['status'] == 'rejected') {
-          uiStatus = 'Cancelled';
-        }
-
-        final checkIn = DateTime.parse(b['check_in_date']);
-        final dateStr = "${checkIn.day}/${checkIn.month}/${checkIn.year}";
-
-        return BookingWrapper(
-          property: Property(
-            id: b['property_id']?.toString() ?? '',
-            name: b['title']?.toString() ?? 'Property',
-            location: b['city']?.toString() ?? '',
-            image: b['image_url']?.toString() ?? '',
-            // total_price may arrive as String or num depending on API / decoding
-            price: (b['total_price'] is num)
-                ? (b['total_price'] as num).toInt()
-                : int.tryParse(b['total_price']?.toString() ?? '') ?? 0,
-
-            lat: 0, lng: 0, 
-            rating: (double.tryParse(b['average_rating']?.toString() ?? '0') ?? 0.0).toDouble(),
-            reviews: int.tryParse(b['review_count']?.toString() ?? '0') ?? 0,
-            category: '', images: [],
-            features: const PropertyFeatures(
-                beds: 0, rooms: 0, baths: 0, furnished: false),
-            amenities: [], agent: const Agent(userId: '', name: '', avatar: ''),
-            description: '',
-          ),
-          dateTime: dateStr,
-          status: uiStatus,
-        );
-      }).toList();
-      _loading = false;
+      _loading = true;
+      _hasError = false;
     });
 
-    _animController.forward();
+    try {
+      final bookings = await BookingService.fetchBookings(isLandlord: false);
+      if (!mounted) return;
+
+      setState(() {
+        _allBookings = bookings.map((b) {
+          String uiStatus = 'Upcoming';
+          if (b['status'] == 'confirmed' || b['status'] == 'pending') {
+            uiStatus = 'Upcoming';
+          }
+          if (b['status'] == 'completed') uiStatus = 'Completed';
+          if (b['status'] == 'cancelled' || b['status'] == 'rejected') {
+            uiStatus = 'Cancelled';
+          }
+
+          final checkIn = DateTime.parse(b['check_in_date']);
+          final dateStr = "${checkIn.day}/${checkIn.month}/${checkIn.year}";
+
+          return BookingWrapper(
+            property: Property(
+              id: b['property_id']?.toString() ?? '',
+              name: b['property_name'] ?? 'Unknown Property',
+              location: 'See Details',
+              image: b['property_image'] ?? '',
+              // total_price may arrive as String or num depending on API / decoding
+              price: int.tryParse(b['total_price']?.toString() ?? '') ?? 0,
+
+              lat: 0, lng: 0, 
+              rating: 0.0,
+              reviews: 0,
+              category: '', images: [],
+              features: const PropertyFeatures(
+                  beds: 0, rooms: 0, baths: 0, furnished: false),
+              amenities: [], agent: const Agent(userId: '', name: '', avatar: ''),
+              description: '',
+            ),
+            dateTime: dateStr,
+            status: uiStatus,
+          );
+        }).toList();
+        _loading = false;
+      });
+
+      _animController.forward(from: 0.0);
+    } catch (err) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _hasError = true;
+      });
+    }
   }
 
   void _switchTab(String tab) {
@@ -162,6 +173,21 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                         color: Color(0xFF4F46E5),
                       ),
                     )
+                  : _hasError
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text('Failed to load bookings.',
+                                  style: TextStyle(color: Colors.red)),
+                              const SizedBox(height: 10),
+                              ElevatedButton(
+                                onPressed: _loadData,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        )
                   : ScrollConfiguration(
                       behavior: const AppScrollBehavior(),
                       child: displayBookings.isEmpty

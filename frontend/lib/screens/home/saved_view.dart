@@ -36,6 +36,16 @@ class _SavedViewState extends State<SavedView>
 
   Future<void> _toggleSave(String propertyId) async {
     final isCurrentlySaved = AppSession.isSaved(propertyId);
+
+    // Optimistic UI update
+    setState(() {
+      if (isCurrentlySaved) {
+        AppSession.savedPropertyIds.remove(propertyId);
+      } else {
+        AppSession.savedPropertyIds.add(propertyId);
+      }
+    });
+
     if (AppSession.currentUserId != null && AppSession.apiToken != null) {
       try {
         final repository = RemoteDatabaseRepository();
@@ -44,31 +54,49 @@ class _SavedViewState extends State<SavedView>
             userId: AppSession.currentUserId!,
             propertyId: propertyId,
           );
-          AppSession.savedPropertyIds.remove(propertyId);
         } else {
           await repository.savePropertyForUser(
             userId: AppSession.currentUserId!,
             propertyId: propertyId,
           );
-          AppSession.savedPropertyIds.add(propertyId);
         }
-        return;
       } catch (_) {
-        // Nothing to do; fall back to local state.
+        // Revert on failure
+        if (!mounted) return;
+        setState(() {
+          if (isCurrentlySaved) {
+            AppSession.savedPropertyIds.add(propertyId);
+          } else {
+            AppSession.savedPropertyIds.remove(propertyId);
+          }
+        });
       }
     }
-    AppSession.toggleSaved(propertyId);
   }
 
+  bool _hasError = false;
+
   Future<void> _load() async {
-    final loaded = await _propertyService.fetchProperties();
-    if (!mounted) return;
     setState(() {
-      _all = loaded;
-      _loading = false;
+      _hasError = false;
+      _loading = true;
     });
-    // Start the cascade animation once data is loaded
-    _animController.forward();
+    try {
+      final loaded = await _propertyService.fetchProperties();
+      if (!mounted) return;
+      setState(() {
+        _all = loaded;
+        _loading = false;
+      });
+      // Start the cascade animation once data is loaded
+      _animController.forward();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _hasError = true;
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -133,6 +161,25 @@ class _SavedViewState extends State<SavedView>
                       color: Color(0xFF3F37C9),
                     ),
                   )
+                : _hasError
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Failed to load properties',
+                              style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600, fontSize: 16),
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: _load,
+                              child: const Text('Retry', style: TextStyle(color: Color(0xFF3F37C9))),
+                            )
+                          ],
+                        ),
+                      )
                 : Builder(builder: (context) {
                     final savedProperties =
                         _all.where((p) => AppSession.isSaved(p.id)).toList();
@@ -220,8 +267,7 @@ class _SavedViewState extends State<SavedView>
                                               ),
                                               GestureDetector(
                                                 onTap: () {
-                                                  _toggleSave(property.id).then(
-                                                      (_) => setState(() {}));
+                                                  _toggleSave(property.id);
                                                 },
                                                 child: const Icon(
                                                   Icons.favorite,

@@ -184,6 +184,22 @@ class HttpJsonClient {
     });
   }
 
+  Future<http.Response> put(
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+  }) {
+    final encodedBody =
+        body is String ? body : (body == null ? null : jsonEncode(body));
+    return _sendWithOptionalRetry(() async {
+      return _client.put(
+        uri,
+        headers: {..._authHeaders, ...?headers},
+        body: encodedBody,
+      );
+    });
+  }
+
   Future<http.Response> delete(
     Uri uri, {
     Map<String, String>? headers,

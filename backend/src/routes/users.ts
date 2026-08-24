@@ -83,7 +83,16 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({ data: result.rows[0] });
+    const user = result.rows[0];
+
+    // Strip sensitive fields if it's not the user's own profile
+    if (req.auth?.id !== id) {
+      delete user.email;
+      delete user.phone;
+      delete user.tax_id;
+    }
+
+    res.json({ data: user });
   } catch (error) {
     next(error);
   }

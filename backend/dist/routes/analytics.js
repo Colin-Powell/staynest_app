@@ -63,21 +63,34 @@ router.post('/track', requireAuth, async (req, res, next) => {
         if (!eventType || !propertyId) {
             return res.status(400).json({ error: 'eventType and propertyId are required.' });
         }
-        const propertyExists = await query('SELECT 1 FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
+        const propertyExists = await query('SELECT landlord_id FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
         if (propertyExists.rowCount === 0) {
             return res.status(404).json({ error: 'Property not found.' });
+        }
+        if (userId && userId === propertyExists.rows[0].landlord_id) {
+            // Don't track interactions if the landlord is viewing their own property
+            return res.status(200).json({ ok: true, ignored: true, reason: 'landlord_own_property' });
         }
         await query('BEGIN');
         try {
             const isViewEvent = eventType === 'property_view' || eventType === 'property_detail_view';
             const isSaveEvent = eventType === 'property_save';
             let isFirstAction = true;
-            if (userId && propertyId && (isViewEvent || isSaveEvent)) {
-                const priorCheck = await query(`SELECT 1 FROM engagement_events 
-           WHERE user_id = $1 AND property_id = $2 
-             AND event_type ${isViewEvent ? "IN ('property_view', 'property_detail_view')" : "= 'property_save'"}
-           LIMIT 1`, [userId, propertyId]);
-                isFirstAction = (priorCheck.rowCount ?? 0) === 0;
+            if (isViewEvent || isSaveEvent) {
+                if (userId) {
+                    const priorCheck = await query(`SELECT 1 FROM engagement_events 
+             WHERE user_id = $1 AND property_id = $2 
+               AND event_type ${isViewEvent ? "IN ('property_view', 'property_detail_view')" : "= 'property_save'"}
+             LIMIT 1`, [userId, propertyId]);
+                    isFirstAction = (priorCheck.rowCount ?? 0) === 0;
+                }
+                else if (sessionId) {
+                    const priorCheck = await query(`SELECT 1 FROM engagement_events 
+             WHERE session_id = $1 AND property_id = $2 
+               AND event_type ${isViewEvent ? "IN ('property_view', 'property_detail_view')" : "= 'property_save'"}
+             LIMIT 1`, [sessionId, propertyId]);
+                    isFirstAction = (priorCheck.rowCount ?? 0) === 0;
+                }
             }
             await query(`INSERT INTO engagement_events (user_id, property_id, event_type, session_id, metadata, created_at)
          VALUES ($1, $2, $3, $4, $5, NOW())`, [userId, propertyId, eventType, sessionId ?? null, metadata]);
@@ -127,6 +140,10 @@ router.get('/stats/:propertyId', requireAuth, async (req, res, next) => {
             return res.status(404).json({ error: 'Analytics not found for property.' });
         }
         const row = result.rows[0];
+        // Verify landlord ownership
+        if (row.landlord_id !== req.auth?.id) {
+            return res.status(403).json({ error: 'You are not authorized to view analytics for this property.' });
+        }
         const views = toNumber(row.views);
         const clicks = toNumber(row.clicks);
         const impressions = toNumber(row.impressions);
@@ -172,7 +189,7 @@ router.get('/landlord-overview', requireAuth, async (req, res, next) => {
         const [statsResult, occupancyResult, chartResult, topProps, photoRows] = await Promise.all([
             query(`SELECT
            COALESCE(SUM(pa.views), 0) AS views,
-           COALESCE(SUM(pa.unique_viewers), 0) AS unique_viewers,
+           COALESCE(SUM(pa.unique_views), 0) AS unique_viewers,
            COALESCE(SUM(pa.saves), 0) AS saves,
            COALESCE(SUM(pa.shares), 0) AS shares,
            COALESCE(SUM(pa.impressions), 0) AS impressions,
@@ -290,6 +307,12 @@ router.get('/landlord-overview', requireAuth, async (req, res, next) => {
 router.get('/management/:propertyId', requireAuth, async (req, res, next) => {
     try {
         const { propertyId } = req.params;
+        const propCheck = await query('SELECT landlord_id FROM properties WHERE id = $1', [propertyId]);
+        if (propCheck.rowCount === 0)
+            return res.status(404).json({ error: 'Property not found.' });
+        if (propCheck.rows[0].landlord_id !== req.auth?.id) {
+            return res.status(403).json({ error: 'You are not authorized to view management data for this property.' });
+        }
         const stats = await query(`SELECT pa.*
        FROM property_analytics pa
        WHERE pa.property_id = $1`, [propertyId]);

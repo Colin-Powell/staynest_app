@@ -11,12 +11,11 @@ const router = Router();
 // Register new user
 router.post('/register', async (req, res, next) => {
   try {
-    const { name, email, password, phone, role } = req.body as {
+    const { name, email, password, phone } = req.body as {
       name?: string;
       email?: string;
       password?: string;
       phone?: string;
-      role?: string;
     };
 
     if (!name || !email || !password || !phone) {
@@ -34,11 +33,11 @@ router.post('/register', async (req, res, next) => {
 
     const hash = await bcrypt.hash(password, 10);
 
-    const userRole = (typeof role === 'string' && ['tenant', 'landlord', 'host'].includes(role)) ? role : 'tenant';
+    const userRole = 'tenant';
 
     const result = await query(
       `INSERT INTO users (name, email, phone, password_hash, role, verified)
-       VALUES ($1, $2, $3, $4, $5, true)
+       VALUES ($1, $2, $3, $4, $5, false)
        RETURNING id, name, email, phone, role, verified`,
       [name.trim(), normalizedEmail, normalizedPhone, hash, userRole],
     );
@@ -46,24 +45,6 @@ router.post('/register', async (req, res, next) => {
 
 
     const created = result.rows[0];
-
-    // If landlord, store business fields
-    if (userRole === 'landlord') {
-      const { business_name, business_type, business_description, tax_id, years_in_business } = req.body;
-      if (business_name || business_type || business_description || tax_id || years_in_business) {
-        await query(
-          `UPDATE users SET business_name = $1, business_type = $2, business_description = $3, tax_id = $4, years_in_business = $5 WHERE id = $6`,
-          [
-            business_name?.trim() || null,
-            business_type?.trim() || null,
-            business_description?.trim() || null,
-            tax_id?.trim() || null,
-            years_in_business ? Number(years_in_business) : null,
-            created.id,
-          ],
-        );
-      }
-    }
 
     const accessToken = jwt.sign(
       {

@@ -47,6 +47,36 @@ router.patch('/profile', requireAuth, async (req, res, next) => {
         next(error);
     }
 });
+router.get('/recent-contacts', requireAuth, async (_req, res, next) => {
+    try {
+        // Placeholder response for the frontend's fetchRecentContacts call
+        res.json({ data: { contacts: [] } });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+router.get('/:id', async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const result = await query(`SELECT id, name, email, phone, avatar, role, verified, created_at, business_name, business_type, business_description, tax_id, years_in_business
+       FROM users WHERE id = $1`, [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        const user = result.rows[0];
+        // Strip sensitive fields if it's not the user's own profile
+        if (req.auth?.id !== id) {
+            delete user.email;
+            delete user.phone;
+            delete user.tax_id;
+        }
+        res.json({ data: user });
+    }
+    catch (error) {
+        next(error);
+    }
+});
 router.post('/change-password', requireAuth, async (req, res, next) => {
     try {
         const userId = req.auth?.id;
@@ -59,6 +89,63 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
         const salt = await bcrypt.genSalt(10);
         const hash = await bcrypt.hash(newPassword, salt);
         await query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, userId]);
+        res.json({ ok: true });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+router.put('/:id/fcm-token', requireAuth, async (req, res, next) => {
+    try {
+        const userId = req.params.id;
+        if (req.auth?.id !== userId) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        const { fcmToken } = req.body;
+        if (!fcmToken) {
+            return res.status(400).json({ error: 'fcmToken is required' });
+        }
+        await query('UPDATE users SET fcm_token = $1 WHERE id = $2', [fcmToken, userId]);
+        res.json({ ok: true });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+router.get('/:id/favorites', requireAuth, async (req, res, next) => {
+    try {
+        const userId = req.params.id;
+        if (req.auth?.id !== userId)
+            return res.status(403).json({ error: 'Forbidden' });
+        const result = await query(`SELECT property_id FROM favorites WHERE user_id = $1`, [userId]);
+        res.json({ data: result.rows });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+router.post('/:id/favorites', requireAuth, async (req, res, next) => {
+    try {
+        const userId = req.params.id;
+        if (req.auth?.id !== userId)
+            return res.status(403).json({ error: 'Forbidden' });
+        const { propertyId } = req.body;
+        if (!propertyId)
+            return res.status(400).json({ error: 'propertyId is required' });
+        await query(`INSERT INTO favorites (user_id, property_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [userId, propertyId]);
+        res.json({ ok: true });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+router.delete('/:id/favorites/:propertyId', requireAuth, async (req, res, next) => {
+    try {
+        const userId = req.params.id;
+        const { propertyId } = req.params;
+        if (req.auth?.id !== userId)
+            return res.status(403).json({ error: 'Forbidden' });
+        await query(`DELETE FROM favorites WHERE user_id = $1 AND property_id = $2`, [userId, propertyId]);
         res.json({ ok: true });
     }
     catch (error) {

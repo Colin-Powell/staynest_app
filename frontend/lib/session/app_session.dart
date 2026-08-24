@@ -1,11 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:uuid/uuid.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
 import 'package:property_app/screens/home/cache_engine.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:property_app/services/socket_service.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AppSession {
   static const String _prefsKey = 'staynest.session';
@@ -39,22 +42,20 @@ class AppSession {
   static String? currentUserPhone;
   static String? currentUserAvatar;
   static bool currentUserVerified = false;
-  // For Android emulators use 10.0.2.2 to reach the host machine.
-  // For physical Android devices, use one of these:
-  // 1) USB + adb reverse:
-  //    adb reverse tcp:8080 tcp:8080
-  //    API_BASE_URL=http://127.0.0.1:8080/api
-  // 2) Same Wi-Fi network:
-  //    API_BASE_URL=http://<YOUR_PC_IP>:8080/api
-  // If the app still fails with Connection refused, adb reverse is not active or the device cannot reach your host.
+  
+  static final String sessionId = const Uuid().v4();
+  
+  // Default to a production or robust staging URL
   static String get apiBaseUrl {
-    final envUrl = dotenv.env['API_BASE_URL']?.trim();
-    if (envUrl?.isNotEmpty == true) {
-      return envUrl!;
+    if (kIsWeb) {
+      return const String.fromEnvironment(
+        'API_BASE_URL',
+        defaultValue: 'http://localhost:8080/api',
+      );
     }
     return const String.fromEnvironment(
       'API_BASE_URL',
-      defaultValue: 'http://10.0.2.2:8080/api',
+      defaultValue: 'https://api.yourdomain.com/api',
     );
   }
 
@@ -214,20 +215,20 @@ class AppSession {
         },
       };
 
+  static const _storage = FlutterSecureStorage();
+
   static Future<void> persistSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsKey, jsonEncode(toSessionSnapshot()));
+    await _storage.write(key: _prefsKey, value: jsonEncode(toSessionSnapshot()));
   }
 
   static Future<void> restoreSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_prefsKey);
+    final raw = await _storage.read(key: _prefsKey);
     if (raw == null || raw.isEmpty) return;
 
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) {
-        await prefs.remove(_prefsKey);
+        await _storage.delete(key: _prefsKey);
         return;
       }
 
@@ -241,13 +242,12 @@ class AppSession {
         refreshToken = tokens['refreshToken']?.toString();
       }
     } catch (_) {
-      await prefs.remove(_prefsKey);
+      await _storage.delete(key: _prefsKey);
     }
   }
 
   static Future<void> clearPersistedSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefsKey);
+    await _storage.delete(key: _prefsKey);
   }
 
   static void applySessionSnapshot(Map<String, dynamic> snapshot) {
@@ -293,8 +293,10 @@ class AppSession {
     apiToken = null;
     refreshToken = null;
     await clearPersistedSession();
-    await CacheEngine.instance
-        .clearAll(); // Critical: Invalidate cache on logout
+    await CacheEngine.instance.clearAll(); // Critical: Invalidate cache on logout
+    try {
+      SocketService.instance.disconnect();
+    } catch (_) {}
   }
 }
 

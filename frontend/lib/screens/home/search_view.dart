@@ -86,18 +86,33 @@ class _SearchViewState extends State<SearchView> {
     super.dispose();
   }
 
+  bool _hasError = false;
+
   Future<void> _load() async {
+    setState(() {
+      _hasError = false;
+      _loading = true;
+    });
     final repo = RemoteDatabaseRepository();
 
-    await repo.loadPropertiesCached(
-      onData: (rawData, isFromCache) {
-        if (!mounted) return;
+    try {
+      await repo.loadPropertiesCached(
+        onData: (rawData, isFromCache) {
+          if (!mounted) return;
+          setState(() {
+            _all = rawData.map(mapApiProperty).toList();
+            _loading = false;
+          });
+        },
+      );
+    } catch (e) {
+      if (mounted) {
         setState(() {
-          _all = rawData.map(mapApiProperty).toList();
+          _hasError = true;
           _loading = false;
         });
-      },
-    );
+      }
+    }
   }
 
   Future<void> _toggleSave(String propertyId) async {
@@ -553,6 +568,25 @@ class _SearchViewState extends State<SearchView> {
                   child: _loading
                       ? const Center(
                           child: CircularProgressIndicator(color: _primaryText))
+                      : _hasError
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Failed to load properties',
+                                    style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w600, fontSize: 16),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextButton(
+                                    onPressed: _load,
+                                    child: Text('Retry', style: GoogleFonts.poppins(color: _primaryText)),
+                                  )
+                                ],
+                              ),
+                            )
                       : results.isEmpty
                           ? _buildEmptyState()
                           : ListView.builder(
@@ -800,8 +834,8 @@ class _SearchViewState extends State<SearchView> {
                                                                         .circular(
                                                                             10),
                                                               ),
-                                                              child: const Text(
-                                                                'Crowd Sourced',
+                                                              child: Text(
+                                                                property.agent.name,
                                                                 style:
                                                                     TextStyle(
                                                                   fontSize: 11,

@@ -62,18 +62,21 @@ class _HomeViewState extends State<HomeView> {
   List<Property> _recommended = [];
   bool _loadingNearby = true;
   bool _loadingRecommended = true;
+  bool _hasError = false;
 
   List<Property> get _filteredNearby {
     final filter = homeCategoryFilters[_activeFilter];
     return _nearby
-        .where((p) => categoryMatchesUiFilter(p.category, filter))
+        .where((p) =>
+            categoryMatchesUiFilter(p.category, filter, beds: p.features.beds))
         .toList();
   }
 
   List<Property> get _filteredRecommended {
     final filter = homeCategoryFilters[_activeFilter];
     return _recommended
-        .where((p) => categoryMatchesUiFilter(p.category, filter))
+        .where((p) =>
+            categoryMatchesUiFilter(p.category, filter, beds: p.features.beds))
         .toList();
   }
 
@@ -93,6 +96,7 @@ class _HomeViewState extends State<HomeView> {
 
   Future<void> _loadData() async {
     setState(() {
+      _hasError = false;
       _loadingNearby = true;
       _loadingRecommended = true;
     });
@@ -120,7 +124,12 @@ class _HomeViewState extends State<HomeView> {
         );
 
         if (response.statusCode == 200) {
-          rawNearby = jsonDecode(response.body);
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map<String, dynamic> && decoded.containsKey('data')) {
+            rawNearby = decoded['data'] as List<dynamic>;
+          } else if (decoded is List) {
+            rawNearby = decoded;
+          }
         }
       }
 
@@ -163,6 +172,7 @@ class _HomeViewState extends State<HomeView> {
       debugPrint('Error loading properties: $e');
       if (mounted) {
         setState(() {
+          _hasError = true;
           _nearby = [];
           _recommended = [];
           _loadingNearby = false;
@@ -561,7 +571,33 @@ class _HomeViewState extends State<HomeView> {
             ],
           ),
         ),
-        if (_filteredNearby.isEmpty)
+        if (_hasError)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Failed to load properties',
+                    style: GoogleFonts.poppins(
+                        color: _dark,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _loadData,
+                    child: Text('Retry',
+                        style: GoogleFonts.poppins(color: _primaryText)),
+                  )
+                ],
+              ),
+            ),
+          )
+        else if (_filteredNearby.isEmpty)
           _loadingNearby
               ? SizedBox(
                   height: 380,
@@ -659,7 +695,15 @@ class _HomeViewState extends State<HomeView> {
             ),
           ),
           const SizedBox(height: 16),
-          if (_loadingRecommended)
+          if (_hasError)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Text(
+                'Could not load recommendations.',
+                style: GoogleFonts.poppins(color: _grey),
+              ),
+            )
+          else if (_loadingRecommended)
             Column(
               children: List.generate(3, (index) {
                 return Padding(
@@ -1022,8 +1066,6 @@ class _GlassContainer extends StatelessWidget {
     this.borderWidth = 1.2,
     this.height,
   });
-
-
 
   @override
   Widget build(BuildContext context) {

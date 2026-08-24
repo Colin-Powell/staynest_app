@@ -1,6 +1,7 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/repository/http_json_client.dart';
+import 'package:uuid/uuid.dart';
 
 class MessageModel {
   final String id;
@@ -67,28 +68,22 @@ class MessageService {
   static final MessageService instance = MessageService._internal();
   MessageService._internal();
 
+  final HttpJsonClient _client = HttpJsonClient();
   final String _baseUrl = AppSession.apiBaseUrl;
 
   Future<String> saveMessage(
-      {required String toUserId, required String text}) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/messages'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${AppSession.apiToken}',
-        },
-        body: jsonEncode({'to_user_id': toUserId, 'text': text}),
-      );
+      {required String toUserId, required String text, String? idempotencyKey}) async {
+    final key = idempotencyKey ?? const Uuid().v4();
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/messages'),
+      headers: {
+        'Idempotency-Key': key,
+      },
+      body: {'to_user_id': toUserId, 'text': text},
+    );
 
-      if (response.statusCode != 201) {
-        throw Exception('Failed to save message: ${response.body}');
-      }
-      final json = jsonDecode(response.body) as Map<String, dynamic>;
-      return json['data']?['id']?.toString() ?? '';
-    } catch (err) {
-      rethrow;
-    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return json['data']?['id']?.toString() ?? '';
   }
 
   Future<List<MessageModel>> fetchConversation(
@@ -96,100 +91,52 @@ class MessageService {
     int limit = 50,
     int offset = 0,
   }) async {
-    try {
-      final response = await http.get(
-        Uri.parse(
-            '$_baseUrl/messages/conversation/$userId?limit=$limit&offset=$offset'),
-        headers: {
-          'Authorization': 'Bearer ${AppSession.apiToken}',
-        },
-      );
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/messages/conversation/$userId?limit=$limit&offset=$offset'),
+    );
 
-      if (response.statusCode != 200) {
-        throw Exception('Failed to fetch messages: ${response.body}');
-      }
-
-      final json = jsonDecode(response.body) as Map<String, dynamic>;
-      final messages = (json['data']?['messages'] as List<dynamic>?)
-              ?.map((m) => MessageModel.fromJson(m as Map<String, dynamic>))
-              .toList() ??
-          [];
-      return messages;
-    } catch (err) {
-      rethrow;
-    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final messages = (json['data']?['messages'] as List<dynamic>?)
+            ?.map((m) => MessageModel.fromJson(m as Map<String, dynamic>))
+            .toList() ??
+        [];
+    return messages;
   }
 
   Future<List<ConversationModel>> fetchConversations() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/messages/conversations'),
-        headers: {
-          'Authorization': 'Bearer ${AppSession.apiToken}',
-        },
-      );
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/messages/conversations'),
+    );
 
-      if (response.statusCode != 200) {
-        throw Exception('Failed to fetch conversations: ${response.body}');
-      }
-
-      final json = jsonDecode(response.body) as Map<String, dynamic>;
-      final conversations = (json['data']?['conversations'] as List<dynamic>?)
-              ?.map(
-                  (c) => ConversationModel.fromJson(c as Map<String, dynamic>))
-              .toList() ??
-          [];
-      return conversations;
-    } catch (err) {
-      rethrow;
-    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final conversations = (json['data']?['conversations'] as List<dynamic>?)
+            ?.map(
+                (c) => ConversationModel.fromJson(c as Map<String, dynamic>))
+            .toList() ??
+        [];
+    return conversations;
   }
 
   Future<void> markAsRead(List<String> userIds) async {
     if (userIds.isEmpty) return;
 
-    final response = await http.post(
+    await _client.post(
       Uri.parse('$_baseUrl/messages/mark-read'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${AppSession.apiToken}',
-      },
-      body: jsonEncode({'user_ids': userIds}),
+      body: {'user_ids': userIds},
     );
-
-    if (response.statusCode != 200) {
-      throw Exception('Failed to mark as read: ${response.body}');
-    }
   }
 
   Future<void> deleteConversation(String userId) async {
-    try {
-      final response = await http.delete(
-        Uri.parse('$_baseUrl/messages/conversation/$userId'),
-        headers: {
-          'Authorization': 'Bearer ${AppSession.apiToken}',
-        },
-      );
-
-      if (response.statusCode != 200 && response.statusCode != 204) {
-        throw Exception('Failed to delete conversation: ${response.body}');
-      }
-    } catch (err) {
-      rethrow;
-    }
+    await _client.delete(
+      Uri.parse('$_baseUrl/messages/conversation/$userId'),
+    );
   }
 
   Future<List<ConversationModel>> fetchRecentContacts() async {
     try {
-      // Placeholder for actual property-related contact fetching logic
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_baseUrl/users/recent-contacts'),
-        headers: {
-          'Authorization': 'Bearer ${AppSession.apiToken}',
-        },
       );
-
-      if (response.statusCode != 200) return [];
 
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       return (json['data']?['contacts'] as List<dynamic>?)

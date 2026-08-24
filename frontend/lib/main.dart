@@ -34,28 +34,47 @@ import 'screens/super_admin/super_admin_shell.dart';
 import 'package:property_app/firebase_options.dart';
 import 'utils/responsive_layout.dart';
 
+void _initializeFirebaseAsync() async {
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+
+    void logFcm(RemoteMessage m, {String source = 'unknown'}) {
+      final data = m.data;
+      final title = m.notification?.title;
+      final body = m.notification?.body;
+      final senderId = data['senderId']?.toString();
+      final chatId = data['chatId']?.toString();
+      final clickAction = data['click_action']?.toString();
+      debugPrint(
+        '[FCM][$source] title=${title ?? '-'} body=${body ?? '-'} senderId=${senderId ?? '-'} chatId=${chatId ?? '-'} click_action=${clickAction ?? '-'} data=${data.isEmpty ? '{}' : data} ',
+      );
+    }
+
+    FCMService.instance.navigatorKey = navigatorKey;
+    if (!kIsWeb) {
+      await FCMService.instance.initialize();
+      await FCMService.instance.subscribeToTopic('new_listings');
+      FirebaseMessaging.onMessage.listen((m) => logFcm(m, source: 'onMessage'));
+      FirebaseMessaging.onMessageOpenedApp
+          .listen((m) => logFcm(m, source: 'onMessageOpenedApp'));
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) logFcm(initial, source: 'getInitialMessage');
+    }
+  } catch (err, stackTrace) {
+    debugPrint('Firebase initialization failed; continuing without it: $err');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   GoogleFonts.config.allowRuntimeFetching = false;
 
-  // Must be called before accessing any Firebase services (FCM, etc.)
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (err, stackTrace) {
-    debugPrint('Firebase initialization failed; continuing without it: $err');
-    debugPrintStack(stackTrace: stackTrace);
-  }
-
-  // Extract + log the current FCM device registration token (helps debugging)
-  try {
-    final fcmToken = await FirebaseMessaging.instance.getToken();
-    debugPrint('[FCM][token] ${fcmToken ?? '-'}');
-  } catch (err) {
-    debugPrint('FCM token extraction failed: $err');
-  }
+  // Defer firebase init so it doesn't block startup
+  _initializeFirebaseAsync();
 
   try {
     await dotenv.load(fileName: '.env');
@@ -69,57 +88,6 @@ Future<void> main() async {
 
   if (kDebugMode) {
     debugPrint('Effective API_BASE_URL = ${AppSession.apiBaseUrl}');
-  }
-
-  // ─── FCM extraction + filtered logs (load first) ──────────────────────────
-  void logFcm(RemoteMessage m, {String source = 'unknown'}) {
-    // Only print the keys we actually use (keeps logs readable)
-    final data = m.data;
-    final title = m.notification?.title;
-    final body = m.notification?.body;
-    final senderId = data['senderId']?.toString();
-    final chatId = data['chatId']?.toString();
-    final clickAction = data['click_action']?.toString();
-
-    debugPrint(
-      '[FCM][$source] title=${title ?? '-'} body=${body ?? '-'} senderId=${senderId ?? '-'} chatId=${chatId ?? '-'} click_action=${clickAction ?? '-'} data=${data.isEmpty ? '{}' : data} ',
-    );
-  }
-
-  // Assign the global navigator key to FCMService before initialization so
-  // any foreground message callbacks can resolve navigation safely.
-  FCMService.instance.navigatorKey = navigatorKey;
-
-  // Initialize FCM early (before runApp so logs/navigation wiring work).
-  // Web builds do not have a configured Firebase app in this project, so we
-  // skip the FCM bootstrap there and keep the app shell available.
-  if (!kIsWeb) {
-    try {
-      await FCMService.instance.initialize();
-      await FCMService.instance.subscribeToTopic('new_listings');
-    } catch (err, stackTrace) {
-      debugPrint('FCM initialization failed; continuing without it: $err');
-      debugPrintStack(stackTrace: stackTrace);
-    }
-  }
-
-  if (!kIsWeb) {
-    try {
-      FirebaseMessaging.onMessage.listen((m) => logFcm(m, source: 'onMessage'));
-      FirebaseMessaging.onMessageOpenedApp
-          .listen((m) => logFcm(m, source: 'onMessageOpenedApp'));
-    } catch (err, stackTrace) {
-      debugPrint('FCM listeners setup failed: $err');
-      debugPrintStack(stackTrace: stackTrace);
-    }
-
-    try {
-      final initial = await FirebaseMessaging.instance.getInitialMessage();
-      if (initial != null) logFcm(initial, source: 'getInitialMessage');
-    } catch (err, stackTrace) {
-      debugPrint('Initial FCM message lookup failed: $err');
-      debugPrintStack(stackTrace: stackTrace);
-    }
   }
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -235,7 +203,17 @@ class _PropertyAppState extends State<PropertyApp> {
                 final success =
                     await GoogleAuthService.instance.signInWithGoogle();
                 if (success) {
+                  if (!AppSession.currentUserVerified) {
+                    Navigator.pushReplacementNamed(context, '/otp');
+                    return;
+                  }
+                  if (AppSession.isLandlord) {
+                    Navigator.pushReplacementNamed(context, '/portal');
+                    return;
+                  }
+                  await _enforceTenantPreferencesIfMissing(context);
                   Navigator.pushReplacementNamed(context, '/home');
+                  AuthService.instance.syncFCMToken();
                 }
               },
             ),
@@ -251,7 +229,17 @@ class _PropertyAppState extends State<PropertyApp> {
                 final success =
                     await GoogleAuthService.instance.signInWithGoogle();
                 if (success) {
+                  if (!AppSession.currentUserVerified) {
+                    Navigator.pushReplacementNamed(context, '/otp');
+                    return;
+                  }
+                  if (AppSession.isLandlord) {
+                    Navigator.pushReplacementNamed(context, '/portal');
+                    return;
+                  }
+                  await _enforceTenantPreferencesIfMissing(context);
                   Navigator.pushReplacementNamed(context, '/home');
+                  AuthService.instance.syncFCMToken();
                 }
               },
             ),

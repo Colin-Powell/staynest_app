@@ -11,7 +11,8 @@
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
     "test": "echo \"No backend tests configured yet. Add tests under backend/src/__tests__\" && exit 0",
-    "seed": "node ./scripts/seed-admin.js"
+    "seed": "node ./scripts/seed-admin.js",
+    "migrate": "node ./scripts/apply-schema.js"
   },
   "bin": {},
   "dependencies": {

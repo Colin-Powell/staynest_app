@@ -122,8 +122,7 @@ class _CallingViewState extends State<CallingView>
         );
       });
 
-      setState(() {
-      });
+      if (mounted) setState(() {});
     } catch (err) {
       // ignore: avoid_print
       print('Failed to initialize call: $err');

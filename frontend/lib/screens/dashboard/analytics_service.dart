@@ -1,13 +1,14 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:property_app/repository/http_json_client.dart';
 import 'package:uuid/uuid.dart';
 import 'package:property_app/session/app_session.dart';
 
 class AnalyticsService {
-  static String get _baseUrl => '${AppSession.apiBaseUrl}/analytics';
-  static String? _sessionId;
+  static final HttpJsonClient _client = HttpJsonClient();
 
-  static String get sessionId => _sessionId ??= const Uuid().v4();
+  static String get _baseUrl => '${AppSession.apiBaseUrl}/analytics';
+
+  static String get sessionId => AppSession.sessionId;
 
   // Anti-duplication state: Source -> Set of Property IDs seen in this session
   static final Map<String, Set<String>> _sessionImpressions = {};
@@ -25,23 +26,19 @@ class AnalyticsService {
     Map<String, dynamic>? metadata,
   }) async {
     try {
-      await http.post(
+      await _client.post(
         Uri.parse('$_baseUrl/track'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (AppSession.apiToken != null)
-            'Authorization': 'Bearer ${AppSession.apiToken}',
-        },
-        body: jsonEncode({
+        body: {
           'eventType': eventType,
           'userId': userId ?? AppSession.currentUserId,
-          'propertyId': propertyId.trim(),
           'sessionId': sessionId,
-          'metadata': metadata,
-        }),
+          'propertyId': propertyId,
+          'metadata': metadata ?? {},
+          'timestamp': DateTime.now().toIso8601String(),
+        },
       );
     } catch (e) {
-      print('Failed to log analytics: $e');
+      print('Analytics tracking failed: $e');
     }
   }
 
@@ -190,13 +187,10 @@ class AnalyticsService {
   static Future<Map<String, dynamic>?> getPropertyEngagementStats(
       String propertyId) async {
     try {
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_baseUrl/stats/$propertyId'),
-        headers: {'Authorization': 'Bearer ${AppSession.apiToken}'},
       );
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      }
+      return jsonDecode(response.body);
     } catch (e) {
       print('Failed to fetch stats: $e');
     }
@@ -207,13 +201,10 @@ class AnalyticsService {
   static Future<Map<String, dynamic>?> getLandlordOverview(
       String filter) async {
     try {
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_baseUrl/landlord-overview?filter=$filter'),
-        headers: {'Authorization': 'Bearer ${AppSession.apiToken}'},
       );
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      }
+      return jsonDecode(response.body);
     } catch (e) {
       print('Failed to fetch landlord overview: $e');
     }
@@ -297,13 +288,10 @@ class AnalyticsService {
   static Future<Map<String, dynamic>?> getPropertyManagementData(
       String propertyId) async {
     try {
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_baseUrl/management/$propertyId'),
-        headers: {'Authorization': 'Bearer ${AppSession.apiToken}'},
       );
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      }
+      return jsonDecode(response.body);
     } catch (e) {
       print('Failed to fetch property management data: $e');
     }
@@ -313,11 +301,10 @@ class AnalyticsService {
   /// Deletes a property from the portfolio
   static Future<bool> deleteProperty(String propertyId) async {
     try {
-      final response = await http.delete(
+      await _client.delete(
         Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId'),
-        headers: {'Authorization': 'Bearer ${AppSession.apiToken}'},
       );
-      return response.statusCode == 200 || response.statusCode == 204;
+      return true;
     } catch (e) {
       return false;
     }
@@ -327,15 +314,11 @@ class AnalyticsService {
   static Future<bool> updatePropertyStatus(
       String propertyId, String status) async {
     try {
-      final response = await http.patch(
+      await _client.patch(
         Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId/status'),
-        body: jsonEncode({'status': status}),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${AppSession.apiToken}',
-        },
+        body: {'status': status},
       );
-      return response.statusCode == 200;
+      return true;
     } catch (e) {
       return false;
     }
@@ -347,14 +330,10 @@ class AnalyticsService {
     try {
       // Maps "Accepted" -> confirm, "Rejected" -> cancel
       final endpoint = action == 'Accepted' ? 'confirm' : 'cancel';
-      final response = await http.patch(
+      await _client.patch(
         Uri.parse('${AppSession.apiBaseUrl}/bookings/$bookingId/$endpoint'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${AppSession.apiToken}',
-        },
       );
-      return response.statusCode == 200;
+      return true;
     } catch (e) {
       return false;
     }
@@ -363,14 +342,11 @@ class AnalyticsService {
   /// Fetches the availability calendar for the next 14 days
   static Future<List<int>> getPropertyAvailability(String propertyId) async {
     try {
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse(
             '${AppSession.apiBaseUrl}/properties/$propertyId/availability'),
-        headers: {'Authorization': 'Bearer ${AppSession.apiToken}'},
       );
-      if (response.statusCode == 200) {
-        return List<int>.from(jsonDecode(response.body)['blocked_days']);
-      }
+      return List<int>.from(jsonDecode(response.body)['blocked_days']);
     } catch (e) {}
     return [];
   }

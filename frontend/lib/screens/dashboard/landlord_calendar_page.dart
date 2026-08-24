@@ -27,6 +27,7 @@ class LandlordCalendarPage extends StatefulWidget {
 class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
   // Logic & State strictly intact
   bool _isLoading = true;
+  bool _hasError = false;
   List<dynamic> _bookings = [];
   List<int> _blockedDays = [];
   DateTime _focusedDate = DateTime.now();
@@ -38,7 +39,10 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
     try {
       final results = await Future.wait([
         BookingService.fetchBookings(isLandlord: true),
@@ -59,7 +63,12 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasError = true;
+        });
+      }
     }
   }
 

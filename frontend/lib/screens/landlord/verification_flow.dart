@@ -13,6 +13,7 @@ import 'package:iconify_flutter/icons/mdi.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/services/uploads.dart';
+import 'package:uuid/uuid.dart';
 import 'package:property_app/services/verification_api.dart';
 
 // ==========================================
@@ -422,7 +423,12 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
       widget.session.propertyPhotos != null;
   bool get _allPagesComplete => _identityComplete && _propertyComplete;
 
+  bool _isSubmitting = false;
+  final String _idempotencyKey = const Uuid().v4();
+
   Future<void> _goNext() async {
+    if (_isSubmitting) return;
+
     if (_currentPage == 0) {
       if (!_identityComplete) {
         ModalUtils.showError(context, 'Incomplete Step',
@@ -440,19 +446,24 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
       return;
     }
 
+    setState(() => _isSubmitting = true);
     try {
       final payload = {
         'documents': widget.session.toDocumentsMap(),
         'property': {}
       };
-      final resp = await VerificationApi.submitVerification(payload);
+      final resp = await VerificationApi.submitVerification(payload, idempotencyKey: _idempotencyKey);
       final data = resp['data'] ?? resp;
-      Navigator.push(
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        Navigator.push(
           context,
           MaterialPageRoute(
               builder: (_) => VerificationStatusView(
                   statusData: data ?? {'status': 'submitted'})));
+      }
     } catch (e) {
+      if (mounted) setState(() => _isSubmitting = false);
       ModalUtils.showError(context, 'Submission Failed',
           'Something went wrong while submitting your documents. Please try again later.');
     }
@@ -471,8 +482,11 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
   Future<void> _handleUpload(
       File file, String type, Function(String url) onSuccess) async {
     final progress = ValueNotifier<double>(0.0);
-    final task =
-        UploadsService.uploadFileWithProgress(file, (p) => progress.value = p);
+    final task = UploadsService.uploadFileWithProgress(
+      file,
+      (p) => progress.value = p,
+      idempotencyKey: '${_idempotencyKey}_$type',
+    );
     ModalUtils.showProgress(context, progress,
         message: 'Uploading document...', onCancel: () => task.cancel());
     try {
@@ -562,12 +576,14 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
                   if (_currentPage > 0) const SizedBox(width: 12),
                   Expanded(
                       child: PrimaryButton(
-                          text: _currentPage == 0
-                              ? 'Next'
-                              : 'Review Verification',
-                          enabled: _currentPage == 0
+                          text: _isSubmitting
+                              ? 'Submitting...'
+                              : (_currentPage == 0
+                                  ? 'Next'
+                                  : 'Review Verification'),
+                          enabled: !_isSubmitting && (_currentPage == 0
                               ? _identityComplete
-                              : _allPagesComplete,
+                              : _allPagesComplete),
                           onPressed: _goNext)),
                 ],
               ),

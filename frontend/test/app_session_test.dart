@@ -2,11 +2,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
     await AppSession.reset();
   });
 

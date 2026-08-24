@@ -69,6 +69,10 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
     _timer?.cancel();
     _remainingSeconds = 30;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       if (_remainingSeconds == 0) {
         timer.cancel();
       } else {
@@ -157,6 +161,7 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
         Navigator.pushReplacementNamed(context, '/home');
       }
     } catch (error) {
+      if (!mounted) return;
       setState(() {
         _hasError = true;
       });
@@ -215,7 +220,7 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
     _resetError();
     _startCountdown();
     await _requestOtpCode();
-    _focusNodes[0].requestFocus();
+    if (mounted) _focusNodes[0].requestFocus();
   }
 
   Widget _buildOtpBox(int index) {

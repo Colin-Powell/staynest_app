@@ -69,7 +69,7 @@ class PropertyService {
     } catch (e) {
       // ignore: avoid_print
       print('Error fetching properties: $e');
-      return [];
+      rethrow;
     }
   }
 

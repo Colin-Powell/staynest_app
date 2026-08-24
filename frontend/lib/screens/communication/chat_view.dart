@@ -120,12 +120,14 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
     _typingSubscription = SocketService.instance.typing.listen((data) {
       if (data['userId'] == widget.userId) {
-        setState(() => _isOtherTyping = data['isTyping'] == true);
+        if (mounted) if (mounted)
+          setState(() => _isOtherTyping = data['isTyping'] == true);
       }
     });
 
     _seenSubscription = SocketService.instance.seen.listen((data) {
       // Logic to update local message status to seen
+      if (!mounted) return;
       setState(() {
         for (int i = 0; i < _messages.length; i++) {
           if (_messages[i].sender == ChatSender.me &&
@@ -162,6 +164,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   void _addMessage(ChatMessage msg) {
     if (_messages.any((m) => m.id == msg.id)) return;
 
+    if (!mounted) return;
     setState(() {
       _messages.add(msg);
     });
@@ -183,9 +186,8 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       status: MessageStatus.sending,
     ));
 
-    // Send over socket
-    SocketService.instance.sendMessage(to: widget.userId, text: text);
-
+    // We ONLY call REST here to prevent duplicates.
+    // The backend's REST /messages will automatically emit it via socket.
     _performSave(messageId, text);
   }
 
@@ -376,7 +378,8 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                         boxShadow: _isOtherTyping
                             ? [
                                 BoxShadow(
-                                    color: const Color(0xFF3B82F6).withOpacity(0.4),
+                                    color: const Color(0xFF3B82F6)
+                                        .withOpacity(0.4),
                                     blurRadius: 4,
                                     spreadRadius: 1)
                               ]
@@ -402,7 +405,8 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
           // Call button
           GestureDetector(
             onTap: widget.onCall,
-            child: Icon(PhosphorIcons.phone(PhosphorIconsStyle.fill), color: Colors.black, size: 26),
+            child: Icon(PhosphorIcons.phone(PhosphorIconsStyle.fill),
+                color: Colors.black, size: 26),
           ),
         ],
       ),
@@ -512,13 +516,13 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
             ),
           ),
           const SizedBox(width: 12),
-          
+
           // Clean Pill Input-Bar
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6), 
+                color: const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Row(
@@ -543,7 +547,8 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onSubmitted: (_) => _sendMessage(),
                     ),
@@ -551,18 +556,15 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                   if (!_isTyping)
                     GestureDetector(
                       onTap: () {}, // Camera Action
-                      child: Icon(
-                        PhosphorIcons.camera(), 
-                        color: const Color(0xFF9CA3AF), 
-                        size: 22
-                      ),
+                      child: Icon(PhosphorIcons.camera(),
+                          color: const Color(0xFF9CA3AF), size: 22),
                     ),
                 ],
               ),
             ),
           ),
           const SizedBox(width: 12),
-          
+
           // Send / Mic Button Switcher
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
@@ -593,11 +595,8 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                         color: Color(0xFFF3F4F6),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
-                        PhosphorIcons.microphone(),
-                        color: const Color(0xFF9CA3AF), 
-                        size: 22
-                      ),
+                      child: Icon(PhosphorIcons.microphone(),
+                          color: const Color(0xFF9CA3AF), size: 22),
                     ),
                   ),
           ),

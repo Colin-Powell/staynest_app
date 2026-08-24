@@ -1,13 +1,17 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config.js';
 
+if (!env.smtpHost || !env.smtpUser || !env.smtpPass) {
+  throw new Error('SMTP_HOST, SMTP_USER, and SMTP_PASS must be configured.');
+}
+
 const transporter = nodemailer.createTransport({
-  host: env.smtpHost || 'smtp.gmail.com',
-  port: env.smtpPort || 587,
+  host: env.smtpHost,
+  port: env.smtpPort,
   secure: env.smtpPort === 465,
   auth: {
-    user: env.smtpUser || undefined,
-    pass: env.smtpPass || undefined,
+    user: env.smtpUser,
+    pass: env.smtpPass,
   },
 });
 
@@ -39,7 +43,7 @@ export async function sendOtpEmail(to: string, code = '000000') {
   const html = `<p>Your verification code is <strong>${code}</strong>.</p><p>If you did not request this, please ignore this message.</p>`;
 
   const info = await transporter.sendMail({
-    from: env.emailFrom,
+    from: env.emailFrom || env.smtpUser,
     to,
     subject,
     text,
@@ -51,7 +55,7 @@ export async function sendOtpEmail(to: string, code = '000000') {
 
 export async function sendAlertEmail(to: string, subject: string, text: string, html?: string) {
   const info = await transporter.sendMail({
-    from: env.emailFrom,
+    from: env.emailFrom || env.smtpUser,
     to,
     subject,
     text,

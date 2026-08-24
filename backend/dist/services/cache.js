@@ -19,4 +19,11 @@ export function setCache(key, value, ttlMs) {
 export function clearCache(key) {
     cache.delete(key);
 }
+export function clearCachePattern(pattern) {
+    for (const key of cache.keys()) {
+        if (key.startsWith(pattern)) {
+            cache.delete(key);
+        }
+    }
+}
 //# sourceMappingURL=cache.js.map

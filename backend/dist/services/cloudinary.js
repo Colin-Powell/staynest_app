@@ -21,7 +21,7 @@ export async function uploadToCloudinary(fileBuffer, fileName, folder = 'staynes
     return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream({
             folder,
-            resource_type: 'auto',
+            resource_type: 'image',
             public_id: `${Date.now()}-${baseName}`,
         }, (error, result) => {
             if (error) {

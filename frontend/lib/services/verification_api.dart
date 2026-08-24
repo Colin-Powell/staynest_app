@@ -1,22 +1,21 @@
-import 'package:property_app/services/api_client.dart';
+import 'dart:convert';
+import 'package:property_app/repository/http_json_client.dart';
 import 'package:property_app/session/app_session.dart';
 
 class VerificationApi {
-  static ApiClient _client() {
-    return ApiClient(
-      baseUrl: AppSession.apiBaseUrl,
-      defaultHeaders: AppSession.apiToken != null
-          ? {'Authorization': 'Bearer ${AppSession.apiToken!}'}
-          : null,
-    );
-  }
+  static final HttpJsonClient _client = HttpJsonClient();
 
   /// Submit verification payload. `payload` should contain `documents` and optional `property`.
   static Future<Map<String, dynamic>> submitVerification(
-      Map<String, dynamic> payload) async {
-    final client = _client();
-    final response = await client.postJson('/verifications', body: payload);
-    return response['data'] as Map<String, dynamic>;
+      Map<String, dynamic> payload, {String? idempotencyKey}) async {
+    final headers = idempotencyKey != null ? {'Idempotency-Key': idempotencyKey} : <String, String>{};
+    final response = await _client.post(
+      Uri.parse('${AppSession.apiBaseUrl}/verifications'),
+      headers: headers,
+      body: payload,
+    );
+    final data = jsonDecode(response.body);
+    return data['data'] as Map<String, dynamic>;
   }
 
   /// Fetch the current user's latest verification status.
@@ -25,10 +24,10 @@ class VerificationApi {
   ///   { data: { status, documents, property_data, admin_notes, ... } }
   /// Some client code may receive an extra nesting depending on API wrappers.
   static Future<Map<String, dynamic>?> getVerificationStatus() async {
-    final client = _client();
-    final response = await client.getJson('/verifications/me');
+    final response = await _client.get(Uri.parse('${AppSession.apiBaseUrl}/verifications/me'));
+    final decoded = jsonDecode(response.body);
 
-    final data = response['data'];
+    final data = decoded['data'];
     if (data is Map<String, dynamic>) {
       // Normal case: data contains `status` directly
       if (data['status'] != null) return data;
@@ -49,22 +48,21 @@ class VerificationApi {
     int offset = 0,
     int limit = 50,
   }) async {
-    final client = _client();
     final params = <String, String>{};
     if (status != null) params['status'] = status;
     params['offset'] = offset.toString();
     params['limit'] = limit.toString();
 
-    final response = await client.getJson(
-      '/verifications/admin/all',
-      queryParams: params,
+    final response = await _client.get(
+      Uri.parse('${AppSession.apiBaseUrl}/verifications/admin/all').replace(queryParameters: params),
     );
+    final decoded = jsonDecode(response.body);
 
     return {
-      'data': response['data'] as List<dynamic>? ?? [],
-      'total': response['total'] as int? ?? 0,
-      'offset': response['offset'] as int? ?? offset,
-      'limit': response['limit'] as int? ?? limit,
+      'data': decoded['data'] as List<dynamic>? ?? [],
+      'total': decoded['total'] as int? ?? 0,
+      'offset': decoded['offset'] as int? ?? offset,
+      'limit': decoded['limit'] as int? ?? limit,
     };
   }
 
@@ -84,15 +82,14 @@ class VerificationApi {
     required String verificationId,
     String? notes,
   }) async {
-    final client = _client();
-    final response = await client.putJson(
-      '/verifications/$verificationId',
+    final response = await _client.patch(
+      Uri.parse('${AppSession.apiBaseUrl}/verifications/$verificationId'),
       body: {
         'status': 'approved',
         'admin_notes': notes,
       },
     );
-    return response['data'] as Map<String, dynamic>;
+    return jsonDecode(response.body)['data'] as Map<String, dynamic>;
   }
 
   /// Reject a verification.
@@ -100,14 +97,13 @@ class VerificationApi {
     required String verificationId,
     String? notes,
   }) async {
-    final client = _client();
-    final response = await client.putJson(
-      '/verifications/$verificationId',
+    final response = await _client.patch(
+      Uri.parse('${AppSession.apiBaseUrl}/verifications/$verificationId'),
       body: {
         'status': 'rejected',
         'admin_notes': notes,
       },
     );
-    return response['data'] as Map<String, dynamic>;
+    return jsonDecode(response.body)['data'] as Map<String, dynamic>;
   }
 }

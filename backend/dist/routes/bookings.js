@@ -5,41 +5,62 @@ const router = Router();
 // Create a new booking (tenant creates booking)
 router.post('/', requireAuth, async (req, res, next) => {
     try {
-        const { propertyId, checkInDate, checkOutDate, totalPrice, notes } = req.body;
-        if (!propertyId || !checkInDate || !checkOutDate || !totalPrice) {
+        const { propertyId, checkInDate, checkOutDate, notes } = req.body;
+        if (!propertyId || !checkInDate || !checkOutDate) {
             return res.status(400).json({
-                error: 'propertyId, checkInDate, checkOutDate, and totalPrice are required.',
+                error: 'propertyId, checkInDate, and checkOutDate are required.',
             });
         }
-        // Availability Engine: Check for overlapping confirmed bookings
-        const overlapCheck = await query(`SELECT id FROM bookings 
-       WHERE property_id = $1 
-       AND status = 'confirmed'
-       AND (check_in_date, check_out_date) OVERLAPS ($2::date, $3::date)`, [propertyId, checkInDate, checkOutDate]);
-        if (overlapCheck.rowCount > 0) {
-            return res.status(409).json({ error: 'Property is already booked for these dates.' });
+        let bookingData;
+        await query('BEGIN');
+        try {
+            // Lock the property row to prevent concurrent booking races
+            const propResult = await query('SELECT id, landlord_id, price FROM properties WHERE id = $1 FOR UPDATE', [propertyId]);
+            if (propResult.rowCount === 0) {
+                await query('ROLLBACK');
+                return res.status(404).json({ error: 'Property not found.' });
+            }
+            const landlordId = propResult.rows[0].landlord_id;
+            const basePrice = Number(propResult.rows[0].price);
+            if (!landlordId) {
+                await query('ROLLBACK');
+                return res.status(400).json({ error: 'Property has no landlord assigned.' });
+            }
+            // Calculate nights and server-side totalPrice
+            const cIn = new Date(checkInDate);
+            const cOut = new Date(checkOutDate);
+            const diffTime = Math.abs(cOut.getTime() - cIn.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const nights = diffDays > 0 ? diffDays : 1;
+            const calculatedTotalPrice = nights * basePrice;
+            // Availability Engine: Check for overlapping confirmed bookings
+            const overlapCheck = await query(`SELECT id FROM bookings 
+         WHERE property_id = $1 
+         AND status = 'confirmed'
+         AND (check_in_date, check_out_date) OVERLAPS ($2::date, $3::date)`, [propertyId, checkInDate, checkOutDate]);
+            if (overlapCheck.rowCount > 0) {
+                await query('ROLLBACK');
+                return res.status(409).json({ error: 'Property is already booked for these dates.' });
+            }
+            // Strict Idempotency Check
+            const existingBooking = await query(`SELECT id FROM bookings 
+         WHERE property_id = $1 AND tenant_id = $2 AND status IN ('pending', 'confirmed')`, [propertyId, req.auth.id]);
+            if (existingBooking.rowCount > 0) {
+                await query('ROLLBACK');
+                return res.status(400).json({ error: 'You already have an active booking or request for this property.' });
+            }
+            // Create booking
+            const bookingResult = await query(`INSERT INTO bookings (property_id, tenant_id, landlord_id, check_in_date, check_out_date, status, total_price, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, property_id, tenant_id, landlord_id, check_in_date, check_out_date, status, total_price, notes, created_at`, [propertyId, req.auth.id, landlordId, checkInDate, checkOutDate, 'pending', calculatedTotalPrice, notes || null]);
+            bookingData = bookingResult.rows[0];
+            await query('COMMIT');
         }
-        // Strict Idempotency Check: Prevent the same tenant from having multiple 
-        // active (pending or confirmed) bookings for the same property.
-        const existingBooking = await query(`SELECT id FROM bookings 
-       WHERE property_id = $1 AND tenant_id = $2 AND status IN ('pending', 'confirmed')`, [propertyId, req.auth.id]);
-        if (existingBooking.rowCount > 0) {
-            return res.status(400).json({ error: 'You already have an active booking or request for this property.' });
+        catch (dbErr) {
+            await query('ROLLBACK');
+            throw dbErr;
         }
-        // Get property and landlord info
-        const propResult = await query('SELECT id, landlord_id, price FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
-        if (propResult.rowCount === 0) {
-            return res.status(404).json({ error: 'Property not found.' });
-        }
-        const landlordId = propResult.rows[0].landlord_id;
-        if (!landlordId) {
-            return res.status(400).json({ error: 'Property has no landlord assigned.' });
-        }
-        // Create booking
-        const bookingResult = await query(`INSERT INTO bookings (property_id, tenant_id, landlord_id, check_in_date, check_out_date, status, total_price, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, property_id, tenant_id, landlord_id, check_in_date, check_out_date, status, total_price, notes, created_at`, [propertyId, req.auth.id, landlordId, checkInDate, checkOutDate, 'pending', totalPrice, notes || null]);
-        res.status(201).json({ data: bookingResult.rows[0] });
+        res.status(201).json({ data: bookingData });
     }
     catch (error) {
         next(error);

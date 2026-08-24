@@ -5,4 +5,4 @@ User-agent: *
 Allow: /
 
 # Point crawlers to the sitemap
-Sitemap: https://www.staynest.rashoti.com/sitemap.xml
+Sitemap: https://staynest.top/sitemap.xml

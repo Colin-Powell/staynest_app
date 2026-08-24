@@ -112,7 +112,7 @@ class PropertyCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    '\$${(property.price / 1000).toStringAsFixed(property.price % 1000 == 0 ? 0 : 1)}k / month',
+                    'Kes. ${property.price} / month',
                     style: const TextStyle(
                         fontWeight: FontWeight.w800, fontSize: 16),
                   ),

@@ -132,7 +132,8 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
        FROM properties p
        LEFT JOIN users u ON u.id = p.landlord_id
        ${whereClause}
-       ORDER BY ${orderClause}`,
+       ORDER BY ${orderClause}
+       LIMIT 50`,
       params,
     );
 

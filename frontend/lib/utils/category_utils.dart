@@ -47,19 +47,25 @@ String? uiFilterForCategory(String category) {
 }
 
 /// Whether [propertyCategory] should appear under the selected [uiFilter] chip.
-bool categoryMatchesUiFilter(String propertyCategory, String uiFilter) {
+bool categoryMatchesUiFilter(String propertyCategory, String uiFilter,
+    {int beds = -1}) {
   if (uiFilter == 'All') return true;
-  
+
   final mapped = uiFilterForCategory(propertyCategory);
-  if (mapped != null) return mapped == uiFilter;
+  if (mapped != null && mapped == uiFilter) return true;
 
   final propKey = normalizeCategoryKey(propertyCategory);
   final filterKey = normalizeCategoryKey(uiFilter);
-  return propKey == filterKey || propKey.contains(filterKey);
+  if (propKey == filterKey || propKey.contains(filterKey)) return true;
+
+  if (beds >= 0) {
+    if (filterKey == 'bedsitter' && beds <= 1) return true;
+    if (filterKey == 'singleroom' && beds == 1) return true;
+  }
+  return false;
 }
 
 String formatPropertyPrice(int price) {
-  if (price <= 0) return 'Kes. —';
-  if (price >= 1000) return 'Kes. ';
+  if (price <= 0) return 'Kes. -';
   return 'Kes. $price';
 }

@@ -97,6 +97,21 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
     try {
       const isViewEvent = eventType === 'property_view' || eventType === 'property_detail_view';
       const isSaveEvent = eventType === 'property_save';
+      const isImpressionEvent = eventType.includes('impression');
+
+      if (isImpressionEvent) {
+        const checkVal = userId || sessionId;
+        if (checkVal) {
+          const checkQuery = userId 
+            ? `SELECT 1 FROM engagement_events WHERE user_id = $1 AND property_id = $2 AND event_type = $3 AND created_at >= CURRENT_DATE LIMIT 1`
+            : `SELECT 1 FROM engagement_events WHERE session_id = $1 AND property_id = $2 AND event_type = $3 AND created_at >= CURRENT_DATE LIMIT 1`;
+          const prior = await query(checkQuery, [checkVal, propertyId, eventType]);
+          if ((prior.rowCount ?? 0) > 0) {
+            await query('ROLLBACK');
+            return res.status(200).json({ ok: true, ignored: true, reason: 'duplicate_impression_today' });
+          }
+        }
+      }
 
       let isFirstAction = true;
       if (isViewEvent || isSaveEvent) {
@@ -192,6 +207,11 @@ router.get('/stats/:propertyId', requireAuth, async (req: Request, res: Response
     }
 
     const row = result.rows[0];
+
+    // Verify landlord ownership
+    if (row.landlord_id !== req.auth?.id) {
+      return res.status(403).json({ error: 'You are not authorized to view analytics for this property.' });
+    }
     const views = toNumber(row.views);
     const clicks = toNumber(row.clicks);
     const impressions = toNumber(row.impressions);
@@ -377,6 +397,12 @@ router.get('/landlord-overview', requireAuth, async (req: Request, res: Response
 router.get('/management/:propertyId', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { propertyId } = req.params;
+
+    const propCheck = await query('SELECT landlord_id FROM properties WHERE id = $1', [propertyId]);
+    if (propCheck.rowCount === 0) return res.status(404).json({ error: 'Property not found.' });
+    if (propCheck.rows[0].landlord_id !== req.auth?.id) {
+      return res.status(403).json({ error: 'You are not authorized to view management data for this property.' });
+    }
 
     const stats = await query(
       `SELECT pa.*

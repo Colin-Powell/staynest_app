@@ -32,6 +32,7 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage>
       FallbackPropertiesLoader(remoteRepository: RemoteDatabaseRepository());
   List<Property> _properties = [];
   bool _loading = true;
+  bool _hasError = false;
 
   // Search & Filter State
   String _selectedCategory = 'All';
@@ -71,12 +72,25 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage>
   }
 
   Future<void> _loadProperties() async {
-    final loaded = await _loader.loadAll();
-    if (!mounted) return;
     setState(() {
-      _properties = loaded.cast<Property>();
-      _loading = false;
+      _loading = true;
+      _hasError = false;
     });
+    try {
+      final loaded = await _loader.loadAll();
+      if (!mounted) return;
+      setState(() {
+        _properties = loaded.cast<Property>();
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _hasError = true;
+        });
+      }
+    }
   }
 
   // --- Helpers for Filtering, Sorting, and Icons ---
@@ -388,6 +402,22 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage>
                                   child: SkeletonPropertyCard(width: double.infinity, margin: EdgeInsets.zero),
                                 ),
                                 childCount: 3,
+                              ),
+                            ),
+                          )
+                        else if (_hasError)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 40),
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Text('Failed to load properties.', style: TextStyle(color: Colors.red)),
+                                    const SizedBox(height: 10),
+                                    ElevatedButton(onPressed: _loadProperties, child: const Text('Retry')),
+                                  ],
+                                ),
                               ),
                             ),
                           )

@@ -14,6 +14,7 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
   List<Map<String, dynamic>> _bookings = [];
   List<Map<String, dynamic>> _filteredBookings = [];
   bool _loading = true;
+  bool _hasError = false;
 
   static const Color tenantPrimary = Color(0xFF3F37C9);
 
@@ -34,6 +35,10 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
   }
 
   Future<void> _loadBookings() async {
+    setState(() {
+      _loading = true;
+      _hasError = false;
+    });
     try {
       final data = await BookingService.fetchBookings(isLandlord: false);
       if (mounted) {
@@ -46,7 +51,10 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
     } catch (e) {
       debugPrint('Error loading bookings: $e');
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+          _hasError = true;
+        });
       }
     }
   }
@@ -55,8 +63,11 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
     if (_selectedStatus == 'All') {
       _filteredBookings = _bookings;
     } else {
-      _filteredBookings =
-          _bookings.where((b) => b['status'] == _selectedStatus).toList();
+      _filteredBookings = _bookings
+          .where((b) =>
+              b['status'].toString().toLowerCase() ==
+              _selectedStatus.toLowerCase())
+          .toList();
     }
   }
 
@@ -135,21 +146,13 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.06),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.chevron_left_rounded,
-                          color: Color(0xFF374151)),
+                      child: const Icon(Icons.arrow_back,
+                          color: Color(0xFF111827)),
                     ),
                   ),
-                  const SizedBox(width: 16),
                   const Expanded(
                     child: Text(
                       'My Bookings',
@@ -165,7 +168,7 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
             // Status filters
             SizedBox(
@@ -190,15 +193,17 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
                               : const Color(0xFFF3F4F6),
                           borderRadius: BorderRadius.circular(20),
                           border: isActive
-                              ? null
-                              : Border.all(color: const Color(0xFFE5E7EB)),
+                              ? Border.all(color: tenantPrimary)
+                              : null,
                         ),
                         child: Text(
-                          status,
+                          status == 'All'
+                              ? 'All Bookings'
+                              : '${status[0].toUpperCase()}${status.substring(1)}',
                           style: TextStyle(
                             color: isActive
                                 ? Colors.white
-                                : const Color(0xFF6B7280),
+                                : const Color(0xFF4B5563),
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),
@@ -209,32 +214,45 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
                 },
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-            // Bookings list
+            // Bookings List
             Expanded(
               child: _loading
                   ? const Center(
-                      child:
-                          CircularProgressIndicator(color: tenantPrimary),
+                      child: CircularProgressIndicator(color: tenantPrimary),
                     )
-                  : _filteredBookings.isEmpty
+                  : _hasError
                       ? Center(
-                          child: Text(
-                            'No $_selectedStatus bookings',
-                            style: const TextStyle(
-                              color: Color(0xFF9CA3AF),
-                              fontSize: 16,
-                            ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text('Failed to load bookings.',
+                                  style: TextStyle(color: Colors.red)),
+                              const SizedBox(height: 10),
+                              ElevatedButton(
+                                onPressed: _loadBookings,
+                                child: const Text('Retry'),
+                              ),
+                            ],
                           ),
                         )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 8),
-                          itemCount: _filteredBookings.length,
-                          itemBuilder: (context, index) {
-                            final booking = _filteredBookings[index];
-                            return _BookingCard(
+                      : _filteredBookings.isEmpty
+                          ? Center(
+                              child: Text(
+                                'No  bookings',
+                                style: const TextStyle(
+                                  color: Color(0xFF9CA3AF),
+                                  fontSize: 16,
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                              itemCount: _filteredBookings.length,
+                              itemBuilder: (context, index) {
+                                final booking = _filteredBookings[index];
+                                return _BookingCard(
                               booking: booking,
                               onCancel: () => _cancelBooking(booking['id'].toString()),
                             );

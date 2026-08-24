@@ -35,7 +35,13 @@ const cloudinaryConfig = parseCloudinaryUrl(
 
 export const env = {
   port: parseIntOrDefault(process.env.PORT, 8080),
-  jwtSecret: process.env.JWT_SECRET?.trim() || 'replace-with-strong-secret',
+  get jwtSecret(): string {
+    const secret = process.env.JWT_SECRET?.trim();
+    if (!secret) {
+      throw new Error('FATAL ERROR: JWT_SECRET environment variable is not defined.');
+    }
+    return secret;
+  },
   databaseUrl:
     process.env.DATABASE_URL || 'postgresql://postgres:postgres@db:5432/staynest',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:8080',
@@ -51,7 +57,7 @@ export const env = {
   smtpPort: parseIntOrDefault(process.env.SMTP_PORT, 587),
   smtpUser: process.env.SMTP_USER || '',
   smtpPass: process.env.SMTP_PASS || '',
-  emailFrom: process.env.EMAIL_FROM || 'StayNest <no-reply@staynest.app>',
+  emailFrom: process.env.EMAIL_FROM || process.env.SMTP_USER || '',
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
   firebaseServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT || '',
 };

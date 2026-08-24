@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { query } from '../db.js';
-import { getCache, setCache } from '../services/cache.js';
+import { getCache, setCache, clearCachePattern } from '../services/cache.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../config.js';
+import { sendPushToTopic } from '../services/firebase.js';
 const router = Router();
 function normalizePropertyRow(property) {
     let images = property.images;
@@ -119,7 +120,8 @@ router.get('/', async (req, res, next) => {
        FROM properties p
        LEFT JOIN users u ON u.id = p.landlord_id
        ${whereClause}
-       ORDER BY ${orderClause}`, params);
+       ORDER BY ${orderClause}
+       LIMIT 50`, params);
         const rows = result.rows.map((row) => normalizePropertyRow(row));
         if (conditions.length === 0) {
             setCache(cacheKey, rows, 60000);
@@ -281,6 +283,30 @@ router.get('/:id/availability-check', async (req, res, next) => {
        AND block_date >= $2::date 
        AND block_date < $3::date`, [propertyId, start, end]);
         res.json({ available: blockCheck.rowCount === 0 });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+// Nearby properties based on lat, lng, and radius (default 5km)
+router.get('/nearby', async (req, res, next) => {
+    try {
+        const lat = typeof req.query.lat === 'string' ? Number(req.query.lat) : undefined;
+        const lng = typeof req.query.lng === 'string' ? Number(req.query.lng) : undefined;
+        const radius = typeof req.query.radius === 'string' ? Number(req.query.radius) : 5;
+        if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) {
+            return res.status(400).json({ error: 'lat and lng are required and must be valid numbers.' });
+        }
+        const result = await query(`SELECT ${PROPERTY_SELECT},
+              (6371 * acos(cos(radians($1)) * cos(radians(p.lat)) * cos(radians(p.lng) - radians($2)) + sin(radians($1)) * sin(radians(p.lat)))) AS distance
+       FROM properties p
+       LEFT JOIN users u ON u.id = p.landlord_id
+       WHERE p.lat IS NOT NULL AND p.lng IS NOT NULL
+         AND (6371 * acos(cos(radians($1)) * cos(radians(p.lat)) * cos(radians(p.lng) - radians($2)) + sin(radians($1)) * sin(radians(p.lat)))) <= $3
+       ORDER BY distance ASC
+       LIMIT 50`, [lat, lng, radius]);
+        const rows = result.rows.map((row) => normalizePropertyRow(row));
+        res.json({ data: rows });
     }
     catch (error) {
         next(error);
@@ -544,8 +570,12 @@ async function handleCreateProperty(req, res, next, logRouteName) {
         console.log(`${logPrefix} inserting userId=${userId} lat=${body.lat ?? null} lng=${body.lng ?? null} price=${Number(body.price)} area=${Number(body.area)}`);
         const result = await query(`INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, landlord_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, $15)
-       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, status, images, amenities, lat, lng`, insertArgs);
+       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng`, insertArgs);
         console.log(`${logPrefix} success userId=${userId} propertyId=${result.rows[0]?.id}`);
+        // Broadcast push notification asynchronously
+        sendPushToTopic('new_listings', 'New Property Listed!', `${result.rows[0]?.title} is now available in ${result.rows[0]?.city}. Check it out!`, { propertyId: result.rows[0]?.id }).catch(e => console.error('Failed to broadcast new listing push', e));
+        // Clear the properties cache so tenants see the new listing immediately
+        clearCachePattern('properties.all');
         res.status(201).json({ data: result.rows[0] });
     }
     catch (error) {

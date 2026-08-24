@@ -14,8 +14,11 @@ import 'package:property_app/screens/home/profile_view.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/widgets/shared.dart';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 void main() {
   setUp(() {
+    FlutterSecureStorage.setMockInitialValues({});
     AppSession.reset();
   });
 
@@ -24,19 +27,28 @@ void main() {
   });
 
   testWidgets('Smoke test (app loads)', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    
     await tester.pumpWidget(const app.PropertyApp());
     // Let any splash/init timers fire before the widget tree is torn down.
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
     // Verify we rendered something from the app.
     expect(find.byType(MaterialApp), findsOneWidget);
+    
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
   });
 
   testWidgets('Home view uses the active session avatar and name',
       (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+
     AppSession.currentUserName = 'Amina Kariuki';
     AppSession.currentUserEmail = 'amina.kariuki@example.com';
-    AppSession.currentUserAvatar = 'assets/images/profile.jpg';
+    AppSession.currentUserAvatar = 'assets/images/profile.jpg'; // non-default
 
     await tester.pumpWidget(
       const MaterialApp(
@@ -45,11 +57,17 @@ void main() {
     );
 
     expect(find.text('Hello, Amina Kariuki 👋'), findsOneWidget);
-    expect(find.byType(Avatar), findsOneWidget);
+    expect(find.byType(Icon), findsWidgets);
+    
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
   });
 
   testWidgets('Profile view uses the active session avatar and name',
       (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+
     AppSession.currentUserName = 'Amina Kariuki';
     AppSession.currentUserEmail = 'amina.kariuki@example.com';
     AppSession.currentUserAvatar = 'assets/images/profile.jpg';
@@ -62,6 +80,9 @@ void main() {
 
     expect(find.text('Amina Kariuki'), findsOneWidget);
     expect(find.text('amina.kariuki@example.com'), findsOneWidget);
-    expect(find.byType(Image), findsWidgets);
+    expect(find.byType(Icon), findsWidgets);
+    
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
   });
 }

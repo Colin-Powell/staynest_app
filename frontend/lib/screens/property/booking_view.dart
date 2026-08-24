@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:uuid/uuid.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
@@ -644,6 +645,8 @@ class _BookingViewState extends State<BookingView> {
   }
 
   // LOGIC INTACT: Submitting Logic exactly as originally written
+  final String _idempotencyKey = const Uuid().v4();
+
   Future<void> _submitBooking() async {
     if (_selectedRange == null || _isSubmitting) return;
 
@@ -657,6 +660,7 @@ class _BookingViewState extends State<BookingView> {
       checkIn: _selectedRange!.start,
       checkOut: _selectedRange!.end,
       totalPrice: totalPrice,
+      idempotencyKey: _idempotencyKey,
       notes: _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),

@@ -3,10 +3,22 @@ import { query } from '../db.js';
 import { createOtp, sendOtpEmail, sendAlertEmail, verifyOtp } from '../services/email.js';
 import { requireAuth } from '../middleware/auth.js';
 
+import rateLimit from 'express-rate-limit';
+
 const router = Router();
 
+const otpRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many OTP requests, please try again later.',
+  },
+});
+
 // Public: send OTP to an email address using a short-lived numeric code.
-router.post('/send-otp', async (req, res, next) => {
+router.post('/send-otp', otpRateLimiter, async (req, res, next) => {
   try {
     const { email } = req.body as { email?: string };
     if (!email) return res.status(400).json({ error: 'Email is required.' });
@@ -17,7 +29,7 @@ router.post('/send-otp', async (req, res, next) => {
     } catch (sendErr) {
       console.warn('Failed to send OTP email (SMTP might be blocked):', sendErr);
     }
-    return res.json({ data: { sent: true, code } });
+    return res.json({ data: { sent: true } });
   } catch (err) {
     next(err);
   }

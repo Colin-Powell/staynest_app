@@ -1,9 +1,10 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/repository/http_json_client.dart';
 
 class BookingService {
   static String get _baseUrl => '${AppSession.apiBaseUrl}/bookings';
+  static final HttpJsonClient _client = HttpJsonClient();
 
   /// Creates a new booking request for a tenant
   static Future<bool> createBooking({
@@ -12,41 +13,30 @@ class BookingService {
     required DateTime checkOut,
     required double totalPrice,
     String? notes,
+    required String idempotencyKey,
   }) async {
-    try {
-      final response = await http.post(
-        Uri.parse(_baseUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${AppSession.apiToken}',
-        },
-        body: jsonEncode({
-          'propertyId': propertyId,
-          'checkInDate': checkIn.toIso8601String(),
-          'checkOutDate': checkOut.toIso8601String(),
-          'totalPrice': totalPrice,
-          'notes': notes,
-        }),
-      );
-      return response.statusCode == 201;
-    } catch (e) {
-      return false;
-    }
+    final response = await _client.post(
+      Uri.parse(_baseUrl),
+      headers: {
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: {
+        'propertyId': propertyId,
+        'checkInDate': checkIn.toIso8601String(),
+        'checkOutDate': checkOut.toIso8601String(),
+        'totalPrice': totalPrice,
+        'notes': notes,
+      },
+    );
+    return response.statusCode == 201 || response.statusCode == 200;
   }
 
   /// Fetches bookings based on role (Tenant or Landlord)
   static Future<List<dynamic>> fetchBookings({bool isLandlord = false}) async {
-    try {
-      final endpoint = isLandlord ? '/landlord' : '/tenant';
-      final response = await http.get(
-        Uri.parse('$_baseUrl$endpoint'),
-        headers: {'Authorization': 'Bearer ${AppSession.apiToken}'},
-      );
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body)['data'] as List;
-      }
-    } catch (e) {
-      print('Booking fetch error: $e');
+    final endpoint = isLandlord ? '/landlord' : '/tenant';
+    final response = await _client.get(Uri.parse('$_baseUrl$endpoint'));
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body)['data'] as List;
     }
     return [];
   }
@@ -54,38 +44,24 @@ class BookingService {
   /// Unified status updater for Accept/Reject/Cancel
   static Future<bool> updateStatus(String bookingId, String action,
       {String? reason}) async {
-    try {
-      // action: confirm, cancel, reject (mapped to backend routes)
-      final endpoint = action.toLowerCase();
-      final response = await http.patch(
-        Uri.parse('$_baseUrl/$bookingId/$endpoint'),
-        headers: {
-          'Authorization': 'Bearer ${AppSession.apiToken}',
-          'Content-Type': 'application/json',
-        },
-        body: reason != null ? jsonEncode({'reason': reason}) : null,
-      );
-      return response.statusCode == 200;
-    } catch (e) {
-      return false;
-    }
+    final endpoint = action.toLowerCase();
+    final response = await _client.patch(
+      Uri.parse('$_baseUrl/$bookingId/$endpoint'),
+      body: reason != null ? {'reason': reason} : null,
+    );
+    return response.statusCode == 200;
   }
 
   /// Checks if a date range is available for a specific property
   static Future<bool> checkAvailability(
       String propertyId, DateTime start, DateTime end) async {
-    try {
-      final response = await http.get(
-        Uri.parse(
-            '${AppSession.apiBaseUrl}/properties/$propertyId/availability-check'
-            '?start=${start.toIso8601String()}&end=${end.toIso8601String()}'),
-        headers: {'Authorization': 'Bearer ${AppSession.apiToken}'},
-      );
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body)['available'] == true;
-      }
-    } catch (e) {
-      print('Availability check error: $e');
+    final response = await _client.get(
+      Uri.parse(
+          '${AppSession.apiBaseUrl}/properties/$propertyId/availability-check'
+          '?start=${start.toIso8601String()}&end=${end.toIso8601String()}'),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body)['available'] == true;
     }
     return false;
   }
@@ -93,20 +69,11 @@ class BookingService {
   /// Toggles a date's availability (for landlords)
   static Future<bool> toggleDateAvailability(
       String propertyId, DateTime date, bool isAvailable) async {
-    try {
-      final response = await http.post(
-        Uri.parse(
-            '${AppSession.apiBaseUrl}/properties/$propertyId/availability'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${AppSession.apiToken}',
-        },
-        body: jsonEncode(
-            {'date': date.toIso8601String(), 'available': isAvailable}),
-      );
-      return response.statusCode == 200;
-    } catch (e) {
-      return false;
-    }
+    final response = await _client.post(
+      Uri.parse(
+          '${AppSession.apiBaseUrl}/properties/$propertyId/availability'),
+      body: {'date': date.toIso8601String(), 'available': isAvailable},
+    );
+    return response.statusCode == 200;
   }
 }
