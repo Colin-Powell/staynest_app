@@ -4,6 +4,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/app_theme.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
+import 'package:property_app/utils/responsive_layout.dart';
 
 import 'super_admin_dashboard.dart';
 import 'super_admin_users.dart';
@@ -25,12 +26,12 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
     _NavItem(
         label: 'Dashboard', icon: PhosphorIcons.house(PhosphorIconsStyle.fill)),
     _NavItem(
-        label: 'Users', icon: PhosphorIcons.users(PhosphorIconsStyle.fill)),
+        label: 'KYC Reviews', icon: PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill)),
     _NavItem(
         label: 'Properties',
         icon: PhosphorIcons.buildingApartment(PhosphorIconsStyle.fill)),
     _NavItem(
-        label: 'KYC', icon: PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill)),
+        label: 'Users', icon: PhosphorIcons.users(PhosphorIconsStyle.fill)),
     _NavItem(
         label: 'Settings',
         icon: PhosphorIcons.gearSix(PhosphorIconsStyle.fill)),
@@ -38,9 +39,9 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
 
   final List<Widget> _pages = const [
     SuperAdminDashboard(),
-    SuperAdminUsersPage(),
-    SuperAdminPropertiesPage(),
     SuperAdminKycPage(),
+    SuperAdminPropertiesPage(),
+    SuperAdminUsersPage(),
     SuperAdminSettingsPage(),
   ];
 
@@ -71,9 +72,11 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
       );
     }
 
+    final isDesktop = ResponsiveLayout.isDesktopOrLarger(context);
+
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
+      appBar: isDesktop ? null : AppBar(
         backgroundColor: AppTheme.background,
         elevation: 0,
         title: Text('Super Admin',
@@ -81,55 +84,47 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: AppColors.gray900)),
-        actions: [
-          IconButton(
-              onPressed: () {},
-              icon: Icon(PhosphorIcons.bell(PhosphorIconsStyle.fill),
-                  color: AppColors.gray700)),
-          IconButton(
-              onPressed: () {},
-              icon: Icon(PhosphorIcons.signOut(PhosphorIconsStyle.fill),
-                  color: AppColors.gray700)),
+      ),
+      body: Row(
+        children: [
+          if (isDesktop)
+            NavigationRail(
+              backgroundColor: AppColors.white,
+              extended: ResponsiveLayout.isLargeDesktop(context),
+              minExtendedWidth: 240,
+              selectedIndex: _selectedIndex,
+              onDestinationSelected: (index) => setState(() => _selectedIndex = index),
+              leading: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24.0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill), color: AppColors.primary, size: 28),
+                    if (ResponsiveLayout.isLargeDesktop(context)) ...[
+                      const SizedBox(width: 12),
+                      Text('Admin',
+                          style: GoogleFonts.poppins(
+                              fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.gray900)),
+                    ]
+                  ],
+                ),
+              ),
+              destinations: _navItems.map((item) {
+                return NavigationRailDestination(
+                  icon: Icon(item.icon),
+                  label: Text(item.label, style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                );
+              }).toList(),
+            ),
+          
+          if (isDesktop) const VerticalDivider(thickness: 1, width: 1, color: AppColors.outlineLight),
+          
+          Expanded(
+            child: _pages[_selectedIndex],
+          ),
         ],
       ),
-      drawer: Drawer(
-        child: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text('StayNest Admin',
-                    style: GoogleFonts.poppins(
-                        fontSize: 20, fontWeight: FontWeight.w700)),
-              ),
-              const SizedBox(height: 8),
-              ..._navItems.asMap().entries.map((entry) {
-                final index = entry.key;
-                final item = entry.value;
-                final selected = _selectedIndex == index;
-                return ListTile(
-                  leading: Icon(item.icon,
-                      color: selected ? AppColors.primary : AppColors.gray600),
-                  title: Text(item.label,
-                      style: GoogleFonts.poppins(
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w500)),
-                  selected: selected,
-                  selectedTileColor: AppColors.primary.withValues(alpha: 0.08),
-                  onTap: () {
-                    setState(() => _selectedIndex = index);
-                    Navigator.pop(context);
-                  },
-                );
-              }),
-            ],
-          ),
-        ),
-      ),
-      body: _pages[_selectedIndex],
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: isDesktop ? null : NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) =>
             setState(() => _selectedIndex = index),

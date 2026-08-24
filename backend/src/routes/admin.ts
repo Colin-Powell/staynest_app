@@ -116,8 +116,8 @@ router.get('/kyc', requireAuth, authorize('admin'), async (req: Request, res: Re
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
     const result = await query(
-      `SELECT v.id, v.status, v.created_at, u.name, u.email
-       FROM verifications v
+      `SELECT v.id, v.status, v.created_at, v.documents, v.property_data, u.name, u.email
+         FROM verifications v
        LEFT JOIN users u ON u.id = v.user_id
        ORDER BY v.created_at DESC LIMIT $1`,
       [limit],
