@@ -47,6 +47,13 @@ class AppSession {
   
   // Default to a production or robust staging URL
   static String get apiBaseUrl {
+    // 1. Try to read from .env file first
+    final envUrl = dotenv.env['API_BASE_URL'];
+    if (envUrl != null && envUrl.isNotEmpty) {
+      return envUrl;
+    }
+
+    // 2. Fallbacks based on platform
     if (kIsWeb) {
       return const String.fromEnvironment(
         'API_BASE_URL',
