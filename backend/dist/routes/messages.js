@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { ioInstance } from '../socket.js';
 const router = Router();
 // Save a message to database
 router.post('/', requireAuth, async (req, res, next) => {
@@ -18,7 +19,12 @@ router.post('/', requireAuth, async (req, res, next) => {
         const result = await query(`INSERT INTO messages (from_user_id, to_user_id, text)
        VALUES ($1, $2, $3)
        RETURNING id, from_user_id, to_user_id, text, created_at`, [from_user_id, to_user_id, text.trim()]);
-        return res.status(201).json({ data: result.rows[0] });
+        const payload = result.rows[0];
+        // Emit to recipient over socket
+        if (ioInstance && to_user_id !== from_user_id) {
+            ioInstance.to(`user:${to_user_id}`).emit('message', payload);
+        }
+        return res.status(201).json({ data: payload });
     }
     catch (error) {
         next(error);

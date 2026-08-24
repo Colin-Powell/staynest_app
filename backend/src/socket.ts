@@ -1,7 +1,7 @@
 import { Server as IOServer } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { env } from './config.js';
-import { query } from './db.js';
+
 
 import type { Socket } from 'socket.io';
 
@@ -48,7 +48,7 @@ export function initSocket(server: import('http').Server) {
     }
 
     // Messaging: client emits { to: string (user UUID), text: string }
-    socket.on('message', async (msg: { to: string; text: string }) => {
+    socket.on('message', async (_msg: { to: string; text: string }) => {
       // We no longer insert into DB here to avoid duplicates!
       // The frontend calls REST /messages which inserts and emits.
       // This listener can be kept as a no-op or fallback relay, but 

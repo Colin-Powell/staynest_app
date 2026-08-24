@@ -1,7 +1,7 @@
 import { Server as IOServer } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { env } from './config.js';
-import { query } from './db.js';
+export let ioInstance;
 export function initSocket(server) {
     const io = new IOServer(server, {
         cors: {
@@ -10,6 +10,7 @@ export function initSocket(server) {
             allowedHeaders: ['Authorization'],
         },
     });
+    ioInstance = io;
     io.use((socket, next) => {
         try {
             const token = socket.handshake.auth?.token ||
@@ -35,35 +36,11 @@ export function initSocket(server) {
             console.log('Socket connected (unauthenticated client)');
         }
         // Messaging: client emits { to: string (user UUID), text: string }
-        socket.on('message', async (msg) => {
-            const from = uid;
-            if (!from) {
-                socket.emit('error', { message: 'Not authenticated' });
-                return;
-            }
-            const text = msg.text?.trim();
-            if (!text)
-                return;
-            try {
-                // Save message to database
-                const result = await query(`INSERT INTO messages (from_user_id, to_user_id, text)
-           VALUES ($1, $2, $3)
-           RETURNING id, from_user_id, to_user_id, text, created_at`, [from, msg.to, text]);
-                const payload = result.rows[0];
-                // FIX: only emit to the RECIPIENT — never echo back to sender.
-                // The sender already appended the message optimistically in the UI.
-                // Ensure we don't emit if the recipient is the sender
-                if (msg.to && msg.to !== from) {
-                    io.to(`user:${msg.to}`).emit('message', payload);
-                }
-                // Emit a delivery confirmation to sender (no message content echo)
-                // so the client can update message status if needed.
-                socket.emit('message:sent', { id: payload.id });
-            }
-            catch (err) {
-                console.error('Message save failed:', err);
-                socket.emit('error', { message: 'Failed to save message' });
-            }
+        socket.on('message', async (_msg) => {
+            // We no longer insert into DB here to avoid duplicates!
+            // The frontend calls REST /messages which inserts and emits.
+            // This listener can be kept as a no-op or fallback relay, but 
+            // it's safer to just ignore to prevent duplicates if REST is used.
         });
         // Typing indicator: client emits { to, isTyping }
         // Forward to recipient room so UI can show typing status.

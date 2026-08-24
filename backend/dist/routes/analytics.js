@@ -75,6 +75,20 @@ router.post('/track', requireAuth, async (req, res, next) => {
         try {
             const isViewEvent = eventType === 'property_view' || eventType === 'property_detail_view';
             const isSaveEvent = eventType === 'property_save';
+            const isImpressionEvent = eventType.includes('impression');
+            if (isImpressionEvent) {
+                const checkVal = userId || sessionId;
+                if (checkVal) {
+                    const checkQuery = userId
+                        ? `SELECT 1 FROM engagement_events WHERE user_id = $1 AND property_id = $2 AND event_type = $3 AND created_at >= CURRENT_DATE LIMIT 1`
+                        : `SELECT 1 FROM engagement_events WHERE session_id = $1 AND property_id = $2 AND event_type = $3 AND created_at >= CURRENT_DATE LIMIT 1`;
+                    const prior = await query(checkQuery, [checkVal, propertyId, eventType]);
+                    if ((prior.rowCount ?? 0) > 0) {
+                        await query('ROLLBACK');
+                        return res.status(200).json({ ok: true, ignored: true, reason: 'duplicate_impression_today' });
+                    }
+                }
+            }
             let isFirstAction = true;
             if (isViewEvent || isSaveEvent) {
                 if (userId) {
