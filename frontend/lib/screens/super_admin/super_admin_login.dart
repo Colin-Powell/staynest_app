@@ -62,7 +62,7 @@ class _SuperAdminLoginViewState extends State<SuperAdminLoginView> {
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'Invalid credentials or network error.';
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
         _isLoading = false;
       });
     }
