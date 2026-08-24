@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+
 import 'package:property_app/services/super_admin_service.dart';
 import 'package:property_app/theme.dart';
+import 'package:property_app/widgets/property_image.dart';
 
 class SuperAdminPropertiesPage extends StatefulWidget {
   const SuperAdminPropertiesPage({super.key});
@@ -15,6 +18,7 @@ class SuperAdminPropertiesPage extends StatefulWidget {
 class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
   final Set<String> _processingIds = <String>{};
   List<Map<String, dynamic>> _properties = [];
+  String _searchQuery = '';
   bool _loading = true;
 
   @override
@@ -48,10 +52,12 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+            backgroundColor: AppColors.gray900,
             content: Text(
               status == 'approved'
                   ? 'Property approved successfully.'
                   : 'Property rejected successfully.',
+              style: GoogleFonts.inter(color: Colors.white),
             ),
           ),
         );
@@ -59,7 +65,13 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Unable to update property status: $error')),
+          SnackBar(
+            backgroundColor: AppColors.gray900,
+            content: Text(
+              'Unable to update property status: $error',
+              style: GoogleFonts.inter(color: Colors.white),
+            ),
+          ),
         );
       }
     } finally {
@@ -71,135 +83,362 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: _loadProperties,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        child: Column(
+    final filtered = _properties.where((prop) {
+      final title = (prop['title']?.toString() ?? '').toLowerCase();
+      final city = (prop['city']?.toString() ?? '').toLowerCase();
+      final address = (prop['address']?.toString() ?? '').toLowerCase();
+      final q = _searchQuery.toLowerCase();
+      return title.contains(q) || city.contains(q) || address.contains(q);
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Property Moderation',
+                      style: GoogleFonts.inter(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.gray900,
+                          letterSpacing: -0.5)),
+                  const SizedBox(height: 6),
+                  Text('Review full listing metadata and manage inventory.',
+                      style: GoogleFonts.inter(
+                          fontSize: 14, color: AppColors.gray500)),
+                ],
+              ),
+              Container(
+                width: 320,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.zero,
+                  border: Border.all(color: StayNestColors.outlineLight),
+                ),
+                child: TextField(
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                  style:
+                      GoogleFonts.inter(fontSize: 13, color: AppColors.gray900),
+                  decoration: InputDecoration(
+                    hintText: 'Search title, city, or address...',
+                    hintStyle: GoogleFonts.inter(
+                        fontSize: 13, color: AppColors.gray400),
+                    prefixIcon: Icon(PhosphorIcons.magnifyingGlass(),
+                        size: 16, color: AppColors.gray500),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(
+                  child: CircularProgressIndicator(color: AppColors.gray900))
+              : filtered.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SvgPicture.asset('assets/illustrations/empty.svg',
+                              height: 120),
+                          const SizedBox(height: 16),
+                          Text('No properties found',
+                              style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.gray900)),
+                          const SizedBox(height: 4),
+                          Text('There are no listings matching your criteria.',
+                              style: GoogleFonts.inter(
+                                  fontSize: 14, color: AppColors.gray500)),
+                        ],
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 8),
+                      itemCount: filtered.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 16),
+                      itemBuilder: (context, index) {
+                        return _buildPropertyCard(filtered[index]);
+                      },
+                    ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPropertyCard(Map<String, dynamic> property) {
+    final id = property['id']?.toString() ?? '';
+    final title = property['title']?.toString() ?? 'Untitled property';
+    final address = property['address']?.toString() ?? 'Unknown address';
+    final city = property['city']?.toString() ?? 'Unknown city';
+    final description =
+        property['description']?.toString() ?? 'No description provided.';
+
+    // Listing Flow specific metadata
+    final category = property['category']?.toString() ?? 'Unknown Type';
+    final beds = property['bedrooms']?.toString() ?? '-';
+    final baths = property['bathrooms']?.toString() ?? '-';
+    final price = property['price']?.toString() ?? '0';
+    final serviceCharge = property['service_charges']?.toString() ?? '0';
+    final deposit = property['security_deposit']?.toString() ?? '0';
+    final minStay = property['minimum_stay']?.toString() ?? 'Not specified';
+
+    // Amenities list parsing
+    final amenitiesList = (property['amenities'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        [];
+    final amenitiesDisplay = amenitiesList.isEmpty
+        ? 'None listed'
+        : amenitiesList.take(4).join(' • ') +
+            (amenitiesList.length > 4
+                ? ' (+${amenitiesList.length - 4} more)'
+                : '');
+
+    // Image parsing
+    final images = property['images'] as List<dynamic>? ?? [];
+    final imageUrl = (images.isNotEmpty
+            ? images.first.toString()
+            : property['image_url']?.toString()) ??
+        '';
+
+    final status =
+        (property['status']?.toString() ?? 'pending_review').toLowerCase();
+    final isProcessing = _processingIds.contains(id);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.zero,
+        border: Border.all(color: StayNestColors.outlineLight),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Property moderation',
-                style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.gray900)),
-            const SizedBox(height: 8),
-            Text(
-                'Approve new listings, review flagged properties, and inspect ownership details.',
-                style: GoogleFonts.poppins(
-                    fontSize: 13, color: AppColors.gray500)),
-            const SizedBox(height: 16),
-            if (_loading)
-              const Center(
-                  child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: CircularProgressIndicator()))
-            else if (_properties.isEmpty)
-              const Center(
-                  child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Text('No properties found.')))
-            else
-              ..._properties.map((property) {
-                final id = property['id']?.toString() ?? '';
-                final title =
-                    property['title']?.toString() ?? 'Untitled property';
-                final city = property['city']?.toString() ?? 'Unknown city';
-                final price = property['price']?.toString() ?? '0';
-                final status =
-                    (property['status']?.toString() ?? 'pending_review')
-                        .toLowerCase();
-                final isProcessing = _processingIds.contains(id);
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: StayNestColors.outlineLight)),
-                  child: Column(
+            // Property Image Thumbnail
+            Container(
+              width: 180,
+              height: 180,
+              decoration: BoxDecoration(
+                color: AppColors.gray100,
+                border: Border.all(color: StayNestColors.outlineLight),
+              ),
+              child: imageUrl.isNotEmpty
+                  ? buildPropertyImage(imageUrl, fit: BoxFit.cover)
+                  : Center(
+                      child: Icon(PhosphorIcons.image(),
+                          size: 32, color: AppColors.gray400),
+                    ),
+            ),
+            const SizedBox(width: 24),
+
+            // Property Metadata
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header Row: Title & Status
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
-                              backgroundColor:
-                                  AppColors.primary.withValues(alpha: 0.12),
-                              child: Icon(
-                                  PhosphorIcons.buildingApartment(
-                                      PhosphorIconsStyle.fill),
-                                  color: AppColors.primary)),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title,
+                                style: GoogleFonts.inter(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.gray900)),
+                            const SizedBox(height: 4),
+                            Row(
                               children: [
-                                Text(title,
-                                    style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.gray900)),
-                                Text('$city • KSh $price',
-                                    style: GoogleFonts.poppins(
-                                        fontSize: 12,
-                                        color: AppColors.gray500)),
+                                Icon(PhosphorIcons.mapPin(),
+                                    size: 14, color: AppColors.gray500),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text('$address, $city',
+                                      style: GoogleFonts.inter(
+                                          fontSize: 13,
+                                          color: AppColors.gray500)),
+                                ),
                               ],
                             ),
-                          ),
-                          Chip(
-                              label: Text(status.toUpperCase(),
-                                  style: GoogleFonts.poppins(fontSize: 11)),
-                              backgroundColor: status == 'approved'
-                                  ? AppColors.greenBg
-                                  : status == 'rejected'
-                                      ? AppColors.redBg
-                                      : AppColors.gray50),
-                        ],
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: isProcessing || status == 'approved'
-                                ? null
-                                : () => _handleDecision(id, 'approved'),
-                            icon: isProcessing
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2),
-                                  )
-                                : const Icon(Icons.check, size: 16),
-                            label: const Text('Approve'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.green600,
-                              side: const BorderSide(color: AppColors.green600),
-                            ),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: isProcessing || status == 'rejected'
-                                ? null
-                                : () => _handleDecision(id, 'rejected'),
-                            icon: const Icon(Icons.close, size: 16),
-                            label: const Text('Reject'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.red500,
-                              side: const BorderSide(color: AppColors.red500),
-                            ),
-                          ),
-                        ],
-                      ),
+                      _buildStatusBadge(status),
                     ],
                   ),
-                );
-              }),
+
+                  const SizedBox(height: 16),
+                  const Divider(height: 1, color: StayNestColors.outlineLight),
+                  const SizedBox(height: 16),
+
+                  // Metadata Grid (Extracted from Listing Flow fields)
+                  Wrap(
+                    spacing: 32,
+                    runSpacing: 16,
+                    children: [
+                      _buildMetaItem('Rent Price', 'KSh $price /mo'),
+                      _buildMetaItem('Security Deposit', 'KSh $deposit'),
+                      _buildMetaItem(
+                          'Service Charge', 'KSh $serviceCharge /mo'),
+                      _buildMetaItem(
+                          'Layout', '$category • $beds Bed • $baths Bath'),
+                      _buildMetaItem('Minimum Stay', minStay),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Text Details
+                  _buildTextRow('Amenities:', amenitiesDisplay),
+                  const SizedBox(height: 6),
+                  _buildTextRow('Description:', description, maxLines: 2),
+
+                  // Action Buttons (Only if pending)
+                  if (status == 'pending_review') ...[
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton(
+                          onPressed: isProcessing
+                              ? null
+                              : () => _handleDecision(id, 'rejected'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.gray900,
+                            side: BorderSide(color: AppColors.gray400),
+                            shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.zero),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 16),
+                          ),
+                          child: const Text('Reject Listing'),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: isProcessing
+                              ? null
+                              : () => _handleDecision(id, 'approved'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.gray900,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.zero),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 16),
+                          ),
+                          child: isProcessing
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : const Text('Approve Listing'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildMetaItem(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(),
+            style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: AppColors.gray500,
+                letterSpacing: 0.5)),
+        const SizedBox(height: 4),
+        Text(value,
+            style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.gray900)),
+      ],
+    );
+  }
+
+  Widget _buildTextRow(String label, String content, {int maxLines = 1}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(label,
+              style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.gray700)),
+        ),
+        Expanded(
+          child: Text(content,
+              maxLines: maxLines,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                  fontSize: 12, color: AppColors.gray500, height: 1.4)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusBadge(String status) {
+    String label = 'PENDING';
+    Color textColor = AppColors.gray700;
+    Color bgColor = AppColors.gray100;
+    Color borderColor = AppColors.gray400;
+
+    if (status == 'approved') {
+      label = 'APPROVED';
+      textColor = AppColors.gray900;
+      bgColor = Colors.white;
+      borderColor = AppColors.gray900;
+    } else if (status == 'rejected') {
+      label = 'REJECTED';
+      textColor = AppColors.gray500;
+      bgColor = AppColors.gray50;
+      borderColor = AppColors.gray400;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bgColor,
+        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.zero,
+      ),
+      child: Text(label,
+          style: GoogleFonts.inter(
+              fontSize: 11, fontWeight: FontWeight.w600, color: textColor)),
     );
   }
 }

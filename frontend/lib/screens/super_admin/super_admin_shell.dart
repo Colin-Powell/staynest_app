@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:property_app/app_theme.dart';
-import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
+import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/responsive_layout.dart';
-
 import 'super_admin_dashboard.dart';
-import 'super_admin_users.dart';
 import 'super_admin_properties.dart';
+import 'super_admin_users.dart';
 import 'super_admin_kyc.dart';
 import 'super_admin_settings.dart';
+import 'super_admin_login.dart';
 
 class SuperAdminShell extends StatefulWidget {
   const SuperAdminShell({super.key});
@@ -21,20 +20,15 @@ class SuperAdminShell extends StatefulWidget {
 
 class _SuperAdminShellState extends State<SuperAdminShell> {
   int _selectedIndex = 0;
+  bool _isSidebarExpanded = true;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   static final List<_NavItem> _navItems = [
-    _NavItem(
-        label: 'Dashboard', icon: PhosphorIcons.house(PhosphorIconsStyle.fill)),
-    _NavItem(
-        label: 'KYC Reviews', icon: PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill)),
-    _NavItem(
-        label: 'Properties',
-        icon: PhosphorIcons.buildingApartment(PhosphorIconsStyle.fill)),
-    _NavItem(
-        label: 'Users', icon: PhosphorIcons.users(PhosphorIconsStyle.fill)),
-    _NavItem(
-        label: 'Settings',
-        icon: PhosphorIcons.gearSix(PhosphorIconsStyle.fill)),
+    _NavItem(label: 'Dashboard', icon: PhosphorIcons.house()),
+    _NavItem(label: 'KYC Reviews', icon: PhosphorIcons.shieldCheck()),
+    _NavItem(label: 'Properties', icon: PhosphorIcons.buildingApartment()),
+    _NavItem(label: 'Users', icon: PhosphorIcons.users()),
+    _NavItem(label: 'Settings', icon: PhosphorIcons.gearSix()),
   ];
 
   final List<Widget> _pages = const [
@@ -44,6 +38,15 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
     SuperAdminUsersPage(),
     SuperAdminSettingsPage(),
   ];
+
+  void _handleLogout() {
+    AppSession.logout();
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const SuperAdminLoginView()),
+      (route) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,15 +59,20 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(PhosphorIcons.shieldSlash(PhosphorIconsStyle.fill),
-                    size: 64, color: AppColors.primary),
-                const SizedBox(height: 16),
+                Icon(PhosphorIcons.shieldSlash(), size: 48, color: AppColors.gray500),
+                const SizedBox(height: 24),
                 Text('Access Restricted',
-                    style: GoogleFonts.poppins(
-                        fontSize: 20, fontWeight: FontWeight.w700)),
+                    style: GoogleFonts.inter(
+                        fontSize: 20, fontWeight: FontWeight.w500, color: AppColors.gray900)),
                 const SizedBox(height: 8),
                 Text('Only super admins can access this area.',
-                    style: GoogleFonts.poppins(color: StayNestColors.textSecondaryLight)),
+                    style: GoogleFonts.inter(color: AppColors.gray500)),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _handleLogout,
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.gray900, foregroundColor: Colors.white),
+                  child: const Text('Logout'),
+                )
               ],
             ),
           ),
@@ -75,95 +83,96 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
     final isDesktop = ResponsiveLayout.isDesktopOrLarger(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      key: _scaffoldKey,
+      backgroundColor: Colors.white,
+      endDrawer: _buildNotificationDrawer(),
       body: Column(
         children: [
           // Global Top Header
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            decoration: BoxDecoration(
+            height: 64,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: const BoxDecoration(
               color: Colors.white,
-              border: const Border(bottom: BorderSide(color: StayNestColors.outlineLight)),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))
-              ],
+              border: Border(bottom: BorderSide(color: StayNestColors.outlineLight)),
             ),
             child: Row(
               children: [
+                if (isDesktop)
+                  IconButton(
+                    icon: Icon(PhosphorIcons.list(), color: AppColors.gray700, size: 20),
+                    onPressed: () {
+                      setState(() {
+                        _isSidebarExpanded = !_isSidebarExpanded;
+                      });
+                    },
+                  ),
+                if (isDesktop) const SizedBox(width: 8),
+                
                 // Logo & Brand
                 if (isDesktop) ...[
-                  Icon(PhosphorIcons.buildings(PhosphorIconsStyle.fill), color: AppColors.primary, size: 28),
+                  Icon(PhosphorIcons.buildings(), color: AppColors.gray700, size: 24),
                   const SizedBox(width: 12),
-                  Text('StayNest Admin', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: StayNestColors.textPrimaryLight)),
-                  const SizedBox(width: 48),
+                  Text('StayNest Admin', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.gray900)),
                 ],
                 
-                // Global Search Bar
-                Expanded(
-                  child: Container(
-                    height: 40,
-                    constraints: const BoxConstraints(maxWidth: 400),
-                    decoration: BoxDecoration(
-                      color: StayNestColors.surfaceVariantLight,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: StayNestColors.outlineLight),
-                    ),
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Search users, properties, or records...',
-                        hintStyle: GoogleFonts.poppins(fontSize: 13, color: StayNestColors.textSecondaryLight),
-                        prefixIcon: const Icon(Icons.search, size: 20, color: StayNestColors.textSecondaryLight),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      ),
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(width: 16),
+                const Spacer(),
                 
                 // Notification Bell
-                Stack(
-                  alignment: Alignment.topRight,
-                  children: [
-                    IconButton(
-                      icon: Icon(PhosphorIcons.bell(PhosphorIconsStyle.fill), color: StayNestColors.textSecondaryLight),
-                      onPressed: () {},
-                    ),
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                          color: StayNestColors.error,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ],
+                IconButton(
+                  icon: Badge(
+                    backgroundColor: StayNestColors.error,
+                    child: Icon(PhosphorIcons.bell(), color: AppColors.gray500, size: 20),
+                  ),
+                  onPressed: () {
+                    _scaffoldKey.currentState?.openEndDrawer();
+                  },
                 ),
                 
                 const SizedBox(width: 12),
                 
                 // Admin Profile Dropdown
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                      child: Text((AppSession.currentUser != null ? AppSession.currentUser!['name'] : 'Admin').substring(0, 1).toUpperCase() ?? 'A',
-                        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
+                PopupMenuButton<String>(
+                  onSelected: (val) {
+                    if (val == 'logout') _handleLogout();
+                  },
+                  offset: const Offset(0, 48),
+                  color: Colors.white,
+                  surfaceTintColor: Colors.transparent,
+                  itemBuilder: (ctx) => [
+                    PopupMenuItem(
+                      value: 'settings',
+                      child: Row(children: [Icon(PhosphorIcons.gear(), size: 16), const SizedBox(width: 12), Text('Account Settings', style: GoogleFonts.inter(fontSize: 14))]),
                     ),
-                    if (isDesktop) ...[
-                      const SizedBox(width: 8),
-                      Text((AppSession.currentUser != null ? AppSession.currentUser!['name'] : 'Admin') ?? 'Admin', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13)),
-                      const Icon(Icons.keyboard_arrow_down, size: 18, color: StayNestColors.textSecondaryLight),
-                    ]
+                    const PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'logout',
+                      child: Row(children: [Icon(PhosphorIcons.signOut(), size: 16, color: StayNestColors.error), const SizedBox(width: 12), Text('Logout', style: GoogleFonts.inter(fontSize: 14, color: StayNestColors.error))]),
+                    ),
                   ],
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: AppColors.gray100,
+                        child: Text(
+                          (AppSession.currentUser != null ? AppSession.currentUser!['name'] : 'Admin').substring(0, 1).toUpperCase(),
+                          style: GoogleFonts.inter(color: AppColors.gray700, fontWeight: FontWeight.w500, fontSize: 12),
+                        ),
+                      ),
+                      if (isDesktop) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          (AppSession.currentUser != null ? AppSession.currentUser!['name'] : 'Admin') ?? 'Admin',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w400, fontSize: 13, color: AppColors.gray700),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(PhosphorIcons.caretDown(), size: 14, color: AppColors.gray500),
+                      ]
+                    ],
+                  ),
                 ),
+                if (isDesktop) const SizedBox(width: 16),
               ],
             ),
           ),
@@ -174,15 +183,21 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
               children: [
                 if (isDesktop)
                   NavigationRail(
-                    backgroundColor: StayNestColors.surfaceLight,
-                    extended: ResponsiveLayout.isLargeDesktop(context),
+                    backgroundColor: Colors.white,
+                    extended: _isSidebarExpanded,
                     minExtendedWidth: 220,
+                    minWidth: 64,
                     selectedIndex: _selectedIndex,
+                    indicatorColor: AppColors.gray100,
                     onDestinationSelected: (index) => setState(() => _selectedIndex = index),
+                    unselectedLabelTextStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.gray500, fontWeight: FontWeight.w400),
+                    selectedLabelTextStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.gray900, fontWeight: FontWeight.w500),
+                    unselectedIconTheme: const IconThemeData(color: AppColors.gray500, size: 20),
+                    selectedIconTheme: const IconThemeData(color: AppColors.gray900, size: 20),
                     destinations: _navItems.map((item) {
                       return NavigationRailDestination(
                         icon: Icon(item.icon),
-                        label: Text(item.label, style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                        label: Text(item.label),
                       );
                     }).toList(),
                   ),
@@ -190,7 +205,10 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                 if (isDesktop) const VerticalDivider(thickness: 1, width: 1, color: StayNestColors.outlineLight),
                 
                 Expanded(
-                  child: _pages[_selectedIndex],
+                  child: Container(
+                    color: AppColors.gray50,
+                    child: _pages[_selectedIndex],
+                  ),
                 ),
               ],
             ),
@@ -199,12 +217,89 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
       ),
       bottomNavigationBar: isDesktop ? null : NavigationBar(
         selectedIndex: _selectedIndex,
+        backgroundColor: Colors.white,
+        indicatorColor: AppColors.gray100,
         onDestinationSelected: (index) =>
             setState(() => _selectedIndex = index),
         destinations: _navItems
             .map((item) =>
                 NavigationDestination(icon: Icon(item.icon), label: item.label))
             .toList(),
+      ),
+    );
+  }
+
+  Widget _buildNotificationDrawer() {
+    return Drawer(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Notifications', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.gray900)),
+                IconButton(icon: Icon(PhosphorIcons.x(), size: 20, color: AppColors.gray500), onPressed: () => Navigator.pop(context)),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: StayNestColors.outlineLight),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _NotificationItem(title: 'New KYC Document', time: '10 mins ago', icon: PhosphorIcons.shieldCheck(), unread: true),
+                _NotificationItem(title: 'Suspicious login attempt', time: '1 hour ago', icon: PhosphorIcons.warning(), iconColor: StayNestColors.error, unread: true),
+                _NotificationItem(title: 'Property Approved', time: '2 hours ago', icon: PhosphorIcons.checkCircle(), iconColor: AppColors.green600, unread: false),
+                _NotificationItem(title: 'Daily Report Generated', time: '1 day ago', icon: PhosphorIcons.fileText(), unread: false),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotificationItem extends StatelessWidget {
+  final String title;
+  final String time;
+  final IconData icon;
+  final bool unread;
+  final Color? iconColor;
+
+  const _NotificationItem({required this.title, required this.time, required this.icon, required this.unread, this.iconColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: unread ? AppColors.gray50 : Colors.transparent,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: (iconColor ?? AppColors.gray500).withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: Icon(icon, size: 16, color: iconColor ?? AppColors.gray700),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: unread ? FontWeight.w600 : FontWeight.w400, color: AppColors.gray900)),
+                const SizedBox(height: 4),
+                Text(time, style: GoogleFonts.inter(fontSize: 12, color: AppColors.gray500)),
+              ],
+            ),
+          ),
+          if (unread)
+            Container(width: 8, height: 8, margin: const EdgeInsets.only(top: 6), decoration: const BoxDecoration(color: StayNestColors.primary, shape: BoxShape.circle)),
+        ],
       ),
     );
   }

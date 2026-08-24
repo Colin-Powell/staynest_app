@@ -78,6 +78,7 @@ router.post('/async', requireAuth, uploadAsync.single('file'), async (req, res, 
             filePath: req.file.path,
             originalName: req.file.originalname,
             mimeType: req.file.mimetype,
+            ownerId: req.auth.id,
         });
         res.status(202).json({
             data: {
@@ -95,6 +96,10 @@ router.get('/job/:id', requireAuth, async (req, res, next) => {
     try {
         const job = await mediaQueue.getJob(req.params.id);
         if (!job) {
+            return res.status(404).json({ error: 'Job not found' });
+        }
+        const isAdmin = ['admin', 'super_admin', 'administrator'].includes(req.auth.role.toLowerCase());
+        if (job.data.ownerId !== req.auth.id && !isAdmin) {
             return res.status(404).json({ error: 'Job not found' });
         }
         const state = await job.getState();

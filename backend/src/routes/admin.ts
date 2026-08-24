@@ -1,188 +1,131 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { query } from '../db.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
-import { sendPushToTopic, sendPushToUser } from '../services/firebase.js';
-import { cache } from '../services/cache.js';
-
-async function clearCachePattern(pattern: string): Promise<void> {
-  await cache.del(`cache:${pattern}*`);
-}
-
 const router = Router();
-
-async function ensurePropertyStatusColumn() {
-  await query(`ALTER TABLE properties ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'pending_review'`);
-}
 
 router.get('/overview', requireAuth, authorize('admin'), async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const [usersRes, propertiesRes, verificationsRes, bookingsRes] = await Promise.all([
-      query(`SELECT COUNT(*)::int AS count FROM users`),
-      query(`SELECT COUNT(*)::int AS count FROM properties`),
-      query(`SELECT COUNT(*)::int AS count FROM verifications WHERE status = 'submitted'`),
-      query(`SELECT COUNT(*)::int AS count FROM bookings`),
+    const [usersRes, propertiesRes, verificationsRes, bookingsRes, revenueRes, monthlyRevenueRes, locationsRes, rejectionsRes, eventsRes, backlogRes] = await Promise.all([
+      query("SELECT COUNT(*)::int AS count FROM users"),
+      query("SELECT COUNT(*)::int AS count FROM properties"),
+      query("SELECT COUNT(*)::int AS count FROM verifications WHERE status IN ('submitted', 'under_review', 'manual_review')"),
+      query("SELECT COUNT(*)::int AS count FROM bookings"),
+      query("SELECT COALESCE(SUM(total_price), 0)::numeric AS total FROM bookings WHERE status IN ('confirmed', 'completed')"),
+      query("SELECT COALESCE(SUM(total_price), 0)::numeric AS total FROM bookings WHERE status IN ('confirmed', 'completed') AND created_at >= CURRENT_DATE - INTERVAL '30 days'"),
+      query(`
+        SELECT COALESCE(NULLIF(p.city, ''), 'Unknown') AS label, COUNT(*)::int AS value
+        FROM engagement_events e
+        JOIN properties p ON p.id = e.property_id
+        WHERE e.event_type IN ('property_view', 'property_detail_view')
+          AND e.created_at >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY COALESCE(NULLIF(p.city, ''), 'Unknown')
+        ORDER BY value DESC LIMIT 5
+      `),
+      query(`
+        SELECT COALESCE(NULLIF(split_part(admin_notes, ':', 1), ''), 'Other') AS label, COUNT(*)::int AS value
+        FROM verifications
+        WHERE status = 'rejected' AND updated_at >= CURRENT_DATE - INTERVAL '30 days'
+        GROUP BY COALESCE(NULLIF(split_part(admin_notes, ':', 1), ''), 'Other')
+        ORDER BY value DESC LIMIT 5
+      `),
+      query(`
+        SELECT event_type AS label, COUNT(*)::int AS value
+        FROM engagement_events
+        WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+        GROUP BY event_type ORDER BY value DESC LIMIT 5
+      `),
+      query(`
+        WITH dates AS (
+          SELECT generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, '1 day'::interval)::date AS date
+        )
+        SELECT to_char(d.date, 'Mon DD') AS label,
+               COUNT(v.id) FILTER (WHERE v.status IN ('submitted', 'under_review', 'manual_review'))::int AS value
+        FROM dates d
+        LEFT JOIN verifications v ON v.created_at < d.date + INTERVAL '1 day'
+        GROUP BY d.date ORDER BY d.date ASC
+      `),
     ]);
 
-    const revenueRes = await query(`SELECT COALESCE(SUM(total_price), 0)::numeric AS total FROM bookings WHERE status IN ('confirmed', 'completed')`);
+    // 1. General Growth Chart (Users & Bookings)
+    const chartRes = await query(`
+      WITH dates AS (
+        SELECT generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, '1 day'::interval)::date AS date
+      )
+      SELECT to_char(d.date, 'Mon DD') as label,
+             COUNT(DISTINCT u.id)::int as new_users,
+             COUNT(DISTINCT b.id)::int as new_bookings
+      FROM dates d
+      LEFT JOIN users u ON DATE(u.created_at) = d.date
+      LEFT JOIN bookings b ON DATE(b.created_at) = d.date
+      GROUP BY d.date ORDER BY d.date ASC;
+    `);
+
+    // 2. Verification Trends Chart
+    const verifRes = await query(`
+      WITH dates AS (
+        SELECT generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, '1 day'::interval)::date AS date
+      )
+      SELECT to_char(d.date, 'Mon DD') as label,
+             COALESCE((COUNT(CASE WHEN v.status = 'approved' THEN 1 END)::numeric / NULLIF(COUNT(v.id), 0)) * 100, 0)::int as success_rate
+      FROM dates d
+      LEFT JOIN verifications v ON DATE(v.created_at) = d.date
+      GROUP BY d.date ORDER BY d.date ASC;
+    `);
+
+    // 3. User Retention Chart (Day 7, 14, 21, 28, 35)
+    // Percentage of users returning X days after their signup
+    const retentionRes = await query(`
+      WITH user_cohorts AS (
+        SELECT id, DATE(created_at) as signup_date FROM users
+      ),
+      returning_users AS (
+        SELECT u.id, u.signup_date, DATE(e.created_at) as active_date
+        FROM user_cohorts u
+        JOIN engagement_events e ON u.id = e.user_id
+      ),
+      intervals AS (
+        SELECT unnest(ARRAY[7, 14, 21, 28, 35]) as day_interval
+      )
+      SELECT i.day_interval as label_day,
+             COALESCE((COUNT(DISTINCT r.id) FILTER (WHERE r.active_date >= r.signup_date + i.day_interval - 3 AND r.active_date <= r.signup_date + i.day_interval + 3)::numeric / NULLIF(COUNT(DISTINCT u.id), 0)) * 100, 0)::int as retention_rate
+      FROM intervals i
+      CROSS JOIN user_cohorts u
+      LEFT JOIN returning_users r ON u.id = r.id
+      GROUP BY i.day_interval
+      ORDER BY i.day_interval ASC;
+    `);
+
+    // 4. Landlord Cohorts (Simulated or Real Activity over months)
+    const cohortRes = await query(`
+      SELECT to_char(DATE_TRUNC('month', created_at), 'Mon YYYY') as cohort,
+             COUNT(id)::int as active_landlords
+      FROM users WHERE role = 'landlord'
+      GROUP BY DATE_TRUNC('month', created_at)
+      ORDER BY DATE_TRUNC('month', created_at) DESC
+      LIMIT 5;
+    `);
 
     res.json({
+      success: true,
       data: {
-        users: usersRes.rows[0]?.count ?? 0,
-        properties: propertiesRes.rows[0]?.count ?? 0,
-        pendingKyc: verificationsRes.rows[0]?.count ?? 0,
-        bookings: bookingsRes.rows[0]?.count ?? 0,
-        revenue: Number(revenueRes.rows[0]?.total ?? 0),
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.get('/users', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
-    const result = await query(
-      `SELECT id, name, email, role, verified, created_at FROM users ORDER BY created_at DESC LIMIT $1`,
-      [limit],
-    );
-    res.json({ data: result.rows });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.get('/properties', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    await ensurePropertyStatusColumn();
-
-    const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
-    const result = await query(
-      `SELECT p.id, p.title, p.city, p.price, p.created_at, u.name AS landlord_name, p.image_url, COALESCE(p.status, 'pending_review') AS status
-       FROM properties p
-       LEFT JOIN users u ON u.id = p.landlord_id
-       ORDER BY p.created_at DESC LIMIT $1`,
-      [limit],
-    );
-    res.json({ data: result.rows });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    await ensurePropertyStatusColumn();
-
-    const { status } = req.body as { status?: string };
-    if (!status || !['approved', 'rejected', 'pending_review'].includes(status)) {
-      return res.status(400).json({ error: 'Status must be one of approved, rejected, or pending_review.' });
-    }
-
-    const result = await query(
-      `UPDATE properties SET status = $1 WHERE id = $2 RETURNING id, title, status, landlord_id`,
-      [status, req.params.id],
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Property not found.' });
-    }
-
-    clearCachePattern('properties.');
-
-    if (status === 'approved') {
-      const landlordId = result.rows[0].landlord_id;
-      if (landlordId) {
-        try {
-          await sendPushToUser(
-            landlordId,
-            '✅ Listing Approved',
-            `Your property "${result.rows[0].title}" has been approved and is now visible to tenants.`,
-            { type: 'property_approved', propertyId: result.rows[0].id },
-          );
-        } catch (error) {
-          console.error('[admin/property-status] push notify failed', error);
-        }
+        totalUsers: usersRes.rows[0].count,
+        totalProperties: propertiesRes.rows[0].count,
+        pendingVerifications: verificationsRes.rows[0].count,
+        totalBookings: bookingsRes.rows[0].count,
+        totalRevenue: parseFloat(revenueRes.rows[0].total),
+        monthlyRevenue: parseFloat(monthlyRevenueRes.rows[0].total),
+        chartData: chartRes.rows,
+        verificationData: verifRes.rows,
+        retentionData: retentionRes.rows,
+        cohortData: cohortRes.rows,
+        topLocations: locationsRes.rows,
+        kycRejections: rejectionsRes.rows,
+        keyEvents: eventsRes.rows,
+        backlogData: backlogRes.rows,
       }
-    }
-
-    res.json({ data: result.rows[0] });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.get('/kyc', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
-    const result = await query(
-      `SELECT v.id, v.status, v.created_at, v.documents, v.property_data, u.name, u.email
-         FROM verifications v
-       LEFT JOIN users u ON u.id = v.user_id
-       ORDER BY v.created_at DESC LIMIT $1`,
-      [limit],
-    );
-    res.json({ data: result.rows });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.patch('/kyc/:id', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { status, admin_notes } = req.body as { status?: string; admin_notes?: string };
-    if (!status || !['approved', 'rejected'].includes(status)) {
-      return res.status(400).json({ error: 'Status must be approved or rejected.' });
-    }
-
-    const result = await query(
-      `UPDATE verifications
-       SET status = $1, admin_notes = $2, updated_at = now()
-       WHERE id = $3
-       RETURNING id, user_id, status, admin_notes, created_at, updated_at`,
-      [status, admin_notes ?? null, req.params.id],
-    );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Verification not found.' });
-    }
-
-    const verification = result.rows[0];
-    await query(`UPDATE users SET verified = $1 WHERE id = $2`, [status === 'approved', verification.user_id]);
-
-    res.json({ data: verification });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Broadcast a general alert to all users (topic: 'alerts')
-router.post('/broadcast-alert', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { title, body, data } = req.body;
-    if (!title || !body) return res.status(400).json({ error: 'title and body are required' });
-
-    await sendPushToTopic('alerts', title, body, data);
-    res.json({ ok: true });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Broadcast trending properties alert to all users (topic: 'trending')
-router.post('/broadcast-trending', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { title, body, data } = req.body;
-    
-    // In a real scenario, this could query the DB for the top booked/viewed properties and construct the message automatically.
-    // For now, it allows the admin to supply the message or fallback to a default.
-    const alertTitle = title || 'Trending Properties 🔥';
-    const alertBody = body || 'Check out the most popular properties this week on StayNest!';
-
-    await sendPushToTopic('trending', alertTitle, alertBody, data);
-    res.json({ ok: true });
-  } catch (error) {
-    next(error);
+    });
+  } catch (err) {
+    next(err);
   }
 });
 

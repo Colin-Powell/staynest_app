@@ -110,4 +110,18 @@ class SuperAdminService {
     }
     return {};
   }
+
+  static Future<Map<String, dynamic>> fetchSettings() async {
+    final response = await _client().getJson('/admin/settings');
+    if (response is Map<String, dynamic>) return response;
+    if (response is Map) return Map<String, dynamic>.from(response);
+    return {};
+  }
+
+  static Future<void> updateSetting(String key, Map<String, dynamic> value) async {
+    await _client().putJson(
+      '/admin/settings/$key',
+      body: value,
+    );
+  }
 }

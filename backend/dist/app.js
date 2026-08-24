@@ -1,7 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import path from 'path';
-import { env } from './config.js';
 import { apiRateLimiter } from './middleware/rateLimiter.js';
 import { requestLogger } from './middleware/logger.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -42,7 +40,6 @@ app.use('/api/messages', messagesRouter);
 app.use('/api/bookings', bookingsRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/admin', adminRouter);
-app.use('/uploads', express.static(path.resolve(process.cwd(), env.storagePath)));
 app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', environment: process.env.NODE_ENV || 'development' });
 });

@@ -7,8 +7,11 @@ class VerificationApi {
 
   /// Submit verification payload. `payload` should contain `documents` and optional `property`.
   static Future<Map<String, dynamic>> submitVerification(
-      Map<String, dynamic> payload, {String? idempotencyKey}) async {
-    final headers = idempotencyKey != null ? {'Idempotency-Key': idempotencyKey} : <String, String>{};
+      Map<String, dynamic> payload,
+      {String? idempotencyKey}) async {
+    final headers = idempotencyKey != null
+        ? {'Idempotency-Key': idempotencyKey}
+        : <String, String>{};
     final response = await _client.post(
       Uri.parse('${AppSession.apiBaseUrl}/verifications'),
       headers: headers,
@@ -24,7 +27,8 @@ class VerificationApi {
   ///   { data: { status, documents, property_data, admin_notes, ... } }
   /// Some client code may receive an extra nesting depending on API wrappers.
   static Future<Map<String, dynamic>?> getVerificationStatus() async {
-    final response = await _client.get(Uri.parse('${AppSession.apiBaseUrl}/verifications/me'));
+    final response = await _client
+        .get(Uri.parse('${AppSession.apiBaseUrl}/verifications/me'));
     final decoded = jsonDecode(response.body);
 
     final data = decoded['data'];
@@ -54,7 +58,8 @@ class VerificationApi {
     params['limit'] = limit.toString();
 
     final response = await _client.get(
-      Uri.parse('${AppSession.apiBaseUrl}/verifications/admin/all').replace(queryParameters: params),
+      Uri.parse('${AppSession.apiBaseUrl}/verifications/admin/all')
+          .replace(queryParameters: params),
     );
     final decoded = jsonDecode(response.body);
 
@@ -82,7 +87,7 @@ class VerificationApi {
     required String verificationId,
     String? notes,
   }) async {
-    final response = await _client.patch(
+    final response = await _client.put(
       Uri.parse('${AppSession.apiBaseUrl}/verifications/$verificationId'),
       body: {
         'status': 'approved',
@@ -97,7 +102,7 @@ class VerificationApi {
     required String verificationId,
     String? notes,
   }) async {
-    final response = await _client.patch(
+    final response = await _client.put(
       Uri.parse('${AppSession.apiBaseUrl}/verifications/$verificationId'),
       body: {
         'status': 'rejected',

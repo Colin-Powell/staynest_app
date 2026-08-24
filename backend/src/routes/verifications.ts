@@ -1,7 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { query } from '../db.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
-import { env } from '../config.js';
 import { sendPushToUser } from '../services/firebase.js';
 
 const router = Router();
@@ -13,8 +12,22 @@ export const createVerificationHandler = async (req: Request, res: Response, nex
       return res.status(400).json({ error: 'Documents and property data are required.' });
     }
 
-    // Determine initial status - skip admin verification if configured for testing
-    const initialStatus = env.skipAdminVerification ? 'approved' : 'submitted';
+    const requiredDocuments = [
+      'id_photo_front', 'id_photo_back', 'selfie',
+      'proof_of_address', 'utility_bill', 'property_photos',
+    ];
+    const missingDocuments = requiredDocuments.filter(
+      (key) => typeof documents[key] !== 'string' || documents[key].trim().length === 0,
+    );
+    if (missingDocuments.length > 0) {
+      return res.status(400).json({
+        error: 'All required verification documents must be uploaded before submission.',
+        missing_documents: missingDocuments,
+      });
+    }
+
+    // Every submission remains pending until an authorized admin reviews it.
+    const initialStatus = 'submitted';
 
     const result = await query(
       `INSERT INTO verifications (user_id, status, documents, property_data)
@@ -22,11 +35,6 @@ export const createVerificationHandler = async (req: Request, res: Response, nex
        RETURNING id, user_id, status, documents, property_data, admin_notes, created_at, updated_at`,
       [req.auth!.id, initialStatus, JSON.stringify(documents), JSON.stringify(property)],
     );
-
-    // If auto-approved, update user's verified status
-    if (initialStatus === 'approved') {
-      await query(`UPDATE users SET verified = true WHERE id = $1`, [req.auth!.id]);
-    }
 
     return res.status(201).json({ data: result.rows[0] });
   } catch (error) {
@@ -39,6 +47,31 @@ router.post('/', requireAuth, createVerificationHandler);
 // Get current user's latest verification
 router.get('/me', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const existing = await query(
+      `SELECT id, user_id, status, documents FROM verifications WHERE id = $1`,
+      [req.params.id],
+    );
+    if (existing.rowCount === 0) {
+      return res.status(404).json({ error: 'Verification not found.' });
+    }
+    const current = existing.rows[0];
+    if (status === 'approved' && current.status !== 'submitted') {
+      return res.status(409).json({ error: 'Only submitted verifications can be approved.' });
+    }
+    if (status === 'approved') {
+      const requiredDocuments = [
+        'id_photo_front', 'id_photo_back', 'selfie',
+        'proof_of_address', 'utility_bill', 'property_photos',
+      ];
+      const documents = current.documents ?? {};
+      const complete = requiredDocuments.every(
+        (key) => typeof documents[key] === 'string' && documents[key].trim().length > 0,
+      );
+      if (!complete) {
+        return res.status(422).json({ error: 'Approval requires a complete document submission.' });
+      }
+    }
+
     const result = await query(
       `SELECT id, user_id, status, documents, property_data, admin_notes, created_at, updated_at
        FROM verifications
@@ -97,13 +130,11 @@ router.put('/:id', requireAuth, authorize('admin'), async (req: Request, res: Re
        RETURNING id, user_id, status, documents, property_data, admin_notes, created_at, updated_at`,
       [status, admin_notes || null, req.params.id],
     );
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Verification not found.' });
-    }
     if (status === 'approved') {
       await query(`UPDATE users SET verified = true WHERE id = $1`, [result.rows[0].user_id]);
       await sendPushToUser(result.rows[0].user_id, '? Verification Approved', 'Your landlord verification was approved! You can now list properties.', { type: 'verification_approved' });
     } else if (status === 'rejected') {
+      await query(`UPDATE users SET verified = false WHERE id = $1`, [result.rows[0].user_id]);
       await sendPushToUser(result.rows[0].user_id, '? Verification Rejected', 'Your landlord verification was rejected. Please check the notes.', { type: 'verification_rejected' });
     }
     return res.json({ data: result.rows[0] });
