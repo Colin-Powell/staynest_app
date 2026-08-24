@@ -67,7 +67,7 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   assets:
-    - .env
+    - config.env
     - assets/data/
     - assets/images/
     - assets/illustrations/

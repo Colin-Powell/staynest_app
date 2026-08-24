@@ -1,0 +1,4 @@
+Options -MultiViews
+RewriteEngine On
+
+RewriteRule ^(about|blog|contact|download|features|pricing|privacy|terms)/?$ $1.html [L]

@@ -78,7 +78,7 @@ Future<void> main() async {
   _initializeFirebaseAsync();
 
   try {
-    await dotenv.load(fileName: '.env');
+    await dotenv.load(fileName: 'config.env');
   } on FileNotFoundError {
     debugPrint('No .env file found; using fallback API_BASE_URL values.');
   } catch (err) {

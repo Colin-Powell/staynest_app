@@ -1,0 +1,7 @@
+RewriteEngine On
+RewriteBase /admin/
+
+RewriteRule ^superadmin_login/?$ /admin/index.html [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /admin/index.html [L]

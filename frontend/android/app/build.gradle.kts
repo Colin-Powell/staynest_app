@@ -35,8 +35,7 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Removed debug signing to ensure production builds are properly signed.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 }

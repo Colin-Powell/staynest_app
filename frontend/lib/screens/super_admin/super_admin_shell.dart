@@ -85,7 +85,6 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Colors.white,
-      endDrawer: _buildNotificationDrawer(),
       body: Column(
         children: [
           // Global Top Header
@@ -118,15 +117,85 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                 
                 const Spacer(),
                 
-                // Notification Bell
-                IconButton(
-                  icon: Badge(
-                    backgroundColor: StayNestColors.error,
-                    child: Icon(PhosphorIcons.bell(), color: AppColors.gray500, size: 20),
+                // Notification Bell (Now a Dropdown Popup)
+                Theme(
+                  data: Theme.of(context).copyWith(
+                    splashColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
                   ),
-                  onPressed: () {
-                    _scaffoldKey.currentState?.openEndDrawer();
-                  },
+                  child: PopupMenuButton<String>(
+                    offset: const Offset(0, 48),
+                    color: Colors.white,
+                    surfaceTintColor: Colors.transparent,
+                    tooltip: 'Notifications',
+                    padding: EdgeInsets.zero,
+                    shape: Border.all(color: StayNestColors.outlineLight),
+                    icon: Badge(
+                      backgroundColor: StayNestColors.error,
+                      child: Icon(PhosphorIcons.bell(), color: AppColors.gray500, size: 20),
+                    ),
+                    itemBuilder: (ctx) => [
+                      PopupMenuItem(
+                        enabled: false, // Prevents closing when clicking the background
+                        padding: EdgeInsets.zero,
+                        child: SizedBox(
+                          width: 340,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Popup Header
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Notifications', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.gray900)),
+                                    InkWell(
+                                      onTap: () {},
+                                      child: Text('Mark all read', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.gray500)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Divider(height: 1, color: StayNestColors.outlineLight),
+                              
+                              // Scrollable Notifications List
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxHeight: 380),
+                                child: ListView(
+                                  shrinkWrap: true,
+                                  padding: EdgeInsets.zero,
+                                  children: [
+                                    _NotificationItem(title: 'New KYC Document', time: '10 mins ago', icon: PhosphorIcons.shieldCheck(), unread: true),
+                                    _NotificationItem(title: 'Suspicious login attempt', time: '1 hour ago', icon: PhosphorIcons.warning(), iconColor: StayNestColors.error, unread: true),
+                                    _NotificationItem(title: 'Property Approved', time: '2 hours ago', icon: PhosphorIcons.checkCircle(), iconColor: AppColors.green600, unread: false),
+                                    _NotificationItem(title: 'Daily Report Generated', time: '1 day ago', icon: PhosphorIcons.fileText(), unread: false),
+                                  ],
+                                ),
+                              ),
+                              
+                              const Divider(height: 1, color: StayNestColors.outlineLight),
+                              
+                              // Footer Action
+                              InkWell(
+                                onTap: () {
+                                  Navigator.pop(ctx);
+                                },
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  child: Center(
+                                    child: Text('View all notifications', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.gray900)),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 
                 const SizedBox(width: 12),
@@ -228,40 +297,6 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
       ),
     );
   }
-
-  Widget _buildNotificationDrawer() {
-    return Drawer(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Notifications', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.gray900)),
-                IconButton(icon: Icon(PhosphorIcons.x(), size: 20, color: AppColors.gray500), onPressed: () => Navigator.pop(context)),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: StayNestColors.outlineLight),
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                _NotificationItem(title: 'New KYC Document', time: '10 mins ago', icon: PhosphorIcons.shieldCheck(), unread: true),
-                _NotificationItem(title: 'Suspicious login attempt', time: '1 hour ago', icon: PhosphorIcons.warning(), iconColor: StayNestColors.error, unread: true),
-                _NotificationItem(title: 'Property Approved', time: '2 hours ago', icon: PhosphorIcons.checkCircle(), iconColor: AppColors.green600, unread: false),
-                _NotificationItem(title: 'Daily Report Generated', time: '1 day ago', icon: PhosphorIcons.fileText(), unread: false),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _NotificationItem extends StatelessWidget {
@@ -275,31 +310,36 @@ class _NotificationItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: unread ? AppColors.gray50 : Colors.transparent,
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: (iconColor ?? AppColors.gray500).withValues(alpha: 0.1), shape: BoxShape.circle),
-            child: Icon(icon, size: 16, color: iconColor ?? AppColors.gray700),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: unread ? FontWeight.w600 : FontWeight.w400, color: AppColors.gray900)),
-                const SizedBox(height: 4),
-                Text(time, style: GoogleFonts.inter(fontSize: 12, color: AppColors.gray500)),
-              ],
+    return InkWell(
+      onTap: () {
+        // Notification action (mark as read / view details)
+      },
+      child: Container(
+        color: unread ? AppColors.gray50 : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: (iconColor ?? AppColors.gray500).withValues(alpha: 0.1), shape: BoxShape.circle),
+              child: Icon(icon, size: 16, color: iconColor ?? AppColors.gray700),
             ),
-          ),
-          if (unread)
-            Container(width: 8, height: 8, margin: const EdgeInsets.only(top: 6), decoration: const BoxDecoration(color: StayNestColors.primary, shape: BoxShape.circle)),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: GoogleFonts.inter(fontSize: 13, fontWeight: unread ? FontWeight.w600 : FontWeight.w500, color: AppColors.gray900)),
+                  const SizedBox(height: 4),
+                  Text(time, style: GoogleFonts.inter(fontSize: 11, color: AppColors.gray500)),
+                ],
+              ),
+            ),
+            if (unread)
+              Container(width: 8, height: 8, margin: const EdgeInsets.only(top: 6), decoration: const BoxDecoration(color: AppColors.gray900, shape: BoxShape.circle)),
+          ],
+        ),
       ),
     );
   }

@@ -20,6 +20,9 @@ import { requireAuth } from './middleware/auth.js'; // Explicitly import require
 
 const app = express();
 
+// Trust the first proxy (e.g., Render load balancer) for express-rate-limit
+app.set('trust proxy', 1);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cors()); // Totally open CORS for all origins, headers, and methods

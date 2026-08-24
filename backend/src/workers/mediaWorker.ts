@@ -18,7 +18,17 @@ export const mediaWorker = new Worker(
     let processedBuffer: Buffer;
     
     try {
-      if (mimeType.startsWith('image/')) {
+      let isImage = mimeType.startsWith('image/');
+      let isVideo = mimeType.startsWith('video/');
+      
+      // Fallback for Flutter application/octet-stream uploads
+      if (!isImage && !isVideo) {
+        const lowerName = originalName.toLowerCase();
+        if (lowerName.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/)) isImage = true;
+        if (lowerName.match(/\.(mp4|mov|avi|mkv|webm)$/)) isVideo = true;
+      }
+
+      if (isImage) {
         // Compress image with Sharp
         processedBuffer = await sharp(filePath)
           .resize(1920, 1080, { fit: 'inside', withoutEnlargement: true })
@@ -27,7 +37,7 @@ export const mediaWorker = new Worker(
           
         const result = await uploadToCloudinary(processedBuffer, `${originalName}.webp`);
         return result;
-      } else if (mimeType.startsWith('video/')) {
+      } else if (isVideo) {
         // Compress video with FFmpeg
         const outputPath = `${filePath}_processed.mp4`;
         

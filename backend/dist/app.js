@@ -18,6 +18,8 @@ import analyticsRouter from './routes/analytics.js';
 import adminRouter from './routes/admin.js';
 import { requireAuth } from './middleware/auth.js'; // Explicitly import requireAuth
 const app = express();
+// Trust the first proxy (e.g., Render load balancer) for express-rate-limit
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cors()); // Totally open CORS for all origins, headers, and methods

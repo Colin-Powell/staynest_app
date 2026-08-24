@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/theme.dart';
@@ -419,8 +418,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SvgPicture.asset('assets/illustrations/empty.svg', height: 96),
-          const SizedBox(height: 12),
           Text(message,
               style: GoogleFonts.inter(fontSize: 13, color: AppColors.gray500)),
         ],
@@ -960,8 +957,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SvgPicture.asset('assets/illustrations/empty.svg', height: 96),
-            const SizedBox(height: 16),
             Text('No data available',
                 style:
                     GoogleFonts.inter(fontSize: 12, color: AppColors.gray500)),
@@ -1011,8 +1006,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             Expanded(
                 child: Center(
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
-              SvgPicture.asset('assets/illustrations/empty.svg', height: 96),
-              const SizedBox(height: 12),
               Text(emptyMessage ?? 'No data',
                   style: GoogleFonts.inter(
                       fontSize: 12, color: AppColors.gray500)),

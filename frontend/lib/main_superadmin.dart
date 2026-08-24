@@ -12,7 +12,7 @@ Future<void> main() async {
   // GoogleFonts.config.allowRuntimeFetching = false;
 
   try {
-    await dotenv.load(fileName: '.env');
+    await dotenv.load(fileName: 'config.env');
   } catch (err) {
     debugPrint('dotenv load failed: $err');
   }
