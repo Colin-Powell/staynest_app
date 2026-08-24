@@ -72,7 +72,7 @@ void _initializeFirebaseAsync() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // GoogleFonts.config.allowRuntimeFetching = false;
 
   // Defer firebase init so it doesn't block startup
   _initializeFirebaseAsync();

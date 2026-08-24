@@ -9,7 +9,7 @@ import 'package:property_app/session/app_session.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // GoogleFonts.config.allowRuntimeFetching = false;
 
   try {
     await dotenv.load(fileName: '.env');
