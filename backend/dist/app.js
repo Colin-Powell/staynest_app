@@ -22,7 +22,7 @@ import { requireAuth } from './middleware/auth.js'; // Explicitly import require
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(cors({ origin: env.corsOrigin, allowedHeaders: ['Content-Type', 'Authorization'] }));
+app.use(cors()); // Totally open CORS for all origins, headers, and methods
 app.use(requestLogger);
 app.use(apiRateLimiter);
 app.use('/api/auth', authRouter);
