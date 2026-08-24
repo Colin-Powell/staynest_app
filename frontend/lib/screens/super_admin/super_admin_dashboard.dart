@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:property_app/core/theme/colors.dart';
+import 'package:property_app/theme.dart';
 import 'package:property_app/services/super_admin_service.dart';
 import 'package:property_app/utils/responsive_layout.dart';
 
