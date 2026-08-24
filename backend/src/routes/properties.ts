@@ -81,7 +81,7 @@ const PROPERTY_SELECT = `p.id,
               p.review_count,
               u.created_at AS landlord_member_since`;
 
-router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/', routeCache(300), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
     const city = typeof req.query.city === 'string' ? req.query.city.trim() : undefined;

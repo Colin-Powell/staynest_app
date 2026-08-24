@@ -2,6 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import bcrypt from 'bcrypt';
+import { routeCache } from '../middleware/cache.js';
+import { cache } from '../services/cache.js';
 
 const router = Router();
 
@@ -55,6 +57,7 @@ router.patch('/profile', requireAuth, async (req: Request, res: Response, next: 
       ]
     );
 
+    await cache.del('cache:/users*');
     res.json({ data: result.rows[0] });
   } catch (error) {
     next(error);
@@ -70,7 +73,7 @@ router.get('/recent-contacts', requireAuth, async (_req: Request, res: Response,
   }
 });
 
-router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:id', routeCache(3600), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const result = await query(
