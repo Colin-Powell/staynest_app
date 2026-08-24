@@ -30,6 +30,7 @@ import 'services/fcm_service.dart';
 import 'services/auth_service.dart'; // Import AuthService
 import 'screens/landlord/landlord_dashboard_view.dart';
 import 'screens/super_admin/super_admin_shell.dart';
+import 'screens/super_admin/super_admin_login.dart';
 import 'package:property_app/firebase_options.dart';
 import 'utils/responsive_layout.dart';
 
@@ -185,6 +186,11 @@ class _PropertyAppState extends State<PropertyApp> {
                   return;
                 }
 
+                if (AppSession.currentRole.toLowerCase() == 'admin') {
+                  Navigator.pushReplacementNamed(context, '/super_admin');
+                  return;
+                }
+
                 // Landlords bypass tenant preferences
                 if (AppSession.isLandlord) {
                   Navigator.pushReplacementNamed(context, '/portal');
@@ -207,6 +213,11 @@ class _PropertyAppState extends State<PropertyApp> {
                     Navigator.pushReplacementNamed(context, '/otp');
                     return;
                   }
+
+                if (AppSession.currentRole.toLowerCase() == 'admin') {
+                  Navigator.pushReplacementNamed(context, '/super_admin');
+                  return;
+                }
                   if (AppSession.isLandlord) {
                     Navigator.pushReplacementNamed(context, '/portal');
                     return;
@@ -233,6 +244,11 @@ class _PropertyAppState extends State<PropertyApp> {
                     Navigator.pushReplacementNamed(context, '/otp');
                     return;
                   }
+
+                if (AppSession.currentRole.toLowerCase() == 'admin') {
+                  Navigator.pushReplacementNamed(context, '/super_admin');
+                  return;
+                }
                   if (AppSession.isLandlord) {
                     Navigator.pushReplacementNamed(context, '/portal');
                     return;
@@ -399,6 +415,7 @@ class _PropertyAppState extends State<PropertyApp> {
             ),
         '/verification_center': (context) => const VerificationCenter(),
         '/super_admin': (context) => const SuperAdminShell(),
+          '/super_admin/login': (context) => const SuperAdminLoginView(),
         '/referral': (context) => const ReferralView(),
         '/reviews': (context) {
           final args = ModalRoute.of(context)!.settings.arguments
@@ -1080,3 +1097,5 @@ class _NavItemState extends State<_NavItem>
     );
   }
 }
+
+

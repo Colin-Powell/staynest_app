@@ -64,7 +64,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                         fontSize: 20, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
                 Text('Only super admins can access this area.',
-                    style: GoogleFonts.poppins(color: AppColors.gray500)),
+                    style: GoogleFonts.poppins(color: StayNestColors.textSecondaryLight)),
               ],
             ),
           ),
@@ -75,7 +75,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
     final isDesktop = ResponsiveLayout.isDesktopOrLarger(context);
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: AppColors.background,
       body: Column(
         children: [
           // Global Top Header
@@ -84,7 +84,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
             padding: const EdgeInsets.symmetric(horizontal: 24),
             decoration: BoxDecoration(
               color: Colors.white,
-              border: const Border(bottom: BorderSide(color: AppColors.outlineLight)),
+              border: const Border(bottom: BorderSide(color: StayNestColors.outlineLight)),
               boxShadow: [
                 BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))
               ],
@@ -95,7 +95,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                 if (isDesktop) ...[
                   Icon(PhosphorIcons.buildings(PhosphorIconsStyle.fill), color: AppColors.primary, size: 28),
                   const SizedBox(width: 12),
-                  Text('StayNest Admin', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.gray900)),
+                  Text('StayNest Admin', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: StayNestColors.textPrimaryLight)),
                   const SizedBox(width: 48),
                 ],
                 
@@ -105,15 +105,15 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                     height: 40,
                     constraints: const BoxConstraints(maxWidth: 400),
                     decoration: BoxDecoration(
-                      color: AppColors.gray50,
+                      color: StayNestColors.surfaceVariantLight,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.outlineLight),
+                      border: Border.all(color: StayNestColors.outlineLight),
                     ),
                     child: TextField(
                       decoration: InputDecoration(
                         hintText: 'Search users, properties, or records...',
-                        hintStyle: GoogleFonts.poppins(fontSize: 13, color: AppColors.gray500),
-                        prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.gray500),
+                        hintStyle: GoogleFonts.poppins(fontSize: 13, color: StayNestColors.textSecondaryLight),
+                        prefixIcon: const Icon(Icons.search, size: 20, color: StayNestColors.textSecondaryLight),
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       ),
@@ -128,7 +128,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                   alignment: Alignment.topRight,
                   children: [
                     IconButton(
-                      icon: Icon(PhosphorIcons.bell(PhosphorIconsStyle.fill), color: AppColors.gray600),
+                      icon: Icon(PhosphorIcons.bell(PhosphorIconsStyle.fill), color: StayNestColors.textSecondaryLight),
                       onPressed: () {},
                     ),
                     Positioned(
@@ -138,7 +138,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                         width: 10,
                         height: 10,
                         decoration: const BoxDecoration(
-                          color: AppColors.red500,
+                          color: StayNestColors.error,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -154,13 +154,13 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                     CircleAvatar(
                       radius: 16,
                       backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                      child: Text(AppSession.currentUser?.name.substring(0, 1).toUpperCase() ?? 'A',
+                      child: Text((AppSession.currentUser != null ? AppSession.currentUser!['name'] : 'Admin').substring(0, 1).toUpperCase() ?? 'A',
                         style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
                     ),
                     if (isDesktop) ...[
                       const SizedBox(width: 8),
-                      Text(AppSession.currentUser?.name ?? 'Admin', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13)),
-                      const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.gray600),
+                      Text((AppSession.currentUser != null ? AppSession.currentUser!['name'] : 'Admin') ?? 'Admin', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13)),
+                      const Icon(Icons.keyboard_arrow_down, size: 18, color: StayNestColors.textSecondaryLight),
                     ]
                   ],
                 ),
@@ -174,7 +174,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
               children: [
                 if (isDesktop)
                   NavigationRail(
-                    backgroundColor: AppColors.white,
+                    backgroundColor: StayNestColors.surfaceLight,
                     extended: ResponsiveLayout.isLargeDesktop(context),
                     minExtendedWidth: 220,
                     selectedIndex: _selectedIndex,
@@ -187,7 +187,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                     }).toList(),
                   ),
                 
-                if (isDesktop) const VerticalDivider(thickness: 1, width: 1, color: AppColors.outlineLight),
+                if (isDesktop) const VerticalDivider(thickness: 1, width: 1, color: StayNestColors.outlineLight),
                 
                 Expanded(
                   child: _pages[_selectedIndex],

@@ -4,7 +4,6 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/super_admin_service.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/utils/responsive_layout.dart';
-import 'package:intl/intl.dart';
 
 class SuperAdminKycPage extends StatefulWidget {
   const SuperAdminKycPage({super.key});
@@ -92,7 +91,7 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.gray500)),
+            child: const Text('Cancel', style: TextStyle(color: const Color(0xFFD1D5DB))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.red500),
@@ -113,7 +112,7 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: AppColors.outlineLight),
+        side: const BorderSide(color: StayNestColors.outlineLight),
       ),
       child: ListView.separated(
         itemCount: _items.length,
@@ -125,7 +124,7 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
           final name = item['name']?.toString() ?? 'Unknown user';
           final email = item['email']?.toString() ?? 'No email';
           final date = item['created_at'] != null 
-              ? DateFormat.yMMMd().format(DateTime.parse(item['created_at']))
+              ? item['created_at'].toString().split('T')[0]
               : '';
               
           final isSelected = _selectedItem?['id'].toString() == id;
@@ -137,14 +136,14 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
                 backgroundColor: AppColors.primary.withValues(alpha: 0.12),
                 child: Icon(PhosphorIcons.identificationBadge(PhosphorIconsStyle.fill), color: AppColors.primary)),
             title: Text(name, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14)),
-            subtitle: Text('$email � $date', style: GoogleFonts.poppins(fontSize: 12, color: AppColors.gray500)),
+            subtitle: Text('$email � $date', style: GoogleFonts.poppins(fontSize: 12, color: const Color(0xFFD1D5DB))),
             trailing: Chip(
                 label: Text(status.toUpperCase(), style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600)),
                 backgroundColor: status == 'approved'
                     ? AppColors.greenBg
                     : status == 'rejected'
                         ? AppColors.redBg
-                        : AppColors.gray50),
+                        : StayNestColors.surfaceVariantLight),
             onTap: () {
               setState(() => _selectedItem = item);
             },
@@ -160,9 +159,9 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(PhosphorIcons.fileSearch(PhosphorIconsStyle.light), size: 64, color: AppColors.gray300),
+            Icon(PhosphorIcons.fileMagnifyingGlass(PhosphorIconsStyle.light), size: 64, color: const Color(0xFFD1D5DB)),
             const SizedBox(height: 16),
-            Text('Select a submission to review', style: GoogleFonts.poppins(color: AppColors.gray500)),
+            Text('Select a submission to review', style: GoogleFonts.poppins(color: const Color(0xFFD1D5DB))),
           ],
         ),
       );
@@ -187,7 +186,7 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.outlineLight)),
+              border: Border(bottom: BorderSide(color: StayNestColors.outlineLight)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -212,9 +211,9 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
                       height: 250,
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: AppColors.gray50,
+                        color: StayNestColors.surfaceVariantLight,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.outlineLight),
+                        border: Border.all(color: StayNestColors.outlineLight),
                         image: DecorationImage(image: NetworkImage(idUrl), fit: BoxFit.contain),
                       ),
                     )
@@ -230,9 +229,9 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
                       height: 250,
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: AppColors.gray50,
+                        color: StayNestColors.surfaceVariantLight,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.outlineLight),
+                        border: Border.all(color: StayNestColors.outlineLight),
                         image: DecorationImage(image: NetworkImage(proofUrl), fit: BoxFit.contain),
                       ),
                     )
@@ -289,7 +288,7 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
     final isDesktop = ResponsiveLayout.isDesktopOrLarger(context);
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: AppColors.background,
       body: _loading 
         ? const Center(child: CircularProgressIndicator())
         : Padding(
@@ -299,7 +298,7 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
               children: [
                 Text('KYC Verification Queue', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
-                Text('Review landlord documents and approve them to allow listing creation.', style: GoogleFonts.poppins(color: AppColors.gray500)),
+                Text('Review landlord documents and approve them to allow listing creation.', style: GoogleFonts.poppins(color: const Color(0xFFD1D5DB))),
                 const SizedBox(height: 16),
                 // Local Filters
                 Row(
@@ -309,8 +308,8 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
                       child: TextField(
                         decoration: InputDecoration(
                           hintText: 'Filter by name or email...',
-                          prefixIcon: const Icon(Icons.search, color: AppColors.gray500),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.outlineLight)),
+                          prefixIcon: const Icon(Icons.search, color: const Color(0xFFD1D5DB)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: StayNestColors.outlineLight)),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
                         onChanged: (value) {},
@@ -321,7 +320,7 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
                       flex: 1,
                       child: DropdownButtonFormField<String>(
                         decoration: InputDecoration(
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.outlineLight)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: StayNestColors.outlineLight)),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
                         value: 'All',
@@ -346,7 +345,7 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
                               borderRadius: BorderRadius.circular(12),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: AppColors.outlineLight),
+                                  border: Border.all(color: StayNestColors.outlineLight),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: _buildDetailsPanel(),
