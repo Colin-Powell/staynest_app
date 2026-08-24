@@ -38,6 +38,10 @@ class _SuperAdminLoginViewState extends State<SuperAdminLoginView> {
         _passwordCtrl.text,
       );
 
+      if (user == null) {
+        throw Exception('Invalid credentials');
+      }
+
       AppSession.updateCurrentUser(user);
       AppSession.apiToken = user['token']?.toString() ?? user['accessToken']?.toString() ?? AppSession.apiToken;
       AppSession.refreshToken = user['refreshToken']?.toString() ?? AppSession.refreshToken;
