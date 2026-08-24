@@ -44,7 +44,7 @@ export const env = {
   },
   databaseUrl:
     process.env.DATABASE_URL || 'postgresql://postgres:postgres@db:5432/staynest',
-  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:8080',
+  corsOrigin: process.env.CORS_ORIGIN || '*', // Changed to * to support random local Flutter ports
   storagePath: process.env.STORAGE_PATH || 'uploads',
   rateLimitWindowMs: parseIntOrDefault(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
   rateLimitMax: parseIntOrDefault(process.env.RATE_LIMIT_MAX, 120),
