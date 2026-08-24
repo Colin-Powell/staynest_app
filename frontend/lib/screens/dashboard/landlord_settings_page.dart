@@ -1126,7 +1126,8 @@ class _BankDetailsPageState extends State<BankDetailsPage> {
   }
 }
 
-// --- 5. PRIVACY POLICY PAGE extends StatelessWidget {
+// --- 5. PRIVACY POLICY PAGE ---
+class PrivacyPolicyPage extends StatelessWidget {
   const PrivacyPolicyPage({super.key});
 
   @override
