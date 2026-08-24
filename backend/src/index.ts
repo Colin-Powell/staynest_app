@@ -1,6 +1,7 @@
 import app from './app.js';
 import { env } from './config.js';
 import { startCronJobs } from './services/cron.js';
+import './workers/mediaWorker.js';
 
 async function startServer() {
   // Use an explicit HTTP server so we can attach Socket.IO

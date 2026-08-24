@@ -1,7 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { query } from '../db.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
-import { sendPushToTopic } from '../services/firebase.js';
+import { sendPushToTopic, sendPushToUser } from '../services/firebase.js';
+import { cache } from '../services/cache.js';
+
+async function clearCachePattern(pattern: string): Promise<void> {
+  await cache.del(`cache:${pattern}*`);
+}
 
 const router = Router();
 
@@ -75,12 +80,30 @@ router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (r
     }
 
     const result = await query(
-      `UPDATE properties SET status = $1 WHERE id = $2 RETURNING id, title, status`,
+      `UPDATE properties SET status = $1 WHERE id = $2 RETURNING id, title, status, landlord_id`,
       [status, req.params.id],
     );
 
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Property not found.' });
+    }
+
+    clearCachePattern('properties.');
+
+    if (status === 'approved') {
+      const landlordId = result.rows[0].landlord_id;
+      if (landlordId) {
+        try {
+          await sendPushToUser(
+            landlordId,
+            '✅ Listing Approved',
+            `Your property "${result.rows[0].title}" has been approved and is now visible to tenants.`,
+            { type: 'property_approved', propertyId: result.rows[0].id },
+          );
+        } catch (error) {
+          console.error('[admin/property-status] push notify failed', error);
+        }
+      }
     }
 
     res.json({ data: result.rows[0] });

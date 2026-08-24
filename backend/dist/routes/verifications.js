@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
 import { env } from '../config.js';
+import { sendPushToUser } from '../services/firebase.js';
 const router = Router();
 export const createVerificationHandler = async (req, res, next) => {
     try {
@@ -80,6 +81,10 @@ router.put('/:id', requireAuth, authorize('admin'), async (req, res, next) => {
         }
         if (status === 'approved') {
             await query(`UPDATE users SET verified = true WHERE id = $1`, [result.rows[0].user_id]);
+            await sendPushToUser(result.rows[0].user_id, '? Verification Approved', 'Your landlord verification was approved! You can now list properties.', { type: 'verification_approved' });
+        }
+        else if (status === 'rejected') {
+            await sendPushToUser(result.rows[0].user_id, '? Verification Rejected', 'Your landlord verification was rejected. Please check the notes.', { type: 'verification_rejected' });
         }
         return res.json({ data: result.rows[0] });
     }

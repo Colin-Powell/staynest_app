@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import bcrypt from 'bcrypt';
+import { routeCache } from '../middleware/cache.js';
+import { cache } from '../services/cache.js';
 const router = Router();
 router.patch('/profile', requireAuth, async (req, res, next) => {
     try {
@@ -41,6 +43,7 @@ router.patch('/profile', requireAuth, async (req, res, next) => {
             settings ? JSON.stringify(settings) : null,
             userId
         ]);
+        await cache.del('cache:/users*');
         res.json({ data: result.rows[0] });
     }
     catch (error) {
@@ -56,7 +59,7 @@ router.get('/recent-contacts', requireAuth, async (_req, res, next) => {
         next(error);
     }
 });
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', routeCache(3600), async (req, res, next) => {
     try {
         const { id } = req.params;
         const result = await query(`SELECT id, name, email, phone, avatar, role, verified, created_at, business_name, business_type, business_description, tax_id, years_in_business

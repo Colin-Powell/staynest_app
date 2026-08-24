@@ -1,19 +1,37 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { query } from '../db.js';
-import { getCache, setCache, clearCachePattern } from '../services/cache.js';
+import { routeCache } from '../middleware/cache.js';
+import { cache } from '../services/cache.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../config.js';
-import { sendPushToTopic } from '../services/firebase.js';
+
+async function getCache<T>(key: string): Promise<T | null> {
+  const raw = await cache.get(`cache:${key}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function setCache<T>(key: string, value: T, ttlSeconds: number): Promise<void> {
+  await cache.set(`cache:${key}`, JSON.stringify(value), ttlSeconds);
+}
+
+async function clearCachePattern(pattern: string): Promise<void> {
+  await cache.del(`cache:${pattern}*`);
+}
 
 const router = Router();
 
 function normalizePropertyRow(property: Record<string, unknown>): Record<string, unknown> {
   let images = property.images;
 
-  // Ensure status is always defined for the frontend.
+  // Keep status explicit so unapproved listings are not treated as public.
   if (!property.status) {
-    property.status = 'available';
+    property.status = 'pending_review';
   }
 
   // FIX 1: null guard — pg returns null for empty jsonb, not undefined
@@ -92,7 +110,7 @@ router.get('/', routeCache(300), async (req: Request, res: Response, next: NextF
     const history = historyRaw ? historyRaw.split(',').map((s) => s.trim()).filter(Boolean) : [];
 
     const cacheKey = `properties.all|category=${category ?? ''}|city=${city ?? ''}|landlordId=${landlordId ?? ''}|lat=${lat ?? ''}|lng=${lng ?? ''}|history=${history.join('|')}`;
-    const cached = getCache<any[]>(cacheKey);
+    const cached = await getCache<any[]>(cacheKey);
     if (cached) {
       return res.json({ data: cached, cached: true });
     }
@@ -112,6 +130,9 @@ router.get('/', routeCache(300), async (req: Request, res: Response, next: NextF
       params.push(landlordId);
       conditions.push(`p.landlord_id = $${params.length}`);
     }
+
+    const visibilityClause = `COALESCE(p.status, 'pending_review') = 'approved'`;
+    conditions.push(visibilityClause);
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -147,7 +168,7 @@ router.get('/', routeCache(300), async (req: Request, res: Response, next: NextF
     const rows = result.rows.map((row) => normalizePropertyRow(row as Record<string, unknown>));
 
     if (conditions.length === 0) {
-      setCache(cacheKey, rows, 60_000);
+      await setCache(cacheKey, rows, 60_000);
     }
 
     res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
@@ -176,7 +197,7 @@ router.get('/recommendations', async (req: Request, res: Response, next: NextFun
     }
 
     const cacheKey = `properties.recommendations|lat=${lat ?? ''}|lng=${lng ?? ''}|history=${history.join('|')}|user=${userId ?? ''}`;
-    const cached = getCache<any[]>(cacheKey);
+    const cached = await getCache<any[]>(cacheKey);
     if (cached) return res.json({ data: cached, cached: true });
 
     let profile: any = null;
@@ -222,6 +243,8 @@ router.get('/recommendations', async (req: Request, res: Response, next: NextFun
       orderParts.push(`(ABS(COALESCE(p.lat,0) - $${params.length - 1}) + ABS(COALESCE(p.lng,0) - $${params.length}))`);
     }
 
+    whereParts.push(`COALESCE(p.status, 'pending_review') = 'approved'`);
+
     const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
     const orderClause = orderParts.length > 0 ? `${orderParts.join(', ')}, p.created_at DESC` : 'p.created_at DESC';
 
@@ -236,7 +259,7 @@ router.get('/recommendations', async (req: Request, res: Response, next: NextFun
     );
 
     const rows = result.rows.map((row) => normalizePropertyRow(row as Record<string, unknown>));
-    setCache(cacheKey, rows, 30_000);
+    await setCache(cacheKey, rows, 30_000);
     res.json({ data: rows });
   } catch (error) {
     next(error);
@@ -270,7 +293,7 @@ router.get('/me', requireAuth, authorize('landlord', 'host'), async (req: Reques
 router.get('/categories', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const cacheKey = 'properties.categories';
-    const cached = getCache<Record<string, unknown>>(cacheKey);
+    const cached = await getCache<Record<string, unknown>>(cacheKey);
     if (cached) {
       return res.json({ data: cached, cached: true });
     }
@@ -285,6 +308,7 @@ router.get('/categories', async (_req: Request, res: Response, next: NextFunctio
                 'image_url', image_url
               ) ORDER BY created_at DESC) AS items
        FROM properties
+       WHERE COALESCE(status, 'pending_review') = 'approved'
        GROUP BY category
        ORDER BY category`,
     );
@@ -297,7 +321,7 @@ router.get('/categories', async (_req: Request, res: Response, next: NextFunctio
       {},
     );
 
-    setCache(cacheKey, categories, 60_000);
+    await setCache(cacheKey, categories, 60_000);
     res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
     res.json({ data: categories });
   } catch (error) {
@@ -360,6 +384,7 @@ router.get('/nearby', async (req: Request, res: Response, next: NextFunction) =>
        FROM properties p
        LEFT JOIN users u ON u.id = p.landlord_id
        WHERE p.lat IS NOT NULL AND p.lng IS NOT NULL
+         AND COALESCE(p.status, 'pending_review') = 'approved'
          AND (6371 * acos(cos(radians($1)) * cos(radians(p.lat)) * cos(radians(p.lng) - radians($2)) + sin(radians($1)) * sin(radians(p.lat)))) <= $3
        ORDER BY distance ASC
        LIMIT 50`,
@@ -390,6 +415,9 @@ router.get('/:id([0-9a-fA-F-]{36})', async (req: Request, res: Response, next: N
     }
 
     const property = result.rows[0] as Record<string, unknown>;
+    if ((property.status ?? 'pending_review') !== 'approved') {
+      return res.status(404).json({ error: 'Property not found or not approved yet.' });
+    }
     const images = property.images;
     const hasImages = Array.isArray(images) && images.length > 0;
 
@@ -709,6 +737,7 @@ function createPropertyInsertArgs(body: Record<string, unknown>) {
     lat != null ? Number(lat) : null,
     lng != null ? Number(lng) : null,
     (body as any).__userId,
+    'pending_review',
   ];
 }
 
@@ -774,24 +803,17 @@ async function handleCreateProperty(req: Request, res: Response, next: NextFunct
     );
 
     const result = await query(
-      `INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, landlord_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, $15)
-       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng`,
+      `INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, landlord_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, $15, $16)
+       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, status`,
       insertArgs,
     );
 
     console.log(`${logPrefix} success userId=${userId} propertyId=${result.rows[0]?.id}`);
-    
-    // Broadcast push notification asynchronously
-    sendPushToTopic(
-      'new_listings', 
-      'New Property Listed!', 
-      `${result.rows[0]?.title} is now available in ${result.rows[0]?.city}. Check it out!`,
-      { propertyId: result.rows[0]?.id }
-    ).catch(e => console.error('Failed to broadcast new listing push', e));
 
-    // Clear the properties cache so tenants see the new listing immediately
-    clearCachePattern('properties.all');
+    // The listing remains pending-review until an admin approves it.
+    // Do not surface it to tenants before approval.
+    clearCachePattern('properties.');
 
     res.status(201).json({ data: result.rows[0] });
   } catch (error) {

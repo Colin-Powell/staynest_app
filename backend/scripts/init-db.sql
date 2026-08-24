@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS properties (
   landlord_id uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   average_rating numeric DEFAULT 0,
-  review_count integer DEFAULT 0
+  review_count integer DEFAULT 0,
+  status text NOT NULL DEFAULT 'pending_review'
 );
 
 -- Ensure lat/lng columns exist for older databases
@@ -53,7 +54,10 @@ ALTER TABLE properties ADD COLUMN IF NOT EXISTS amenities jsonb DEFAULT '[]'::js
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS address text;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS average_rating numeric DEFAULT 0;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS review_count integer DEFAULT 0;
-ALTER TABLE properties ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'available';
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS status text;
+UPDATE properties SET status = 'pending_review' WHERE status IS NULL OR status = 'available';
+ALTER TABLE properties ALTER COLUMN status SET DEFAULT 'pending_review';
+ALTER TABLE properties ALTER COLUMN status SET NOT NULL;
 
 CREATE TABLE IF NOT EXISTS verifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

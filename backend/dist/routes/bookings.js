@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { sendPushToUser } from '../services/firebase.js';
 const router = Router();
 // Create a new booking (tenant creates booking)
 router.post('/', requireAuth, async (req, res, next) => {
@@ -55,6 +56,16 @@ router.post('/', requireAuth, async (req, res, next) => {
          RETURNING id, property_id, tenant_id, landlord_id, check_in_date, check_out_date, status, total_price, notes, created_at`, [propertyId, req.auth.id, landlordId, checkInDate, checkOutDate, 'pending', calculatedTotalPrice, notes || null]);
             bookingData = bookingResult.rows[0];
             await query('COMMIT');
+            try {
+                const tenantRes = await query('SELECT name FROM users WHERE id = $1 LIMIT 1', [req.auth.id]);
+                const pRes = await query('SELECT title FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
+                const tenantName = tenantRes.rows[0]?.name || 'A tenant';
+                const pName = pRes.rows[0]?.title || 'your property';
+                await sendPushToUser(landlordId, '?? New Booking Request', `${tenantName} requested to book ${pName}.`, { type: 'new_booking', bookingId: bookingData.id });
+            }
+            catch (e) {
+                console.error('Push error:', e);
+            }
         }
         catch (dbErr) {
             await query('ROLLBACK');
@@ -148,6 +159,15 @@ router.patch('/:id/confirm', requireAuth, async (req, res, next) => {
             return res.status(403).json({ error: 'Only the landlord can confirm this booking.' });
         }
         const result = await query('UPDATE bookings SET status = $1, updated_at = now() WHERE id = $2 RETURNING *', ['confirmed', bookingId]);
+        try {
+            const b = result.rows[0];
+            const pRes = await query('SELECT title FROM properties WHERE id = $1 LIMIT 1', [b.property_id]);
+            const pName = pRes.rows[0]?.title || 'a property';
+            await sendPushToUser(b.tenant_id, '? Booking Approved', `Your booking for ${pName} was approved!`, { type: 'booking_approved', bookingId });
+        }
+        catch (e) {
+            console.error('Push error:', e);
+        }
         res.json({ data: result.rows[0] });
     }
     catch (error) {
@@ -176,6 +196,15 @@ router.patch('/:id/reject', requireAuth, async (req, res, next) => {
            updated_at = now() 
        WHERE id = $3 
        RETURNING *`, ['rejected', notesUpdate, bookingId]);
+        try {
+            const b = result.rows[0];
+            const pRes = await query('SELECT title FROM properties WHERE id = $1 LIMIT 1', [b.property_id]);
+            const pName = pRes.rows[0]?.title || 'a property';
+            await sendPushToUser(b.tenant_id, '? Booking Declined', `Your booking for ${pName} was declined.`, { type: 'booking_declined', bookingId });
+        }
+        catch (e) {
+            console.error('Push error:', e);
+        }
         res.json({ data: result.rows[0] });
     }
     catch (error) {
@@ -205,6 +234,17 @@ router.patch('/:id/cancel', requireAuth, async (req, res, next) => {
        SET status = $1, notes = CASE WHEN $2::text IS NOT NULL THEN COALESCE(notes, '') || ' ' || $2 ELSE notes END, updated_at = now() 
        WHERE id = $3 
        RETURNING *`, ['cancelled', notesUpdate, bookingId]);
+        try {
+            const b = result.rows[0];
+            const notifyUserId = isTenant ? b.landlord_id : b.tenant_id;
+            const actor = isTenant ? 'Tenant' : 'Landlord';
+            const pRes = await query('SELECT title FROM properties WHERE id = $1 LIMIT 1', [b.property_id]);
+            const pName = pRes.rows[0]?.title || 'a property';
+            await sendPushToUser(notifyUserId, '?? Booking Cancelled', `${actor} cancelled the booking for ${pName}.`, { type: 'booking_cancelled', bookingId });
+        }
+        catch (e) {
+            console.error('Push error:', e);
+        }
         res.json({ data: result.rows[0] });
     }
     catch (error) {

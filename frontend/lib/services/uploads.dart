@@ -19,14 +19,13 @@ class UploadCancelledException implements Exception {
 }
 
 class UploadsService {
-  /// Uploads a single file to the backend `/uploads` endpoint and returns the public URL.
+  /// Uploads a single file synchronously to the backend `/uploads` endpoint.
   static Future<String> uploadFile(File file, {String? token, String? idempotencyKey}) async {
-    final base = AppSession.apiBaseUrl; // e.g. http://10.0.2.2:8080/api
+    final base = AppSession.apiBaseUrl;
     final uri = Uri.parse('$base/uploads');
     final request = http.MultipartRequest('POST', uri);
     if ((token ?? AppSession.apiToken) != null) {
-      request.headers['Authorization'] =
-          'Bearer ${token ?? AppSession.apiToken}';
+      request.headers['Authorization'] = 'Bearer ${token ?? AppSession.apiToken}';
     }
     if (idempotencyKey != null) {
       request.headers['Idempotency-Key'] = idempotencyKey;
@@ -48,21 +47,21 @@ class UploadsService {
     return url as String;
   }
 
-  /// Uploads a file while reporting progress via [onProgress] (0.0 - 1.0).
-  /// Returns an [UploadTask] with a `future` and a `cancel()` method.
+  /// Uploads a file asynchronously using BullMQ worker via `/uploads/async`
+  /// and polls the job status until it is completed, reporting progress via [onProgress] (0.0 - 1.0).
   static UploadTask uploadFileWithProgress(
       File file, void Function(double) onProgress,
       {String? token, String? idempotencyKey}) {
     final client = http.Client();
     final completer = Completer<String>();
+    bool isCancelled = false;
 
     () async {
       final base = AppSession.apiBaseUrl;
-      final uri = Uri.parse('$base/uploads');
+      final uri = Uri.parse('$base/uploads/async');
       final request = http.MultipartRequest('POST', uri);
       if ((token ?? AppSession.apiToken) != null) {
-        request.headers['Authorization'] =
-            'Bearer ${token ?? AppSession.apiToken}';
+        request.headers['Authorization'] = 'Bearer ${token ?? AppSession.apiToken}';
       }
       if (idempotencyKey != null) {
         request.headers['Idempotency-Key'] = idempotencyKey;
@@ -76,7 +75,8 @@ class UploadsService {
             handleData: (List<int> data, EventSink<List<int>> sink) {
           bytesSent += data.length;
           try {
-            onProgress(bytesSent / total);
+            // Uploading physical file makes up the first 80% of progress
+            onProgress((bytesSent / total) * 0.8);
           } catch (_) {}
           sink.add(data);
         }));
@@ -88,19 +88,54 @@ class UploadsService {
         final streamed = await client.send(request);
         final response = await http.Response.fromStream(streamed);
         if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw Exception(
-              'Upload failed: ${response.statusCode} ${response.body}');
+          throw Exception('Async Upload failed: ${response.statusCode} ${response.body}');
         }
 
         final decoded = jsonDecode(response.body) as Map<String, dynamic>;
         final data = decoded['data'];
-        final url = (data is Map ? data['url'] : null) ?? decoded['url'];
+        final jobId = data['jobId'];
+        
+        if (jobId == null) throw Exception('Upload did not return a Job ID');
 
-        if (url == null) throw Exception('Upload returned no URL');
+        // Poll for job completion
+        String? finalUrl;
+        while (!isCancelled) {
+          await Future.delayed(const Duration(seconds: 2));
+          if (isCancelled) break;
+          
+          final jobRes = await client.get(
+            Uri.parse('$base/uploads/job/$jobId'),
+            headers: {'Authorization': 'Bearer ${token ?? AppSession.apiToken}'}
+          );
+          
+          if (jobRes.statusCode == 200) {
+            final jobData = jsonDecode(jobRes.body)['data'];
+            final status = jobData['status'];
+            
+            if (status == 'completed') {
+               finalUrl = jobData['result']['url'] ?? jobData['result']['secure_url'];
+               break;
+            } else if (status == 'failed') {
+               throw Exception('Background processing failed: ${jobData['error']}');
+            } else {
+               // still processing, maybe update progress slightly
+               try {
+                  onProgress(0.9); // Processing...
+               } catch (_) {}
+            }
+          }
+        }
+        
+        if (isCancelled) {
+          throw UploadCancelledException();
+        }
+
+        if (finalUrl == null) throw Exception('Job finished but no URL was returned');
+        
         try {
           onProgress(1.0);
         } catch (_) {}
-        if (!completer.isCompleted) completer.complete(url as String);
+        if (!completer.isCompleted) completer.complete(finalUrl as String);
       } catch (e) {
         if (!completer.isCompleted) completer.completeError(e);
       } finally {
@@ -111,6 +146,7 @@ class UploadsService {
     }();
 
     return UploadTask(completer.future, () {
+      isCancelled = true;
       try {
         if (!completer.isCompleted) {
           completer.completeError(UploadCancelledException());
