@@ -1,7 +1,8 @@
 // lib/screens/referral_view.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:property_app/session/app_session.dart';
 
 class ReferralView extends StatefulWidget {
   const ReferralView({super.key});
@@ -10,28 +11,32 @@ class ReferralView extends StatefulWidget {
   State<ReferralView> createState() => _ReferralViewState();
 }
 
-class _ReferralViewState extends State<ReferralView>
-    with TickerProviderStateMixin {
+class _ReferralViewState extends State<ReferralView> with TickerProviderStateMixin {
   late final AnimationController _pageCtrl;
   late final AnimationController _staggerCtrl;
   late final Animation<double> _pageFade;
+  bool _howItWorksOpen = false;
+
+  // Generate a deterministic referral code from the user's ID
+  String get _referralCode {
+    final userId = AppSession.currentUserId ?? '';
+    if (userId.length >= 6) {
+      return userId.replaceAll('-', '').substring(0, 6).toUpperCase();
+    }
+    // Fallback to name-based code
+    final name = AppSession.currentUserName ?? 'GUEST';
+    final cleaned = name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toUpperCase();
+    return cleaned.length >= 4
+        ? '${cleaned.substring(0, 4)}${DateTime.now().year % 100}'
+        : 'SN${DateTime.now().millisecondsSinceEpoch % 9999}';
+  }
 
   @override
   void initState() {
     super.initState();
-    // Base entrance animation
-    _pageCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
+    _pageCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
     _pageFade = CurvedAnimation(parent: _pageCtrl, curve: Curves.easeOut);
-
-    // Staggered cascade animation for the elements
-    _staggerCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-
+    _staggerCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
     _pageCtrl.forward().then((_) => _staggerCtrl.forward());
   }
 
@@ -42,36 +47,27 @@ class _ReferralViewState extends State<ReferralView>
     super.dispose();
   }
 
-  /// Staggered sliding fade animation helper
   Widget _buildStaggered({required int index, required Widget child}) {
     final double start = (index * 0.1).clamp(0.0, 1.0);
     final double end = (start + 0.4).clamp(0.0, 1.0);
-
     final animation = CurvedAnimation(
       parent: _staggerCtrl,
       curve: Interval(start, end, curve: Curves.easeOutCubic),
     );
-
     return FadeTransition(
       opacity: animation,
       child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 0.15),
-          end: Offset.zero,
-        ).animate(animation),
+        position: Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero).animate(animation),
         child: child,
       ),
     );
   }
 
   void _copyReferralCode() {
-    Clipboard.setData(const ClipboardData(text: 'ESQ234'));
+    Clipboard.setData(ClipboardData(text: _referralCode));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text(
-          'Referral code copied to clipboard!',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
+        content: const Text('Referral code copied to clipboard!', style: TextStyle(fontWeight: FontWeight.w600)),
         backgroundColor: const Color(0xFF3B82F6),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -79,9 +75,19 @@ class _ReferralViewState extends State<ReferralView>
     );
   }
 
+  Future<void> _shareInvite() async {
+    final code = _referralCode;
+    final name = AppSession.displayName;
+    await Share.share(
+      '$name is inviting you to StayNest!\n\n'
+      'Use my referral code $code when you sign up and we both earn Ksh 500 once you complete your first booking.\n\n'
+      'Download StayNest and find your perfect home today! ??',
+      subject: 'Join StayNest with my referral code',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Exact colors picked from the design
     const Color bgColor = Color(0xFF161C2D);
     const Color primaryBlue = Color(0xFF4378FF);
     const Color codeBlue = Color(0xFF3F3CD4);
@@ -98,7 +104,6 @@ class _ReferralViewState extends State<ReferralView>
             onPressed: () => Navigator.pop(context),
           ),
         ),
-        // Extend body behind AppBar so the content perfectly centers
         extendBodyBehindAppBar: true,
         body: SafeArea(
           child: Padding(
@@ -106,64 +111,51 @@ class _ReferralViewState extends State<ReferralView>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
-                // 1. Title
                 _buildStaggered(
                   index: 0,
-                  child: const Text(
-                    'Invite & Earn',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+                  child: const Text('Invite & Earn',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.5)),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
-                // 2. Subtitle
                 _buildStaggered(
                   index: 1,
                   child: RichText(
                     textAlign: TextAlign.center,
                     text: const TextSpan(
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        height: 1.4,
-                      ),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white, height: 1.5),
                       children: [
-                        TextSpan(text: 'Invite your friends and\n'),
-                        TextSpan(text: 'earn up to '),
-                        TextSpan(
-                          text: 'Ksh 500',
-                          style: TextStyle(color: primaryBlue),
-                        ),
+                        TextSpan(text: 'Invite friends & earn up to '),
+                        TextSpan(text: 'Ksh 500', style: TextStyle(color: primaryBlue, fontWeight: FontWeight.w800)),
+                        TextSpan(text: ' per successful referral.'),
                       ],
                     ),
                   ),
                 ),
 
-                // Flexible space pushes illustration to middle
                 const Spacer(flex: 2),
 
-                // 3. Image Illustration
+                // Steps illustration — inline since we might not have SVG
                 _buildStaggered(
                   index: 2,
-                  child: SvgPicture.asset(
-                    'assets/images/referal.svg',
-                    height: 260,
-                    fit: BoxFit.contain,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: const [
+                      _StepBubble(icon: Icons.share, label: 'Share\nCode'),
+                      _StepArrow(),
+                      _StepBubble(icon: Icons.person_add, label: 'Friend\nSigns Up'),
+                      _StepArrow(),
+                      _StepBubble(icon: Icons.wallet, label: 'Earn\nKsh 500'),
+                    ],
                   ),
                 ),
 
-                const Spacer(flex: 3),
+                const Spacer(flex: 2),
 
-                // 4. Referral Code Box
+                // Referral Code Box
                 _buildStaggered(
                   index: 3,
                   child: GestureDetector(
@@ -174,105 +166,125 @@ class _ReferralViewState extends State<ReferralView>
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(
-                            'Your Referral code ',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF111827),
-                            ),
-                          ),
-                          SizedBox(width: 4),
-                          Text(
-                            'ESQ234',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              color: codeBlue,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Icon(
-                            Icons.content_copy_rounded,
-                            color: Color(0xFF111827),
-                            size: 20,
-                          ),
+                          const Text('Your Referral Code  ',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+                          Text(_referralCode,
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: codeBlue, letterSpacing: 1)),
+                          const SizedBox(width: 10),
+                          const Icon(Icons.content_copy_rounded, color: Color(0xFF9CA3AF), size: 18),
                         ],
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
-                // 5. Invite Now Button
+                // Invite Now Button
                 _buildStaggered(
                   index: 4,
                   child: SizedBox(
-                    height: 60,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // Open native share functionality
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Opening Share Options...')),
-                        );
-                      },
+                    height: 58,
+                    child: ElevatedButton.icon(
+                      onPressed: _shareInvite,
+                      icon: const Icon(Icons.ios_share_rounded),
+                      label: const Text('Invite Now', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryBlue,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
-                      child: const Text(
-                        'Invite Now',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // How it works
+                _buildStaggered(
+                  index: 5,
+                  child: GestureDetector(
+                    onTap: () => setState(() => _howItWorksOpen = !_howItWorksOpen),
+                    behavior: HitTestBehavior.opaque,
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('How it works?',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                            AnimatedRotation(
+                              turns: _howItWorksOpen ? 0.5 : 0,
+                              duration: const Duration(milliseconds: 200),
+                              child: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70),
+                            ),
+                          ],
                         ),
-                      ),
+                        AnimatedCrossFade(
+                          firstChild: const SizedBox.shrink(),
+                          secondChild: Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Text(
+                              '1. Share your unique code with a friend.\n'
+                              '2. They sign up using your referral code.\n'
+                              '3. When they complete their first booking, you both receive Ksh 500 credit automatically added to your wallets.',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.7),
+                            ),
+                          ),
+                          crossFadeState: _howItWorksOpen ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                          duration: const Duration(milliseconds: 250),
+                        ),
+                      ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 24),
-
-                // 6. How it works Text Button
-                _buildStaggered(
-                  index: 5,
-                  child: Center(
-                    child: GestureDetector(
-                      onTap: () {
-                        // Navigate to How it works modal/screen
-                      },
-                      behavior: HitTestBehavior.opaque,
-                      child: const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Text(
-                          'How it works?',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Bottom spacing for screens without physical home button
-                const SizedBox(height: 16),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _StepBubble extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _StepBubble({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 56, height: 56,
+          decoration: BoxDecoration(
+            color: const Color(0xFF4378FF).withOpacity(0.15),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Icon(icon, color: const Color(0xFF4378FF), size: 26),
+        ),
+        const SizedBox(height: 8),
+        Text(label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+}
+
+class _StepArrow extends StatelessWidget {
+  const _StepArrow();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(bottom: 20),
+      child: Icon(Icons.arrow_forward_rounded, color: Color(0xFF4378FF), size: 20),
     );
   }
 }

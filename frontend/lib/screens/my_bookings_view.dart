@@ -12,13 +12,18 @@ class BookingWrapper {
   final Property property;
   final String dateTime;
   final String status;
+  final String bookingId;
+  final Map<String, dynamic> rawData;
 
   BookingWrapper({
     required this.property,
     required this.dateTime,
     required this.status,
+    required this.bookingId,
+    required this.rawData,
   });
 }
+
 
 class MyBookingsViewScreen extends StatefulWidget {
   final VoidCallback onBack;
@@ -83,20 +88,19 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
               name: b['property_name'] ?? 'Unknown Property',
               location: 'See Details',
               image: b['property_image'] ?? '',
-              // total_price may arrive as String or num depending on API / decoding
               price: int.tryParse(b['total_price']?.toString() ?? '') ?? 0,
-
-              lat: 0, lng: 0, 
+              lat: 0, lng: 0,
               rating: 0.0,
               reviews: 0,
               category: '', images: [],
-              features: const PropertyFeatures(
-                  beds: 0, rooms: 0, baths: 0, furnished: false),
+              features: const PropertyFeatures(beds: 0, rooms: 0, baths: 0, furnished: false),
               amenities: [], agent: const Agent(userId: '', name: '', avatar: ''),
               description: '',
             ),
             dateTime: dateStr,
             status: uiStatus,
+            bookingId: b['id']?.toString() ?? '',
+            rawData: Map<String, dynamic>.from(b),
           );
         }).toList();
         _loading = false;
@@ -215,10 +219,12 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                               itemBuilder: (context, i) {
                                 return _buildStaggered(
                                   index: i,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(bottom: 20),
-                                    child: _BookingCard(
-                                        booking: displayBookings[i]),
+                                  child: GestureDetector(
+                                    onTap: () => _showBookingDetail(displayBookings[i]),
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(bottom: 20),
+                                      child: _BookingCard(booking: displayBookings[i]),
+                                    ),
                                   ),
                                 );
                               },
@@ -230,7 +236,102 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
       ),
     );
   }
+
+  Future<void> _showBookingDetail(BookingWrapper b) async {
+    final raw = b.rawData;
+    final checkIn = raw['check_in_date']?.toString() ?? '';
+    final checkOut = raw['check_out_date']?.toString() ?? '';
+    final total = raw['total_price']?.toString() ?? '—';
+    final nights = raw['nights']?.toString() ?? '—';
+    final backendStatus = raw['status']?.toString() ?? b.status;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => Padding(
+        padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).padding.bottom + 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(width: 40, height: 4,
+                decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(2))),
+            ),
+            const SizedBox(height: 20),
+            Text(b.property.name,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF111827))),
+            const SizedBox(height: 4),
+            Text('Booking #${b.bookingId.length > 8 ? b.bookingId.substring(0, 8).toUpperCase() : b.bookingId}',
+                style: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF))),
+            const SizedBox(height: 20),
+            _DetailRow(label: 'Check-in', value: checkIn),
+            _DetailRow(label: 'Check-out', value: checkOut),
+            if (nights != '—') _DetailRow(label: 'Duration', value: '$nights night(s)'),
+            _DetailRow(label: 'Total', value: 'Ksh $total'),
+            _DetailRow(label: 'Status', value: backendStatus.toUpperCase()),
+            if (b.status == 'Upcoming') ...[
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await _cancelBooking(b);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFEF4444),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('Cancel Booking',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _cancelBooking(BookingWrapper b) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Cancel Booking?', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: Text('Are you sure you want to cancel your booking for ${b.property.name}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancel Booking', style: TextStyle(color: Color(0xFFEF4444))),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final success = await BookingService.updateStatus(b.bookingId, 'cancel');
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Booking cancelled'), behavior: SnackBarBehavior.floating),
+      );
+      _loadData();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not cancel booking. Please try again.'),
+            behavior: SnackBarBehavior.floating),
+      );
+    }
+  }
 }
+
 
 // ==================== SHARED WIDGETS ====================
 
@@ -501,4 +602,31 @@ class AppScrollBehavior extends ScrollBehavior {
   ScrollPhysics getScrollPhysics(BuildContext context) =>
       const BouncingScrollPhysics(
           decelerationRate: ScrollDecelerationRate.fast);
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _DetailRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(label,
+                style: const TextStyle(fontSize: 14, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w500)),
+          ),
+          Expanded(
+            child: Text(value,
+                style: const TextStyle(fontSize: 14, color: Color(0xFF111827), fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
 }

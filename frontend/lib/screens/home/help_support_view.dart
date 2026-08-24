@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:property_app/app_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class HelpSupportView extends StatefulWidget {
   final VoidCallback onBack;
-
   const HelpSupportView({super.key, required this.onBack});
 
   @override
@@ -11,44 +10,39 @@ class HelpSupportView extends StatefulWidget {
 }
 
 class _HelpSupportViewState extends State<HelpSupportView> {
-  static const List<Map<String, dynamic>> _menuItems = [
+  // FAQ items � expandable
+  static const List<Map<String, String>> _faqs = [
     {
-      'label': 'FAQs',
-      'icon': Icons.help_outline_rounded,
-      'details':
-          'Frequently asked questions about searching, bookings, and account management.',
+      'q': 'How do I search for a property?',
+      'a': 'Use the search bar on the home screen. You can filter by category, price, location, and number of bedrooms. Tap on any property card to see full details.',
     },
     {
-      'label': 'Contact Support',
-      'icon': Icons.headset_mic_rounded,
-      'details':
-          'Reach the support team for booking help, property issues, and account questions.',
+      'q': 'How do I book a property?',
+      'a': 'Open a property, tap the "Book Now" button, choose your check-in and check-out dates, then confirm. The landlord will review and approve your request.',
     },
     {
-      'label': 'Safety Tools',
-      'icon': Icons.shield_outlined,
-      'details':
-          'Learn how to stay safe while browsing properties and interacting with landlords.',
+      'q': 'Can I cancel a booking?',
+      'a': 'Yes. Go to Profile ? My Bookings, tap on an upcoming booking, and tap "Cancel". Cancellation policies vary per property � check the listing for details.',
     },
     {
-      'label': 'Report a Problem',
-      'icon': Icons.flag_outlined,
-      'details':
-          'Submit a report if you encounter booking issues, listing errors, or app problems.',
+      'q': 'How do I verify my account?',
+      'a': 'After registration, check your email for an OTP code and enter it on the verification screen. Verified accounts get a checkmark badge and more trust from landlords.',
     },
     {
-      'label': 'Terms & Conditions',
-      'icon': Icons.description_outlined,
-      'details':
-          'View the terms that govern StayNest use, liability, and user responsibilities.',
+      'q': 'What payment methods are supported?',
+      'a': 'StayNest currently supports M-Pesa and card payments. Go to Profile ? Payment Methods to manage your linked accounts.',
     },
     {
-      'label': 'Privacy Policy',
-      'icon': Icons.lock_outline_rounded,
-      'details':
-          'See how StayNest uses and protects your data before connecting to real backend services.',
+      'q': 'How does the referral program work?',
+      'a': 'Share your unique referral code from Profile ? Refer a Friend. When a friend signs up and completes a booking, you both earn Ksh 500 credit.',
+    },
+    {
+      'q': 'I found a suspicious listing. What do I do?',
+      'a': 'Tap the flag icon on the property page to report it, or email us at support@staynest.top with the property link and a description of the issue.',
     },
   ];
+
+  final Set<int> _expanded = {};
 
   @override
   Widget build(BuildContext context) {
@@ -58,90 +52,119 @@ class _HelpSupportViewState extends State<HelpSupportView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
               child: Row(
                 children: [
-                  _BackButton(onTap: widget.onBack),
+                  GestureDetector(
+                    onTap: widget.onBack,
+                    child: const Icon(Icons.arrow_back, size: 28, color: Colors.black),
+                  ),
                   const SizedBox(width: 16),
                   const Expanded(
-                    child: Text(
-                      'Help & Support',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.black,
-                      ),
-                    ),
+                    child: Text('Help & Support',
+                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.black)),
                   ),
                 ],
               ),
             ),
+
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                itemCount: _menuItems.length + 2, // items + divider + logout
-                itemBuilder: (context, index) {
-                  if (index < _menuItems.length) {
-                    final item = _menuItems[index];
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                children: [
+                  // Quick actions
+                  const SizedBox(height: 8),
+                  _QuickAction(
+                    icon: Icons.headset_mic_rounded,
+                    label: 'Contact Support',
+                    subtitle: 'support@staynest.top',
+                    color: const Color(0xFF4F46E5),
+                    onTap: () => _launchEmail(
+                      to: 'support@staynest.top',
+                      subject: 'StayNest Support Request',
+                      body: 'Hi StayNest Support,\n\nI need help with:\n',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _QuickAction(
+                    icon: Icons.flag_outlined,
+                    label: 'Report a Problem',
+                    subtitle: 'Tell us what went wrong',
+                    color: const Color(0xFFEF4444),
+                    onTap: () => _launchEmail(
+                      to: 'support@staynest.top',
+                      subject: 'StayNest Problem Report',
+                      body: 'Hi,\n\nI encountered a problem:\n\nDescription:\n\nSteps to reproduce:\n',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _QuickAction(
+                    icon: Icons.lock_outline,
+                    label: 'Privacy Policy',
+                    subtitle: 'How we handle your data',
+                    color: const Color(0xFF6B7280),
+                    onTap: () => Navigator.pushNamed(context, '/privacy'),
+                  ),
 
-                    return InkWell(
-                      onTap: () => Navigator.pushNamed(
-                        context,
-                        '/how_it_works',
-                        arguments: {
-                          'title': item['label'],
-                          'subtitle': '${item['label']} details',
-                          'details': item['details'],
-                        },
-                      ),
-                      highlightColor: Colors.transparent,
-                      splashColor: Colors.transparent,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              item['label'] as String,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF111827),
-                              ),
+                  const SizedBox(height: 28),
+                  const Text('Frequently Asked Questions',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF111827))),
+                  const SizedBox(height: 12),
+
+                  // FAQ accordion
+                  ...List.generate(_faqs.length, (i) {
+                    final faq = _faqs[i];
+                    final isOpen = _expanded.contains(i);
+                    return Column(
+                      children: [
+                        InkWell(
+                          onTap: () => setState(() {
+                            if (isOpen) _expanded.remove(i); else _expanded.add(i);
+                          }),
+                          splashColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(faq['q']!,
+                                      style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF111827))),
+                                ),
+                                AnimatedRotation(
+                                  turns: isOpen ? 0.5 : 0,
+                                  duration: const Duration(milliseconds: 200),
+                                  child: const Icon(Icons.keyboard_arrow_down_rounded,
+                                      color: Color(0xFF9CA3AF)),
+                                ),
+                              ],
                             ),
-                            const Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              color: Color(0xFF9CA3AF),
-                              size: 18,
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    );
-                  } else if (index == _menuItems.length) {
-                    return const Padding(
-                      padding: EdgeInsets.only(top: 8, bottom: 24),
-                      child: Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: Color(0xFFE5E7EB),
-                      ),
-                    );
-                  } else {
-                    return GestureDetector(
-                      onTap: () {},
-                      child: const Text(
-                        'Logout',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFFEF4444),
+                        AnimatedCrossFade(
+                          firstChild: const SizedBox.shrink(),
+                          secondChild: Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: Text(faq['a']!,
+                                style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Color(0xFF6B7280),
+                                    height: 1.6)),
+                          ),
+                          crossFadeState: isOpen ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                          duration: const Duration(milliseconds: 200),
                         ),
-                      ),
+                        const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                      ],
                     );
-                  }
-                },
+                  }),
+                  const SizedBox(height: 40),
+                ],
               ),
             ),
           ],
@@ -149,117 +172,77 @@ class _HelpSupportViewState extends State<HelpSupportView> {
       ),
     );
   }
+
+  Future<void> _launchEmail({required String to, required String subject, required String body}) async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: to,
+      query: 'subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(body)}',
+    );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open email. Please contact support@staynest.top'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
 }
 
-// ─── Back Button ─────────────────────────────────────────────────────────────
-
-class _BackButton extends StatefulWidget {
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final Color color;
   final VoidCallback onTap;
-  const _BackButton({required this.onTap});
 
-  @override
-  State<_BackButton> createState() => _BackButtonState();
-}
-
-class _BackButtonState extends State<_BackButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _c;
-  late Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 120),
-    );
-    _scale = Tween<double>(begin: 1.0, end: 0.88)
-        .animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) => _c.forward(),
-      onTapUp: (_) {
-        _c.reverse();
-        widget.onTap();
-      },
-      onTapCancel: () => _c.reverse(),
-      child: ScaleTransition(
-        scale: _scale,
-        child: Container(
-          color: Colors.transparent, // Increases touch target
-          child: const Icon(
-            Icons.arrow_back,
-            size: 28,
-            color: Colors.black,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Version Tile ─────────────────────────────────────────────────────────────
-
-class _VersionTile extends StatefulWidget {
-  @override
-  State<_VersionTile> createState() => _VersionTileState();
-}
-
-class _VersionTileState extends State<_VersionTile> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: _pressed ? const Color(0xFFF9FAFB) : Colors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: _pressed ? AppTheme.borderMid : AppTheme.border,
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(_pressed ? 0.0 : 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          border: Border.all(color: const Color(0xFFE5E7EB)),
         ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Row(
           children: [
-            Text(
-              'Version',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
-                color: Color(0xFF374151),
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF111827))),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                ],
               ),
             ),
-            Text(
-              'v1.0.0',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                color: AppTheme.textMuted,
-              ),
-            ),
+            const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF9CA3AF)),
           ],
         ),
       ),

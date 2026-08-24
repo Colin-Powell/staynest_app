@@ -23,6 +23,7 @@ dependencies:
   flutter_svg: ^2.3.0
   table_calendar: ^3.0.10
   url_launcher: ^6.1.10
+  share_plus: ^10.0.0
   image_picker: ^1.2.3
   image_cropper: ^8.0.0
   flutter_image_compress: ^2.4.0

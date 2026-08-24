@@ -1,77 +1,147 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:property_app/session/app_session.dart';
 
 class PaymentMethodsViewScreen extends StatefulWidget {
   final VoidCallback onBack;
-
   const PaymentMethodsViewScreen({super.key, required this.onBack});
 
   @override
-  State<PaymentMethodsViewScreen> createState() =>
-      _PaymentMethodsViewScreenState();
+  State<PaymentMethodsViewScreen> createState() => _PaymentMethodsViewScreenState();
 }
 
 class _PaymentMethodsViewScreenState extends State<PaymentMethodsViewScreen>
     with TickerProviderStateMixin {
   late final AnimationController _pageCtrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 500),
-  );
-  late final Animation<double> _pageFade = CurvedAnimation(
-    parent: _pageCtrl,
-    curve: Curves.easeOutCubic,
-  );
-  late final Animation<Offset> _pageSlide = Tween<Offset>(
-    begin: const Offset(0.05, 0),
-    end: Offset.zero,
-  ).animate(_pageFade);
+    vsync: this, duration: const Duration(milliseconds: 500));
+  late final Animation<double> _pageFade =
+      CurvedAnimation(parent: _pageCtrl, curve: Curves.easeOutCubic);
+  late final Animation<Offset> _pageSlide =
+      Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero).animate(_pageFade);
 
-  late List<AnimationController> _itemCtrls;
-  late List<Animation<double>> _itemFades;
-  late List<Animation<Offset>> _itemSlides;
+  // Mutable list of payment methods
+  final List<Map<String, dynamic>> _methods = [];
 
   @override
   void initState() {
     super.initState();
     _pageCtrl.forward();
-    _initAnimations();
+    _initMethods();
   }
 
-  void _initAnimations() {
-    // 3 items: Mpesa, Visa, Button
-    _itemCtrls = List.generate(
-      3,
-      (i) => AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 600),
-      ),
-    );
-
-    _itemFades = _itemCtrls
-        .map((c) => CurvedAnimation(parent: c, curve: Curves.easeOutCubic))
-        .toList();
-
-    _itemSlides = _itemCtrls
-        .map((c) => Tween<Offset>(
-              begin: const Offset(0, 0.1),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(parent: c, curve: Curves.easeOutCubic)))
-        .toList();
-
-    for (int i = 0; i < _itemCtrls.length; i++) {
-      Future.delayed(Duration(milliseconds: 150 + i * 100), () {
-        if (mounted) _itemCtrls[i].forward();
-      });
+  void _initMethods() {
+    final phone = AppSession.displayPhone;
+    // Start with M-Pesa if phone is available
+    if (phone.isNotEmpty) {
+      _methods.add({'type': 'mpesa', 'number': phone, 'isDefault': true});
+    } else {
+      _methods.add({'type': 'mpesa', 'number': '+254 7XX XXX XXX', 'isDefault': true});
     }
   }
 
   @override
   void dispose() {
     _pageCtrl.dispose();
-    for (final c in _itemCtrls) {
-      c.dispose();
-    }
     super.dispose();
+  }
+
+  void _setDefault(int index) {
+    setState(() {
+      for (int i = 0; i < _methods.length; i++) {
+        _methods[i]['isDefault'] = (i == index);
+      }
+    });
+  }
+
+  void _removeMethod(int index) {
+    if (_methods[index]['isDefault'] == true && _methods.length > 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot remove default payment method. Set another as default first.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Remove payment method?', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: Text('This will remove the ${_methods[index]['type'] == 'mpesa' ? 'M-Pesa' : 'card'} ending in ...${_methods[index]['number'].toString().substring(_methods[index]['number'].toString().length - 4)}.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() => _methods.removeAt(index));
+            },
+            child: const Text('Remove', style: TextStyle(color: Color(0xFFEF4444))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddSheet() {
+    final phoneCtrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 24, right: 24, top: 20,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 32,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(width: 40, height: 4,
+                decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(2))),
+            ),
+            const SizedBox(height: 20),
+            const Text('Add M-Pesa Number',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF111827))),
+            const SizedBox(height: 20),
+            TextField(
+              controller: phoneCtrl,
+              keyboardType: TextInputType.phone,
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]'))],
+              decoration: InputDecoration(
+                labelText: 'Phone number (e.g. +254712345678)',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                prefixIcon: const Icon(Icons.phone_android_rounded),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton(
+                onPressed: () {
+                  final number = phoneCtrl.text.trim();
+                  if (number.length < 9) return;
+                  Navigator.pop(ctx);
+                  setState(() => _methods.add({'type': 'mpesa', 'number': number, 'isDefault': false}));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('M-Pesa number added'), behavior: SnackBarBehavior.floating),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3F3CD4),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Add Number', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -88,38 +158,43 @@ class _PaymentMethodsViewScreenState extends State<PaymentMethodsViewScreen>
               children: [
                 _Header(onBack: widget.onBack),
                 Expanded(
-                  child: ScrollConfiguration(
-                    behavior: const AppScrollBehavior(),
-                    child: ListView(
-                      physics: const BouncingScrollPhysics(
-                        decelerationRate: ScrollDecelerationRate.fast,
-                      ),
-                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-                      children: [
-                        FadeTransition(
-                          opacity: _itemFades[0],
-                          child: SlideTransition(
-                            position: _itemSlides[0],
-                            child: const _MpesaCard(),
-                          ),
+                  child: _methods.isEmpty
+                      ? const Center(
+                          child: Text('No payment methods yet.',
+                              style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 16)))
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                          itemCount: _methods.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 16),
+                          itemBuilder: (_, i) {
+                            final m = _methods[i];
+                            return _PaymentCard(
+                              type: m['type'] as String,
+                              number: m['number'] as String,
+                              isDefault: m['isDefault'] as bool,
+                              onSetDefault: () => _setDefault(i),
+                              onRemove: () => _removeMethod(i),
+                            );
+                          },
                         ),
-                        const SizedBox(height: 20),
-                        FadeTransition(
-                          opacity: _itemFades[1],
-                          child: SlideTransition(
-                            position: _itemSlides[1],
-                            child: const _VisaCard(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
-                FadeTransition(
-                  opacity: _itemFades[2],
-                  child: SlideTransition(
-                    position: _itemSlides[2],
-                    child: const _AddPaymentButton(),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(20, 8, 20, MediaQuery.of(context).padding.bottom + 20),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 58,
+                    child: ElevatedButton.icon(
+                      onPressed: _showAddSheet,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Add Payment Method',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF3F3CD4),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -131,20 +206,6 @@ class _PaymentMethodsViewScreenState extends State<PaymentMethodsViewScreen>
   }
 }
 
-// Custom Smooth Scroll Behavior
-class AppScrollBehavior extends ScrollBehavior {
-  const AppScrollBehavior();
-  @override
-  Widget buildOverscrollIndicator(
-          BuildContext context, Widget child, ScrollableDetails details) =>
-      child;
-  @override
-  ScrollPhysics getScrollPhysics(BuildContext context) =>
-      const BouncingScrollPhysics(
-          decelerationRate: ScrollDecelerationRate.fast);
-}
-
-// Header Pixel-matched
 class _Header extends StatelessWidget {
   final VoidCallback onBack;
   const _Header({required this.onBack});
@@ -160,23 +221,13 @@ class _Header extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             child: const Padding(
               padding: EdgeInsets.only(right: 16, top: 4, bottom: 4),
-              child: Icon(
-                Icons.arrow_back,
-                size: 28,
-                color: Color(0xFF111827),
-              ),
+              child: Icon(Icons.arrow_back, size: 28, color: Color(0xFF111827)),
             ),
           ),
           const Expanded(
-            child: Text(
-              'Payment Methods',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF111827),
-                letterSpacing: -0.5,
-              ),
-            ),
+            child: Text('Payment Methods',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800,
+                    color: Color(0xFF111827), letterSpacing: -0.5)),
           ),
         ],
       ),
@@ -184,65 +235,81 @@ class _Header extends StatelessWidget {
   }
 }
 
-// M-Pesa Card matching the PDF perfectly
-class _MpesaCard extends StatelessWidget {
-  const _MpesaCard();
+class _PaymentCard extends StatelessWidget {
+  final String type;
+  final String number;
+  final bool isDefault;
+  final VoidCallback onSetDefault;
+  final VoidCallback onRemove;
+
+  const _PaymentCard({
+    required this.type,
+    required this.number,
+    required this.isDefault,
+    required this.onSetDefault,
+    required this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final isMpesa = type == 'mpesa';
+    final borderColor = isMpesa ? const Color(0xFF4CAF50) : const Color(0xFFA5B4FC);
+    final logoColor = isMpesa ? const Color(0xFF4CAF50) : const Color(0xFF1A1F71);
+    final defaultColor = isMpesa ? const Color(0xFF22C55E) : const Color(0xFF2563EB);
+
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF4CAF50), width: 1.2),
+        border: Border.all(color: borderColor, width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // M-Pesa Logo
-          SvgPicture.asset(
-            'assets/images/MPESA.svg',
-            height: 32,
-            alignment: Alignment.centerLeft,
-            errorBuilder: (context, error, stackTrace) => const Text(
-              'M-PESA',
-              style: TextStyle(
-                color: Color(0xFF4CAF50),
-                fontWeight: FontWeight.w800,
-                fontSize: 20,
-              ),
-            ),
-          ),
-          const SizedBox(height: 32),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Text(
-                '+254 712 345 678',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF22C55E),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text(
-                  'Default',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
+              isMpesa
+                  ? SvgPicture.asset('assets/images/MPESA.svg', height: 28,
+                      errorBuilder: (_, __, ___) => Text('M-PESA',
+                          style: TextStyle(color: logoColor, fontWeight: FontWeight.w900, fontSize: 18)))
+                  : Text('VISA',
+                      style: TextStyle(color: logoColor, fontWeight: FontWeight.w900,
+                          fontSize: 22, fontStyle: FontStyle.italic)),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, color: Color(0xFF9CA3AF)),
+                onSelected: (v) {
+                  if (v == 'default') onSetDefault();
+                  if (v == 'remove') onRemove();
+                },
+                itemBuilder: (_) => [
+                  if (!isDefault)
+                    const PopupMenuItem(value: 'default', child: Text('Set as Default')),
+                  const PopupMenuItem(
+                    value: 'remove',
+                    child: Text('Remove', style: TextStyle(color: Color(0xFFEF4444))),
                   ),
-                ),
+                ],
               ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(number,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF6B7280))),
+              if (isDefault)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: defaultColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text('Default',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+                ),
             ],
           ),
         ],
@@ -251,117 +318,11 @@ class _MpesaCard extends StatelessWidget {
   }
 }
 
-// Visa Card matching the PDF perfectly
-class _VisaCard extends StatelessWidget {
-  const _VisaCard();
-
+class AppScrollBehavior extends ScrollBehavior {
+  const AppScrollBehavior();
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-            color: const Color(0xFFA5B4FC), width: 1.2), // Soft blue border
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Visa Logo
-          SvgPicture.asset(
-            'assets/images/Visa.svg',
-            height: 24,
-            alignment: Alignment.centerLeft,
-            errorBuilder: (context, error, stackTrace) => const Text(
-              'VISA',
-              style: TextStyle(
-                color: Color(0xFF1A1F71),
-                fontWeight: FontWeight.w800,
-                fontSize: 24,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Visa •••••••••0023',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF4B5563),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              const Text(
-                'Expires 17 June 2026',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF9CA3AF),
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2563EB),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text(
-                  'Use',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// Add Payment Method Button
-class _AddPaymentButton extends StatelessWidget {
-  const _AddPaymentButton();
-
+  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) => child;
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          20, 16, 20, MediaQuery.of(context).padding.bottom + 24),
-      child: SizedBox(
-        width: double.infinity,
-        height: 58,
-        child: ElevatedButton(
-          onPressed: () {},
-          style: ElevatedButton.styleFrom(
-            backgroundColor:
-                const Color(0xFF3F3CD4), // Deep indigo/blue matching PDF
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-          child: const Text(
-            'Add Payment Method',
-            style: TextStyle(
-              fontSize: 16.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  ScrollPhysics getScrollPhysics(BuildContext context) =>
+      const BouncingScrollPhysics(decelerationRate: ScrollDecelerationRate.fast);
 }
