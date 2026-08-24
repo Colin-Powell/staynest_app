@@ -14,6 +14,7 @@ import 'package:property_app/services/user_service.dart';
 import 'package:property_app/services/avatar_service.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/screens/home/how_it_works_view.dart';
+import 'package:property_app/screens/help_support_view.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'landlord_analytics_page.dart';
@@ -258,13 +259,7 @@ class LandlordSettingsPage extends StatelessWidget {
                       icon: PhosphorIcons.question(PhosphorIconsStyle.fill),
                       onTap: () => _navigateTo(
                           context,
-                          const HowItWorksView(
-                            title: 'Landlord Support',
-                            subtitle:
-                                'Managing your properties and tenants on StayNest.',
-                            details:
-                                'Find comprehensive guides on optimizing your listings, managing booking requests, and tracking your business performance analytics.',
-                          )),
+                          HelpSupportView(onBack: () => Navigator.pop(context))),
                     ),
                     _buildDivider(),
                     _buildSettingRow(
