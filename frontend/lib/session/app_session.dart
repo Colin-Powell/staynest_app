@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:uuid/uuid.dart';
@@ -53,9 +53,19 @@ class AppSession {
         defaultValue: 'http://localhost:8080/api',
       );
     }
+    
+    // For local development on Android emulator, 10.0.2.2 points to host's localhost
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return const String.fromEnvironment(
+        'API_BASE_URL',
+        defaultValue: 'http://10.0.2.2:8080/api',
+      );
+    }
+    
+    // For iOS simulator, localhost works fine
     return const String.fromEnvironment(
       'API_BASE_URL',
-      defaultValue: 'https://api.yourdomain.com/api',
+      defaultValue: 'http://localhost:8080/api',
     );
   }
 
