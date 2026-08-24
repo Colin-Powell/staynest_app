@@ -3,7 +3,6 @@ import multer from 'multer';
 import { requireAuth } from '../middleware/auth.js';
 import { uploadToCloudinary, isCloudinaryConfigured, buildFileUrl, storageDestination, ensureStorageDirectory } from '../services/storage.js';
 import { mediaQueue } from '../services/queue.js';
-import path from 'path';
 
 const router = Router();
 ensureStorageDirectory();

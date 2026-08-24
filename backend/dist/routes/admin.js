@@ -89,8 +89,8 @@ router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (r
 router.get('/kyc', requireAuth, authorize('admin'), async (req, res, next) => {
     try {
         const limit = Math.min(parseInt(req.query.limit) || 10, 50);
-        const result = await query(`SELECT v.id, v.status, v.created_at, u.name, u.email
-       FROM verifications v
+        const result = await query(`SELECT v.id, v.status, v.created_at, v.documents, v.property_data, u.name, u.email
+         FROM verifications v
        LEFT JOIN users u ON u.id = v.user_id
        ORDER BY v.created_at DESC LIMIT $1`, [limit]);
         res.json({ data: result.rows });
