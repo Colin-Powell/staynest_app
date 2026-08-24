@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/app_theme.dart';
 import 'package:property_app/theme.dart';
-import 'package:property_app/services/auth_service.dart';
+import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/responsive_layout.dart';
 
@@ -32,10 +32,16 @@ class _SuperAdminLoginViewState extends State<SuperAdminLoginView> {
     });
 
     try {
-      await AuthService.instance.login(
+      final repo = RemoteDatabaseRepository();
+      final user = await repo.authenticate(
         _emailCtrl.text.trim(),
         _passwordCtrl.text,
       );
+
+      AppSession.updateCurrentUser(user);
+      AppSession.apiToken = user['token']?.toString() ?? user['accessToken']?.toString() ?? AppSession.apiToken;
+      AppSession.refreshToken = user['refreshToken']?.toString() ?? AppSession.refreshToken;
+      await AppSession.persistSession();
 
       if (AppSession.currentRole.toLowerCase() != 'admin') {
         // Kick them out if they aren't actually an admin
@@ -179,13 +185,7 @@ class _SuperAdminLoginViewState extends State<SuperAdminLoginView> {
                         ),
                 ),
                 const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
-                  child: Text(
-                    'Return to public login',
-                    style: GoogleFonts.poppins(color: StayNestColors.textSecondaryLight),
-                  ),
-                ),
+                
               ],
             ),
           ),
