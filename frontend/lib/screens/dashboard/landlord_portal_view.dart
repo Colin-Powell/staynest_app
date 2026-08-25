@@ -273,7 +273,7 @@ case 'Bookings':
       case 'Settings':
         return const LandlordSettingsPage();
       default:
-        return const LandlordOverviewPage();
+        return LandlordOverviewPage(onViewAllProperties: () => setState(() => _selectedNav = 'Properties'));
     }
   }
 

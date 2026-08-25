@@ -8,6 +8,8 @@ import 'package:property_app/widgets/skeleton_property_card.dart';
 
 import 'package:property_app/models/property.dart';
 import 'package:property_app/services/property_service.dart';
+import 'package:property_app/services/properties_api.dart';
+import 'package:property_app/utils/property_mapper.dart';
 
 import 'package:property_app/widgets/property_image.dart';
 
@@ -76,10 +78,10 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage>
       _hasError = false;
     });
     try {
-      final loaded = await _propertyService.fetchProperties();
+      final rawList = await PropertiesApi.getLandlordProperties();
       if (!mounted) return;
       setState(() {
-        _properties = loaded.cast<Property>();
+        _properties = rawList.map((m) => mapApiProperty(m)).toList();
         _loading = false;
       });
     } catch (e) {

@@ -14,7 +14,8 @@ import 'dashboard_widgets.dart';
 import 'landlord_analytics_page.dart';
 
 class LandlordOverviewPage extends StatefulWidget {
-  const LandlordOverviewPage({super.key});
+  final VoidCallback? onViewAllProperties;
+  const LandlordOverviewPage({super.key, this.onViewAllProperties});
 
   @override
   State<LandlordOverviewPage> createState() => _LandlordOverviewPageState();
@@ -289,16 +290,19 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
             const SizedBox(height: 16),
 
             // --- VIEW ALL PROPERTIES BUTTON ---
-            GlassContainer(
-              borderRadius: BorderRadius.circular(20),
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                child: Text(
-                  'View All Properties',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: textLight,
+            GestureDetector(
+              onTap: widget.onViewAllProperties,
+              child: GlassContainer(
+                borderRadius: BorderRadius.circular(20),
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Center(
+                  child: Text(
+                    'View All Properties',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: textLight,
+                    ),
                   ),
                 ),
               ),

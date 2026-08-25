@@ -7,6 +7,17 @@ import { requireAuth } from '../middleware/auth.js';
 import { verifyOtp } from '../services/email.js';
 
 const router = Router();
+const ADMIN_ACCESS_TOKEN_TTL = '24h';
+const DEFAULT_ACCESS_TOKEN_TTL = '15m';
+
+const accessTokenTtlForRole = (role: string | undefined) => {
+  const normalizedRole = role?.toLowerCase();
+  return normalizedRole === 'admin' ||
+          normalizedRole === 'super_admin' ||
+          normalizedRole === 'administrator'
+      ? ADMIN_ACCESS_TOKEN_TTL
+      : DEFAULT_ACCESS_TOKEN_TTL;
+};
 
 // Register new user
 router.post('/register', async (req, res, next) => {
@@ -56,7 +67,7 @@ router.post('/register', async (req, res, next) => {
         verified: created.verified,
       },
       env.jwtSecret,
-      { expiresIn: '15m' },
+      { expiresIn: accessTokenTtlForRole(created.role) },
     );
     const refreshToken = jwt.sign(
       { id: created.id },
@@ -100,7 +111,7 @@ router.post('/refresh', async (req, res, next) => {
         verified: user.verified,
       },
       env.jwtSecret,
-      { expiresIn: '15m' },
+      { expiresIn: accessTokenTtlForRole(user.role) },
     );
     const nextRefreshToken = jwt.sign({ id: user.id }, env.jwtSecret, { expiresIn: '30d' });
 
@@ -187,7 +198,7 @@ router.post('/login', async (req, res, next) => {
         verified: user.verified,
       },
       env.jwtSecret,
-      { expiresIn: '15m' },
+      { expiresIn: accessTokenTtlForRole(user.role) },
     );
     const refreshToken = jwt.sign(
       { id: user.id },
