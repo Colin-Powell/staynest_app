@@ -195,10 +195,10 @@ router.get('/kyc', requireAuth, authorize('admin'), async (req: Request, res: Re
         v.id,
         v.user_id,
         v.status,
-        v.document_type,
-        v.document_url,
-        v.document_number,
-        v.selfie_url,
+        v.documents,
+        v.property_data,
+        
+        
         v.admin_notes,
         v.created_at,
         v.updated_at,
@@ -226,10 +226,10 @@ router.get('/kyc', requireAuth, authorize('admin'), async (req: Request, res: Re
         email: row.email,
         phone: row.phone,
         role: row.role,
-        document_type: row.document_type,
-        document_url: row.document_url,
-        document_number: row.document_number,
-        selfie_url: row.selfie_url,
+        documents: row.documents,
+        property_data: row.property_data,
+        
+        
         
         admin_notes: row.admin_notes,
         property_count: row.property_count,
