@@ -108,7 +108,7 @@ router.get('/properties', requireAuth, authorize('admin'), async (req: Request, 
         p.image_url,
         p.status,
         p.created_at,
-        p.updated_at,
+        p.created_at as updated_at,
         u.id as landlord_id,
         u.name as landlord_name,
         u.email as landlord_email,
@@ -309,6 +309,36 @@ router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (r
     res.json({
       success: true,
       data: updateRes.rows[0]
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+// GET /admin/overview - Dashboard stats
+router.get('/overview', requireAuth, authorize('admin'), async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const usersRes = await query(`SELECT COUNT(*)::int as count FROM users`);
+    const propsRes = await query(`SELECT COUNT(*)::int as count FROM properties`);
+    const pendingKycRes = await query(`SELECT COUNT(*)::int as count FROM verifications WHERE status IN ('submitted', 'under_review')`);
+    const revenueRes = await query(`SELECT COALESCE(SUM(total_price), 0)::numeric as total FROM bookings WHERE status IN ('confirmed', 'completed')`);
+    const monthlyRevRes = await query(`SELECT COALESCE(SUM(total_price), 0)::numeric as total FROM bookings WHERE status IN ('confirmed', 'completed') AND created_at > now() - interval '30 days'`);
+
+    res.json({
+      success: true,
+      data: {
+        totalUsers: usersRes.rows[0].count,
+        totalProperties: propsRes.rows[0].count,
+        pendingVerifications: pendingKycRes.rows[0].count,
+        totalRevenue: parseFloat(revenueRes.rows[0].total) || 0,
+        monthlyRevenue: parseFloat(monthlyRevRes.rows[0].total) || 0,
+        chartData: [],
+        backlogData: [],
+        verificationData: [],
+        retentionData: [],
+        cohortData: []
+      }
     });
   } catch (err) {
     next(err);
