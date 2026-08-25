@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
 import { env } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
-import { verifyOtp } from '../services/email.js';
+import { verifyOtp, createOtp, sendOtpEmail } from '../services/email.js';
 
 const router = Router();
 const ADMIN_ACCESS_TOKEN_TTL = '24h';
@@ -75,6 +75,14 @@ router.post('/register', async (req, res, next) => {
       { expiresIn: '30d' },
     );
 
+    // Generate and send OTP for verification
+    try {
+      const otpInfo = createOtp(created.email);
+      await sendOtpEmail(created.email, otpInfo.code);
+    } catch (err) {
+      console.error('Failed to send OTP during registration:', err);
+    }
+
     return res.status(201).json({ data: { token: accessToken, accessToken, refreshToken, user: created } });
   } catch (error) {
     next(error);
@@ -94,7 +102,7 @@ router.post('/refresh', async (req, res, next) => {
     }
 
     const result = await query(
-      'SELECT id, name, email, phone, avatar, role, verified FROM users WHERE id = $1 LIMIT 1',
+      'SELECT id, name, email, phone, avatar, role, verified, referral_code, wallet_balance FROM users WHERE id = $1 LIMIT 1',
       [payload.id],
     );
 
@@ -176,7 +184,7 @@ router.post('/login', async (req, res, next) => {
     }
 
     const result = await query(
-      'SELECT id, name, email, phone, avatar, password_hash, role, verified FROM users WHERE email = $1 LIMIT 1',
+      'SELECT id, name, email, phone, avatar, password_hash, role, verified, referral_code, wallet_balance FROM users WHERE email = $1 LIMIT 1',
       [email.trim().toLowerCase()],
     );
 

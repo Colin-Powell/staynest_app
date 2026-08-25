@@ -137,6 +137,7 @@ router.get('/properties', requireAuth, authorize('admin'), async (req, res, next
                 image_count: row.image_count,
                 booking_count: row.booking_count,
                 total_revenue: parseFloat(row.total_revenue) || 0,
+                status: row.status,
                 created_at: row.created_at,
                 landlord_id: row.landlord_id,
                 landlord_name: row.landlord_name,
@@ -210,9 +211,11 @@ router.get('/kyc', requireAuth, authorize('admin'), async (req, res, next) => {
                 role: row.role,
                 documents: row.documents,
                 property_data: row.property_data,
+                status: row.status,
                 admin_notes: row.admin_notes,
                 property_count: row.property_count,
                 created_at: row.created_at,
+                updated_at: row.updated_at,
             }))
         });
     }
@@ -293,6 +296,66 @@ router.get('/overview', requireAuth, authorize('admin'), async (_req, res, next)
         const pendingKycRes = await query(`SELECT COUNT(*)::int as count FROM verifications WHERE status IN ('submitted', 'under_review')`);
         const revenueRes = await query(`SELECT COALESCE(SUM(total_price), 0)::numeric as total FROM bookings WHERE status IN ('confirmed', 'completed')`);
         const monthlyRevRes = await query(`SELECT COALESCE(SUM(total_price), 0)::numeric as total FROM bookings WHERE status IN ('confirmed', 'completed') AND created_at > now() - interval '30 days'`);
+        const chartRes = await query(`
+      WITH dates AS (
+        SELECT generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, '1 day'::interval)::date AS date
+      )
+      SELECT to_char(d.date, 'Mon DD') AS label,
+             COUNT(DISTINCT u.id)::int AS new_users,
+             COUNT(DISTINCT b.id)::int AS new_bookings
+      FROM dates d
+      LEFT JOIN users u ON DATE(u.created_at) = d.date
+      LEFT JOIN bookings b ON DATE(b.created_at) = d.date
+      GROUP BY d.date ORDER BY d.date ASC
+    `);
+        const verificationRes = await query(`
+      WITH dates AS (
+        SELECT generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, '1 day'::interval)::date AS date
+      )
+      SELECT to_char(d.date, 'Mon DD') AS label,
+             COALESCE((COUNT(*) FILTER (WHERE v.status = 'approved')::numeric / NULLIF(COUNT(v.id), 0)) * 100, 0)::int AS success_rate
+      FROM dates d
+      LEFT JOIN verifications v ON DATE(v.created_at) = d.date
+      GROUP BY d.date ORDER BY d.date ASC
+    `);
+        const retentionRes = await query(`
+      WITH cohorts AS (SELECT id, DATE(created_at) AS signup_date FROM users),
+      intervals AS (SELECT unnest(ARRAY[7, 14, 21, 28, 35]) AS day_interval)
+      SELECT i.day_interval AS label_day,
+             COALESCE((COUNT(DISTINCT e.user_id)::numeric / NULLIF(COUNT(DISTINCT c.id), 0)) * 100, 0)::int AS retention_rate
+      FROM intervals i CROSS JOIN cohorts c
+      LEFT JOIN engagement_events e ON e.user_id = c.id
+        AND DATE(e.created_at) BETWEEN c.signup_date + i.day_interval - 3 AND c.signup_date + i.day_interval + 3
+      GROUP BY i.day_interval ORDER BY i.day_interval ASC
+    `);
+        const cohortRes = await query(`
+      SELECT to_char(DATE_TRUNC('month', created_at), 'Mon YYYY') AS cohort,
+             COUNT(*) FILTER (WHERE role = 'landlord')::int AS active_landlords
+      FROM users GROUP BY DATE_TRUNC('month', created_at)
+      ORDER BY DATE_TRUNC('month', created_at) DESC LIMIT 5
+    `);
+        const locationsRes = await query(`
+      SELECT COALESCE(NULLIF(p.city, ''), 'Unknown') AS label, COUNT(*)::int AS value
+      FROM engagement_events e JOIN properties p ON p.id = e.property_id
+      WHERE e.event_type IN ('property_view', 'property_detail_view')
+        AND e.created_at >= CURRENT_DATE - INTERVAL '30 days'
+      GROUP BY 1 ORDER BY value DESC LIMIT 5
+    `);
+        const rejectionRes = await query(`
+      SELECT COALESCE(NULLIF(split_part(admin_notes, ':', 1), ''), 'Other') AS label, COUNT(*)::int AS value
+      FROM verifications WHERE status = 'rejected'
+      GROUP BY 1 ORDER BY value DESC LIMIT 5
+    `);
+        const eventsRes = await query(`
+      SELECT event_type AS label, COUNT(*)::int AS value
+      FROM engagement_events WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+      GROUP BY event_type ORDER BY value DESC LIMIT 5
+    `);
+        const backlogRes = await query(`
+      SELECT to_char(DATE(created_at), 'Mon DD') AS label, COUNT(*)::int AS value
+      FROM verifications WHERE status IN ('submitted', 'under_review')
+      GROUP BY DATE(created_at) ORDER BY DATE(created_at) ASC LIMIT 7
+    `);
         res.json({
             success: true,
             data: {
@@ -301,41 +364,14 @@ router.get('/overview', requireAuth, authorize('admin'), async (_req, res, next)
                 pendingVerifications: pendingKycRes.rows[0].count,
                 totalRevenue: parseFloat(revenueRes.rows[0].total) || 0,
                 monthlyRevenue: parseFloat(monthlyRevRes.rows[0].total) || 0,
-                chartData: [
-                    { "day": "Mon", "users": 12, "bookings": 4 },
-                    { "day": "Tue", "users": 19, "bookings": 6 },
-                    { "day": "Wed", "users": 15, "bookings": 8 },
-                    { "day": "Thu", "users": 22, "bookings": 5 },
-                    { "day": "Fri", "users": 30, "bookings": 12 },
-                    { "day": "Sat", "users": 45, "bookings": 25 },
-                    { "day": "Sun", "users": 40, "bookings": 20 }
-                ],
-                backlogData: [
-                    { "hour": "00:00", "count": 2 },
-                    { "hour": "04:00", "count": 1 },
-                    { "hour": "08:00", "count": 5 },
-                    { "hour": "12:00", "count": 12 },
-                    { "hour": "16:00", "count": 8 },
-                    { "hour": "20:00", "count": 3 }
-                ],
-                verificationData: [
-                    { "date": "Week 1", "rate": 85 },
-                    { "date": "Week 2", "rate": 82 },
-                    { "date": "Week 3", "rate": 90 },
-                    { "date": "Week 4", "rate": 95 }
-                ],
-                retentionData: [
-                    { "month": "Jan", "rate": 40 },
-                    { "month": "Feb", "rate": 45 },
-                    { "month": "Mar", "rate": 42 },
-                    { "month": "Apr", "rate": 50 },
-                    { "month": "May", "rate": 55 },
-                    { "month": "Jun", "rate": 60 }
-                ],
-                cohortData: [
-                    { "cohort": "2026-Q1", "m1": 100, "m2": 80, "m3": 75, "m4": 60, "m5": 55 },
-                    { "cohort": "2026-Q2", "m1": 100, "m2": 85, "m3": 80, "m4": 70, "m5": 65 }
-                ]
+                chartData: chartRes.rows,
+                backlogData: backlogRes.rows,
+                verificationData: verificationRes.rows,
+                retentionData: retentionRes.rows,
+                cohortData: cohortRes.rows,
+                topLocations: locationsRes.rows,
+                kycRejections: rejectionRes.rows,
+                keyEvents: eventsRes.rows
             }
         });
     }

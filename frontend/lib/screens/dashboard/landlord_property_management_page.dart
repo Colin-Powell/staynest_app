@@ -4,8 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
 import 'package:property_app/services/booking_service.dart';
+import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'boost_listing_modal.dart';
 import 'landlord_calendar_page.dart';
 
 class LandlordPropertyManagementPage extends StatefulWidget {
@@ -28,6 +30,7 @@ class _LandlordPropertyManagementPageState
   bool _isPreviewMode = false;
   bool _isLoading = true;
   String? _loadError;
+  bool _activeBoost = false;
 
   // Wired State
   Map<String, dynamic> _stats = {
@@ -75,6 +78,7 @@ class _LandlordPropertyManagementPageState
         AnalyticsService.getPropertyManagementData(id),
         BookingService.fetchBookings(isLandlord: true),
         AnalyticsService.getPropertyAvailability(id),
+        PropertiesApi.getActivePromotions(),
       ]);
 
       final data = results[0] is Map<String, dynamic>
@@ -82,6 +86,8 @@ class _LandlordPropertyManagementPageState
           : null;
       final landlordBookings = results[1] is List ? results[1] as List : null;
       final blocked = results[2] is List<int> ? results[2] as List<int> : null;
+      final promos = results[3] is List ? results[3] as List : [];
+      final isBoosted = promos.any((p) => p['property_id'].toString() == id);
 
       if (mounted && data != null) {
         setState(() {
@@ -896,44 +902,51 @@ class _LandlordPropertyManagementPageState
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                    color: primaryGreen.withOpacity(0.15),
+                    color: _activeBoost ? Colors.purpleAccent.withOpacity(0.15) : primaryGreen.withOpacity(0.15),
                     shape: BoxShape.circle),
-                child: Icon(PhosphorIcons.megaphone(PhosphorIconsStyle.fill),
-                    color: primaryGreen, size: 28),
+                child: Icon(_activeBoost ? PhosphorIcons.rocketLaunch(PhosphorIconsStyle.fill) : PhosphorIcons.megaphone(PhosphorIconsStyle.fill),
+                    color: _activeBoost ? Colors.purpleAccent : primaryGreen, size: 28),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Boost Listing',
+                      Text(_activeBoost ? 'Boost Active' : 'Boost Listing',
                           style: GoogleFonts.poppins(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
                               color: textDark)),
-                      Text('Get seen by 5x more tenants.',
+                      Text(_activeBoost ? 'Your property is currently promoted.' : 'Get seen by 5x more tenants.',
                           style: GoogleFonts.poppins(
                               fontSize: 13, color: textLight)),
                     ]),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryGreen,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16))),
-              child: Text('Boost Now',
-                  style: GoogleFonts.poppins(
-                      color: Colors.white, fontWeight: FontWeight.w700)),
+          if (!_activeBoost) ...[
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () async {
+                  final result = await BoostListingModal.show(context, _property['id'].toString());
+                  if (result == true) {
+                    _fetchInitialData();
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryGreen,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16))),
+                child: Text('Boost Now',
+                    style: GoogleFonts.poppins(
+                        color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
             ),
-          ),
+          ]
         ],
       ),
     );

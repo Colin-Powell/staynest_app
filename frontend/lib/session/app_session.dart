@@ -43,6 +43,8 @@ class AppSession {
   static String? currentUserPhone;
   static String? currentUserAvatar;
   static bool currentUserVerified = false;
+  static String? referralCode;
+  static double walletBalance = 0.0;
 
   static final String sessionId = const Uuid().v4();
 
@@ -226,6 +228,8 @@ class AppSession {
           'avatar': currentUserAvatar,
           'role': currentRole,
           'verified': currentUserVerified,
+          'referral_code': referralCode,
+          'wallet_balance': walletBalance,
         },
         'tokens': {
           'apiToken': apiToken,
@@ -289,6 +293,8 @@ class AppSession {
     currentUserAvatar = user['avatar']?.toString();
     currentRole = user['role']?.toString() ?? currentRole;
     currentUserVerified = user['verified'] == true;
+    referralCode = user['referral_code']?.toString();
+    walletBalance = double.tryParse(user['wallet_balance']?.toString() ?? '0') ?? 0.0;
     AnalyticsService.setUserId(currentUserId);
   }
 
@@ -310,6 +316,8 @@ class AppSession {
     currentUserPhone = null;
     currentUserAvatar = null;
     currentUserVerified = false;
+    referralCode = null;
+    walletBalance = 0.0;
     await AnalyticsService.clearUser();
     apiToken = null;
     refreshToken = null;

@@ -941,8 +941,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     if (rows is! List) return {};
     return {
       for (final row in rows.whereType<Map>())
-        row['label']?.toString() ?? 'Unknown':
-            (row['value'] as num?)?.toInt() ?? 0,
+        row['label']?.toString() ?? 'Unknown': _number(row['value']).toInt(),
     };
   }
 

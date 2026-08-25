@@ -83,6 +83,16 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
       return res.status(400).json({ error: 'eventType and propertyId are required.' });
     }
 
+    const supportedEvent = Object.prototype.hasOwnProperty.call(EVENT_WEIGHTS, eventType);
+    if (!supportedEvent) {
+      return res.status(400).json({ error: 'Unsupported analytics event.' });
+    }
+
+    const isViewEvent = eventType === 'property_view' || eventType === 'property_detail_view';
+    if (isViewEvent && req.auth?.role?.toLowerCase() !== 'tenant') {
+      return res.status(403).json({ error: 'Only tenant portal views are countable.' });
+    }
+
     const propertyExists = await query('SELECT landlord_id FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
     if (propertyExists.rowCount === 0) {
       return res.status(404).json({ error: 'Property not found.' });
@@ -95,12 +105,34 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
 
     await query('BEGIN');
     try {
-      const isViewEvent = eventType === 'property_view' || eventType === 'property_detail_view';
       const isSaveEvent = eventType === 'property_save';
       const isImpressionEvent = eventType.includes('impression');
+      
+      let isFirstEverAction = true;
+      const checkVal = userId || sessionId;
 
-      if (isImpressionEvent) {
-        const checkVal = userId || sessionId;
+      if (checkVal) {
+        const checkQuery = userId
+          ? `SELECT 1 FROM engagement_events WHERE user_id = $1 AND property_id = $2 AND event_type = $3 LIMIT 1`
+          : `SELECT 1 FROM engagement_events WHERE session_id = $1 AND property_id = $2 AND event_type = $3 LIMIT 1`;
+        const priorCheck = await query(checkQuery, [checkVal, propertyId, eventType]);
+        isFirstEverAction = (priorCheck.rowCount ?? 0) === 0;
+      }
+
+      if (isViewEvent) {
+        // One view per property per day
+        const uniqueView = await query(
+          `INSERT INTO property_unique_views (property_id, user_id, viewed_date)
+           VALUES ($1, $2, CURRENT_DATE)
+           ON CONFLICT (property_id, user_id, viewed_date) DO NOTHING
+           RETURNING property_id`,
+          [propertyId, userId],
+        );
+        if ((uniqueView.rowCount ?? 0) === 0) {
+          await query('ROLLBACK');
+          return res.status(200).json({ ok: true, ignored: true, reason: 'duplicate_view_today' });
+        }
+      } else if (isImpressionEvent) {
         if (checkVal) {
           const checkQuery = userId 
             ? `SELECT 1 FROM engagement_events WHERE user_id = $1 AND property_id = $2 AND event_type = $3 AND created_at >= CURRENT_DATE LIMIT 1`
@@ -111,28 +143,10 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
             return res.status(200).json({ ok: true, ignored: true, reason: 'duplicate_impression_today' });
           }
         }
-      }
-
-      let isFirstAction = true;
-      if (isViewEvent || isSaveEvent) {
-        if (userId) {
-          const priorCheck = await query(
-            `SELECT 1 FROM engagement_events 
-             WHERE user_id = $1 AND property_id = $2 
-               AND event_type ${isViewEvent ? "IN ('property_view', 'property_detail_view')" : "= 'property_save'"}
-             LIMIT 1`,
-            [userId, propertyId],
-          );
-          isFirstAction = (priorCheck.rowCount ?? 0) === 0;
-        } else if (sessionId) {
-          const priorCheck = await query(
-            `SELECT 1 FROM engagement_events 
-             WHERE session_id = $1 AND property_id = $2 
-               AND event_type ${isViewEvent ? "IN ('property_view', 'property_detail_view')" : "= 'property_save'"}
-             LIMIT 1`,
-            [sessionId, propertyId],
-          );
-          isFirstAction = (priorCheck.rowCount ?? 0) === 0;
+      } else if (isSaveEvent) {
+        if (!isFirstEverAction) {
+          await query('ROLLBACK');
+          return res.status(200).json({ ok: true, ignored: true, reason: 'already_saved' });
         }
       }
 
@@ -142,21 +156,12 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
         [userId, propertyId, eventType, sessionId ?? null, metadata],
       );
 
-      if (userId && propertyId && isViewEvent) {
-        await query(
-          `INSERT INTO property_unique_views (property_id, user_id, viewed_date)
-           VALUES ($1, $2, CURRENT_DATE)
-           ON CONFLICT (property_id, user_id, viewed_date) DO NOTHING`,
-          [propertyId, userId],
-        );
-      }
-
       const weight = EVENT_WEIGHTS[eventType] ?? 0;
-      const score = weight * (isFirstAction ? 1.5 : (isViewEvent || isSaveEvent ? 0 : 1));
+      const score = weight * (isFirstEverAction ? 1.5 : 1);
 
       const column = METRIC_COLUMNS[eventType];
-      const uniqueInc = (isViewEvent && isFirstAction) ? 1 : 0;
-      const metricInc = (isViewEvent || isSaveEvent) ? (isFirstAction ? 1 : 0) : 1;
+      const uniqueInc = (isViewEvent && isFirstEverAction) ? 1 : 0;
+      const metricInc = 1;
 
       await query(
         `INSERT INTO property_analytics (property_id, views, unique_views, impressions, clicks, saves, shares, chats, booking_requested, bookings_confirmed, bookings_completed, engagement_score, last_event_at, updated_at)
@@ -192,10 +197,12 @@ router.get('/stats/:propertyId', requireAuth, async (req: Request, res: Response
     const { propertyId } = req.params;
 
     const result = await query(
-      `SELECT pa.*,
+            `SELECT pa.*,
               p.title,
               p.image_url,
-              p.landlord_id
+              p.landlord_id,
+              (SELECT COUNT(*) FROM property_unique_views puv
+               WHERE puv.property_id = p.id) AS counted_views
        FROM property_analytics pa
        JOIN properties p ON p.id = pa.property_id
        WHERE pa.property_id = $1`,
@@ -212,7 +219,7 @@ router.get('/stats/:propertyId', requireAuth, async (req: Request, res: Response
     if (row.landlord_id !== req.auth?.id) {
       return res.status(403).json({ error: 'You are not authorized to view analytics for this property.' });
     }
-    const views = toNumber(row.views);
+    const views = toNumber(row.counted_views);
     const clicks = toNumber(row.clicks);
     const impressions = toNumber(row.impressions);
     const saves = toNumber(row.saves);
@@ -225,7 +232,7 @@ router.get('/stats/:propertyId', requireAuth, async (req: Request, res: Response
       landlordId: row.landlord_id,
       stats: {
         views,
-        uniqueViews: toNumber(row.unique_views),
+        uniqueViews: views,
         impressions,
         clicks,
         saves,
@@ -259,8 +266,12 @@ router.get('/landlord-overview', requireAuth, async (req: Request, res: Response
     const [statsResult, occupancyResult, chartResult, topProps, photoRows] = await Promise.all([
       query(
         `SELECT
-           COALESCE(SUM(pa.views), 0) AS views,
-           COALESCE(SUM(pa.unique_views), 0) AS unique_viewers,
+           COALESCE((SELECT COUNT(*) FROM property_unique_views puv
+                     JOIN properties pv ON pv.id = puv.property_id
+                     WHERE pv.landlord_id = $1), 0) AS views,
+           COALESCE((SELECT COUNT(DISTINCT puv.user_id) FROM property_unique_views puv
+                     JOIN properties pv ON pv.id = puv.property_id
+                     WHERE pv.landlord_id = $1), 0) AS unique_viewers,
            COALESCE(SUM(pa.saves), 0) AS saves,
            COALESCE(SUM(pa.shares), 0) AS shares,
            COALESCE(SUM(pa.impressions), 0) AS impressions,
@@ -287,13 +298,12 @@ router.get('/landlord-overview', requireAuth, async (req: Request, res: Response
         [landlordId]
       ),
       query(
-        `SELECT DATE(ee.created_at) AS day, COUNT(*)::int AS total
-         FROM engagement_events ee
-         JOIN properties p ON p.id = ee.property_id
+        `SELECT puv.viewed_date AS day, COUNT(*)::int AS total
+         FROM property_unique_views puv
+         JOIN properties p ON p.id = puv.property_id
          WHERE p.landlord_id = $1
-           AND ee.created_at >= NOW() - INTERVAL '${window}'
-           AND ee.event_type IN ('property_view', 'property_detail_view')
-         GROUP BY DATE(ee.created_at)
+           AND puv.viewed_date >= CURRENT_DATE - INTERVAL '${window}'
+         GROUP BY puv.viewed_date
          ORDER BY day ASC`,
         [landlordId]
       ),
@@ -301,18 +311,19 @@ router.get('/landlord-overview', requireAuth, async (req: Request, res: Response
         `SELECT p.title AS name,
                 p.city AS location,
                 p.image_url AS image,
-                COALESCE(pa.views, 0)::text AS views
+                (SELECT COUNT(*) FROM property_unique_views puv
+                 WHERE puv.property_id = p.id)::text AS views
          FROM properties p
          JOIN property_analytics pa ON p.id = pa.property_id
          WHERE p.landlord_id = $1
-         ORDER BY pa.views DESC, p.created_at DESC
+         ORDER BY (SELECT COUNT(*) FROM property_unique_views puv WHERE puv.property_id = p.id) DESC, p.created_at DESC
          LIMIT 3`,
         [landlordId]
       ),
       query(
-        `SELECT p.title, p.image_url, COUNT(ee.id)::int AS engagement
+         `SELECT p.title, p.image_url, COUNT(puv.property_id)::int AS engagement
          FROM properties p
-         LEFT JOIN engagement_events ee ON ee.property_id = p.id AND ee.event_type = 'property_view'
+         LEFT JOIN property_unique_views puv ON puv.property_id = p.id
          WHERE p.landlord_id = $1
          GROUP BY p.id, p.title, p.image_url
          ORDER BY engagement DESC

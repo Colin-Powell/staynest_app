@@ -27,7 +27,7 @@ class _SuperAdminUsersPageState extends State<SuperAdminUsersPage> {
   Future<void> _loadUsers() async {
     setState(() => _loading = true);
     try {
-      final users = await SuperAdminService.fetchUsers();
+      final users = await SuperAdminService.fetchUsers(limit: 100);
       if (mounted) {
         setState(() {
           _users = users;

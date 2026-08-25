@@ -27,6 +27,7 @@ class _RegisterViewState extends State<RegisterView>
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _referralCodeController = TextEditingController();
   final _businessNameController = TextEditingController();
   final _businessTypeController = TextEditingController();
   final _businessDescriptionController = TextEditingController();
@@ -117,6 +118,7 @@ class _RegisterViewState extends State<RegisterView>
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _referralCodeController.dispose();
     _businessNameController.dispose();
     _businessTypeController.dispose();
     _businessDescriptionController.dispose();

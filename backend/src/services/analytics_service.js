@@ -387,6 +387,7 @@ class AnalyticsService {
       `SELECT p.id, p.title, p.price, pa.views, pa.saves, pa.engagement_score
        FROM properties p
        JOIN property_analytics pa ON p.id = pa.property_id
+       WHERE pa.engagement_score >= 10
        ORDER BY pa.engagement_score DESC
        LIMIT $1`,
       [limit]
@@ -400,7 +401,7 @@ class AnalyticsService {
 
   async getPerformanceInsights(propertyId) {
     const analytics = await this.getPropertyAnalytics(propertyId);
-    if (!analytics || !analytics.engagement_score) {
+    if (!analytics || !analytics.engagement_score || Number(analytics.engagement_score) < 10) {
       return {
         status: 'NEW',
         insight: 'Not enough data yet to generate performance insights.',

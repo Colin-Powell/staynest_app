@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
 import { env } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
-import { verifyOtp } from '../services/email.js';
+import { verifyOtp, createOtp, sendOtpEmail } from '../services/email.js';
 const router = Router();
 const ADMIN_ACCESS_TOKEN_TTL = '24h';
 const DEFAULT_ACCESS_TOKEN_TTL = '15m';
@@ -43,6 +43,14 @@ router.post('/register', async (req, res, next) => {
             verified: created.verified,
         }, env.jwtSecret, { expiresIn: accessTokenTtlForRole(created.role) });
         const refreshToken = jwt.sign({ id: created.id }, env.jwtSecret, { expiresIn: '30d' });
+        // Generate and send OTP for verification
+        try {
+            const otpInfo = createOtp(created.email);
+            await sendOtpEmail(created.email, otpInfo.code);
+        }
+        catch (err) {
+            console.error('Failed to send OTP during registration:', err);
+        }
         return res.status(201).json({ data: { token: accessToken, accessToken, refreshToken, user: created } });
     }
     catch (error) {
@@ -59,7 +67,7 @@ router.post('/refresh', async (req, res, next) => {
         if (!payload.id) {
             return res.status(401).json({ error: 'Invalid refresh token.' });
         }
-        const result = await query('SELECT id, name, email, phone, avatar, role, verified FROM users WHERE id = $1 LIMIT 1', [payload.id]);
+        const result = await query('SELECT id, name, email, phone, avatar, role, verified, referral_code, wallet_balance FROM users WHERE id = $1 LIMIT 1', [payload.id]);
         const user = result.rows[0];
         if (!user) {
             return res.status(401).json({ error: 'Invalid refresh token.' });
@@ -121,7 +129,7 @@ router.post('/login', async (req, res, next) => {
         if (!email || !password) {
             return res.status(400).json({ error: 'Email and password are required.' });
         }
-        const result = await query('SELECT id, name, email, phone, avatar, password_hash, role, verified FROM users WHERE email = $1 LIMIT 1', [email.trim().toLowerCase()]);
+        const result = await query('SELECT id, name, email, phone, avatar, password_hash, role, verified, referral_code, wallet_balance FROM users WHERE email = $1 LIMIT 1', [email.trim().toLowerCase()]);
         const user = result.rows[0];
         if (!user || !user.password_hash) {
             return res.status(401).json({ error: 'Invalid credentials.' });

@@ -352,3 +352,9 @@ CREATE TABLE IF NOT EXISTS review_reports (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Performance scaling indexes added for 10000+ users
+CREATE INDEX IF NOT EXISTS idx_properties_landlord_id ON properties(landlord_id);
+CREATE INDEX IF NOT EXISTS idx_properties_status ON properties(status);
+CREATE INDEX IF NOT EXISTS idx_property_analytics_engagement ON property_analytics(engagement_score DESC);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);

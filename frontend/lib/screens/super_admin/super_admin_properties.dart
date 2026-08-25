@@ -31,7 +31,8 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
   Future<void> _loadProperties() async {
     setState(() => _loading = true);
     try {
-      final properties = await SuperAdminService.fetchProperties(status: _statusFilter);
+      final properties = await SuperAdminService.fetchProperties(
+          status: _statusFilter, limit: 100);
       if (mounted) {
         setState(() {
           _properties = properties;
@@ -83,7 +84,6 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
     }
   }
 
-
   Widget _buildTab(String label, String value) {
     final isActive = _statusFilter == value;
     return InkWell(
@@ -99,7 +99,9 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: isActive ? AppColors.gray900 : Colors.white,
-          border: Border.all(color: isActive ? AppColors.gray900 : StayNestColors.outlineLight),
+          border: Border.all(
+              color:
+                  isActive ? AppColors.gray900 : StayNestColors.outlineLight),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
@@ -361,7 +363,7 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
                   _buildTextRow('Landlord:', '$landlordName • $landlordEmail'),
 
                   // Action Buttons (Only if pending)
-                  if (status == 'pending_review') ...[
+                  if (status == 'pending_review' || status == 'pending') ...[
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,

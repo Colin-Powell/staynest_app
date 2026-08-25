@@ -4,6 +4,28 @@ import 'package:property_app/screens/home/cache_engine.dart';
 
 
 class PropertiesApi {
+  /// Boost a property
+  static Future<Map<String, dynamic>> boostProperty(String propertyId, String packageType) async {
+    final client = _client();
+    final response = await client.postJson('/promotions/boost', body: {
+      'property_id': propertyId,
+      'package_type': packageType,
+    });
+    return response['data'] ?? {};
+  }
+
+  /// Get active promotions for landlord
+  static Future<List<Map<String, dynamic>>> getActivePromotions() async {
+    try {
+      final client = _client();
+      final response = await client.getJson('/promotions/me');
+      final data = response['data'] as List<dynamic>? ?? [];
+      return data.cast<Map<String, dynamic>>();
+    } catch (e) {
+      return [];
+    }
+  }
+
   static ApiClient _client() {
     return ApiClient(
       baseUrl: AppSession.apiBaseUrl,
