@@ -23,7 +23,7 @@ router.get('/users', requireAuth, authorize('admin'), async (req, res, next) => 
         }
         params.push(limit, offset);
         const usersRes = await query(`
-      SELECT u.id, u.name, u.email, u.phone, u.role, u.verified, u.status, u.created_at, u.updated_at,
+      SELECT u.id, u.name, u.email, u.phone, u.role, u.verified, 'active' as status, u.created_at, u.created_at as updated_at,
         (SELECT COUNT(*)::int FROM properties p WHERE p.landlord_id = u.id AND p.status = 'approved') AS active_property_count,
         (SELECT COUNT(*)::int FROM properties p WHERE p.landlord_id = u.id) AS total_property_count,
         (SELECT COUNT(*)::int FROM bookings b WHERE b.landlord_id = u.id) AS booking_count_as_landlord,
@@ -43,9 +43,7 @@ router.get('/users', requireAuth, authorize('admin'), async (req, res, next) => 
                 phone: row.phone,
                 role: row.role,
                 verified: row.verified,
-                status: row.status,
                 created_at: row.created_at,
-                updated_at: row.updated_at,
                 property_count: row.total_property_count,
                 active_property_count: row.active_property_count,
                 booking_count_as_landlord: row.booking_count_as_landlord,
@@ -107,7 +105,7 @@ router.get('/properties', requireAuth, authorize('admin'), async (req, res, next
         u.name as landlord_name,
         u.email as landlord_email,
         u.verified as landlord_verified,
-        COALESCE(json_array_length(p.images), 0)::int as image_count,
+        COALESCE(jsonb_array_length(p.images), 0)::int as image_count,
         COUNT(DISTINCT b.id)::int as booking_count,
         COALESCE(SUM(CASE WHEN b.status IN ('confirmed', 'completed') THEN b.total_price ELSE 0 END), 0)::numeric as total_revenue
       FROM properties p
@@ -139,9 +137,7 @@ router.get('/properties', requireAuth, authorize('admin'), async (req, res, next
                 image_count: row.image_count,
                 booking_count: row.booking_count,
                 total_revenue: parseFloat(row.total_revenue) || 0,
-                status: row.status,
                 created_at: row.created_at,
-                updated_at: row.updated_at,
                 landlord_id: row.landlord_id,
                 landlord_name: row.landlord_name,
                 landlord_email: row.landlord_email,
@@ -216,11 +212,9 @@ router.get('/kyc', requireAuth, authorize('admin'), async (req, res, next) => {
                 document_url: row.document_url,
                 document_number: row.document_number,
                 selfie_url: row.selfie_url,
-                status: row.status,
                 admin_notes: row.admin_notes,
                 property_count: row.property_count,
                 created_at: row.created_at,
-                updated_at: row.updated_at,
             }))
         });
     }
@@ -274,7 +268,7 @@ router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (r
         }
         const updateRes = await query(`
       UPDATE properties
-      SET status = $1, updated_at = CURRENT_TIMESTAMP
+      SET status = $1
       WHERE id = $2
       RETURNING *
     `, [status, id]);

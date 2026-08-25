@@ -34,7 +34,8 @@ class _SuperAdminUsersPageState extends State<SuperAdminUsersPage> {
           _loading = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      print('USERS_ERROR: $e');
       if (mounted) {
         setState(() => _loading = false);
       }

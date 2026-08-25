@@ -38,7 +38,8 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
           _loading = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      print('PROPS_ERROR: $e');
       if (mounted) {
         setState(() => _loading = false);
       }

@@ -218,10 +218,10 @@ class _PropertyAppState extends State<PropertyApp> {
                     return;
                   }
 
-                if (AppSession.currentRole.toLowerCase() == 'admin') {
-                  Navigator.pushReplacementNamed(context, '/super_admin');
-                  return;
-                }
+                  if (AppSession.currentRole.toLowerCase() == 'admin') {
+                    Navigator.pushReplacementNamed(context, '/super_admin');
+                    return;
+                  }
                   if (AppSession.isLandlord) {
                     Navigator.pushReplacementNamed(context, '/portal');
                     return;
@@ -249,10 +249,10 @@ class _PropertyAppState extends State<PropertyApp> {
                     return;
                   }
 
-                if (AppSession.currentRole.toLowerCase() == 'admin') {
-                  Navigator.pushReplacementNamed(context, '/super_admin');
-                  return;
-                }
+                  if (AppSession.currentRole.toLowerCase() == 'admin') {
+                    Navigator.pushReplacementNamed(context, '/super_admin');
+                    return;
+                  }
                   if (AppSession.isLandlord) {
                     Navigator.pushReplacementNamed(context, '/portal');
                     return;
@@ -419,7 +419,7 @@ class _PropertyAppState extends State<PropertyApp> {
             ),
         '/verification_center': (context) => const VerificationCenter(),
         '/super_admin': (context) => const SuperAdminShell(),
-          '/super_admin/login': (context) => const SuperAdminLoginView(),
+        '/super_admin/login': (context) => const SuperAdminLoginView(),
         '/referral': (context) => const ReferralView(),
         '/reviews': (context) {
           final args = ModalRoute.of(context)!.settings.arguments
@@ -1101,5 +1101,3 @@ class _NavItemState extends State<_NavItem>
     );
   }
 }
-
-
