@@ -33,20 +33,21 @@ function initFirebase() {
 }
 initFirebase();
 export async function sendPushToUser(userId, title, body, data) {
-    if (getApps().length === 0)
-        return false;
     try {
-        const userRes = await query('SELECT fcm_token, settings FROM users WHERE id = $1', [userId]);
-        const user = userRes.rows[0];
-        if (!user)
-            return false;
-        // Always save to database for the in-app notifications tab
+        // Always save to database for the in-app notifications tab, EVEN IF Firebase is disabled
         try {
             await query(`INSERT INTO notifications (user_id, title, body, data) VALUES ($1, $2, $3, $4)`, [userId, title, body, data ? JSON.stringify(data) : null]);
         }
         catch (dbErr) {
             console.error(`Failed to save notification to DB for user ${userId}:`, dbErr);
         }
+        // If Firebase isn't initialized, we gracefully stop here but return true because in-app alerts worked
+        if (getApps().length === 0)
+            return true;
+        const userRes = await query('SELECT fcm_token, settings FROM users WHERE id = $1', [userId]);
+        const user = userRes.rows[0];
+        if (!user)
+            return false;
         // Skip actual push if no token
         if (!user.fcm_token)
             return true;

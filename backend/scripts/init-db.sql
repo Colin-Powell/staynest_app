@@ -23,6 +23,16 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS business_description text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS tax_id text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS years_in_business integer;
 
+
+CREATE TABLE IF NOT EXISTS wallet_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  amount NUMERIC(10, 2) NOT NULL,
+  type VARCHAR(20) NOT NULL,
+  description TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS properties (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   title text NOT NULL,
