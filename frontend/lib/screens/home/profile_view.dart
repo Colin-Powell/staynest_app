@@ -82,6 +82,7 @@ class _ProfileViewState extends State<ProfileView>
       final user = await repository.loadCurrentUser();
 
       AppSession.updateCurrentUser(user);
+      await AppSession.persistSession();
       if (!mounted) return;
 
       setState(() {

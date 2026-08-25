@@ -159,6 +159,70 @@ class CacheEngine {
     }
   }
 
+  
+  /// Standard Future-based cache fetch. 
+  /// Returns cached data immediately if fresh, otherwise fetches from network.
+  Future<T> getOrFetch<T>({
+    required String key,
+    required Future<T> Function() networkFetcher,
+    Duration ttl = const Duration(minutes: 10),
+  }) async {
+    await _init();
+
+    // 1 & 2. Check Cache
+    CacheEntry? entry;
+    if (_memoryCache.containsKey(key)) {
+      entry = _memoryCache[key]!;
+    } else {
+      final raw = _box?.get(key);
+      if (raw != null) {
+        try {
+          final dynamic decoded = raw;
+          Map<String, dynamic> map;
+          if (decoded is Map<String, dynamic>) {
+            map = decoded;
+          } else if (decoded is Map) {
+            map = Map<String, dynamic>.from(decoded);
+          } else {
+            throw FormatException('Unexpected cache payload');
+          }
+          final loadedEntry = CacheEntry.fromJson(map);
+          if (loadedEntry.version == _currentVersion) {
+            _memoryCache[key] = loadedEntry;
+            entry = loadedEntry;
+          } else {
+            await invalidate(key);
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (entry != null) {
+      try {
+        dynamic data = entry.data;
+        if (data is List && T == List<Map<String, dynamic>>) {
+          data = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        } else if (data is Map && T == Map<String, dynamic>) {
+          data = Map<String, dynamic>.from(data);
+        }
+        
+        if (!entry.isExpired) return data as T;
+        
+        // If expired, we trigger a background network fetch but still return stale data for instant UI
+        _deduplicatedFetch(key, networkFetcher).then((freshData) {
+          _save(key, freshData, ttl);
+        }).catchError((_) {});
+        
+        return data as T;
+      } catch (_) {}
+    }
+
+    // 3. Cache Miss - Fetch from Network
+    final T freshData = await _deduplicatedFetch(key, networkFetcher);
+    await _save(key, freshData, ttl);
+    return freshData;
+  }
+
   Future<void> _save(String key, dynamic data, Duration ttl) async {
     final entry = CacheEntry(
       data: data,

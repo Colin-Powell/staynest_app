@@ -7,8 +7,8 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/widgets/skeleton_property_card.dart';
 
 import 'package:property_app/models/property.dart';
-import 'package:property_app/repository/remote_database_repository.dart';
-import 'package:property_app/data_loader/fallback_properties_loader.dart';
+import 'package:property_app/services/property_service.dart';
+
 import 'package:property_app/widgets/property_image.dart';
 
 import 'analytics_service.dart';
@@ -28,8 +28,7 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage>
   late Animation<double> _fadeAnim;
   late Animation<double> _scaleAnim;
 
-  final _loader =
-      FallbackPropertiesLoader(remoteRepository: RemoteDatabaseRepository());
+  final _propertyService = PropertyService.instance;
   List<Property> _properties = [];
   bool _loading = true;
   bool _hasError = false;
@@ -77,7 +76,7 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage>
       _hasError = false;
     });
     try {
-      final loaded = await _loader.loadAll();
+      final loaded = await _propertyService.fetchProperties();
       if (!mounted) return;
       setState(() {
         _properties = loaded.cast<Property>();
@@ -178,280 +177,284 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage>
             child: ScaleTransition(
               scale: _scaleAnim,
               child: CustomScrollView(
-                      slivers: [
-                        // Header
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.only(
-                              top: MediaQuery.of(context).padding.top + 24,
-                              left: 24,
-                              right: 24,
-                              bottom: 16,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'My Properties',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.w700,
-                                    color: textDark,
-                                    letterSpacing: -0.5,
-                                  ),
-                                ),
-                                // Add Property Button
-                                GestureDetector(
-                                  onTap: widget.onAddProperty,
-                                  child: Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: primaryGreen,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: primaryGreen.withValues(alpha: 0.3),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 4),
-                                        )
-                                      ],
-                                    ),
-                                    child: const Icon(
-                                      Icons.add,
-                                      color: Colors.white,
-                                      size: 26,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                slivers: [
+                  // Header
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        top: MediaQuery.of(context).padding.top + 24,
+                        left: 24,
+                        right: 24,
+                        bottom: 16,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'My Properties',
+                            style: GoogleFonts.poppins(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              color: textDark,
+                              letterSpacing: -0.5,
                             ),
                           ),
-                        ),
+                          // Add Property Button
+                          GestureDetector(
+                            onTap: widget.onAddProperty,
+                            child: Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: primaryGreen,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: primaryGreen.withValues(alpha: 0.3),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  )
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.add,
+                                color: Colors.white,
+                                size: 26,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
-                        // Category tabs (Dynamic Circular Pills)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
+                  // Category tabs (Dynamic Circular Pills)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: _categoryTabs.map((tab) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _CategoryPill(
+                                label: tab,
+                                icon: _getIconForCategory(tab),
+                                selected: _selectedCategory == tab,
+                                onTap: () {
+                                  setState(() {
+                                    _selectedCategory = tab;
+                                  });
+                                },
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Search & Sorting Row
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                      child: Row(
+                        children: [
+                          // Functional Search Bar
+                          Expanded(
+                            child: Container(
+                              height: 50,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEAF5EF)
+                                    .withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                    width: 1.5),
+                              ),
                               child: Row(
-                                children: _categoryTabs.map((tab) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: _CategoryPill(
-                                      label: tab,
-                                      icon: _getIconForCategory(tab),
-                                      selected: _selectedCategory == tab,
-                                      onTap: () {
+                                children: [
+                                  Icon(PhosphorIcons.magnifyingGlass(),
+                                      color: textDark, size: 20),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _searchController,
+                                      onChanged: (value) {
                                         setState(() {
-                                          _selectedCategory = tab;
+                                          _searchQuery = value;
                                         });
                                       },
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // Search & Sorting Row
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                            child: Row(
-                              children: [
-                                // Functional Search Bar
-                                Expanded(
-                                  child: Container(
-                                    height: 50,
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEAF5EF)
-                                          .withValues(alpha: 0.6),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                          color: Colors.white
-                                              .withValues(alpha: 0.8),
-                                          width: 1.5),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(PhosphorIcons.magnifyingGlass(),
-                                            color: textDark, size: 20),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: TextField(
-                                            controller: _searchController,
-                                            onChanged: (value) {
-                                              setState(() {
-                                                _searchQuery = value;
-                                              });
-                                            },
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 14,
-                                              color: textDark,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                            decoration: InputDecoration(
-                                              hintText: 'Search listings',
-                                              hintStyle: GoogleFonts.poppins(
-                                                fontSize: 14,
-                                                color: textLight,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                              // Ensure global themes do not render backgrounds/borders here
-                                              filled: false,
-                                              fillColor: Colors.transparent,
-                                              border: InputBorder.none,
-                                              enabledBorder: InputBorder.none,
-                                              focusedBorder: InputBorder.none,
-                                              errorBorder: InputBorder.none,
-                                              disabledBorder: InputBorder.none,
-                                              isDense: true,
-                                              contentPadding: EdgeInsets.zero,
-                                            ),
-                                          ),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        color: textDark,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      decoration: InputDecoration(
+                                        hintText: 'Search listings',
+                                        hintStyle: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: textLight,
+                                          fontWeight: FontWeight.w500,
                                         ),
-                                        // Show clear button if there is text
-                                        if (_searchQuery.isNotEmpty)
-                                          GestureDetector(
-                                            onTap: () {
-                                              _searchController.clear();
-                                              setState(() {
-                                                _searchQuery = '';
-                                              });
-                                            },
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(left: 8.0),
-                                              child: Icon(
-                                                PhosphorIcons.xCircle(PhosphorIconsStyle.fill),
-                                                size: 18,
-                                                color: textLight,
-                                              ),
-                                            ),
-                                          ),
-                                      ],
+                                        // Ensure global themes do not render backgrounds/borders here
+                                        filled: false,
+                                        fillColor: Colors.transparent,
+                                        border: InputBorder.none,
+                                        enabledBorder: InputBorder.none,
+                                        focusedBorder: InputBorder.none,
+                                        errorBorder: InputBorder.none,
+                                        disabledBorder: InputBorder.none,
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 16),
-
-                                // Sort Icon Popup
-                                Container(
-                                  height: 50,
-                                  width: 50, // Fixed width prevents overflow
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.6),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.8),
-                                      width: 1.5,
+                                  // Show clear button if there is text
+                                  if (_searchQuery.isNotEmpty)
+                                    GestureDetector(
+                                      onTap: () {
+                                        _searchController.clear();
+                                        setState(() {
+                                          _searchQuery = '';
+                                        });
+                                      },
+                                      child: Padding(
+                                        padding:
+                                            const EdgeInsets.only(left: 8.0),
+                                        child: Icon(
+                                          PhosphorIcons.xCircle(
+                                              PhosphorIconsStyle.fill),
+                                          size: 18,
+                                          color: textLight,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                  child: PopupMenuButton<String>(
-                                    icon: Icon(PhosphorIcons.sortDescending(),
-                                        size: 20, color: textDark),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(16)),
-                                    color: const Color(0xFFF7FDF9),
-                                    onSelected: (String newValue) {
-                                      setState(() {
-                                        _selectedSort = newValue;
-                                      });
-                                    },
-                                    itemBuilder: (BuildContext context) {
-                                      return _sortOptions.map<PopupMenuItem<String>>(
-                                          (String value) {
-                                        return PopupMenuItem<String>(
-                                          value: value,
-                                          child: Text(
-                                            value,
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 14,
-                                              fontWeight: _selectedSort == value
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
-                                              color: _selectedSort == value
-                                                  ? primaryGreen
-                                                  : textDark,
-                                            ),
-                                          ),
-                                        );
-                                      }).toList();
-                                    },
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 16),
 
-                        // Property Cards List (filtered)
-                        if (_loading)
-                          SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
-                            sliver: SliverList(
-                              delegate: SliverChildBuilderDelegate(
-                                (context, index) => const Padding(
-                                  padding: EdgeInsets.only(bottom: 20),
-                                  child: SkeletonPropertyCard(width: double.infinity, margin: EdgeInsets.zero),
-                                ),
-                                childCount: 3,
+                          // Sort Icon Popup
+                          Container(
+                            height: 50,
+                            width: 50, // Fixed width prevents overflow
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                width: 1.5,
                               ),
                             ),
-                          )
-                        else if (_hasError)
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 40),
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Text('Failed to load properties.', style: TextStyle(color: Colors.red)),
-                                    const SizedBox(height: 10),
-                                    ElevatedButton(onPressed: _loadProperties, child: const Text('Retry')),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          )
-                        else if (_visibleProperties.isEmpty)
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 40),
-                              child: Center(
-                                child: Text('No properties found.',
-                                    style: GoogleFonts.poppins(color: textLight)),
-                              ),
-                            ),
-                          )
-                        else
-                          SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
-                            sliver: SliverList(
-                              delegate: SliverChildBuilderDelegate(
-                                (context, index) {
-                                  final property = _visibleProperties[index];
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 20),
-                                    child: _PropertyCard(
-                                      property: property,
-                                      delay: Duration(milliseconds: 80 * index),
+                            child: PopupMenuButton<String>(
+                              icon: Icon(PhosphorIcons.sortDescending(),
+                                  size: 20, color: textDark),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16)),
+                              color: const Color(0xFFF7FDF9),
+                              onSelected: (String newValue) {
+                                setState(() {
+                                  _selectedSort = newValue;
+                                });
+                              },
+                              itemBuilder: (BuildContext context) {
+                                return _sortOptions
+                                    .map<PopupMenuItem<String>>((String value) {
+                                  return PopupMenuItem<String>(
+                                    value: value,
+                                    child: Text(
+                                      value,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        fontWeight: _selectedSort == value
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        color: _selectedSort == value
+                                            ? primaryGreen
+                                            : textDark,
+                                      ),
                                     ),
                                   );
-                                },
-                                childCount: _visibleProperties.length,
-                              ),
+                                }).toList();
+                              },
                             ),
                           ),
-                      ],
+                        ],
+                      ),
                     ),
+                  ),
+
+                  // Property Cards List (filtered)
+                  if (_loading)
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) => const Padding(
+                            padding: EdgeInsets.only(bottom: 20),
+                            child: SkeletonPropertyCard(
+                                width: double.infinity,
+                                margin: EdgeInsets.zero),
+                          ),
+                          childCount: 3,
+                        ),
+                      ),
+                    )
+                  else if (_hasError)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text('Failed to load properties.',
+                                  style: TextStyle(color: Colors.red)),
+                              const SizedBox(height: 10),
+                              ElevatedButton(
+                                  onPressed: _loadProperties,
+                                  child: const Text('Retry')),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (_visibleProperties.isEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: Text('No properties found.',
+                              style: GoogleFonts.poppins(color: textLight)),
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final property = _visibleProperties[index];
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 20),
+                              child: _PropertyCard(
+                                property: property,
+                                delay: Duration(milliseconds: 80 * index),
+                              ),
+                            );
+                          },
+                          childCount: _visibleProperties.length,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ],
@@ -511,7 +514,9 @@ class _CategoryPill extends StatelessWidget {
               child: Icon(
                 icon,
                 size: 18,
-                color: selected ? const Color(0xFF059669) : const Color(0xFF6B7280),
+                color: selected
+                    ? const Color(0xFF059669)
+                    : const Color(0xFF6B7280),
               ),
             ),
             const SizedBox(width: 10),
@@ -687,7 +692,7 @@ class _PropertyCardState extends State<_PropertyCard>
                     child: buildPropertyImage(
                       widget.property.image,
                       width: 135,
-                      height: 145, 
+                      height: 145,
                       fit: BoxFit.cover,
                       errorPlaceholder: Container(
                           width: 135,
@@ -702,7 +707,8 @@ class _PropertyCardState extends State<_PropertyCard>
                   // Details Column
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.only(top: 16.0, bottom: 16.0, right: 16.0),
+                      padding: const EdgeInsets.only(
+                          top: 16.0, bottom: 16.0, right: 16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,

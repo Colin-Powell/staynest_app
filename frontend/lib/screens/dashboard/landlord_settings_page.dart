@@ -259,7 +259,8 @@ class LandlordSettingsPage extends StatelessWidget {
                       icon: PhosphorIcons.question(PhosphorIconsStyle.fill),
                       onTap: () => _navigateTo(
                           context,
-                          HelpSupportView(onBack: () => Navigator.pop(context))),
+                          HelpSupportView(
+                              onBack: () => Navigator.pop(context))),
                     ),
                     _buildDivider(),
                     _buildSettingRow(
@@ -581,6 +582,25 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
     _nameController = TextEditingController(text: AppSession.displayName);
     _emailController = TextEditingController(text: AppSession.displayEmail);
     _phoneController = TextEditingController(text: AppSession.displayPhone);
+    _refreshProfile();
+  }
+
+  Future<void> _refreshProfile() async {
+    try {
+      if (AppSession.apiToken != null && AppSession.currentUserId != null) {
+        final user = await RemoteDatabaseRepository().loadCurrentUser();
+        AppSession.updateCurrentUser(user);
+        await AppSession.persistSession();
+      }
+    } catch (_) {
+      // Keep the cached session values if the refresh fails.
+    }
+
+    if (!mounted) return;
+    _nameController.text = AppSession.displayName;
+    _emailController.text = AppSession.displayEmail;
+    _phoneController.text = AppSession.displayPhone;
+    setState(() {});
   }
 
   @override
@@ -633,6 +653,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
       });
 
       AppSession.updateCurrentUser(updatedUser);
+      await AppSession.persistSession();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1068,7 +1089,7 @@ class _BankDetailsPageState extends State<BankDetailsPage> {
     return SettingsPageLayout(
       title: 'Bank Details',
       bottomNavigationBar: _buildSaveButton(
-        context, 
+        context,
         text: _isSaving ? "Saving..." : "Save Bank Details",
         onPressed: _isSaving ? null : _handleSave,
       ),
@@ -1107,12 +1128,14 @@ class _BankDetailsPageState extends State<BankDetailsPage> {
             const SizedBox(height: 32),
             _buildTextField('Bank Name',
                 controller: _bankNameController,
-                hintText: 'e.g. Chase Bank', prefixIcon: PhosphorIcons.bank()),
+                hintText: 'e.g. Chase Bank',
+                prefixIcon: PhosphorIcons.bank()),
             _buildTextField('Account Holder Name',
-                controller: _holderController,
-                hintText: 'Jomison Real Estate'),
-            _buildTextField('Account Number', controller: _accountController, hintText: '1234567890'),
-            _buildTextField('Routing Number', controller: _routingController, hintText: '098765432'),
+                controller: _holderController, hintText: 'Jomison Real Estate'),
+            _buildTextField('Account Number',
+                controller: _accountController, hintText: '1234567890'),
+            _buildTextField('Routing Number',
+                controller: _routingController, hintText: '098765432'),
             const SizedBox(height: 40),
           ],
         ),

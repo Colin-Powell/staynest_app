@@ -99,7 +99,11 @@ class UploadsService {
 
         // Poll for job completion
         String? finalUrl;
+        int attempts = 0;
+        const maxAttempts = 60; // 2 minutes timeout
         while (!isCancelled) {
+          if (attempts >= maxAttempts) throw Exception('Upload timed out while processing');
+          attempts++;
           await Future.delayed(const Duration(seconds: 2));
           if (isCancelled) break;
           

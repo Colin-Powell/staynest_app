@@ -1,13 +1,12 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/widgets/skeleton_property_card.dart';
 
 import 'package:property_app/models/property.dart';
-import 'package:property_app/repository/remote_database_repository.dart';
-import 'package:property_app/data_loader/fallback_properties_loader.dart';
+import 'package:property_app/services/property_service.dart';
+
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
 import 'package:property_app/widgets/shared.dart';
@@ -27,8 +26,7 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
   late Animation<double> _fadeAnim;
   late Animation<double> _scaleAnim;
 
-  final _loader =
-      FallbackPropertiesLoader(remoteRepository: RemoteDatabaseRepository());
+  final _propertyService = PropertyService.instance;
   List<Property> _properties = [];
   bool _loading = true;
   String _selectedCategory = 'All';
@@ -63,7 +61,7 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
   }
 
   Future<void> _loadProperties() async {
-    final loaded = await _loader.loadAll();
+    final loaded = await _propertyService.fetchProperties();
     if (!mounted) return;
     setState(() {
       _properties = loaded.cast<Property>();

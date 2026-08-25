@@ -22,14 +22,18 @@ export const mediaWorker = new Worker('media-processing', async (job) => {
             if (lowerName.match(/\.(mp4|mov|avi|mkv|webm)$/))
                 isVideo = true;
         }
+        // If file doesn't exist anymore (e.g. on a retry after it was deleted), we can't process it.
+        if (!fs.existsSync(filePath)) {
+            throw new Error(`Input file is missing (possibly deleted during a previous failed attempt): ${filePath}`);
+        }
+        let result;
         if (isImage) {
             // Compress image with Sharp
             processedBuffer = await sharp(filePath)
                 .resize(1920, 1080, { fit: 'inside', withoutEnlargement: true })
                 .webp({ quality: 80 })
                 .toBuffer();
-            const result = await uploadToCloudinary(processedBuffer, `${originalName}.webp`);
-            return result;
+            result = await uploadToCloudinary(processedBuffer, `${originalName}.webp`);
         }
         else if (isVideo) {
             // Compress video with FFmpeg
@@ -44,18 +48,29 @@ export const mediaWorker = new Worker('media-processing', async (job) => {
                     .save(outputPath);
             });
             const videoBuffer = fs.readFileSync(outputPath);
-            const result = await uploadToCloudinary(videoBuffer, `${originalName}.mp4`);
+            result = await uploadToCloudinary(videoBuffer, `${originalName}.mp4`);
             // cleanup processed video
-            fs.unlinkSync(outputPath);
-            return result;
+            if (fs.existsSync(outputPath))
+                fs.unlinkSync(outputPath);
         }
-        throw new Error(`Unsupported media type: ${mimeType}`);
-    }
-    finally {
-        // Always cleanup original local file
+        else {
+            throw new Error(`Unsupported media type: ${mimeType}`);
+        }
+        // Success! Cleanup original local file
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
         }
+        return result;
+    }
+    catch (error) {
+        // If we failed, check if we will retry. If we have exhausted retries, cleanup.
+        // By default, if we don't know the retry strategy, it's safer to leave the file for retries
+        // and maybe have a cron job clean up old files in the uploads folder.
+        // For now, let's just log it.
+        console.error(`Job ${job.id} failed on attempt ${job.attemptsMade + 1}. Error: ${error.message}`);
+        // If the error was NOT "file missing", and we are abandoning the job, we should clean up.
+        // However, to be safe for retries, we won't delete the file here.
+        throw error;
     }
 }, { connection, concurrency: 2 } // Process up to 2 uploads concurrently
 );

@@ -144,12 +144,19 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
     try {
       final repository = RemoteDatabaseRepository();
       final result = await repository.verifyPhoneCode(code);
-      if (result == null) {
-        throw Exception('Verification failed.');
-      }
+        if (result == null || result['error'] != null) {
+          throw Exception(result?['error']?.toString() ?? 'Verification failed.');
+        }
 
-      AppSession.currentUserVerified = true;
-      await AppSession.persistSession();
+        if (result['verified'] == true || result['user']?['verified'] == true) {
+          AppSession.currentUserVerified = true;
+          if (result['user'] != null) {
+             AppSession.updateCurrentUser(result['user']);
+          }
+          await AppSession.persistSession();
+        } else {
+          throw Exception('Verification was not successful.');
+        }
 
       if (!mounted) return;
       // Role-based routing after verification

@@ -47,31 +47,6 @@ router.post('/', requireAuth, createVerificationHandler);
 // Get current user's latest verification
 router.get('/me', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const existing = await query(
-      `SELECT id, user_id, status, documents FROM verifications WHERE id = $1`,
-      [req.params.id],
-    );
-    if (existing.rowCount === 0) {
-      return res.status(404).json({ error: 'Verification not found.' });
-    }
-    const current = existing.rows[0];
-    if (status === 'approved' && current.status !== 'submitted') {
-      return res.status(409).json({ error: 'Only submitted verifications can be approved.' });
-    }
-    if (status === 'approved') {
-      const requiredDocuments = [
-        'id_photo_front', 'id_photo_back', 'selfie',
-        'proof_of_address', 'utility_bill', 'property_photos',
-      ];
-      const documents = current.documents ?? {};
-      const complete = requiredDocuments.every(
-        (key) => typeof documents[key] === 'string' && documents[key].trim().length > 0,
-      );
-      if (!complete) {
-        return res.status(422).json({ error: 'Approval requires a complete document submission.' });
-      }
-    }
-
     const result = await query(
       `SELECT id, user_id, status, documents, property_data, admin_notes, created_at, updated_at
        FROM verifications

@@ -9,7 +9,7 @@ const router = Router();
 // Register new user
 router.post('/register', async (req, res, next) => {
     try {
-        const { name, email, password, phone } = req.body;
+        const { name, email, password, phone, role } = req.body;
         if (!name || !email || !password || !phone) {
             return res.status(400).json({ error: 'Name, email, phone and password are required.' });
         }
@@ -20,7 +20,8 @@ router.post('/register', async (req, res, next) => {
             return res.status(409).json({ error: 'Email already registered.' });
         }
         const hash = await bcrypt.hash(password, 10);
-        const userRole = 'tenant';
+        const allowedRoles = ['tenant', 'landlord', 'host'];
+        const userRole = (role && allowedRoles.includes(role.toLowerCase())) ? role.toLowerCase() : 'tenant';
         const result = await query(`INSERT INTO users (name, email, phone, password_hash, role, verified)
        VALUES ($1, $2, $3, $4, $5, false)
        RETURNING id, name, email, phone, role, verified`, [name.trim(), normalizedEmail, normalizedPhone, hash, userRole]);

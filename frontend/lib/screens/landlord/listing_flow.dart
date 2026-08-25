@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:path/path.dart' as path;
 
 // Your project imports
@@ -16,6 +16,7 @@ import 'package:property_app/theme.dart';
 import 'package:property_app/services/image_upload_service.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/geocoding.dart';
+import 'package:property_app/services/property_service.dart';
 import 'package:property_app/services/uploads.dart';
 import 'package:property_app/widgets/property_image.dart';
 
@@ -138,7 +139,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   String _minimumStay = '6 Months';
   DateTime? _availableFrom;
 
-  static const _draftKey = 'listing_draft';
+  String? _draftId;
 
   // FIX: build a repo with a fresh token every time we need it
   RemoteDatabaseRepository _buildRepo() {
@@ -216,78 +217,56 @@ class _AddListingFlowState extends State<AddListingFlow> {
       if (mounted) setState(() => _loadingDraft = false);
       return;
     }
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_draftKey);
-    if (raw != null) {
-      try {
-        final data = jsonDecode(raw) as Map<String, dynamic>;
-        _propertyType = data['type'] ?? 'Apartment';
+    try {
+      final drafts = await PropertyService.instance.getDrafts();
+      if (drafts.isNotEmpty) {
+        final data = drafts.first;
+        _draftId = data['id']?.toString();
+        _propertyType = data['category'] ?? 'Apartment';
         _title.text = data['title'] ?? '';
         _description.text = data['description'] ?? '';
         _bedrooms = data['bedrooms'] ?? 1;
         _bathrooms = data['bathrooms'] ?? 1;
-
-        if (_countries.contains(data['country'])) {
-          _selectedCountry = data['country'];
-        }
-        if (_citiesByCountry[_selectedCountry]?.contains(data['city']) ??
-            false) {
-          _selectedCity = data['city'];
-        }
-
-        _neighborhood.text = data['neighborhood'] ?? '';
-        _street.text = data['street'] ?? '';
-        _building.text = data['building'] ?? '';
-        _locationSearch.text = data['locationSearch'] ?? '';
-        _selectedLatitude = (data['latitude'] as num?)?.toDouble();
-        _selectedLongitude = (data['longitude'] as num?)?.toDouble();
-        _selectedLocationLabel = _locationSearch.text;
-
-        _rentPrice.text = data['rentPrice'] ?? '';
-        _serviceCharges.text = data['serviceCharges'] ?? '';
-        _securityDeposit.text = data['securityDeposit'] ?? '';
-        _minimumStay = data['minimumStay'] ?? '6 Months';
-        if (data['availableFrom'] != null) {
-          _availableFrom = DateTime.tryParse(data['availableFrom']);
-        }
-
-        final savedAmenities =
-            Map<String, dynamic>.from(data['amenities'] ?? {});
-        for (final key in _amenities.keys) {
-          if (savedAmenities.containsKey(key)) {
-            _amenities[key] = savedAmenities[key] == true;
+        _selectedCity = data['city'] ?? 'Dubai';
+        _neighborhood.text = data['address'] ?? '';
+        _locationSearch.text = data['address'] ?? '';
+        if (data['lat'] != null) _selectedLatitude = (data['lat'] as num).toDouble();
+        if (data['lng'] != null) _selectedLongitude = (data['lng'] as num).toDouble();
+        _rentPrice.text = data['price']?.toString() ?? '';
+        if (data['amenities'] is List) {
+          for (final a in (data['amenities'] as List)) {
+            _amenities[a.toString()] = true;
           }
         }
-      } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('Failed to load backend draft: $e');
     }
     if (mounted) setState(() => _loadingDraft = false);
   }
 
   Future<void> _saveDraft({bool showConfirmation = true}) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        _draftKey,
-        jsonEncode({
-          'type': _propertyType,
-          'title': _title.text.trim(),
-          'description': _description.text.trim(),
-          'bedrooms': _bedrooms,
-          'bathrooms': _bathrooms,
-          'country': _selectedCountry,
-          'city': _selectedCity,
-          'neighborhood': _neighborhood.text.trim(),
-          'street': _street.text.trim(),
-          'building': _building.text.trim(),
-          'locationSearch': _locationSearch.text.trim(),
-          'latitude': _selectedLatitude,
-          'longitude': _selectedLongitude,
-          'rentPrice': _rentPrice.text.trim(),
-          'serviceCharges': _serviceCharges.text.trim(),
-          'securityDeposit': _securityDeposit.text.trim(),
-          'minimumStay': _minimumStay,
-          'availableFrom': _availableFrom?.toIso8601String(),
-          'amenities': _amenities,
-        }));
+    try {
+      final payload = {
+        'category': _propertyType,
+        'title': _title.text.trim(),
+        'description': _description.text.trim(),
+        'bedrooms': _bedrooms,
+        'bathrooms': _bathrooms,
+        'city': _selectedCity,
+        'address': _neighborhood.text.trim(),
+        'lat': _selectedLatitude,
+        'lng': _selectedLongitude,
+        'price': _rentPrice.text.trim(),
+        'amenities': _amenities.entries.where((e) => e.value).map((e) => e.key).toList(),
+      };
+      final data = await PropertyService.instance.saveDraft(payload, draftId: _draftId);
+      if (data['id'] != null) {
+        _draftId = data['id'].toString();
+      }
+    } catch(e) {
+      debugPrint('Failed to save draft $e');
+    }
     if (mounted && showConfirmation) {
       ModalUtils.showSuccess(context, "Draft Saved!",
           "Your progress has been safely tucked away. You can resume anytime.");
@@ -528,8 +507,14 @@ class _AddListingFlowState extends State<AddListingFlow> {
         });
       }
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_draftKey);
+      if (_draftId != null) {
+          try {
+            await PropertyService.instance.deleteDraft(_draftId!);
+            _draftId = null;
+          } catch (e) {
+            debugPrint('Failed to delete draft: $e');
+          }
+        }
 
       if (!mounted) return;
       ModalUtils.showSuccess(

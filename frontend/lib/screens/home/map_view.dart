@@ -4,11 +4,13 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:property_app/data/models.dart';
+import 'package:property_app/models/property.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/widgets/shared.dart';
 import 'package:property_app/services/routing_service.dart';
+import 'package:property_app/services/property_service.dart';
+import 'package:property_app/utils/category_utils.dart';
 
 class MapViewScreen extends StatefulWidget {
   final VoidCallback onBack;
@@ -72,6 +74,7 @@ class _MapViewScreenState extends State<MapViewScreen>
 
   // ── Selected pin ─────────────────────────────────────────────
   String? _selectedId;
+  List<Property> _properties = [];
 
   @override
   void initState() {
@@ -91,6 +94,8 @@ class _MapViewScreenState extends State<MapViewScreen>
       curve: Curves.easeInOut,
     );
 
+    _loadProperties();
+
     if (widget.isNavigation) {
       _navProgressCtrl.repeat(reverse: false);
       // Fetch a real route asynchronously
@@ -101,6 +106,15 @@ class _MapViewScreenState extends State<MapViewScreen>
     Future.delayed(const Duration(milliseconds: 60), () {
       if (mounted) _entryCtrl.forward();
     });
+  }
+
+  Future<void> _loadProperties() async {
+    try {
+      final loaded = await PropertyService.instance.fetchProperties();
+      if (mounted) setState(() => _properties = loaded);
+    } catch (error) {
+      debugPrint('Property map fetch error: $error');
+    }
   }
 
   Future<void> fetchAndSetRoute() async {
@@ -193,17 +207,17 @@ class _MapViewScreenState extends State<MapViewScreen>
   }
 
   List<Marker> _buildMarkers() {
-    return properties.map((prop) {
+    return _properties.map((prop) {
       final isSelected = _selectedId == prop.id;
       return Marker(
         point: LatLng(prop.lat, prop.lng),
         width: 90,
         height: 56,
         child: _PricePin(
-          label: formatPrice(prop.price),
+          label: formatPropertyPrice(prop.price),
           isSelected: isSelected,
           floatController: _floatCtrl,
-          phaseOffset: properties.indexOf(prop) * 0.33,
+          phaseOffset: _properties.indexOf(prop) * 0.33,
           onTap: () {
             setState(() => _selectedId = prop.id);
             widget.onSelectProperty?.call(prop.id);
@@ -325,7 +339,7 @@ class _MapViewScreenState extends State<MapViewScreen>
               left: 0,
               right: 0,
               child: _PropertyPreviewCard(
-                property: properties.firstWhere((p) => p.id == _selectedId),
+                property: _properties.firstWhere((p) => p.id == _selectedId),
                 onDismiss: () => setState(() => _selectedId = null),
                 onSelect: () => widget.onSelectProperty?.call(_selectedId!),
               ),
@@ -779,7 +793,7 @@ class _PropertyPreviewCardState extends State<_PropertyPreviewCard>
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    formatPrice(p.price),
+                    formatPropertyPrice(p.price),
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,

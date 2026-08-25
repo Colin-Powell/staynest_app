@@ -353,7 +353,10 @@ router.get('/:id([0-9a-fA-F-]{36})', async (req, res, next) => {
             return res.status(404).json({ error: 'Property not found.' });
         }
         const property = result.rows[0];
-        if ((property.status ?? 'pending_review') !== 'approved') {
+        const isApproved = (property.status ?? 'pending_review') === 'approved';
+        const isOwner = req.auth?.id && req.auth.id === property.landlord_id;
+        const isAdmin = req.auth?.role === 'super_admin';
+        if (!isApproved && !isOwner && !isAdmin) {
             return res.status(404).json({ error: 'Property not found or not approved yet.' });
         }
         const images = property.images;

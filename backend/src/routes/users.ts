@@ -11,7 +11,7 @@ router.patch('/profile', requireAuth, async (req: Request, res: Response, next: 
   try {
     const userId = req.auth?.id;
     const {
-      name, phone, avatar,
+      name, email, phone, avatar,
       businessName, businessType, businessDescription,
       taxId, yearsInBusiness,
       settings
@@ -37,19 +37,20 @@ router.patch('/profile', requireAuth, async (req: Request, res: Response, next: 
 
     const result = await query(
       `UPDATE users
-       SET name = COALESCE($1, name),
-           phone = COALESCE($2, phone),
-           avatar = COALESCE($3, avatar),
-           business_name = COALESCE($4, business_name),
-           business_type = COALESCE($5, business_type),
-           business_description = COALESCE($6, business_description),
-           tax_id = COALESCE($7, tax_id),
-           years_in_business = COALESCE($8, years_in_business),
-           settings = COALESCE($9, settings)
-       WHERE id = $10
+         SET name = COALESCE(NULLIF($1, ''), name),
+           email = COALESCE(NULLIF($2, ''), email),
+           phone = COALESCE($3, phone),
+           avatar = COALESCE($4, avatar),
+           business_name = COALESCE($5, business_name),
+           business_type = COALESCE($6, business_type),
+           business_description = COALESCE($7, business_description),
+           tax_id = COALESCE($8, tax_id),
+           years_in_business = COALESCE($9, years_in_business),
+           settings = COALESCE($10, settings)
+         WHERE id = $11
        RETURNING id, name, email, phone, avatar, role, verified, created_at, business_name, business_type, business_description, tax_id, years_in_business, settings`,
       [
-        name, phone, avatar,
+        name, email, phone, avatar,
         businessName, businessType, businessDescription,
         taxId, yearsInBusiness,
         settings ? JSON.stringify(settings) : null,
@@ -68,6 +69,26 @@ router.get('/recent-contacts', requireAuth, async (_req: Request, res: Response,
   try {
     // Placeholder response for the frontend's fetchRecentContacts call
     res.json({ data: { contacts: [] } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/me', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await query(
+      `SELECT id, name, email, phone, avatar, role, verified, created_at,
+              business_name, business_type, business_description, tax_id,
+              years_in_business, settings
+       FROM users WHERE id = $1`,
+      [req.auth?.id],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ data: result.rows[0] });
   } catch (error) {
     next(error);
   }

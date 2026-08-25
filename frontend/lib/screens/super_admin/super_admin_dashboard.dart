@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/services/super_admin_service.dart';
-import 'package:property_app/utils/responsive_layout.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class SuperAdminDashboard extends StatefulWidget {
@@ -93,8 +92,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   // 1. RESPONSIVE STATS
   // ---------------------------------------------------------------------------
   Widget _buildStatsGrid(BuildContext context) {
-    final monthlyRevenue =
-        (_overview['monthlyRevenue'] as num?)?.toDouble() ?? 0;
+    final monthlyRevenue = _number(_overview['monthlyRevenue']);
     final stats = [
       _StatCard(
           title: 'Total Users',
@@ -334,7 +332,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           const SizedBox(height: 24),
           _buildActivityTile(
               'Revenue from completed bookings',
-              'KSh ${((_overview['totalRevenue'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
+              'KSh ${_number(_overview['totalRevenue']).toStringAsFixed(0)}',
               PhosphorIcons.wallet()),
           const Divider(height: 1, color: AppColors.gray100),
           _buildActivityTile(
@@ -433,8 +431,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
     if (chartData.isNotEmpty) {
       for (int i = 0; i < chartData.length; i++) {
-        final u = (chartData[i]['new_users'] ?? 0).toDouble();
-        final b = (chartData[i]['new_bookings'] ?? 0).toDouble();
+        final u = _number(chartData[i]['new_users']);
+        final b = _number(chartData[i]['new_bookings']);
         usersSpots.add(FlSpot(i.toDouble(), u));
         bookingsSpots.add(FlSpot(i.toDouble(), b));
         if (u > maxY) maxY = u;
@@ -600,8 +598,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     backlogData.length,
                     (i) => BarChartGroupData(x: i, barRods: [
                           BarChartRodData(
-                              toY: ((backlogData[i]['value'] ?? 0) as num)
-                                  .toDouble(),
+                              toY: _number(backlogData[i]['value']),
                               color: _primaryBlue, // GA Blue bars
                               width: 10,
                               borderRadius: const BorderRadius.vertical(
@@ -641,7 +638,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     bool allZero = true;
     List<FlSpot> spots = [];
     for (int i = 0; i < data.length; i++) {
-      final val = (data[i]['success_rate'] ?? 0).toDouble();
+      final val = _number(data[i]['success_rate']);
       if (val > 0) allZero = false;
       spots.add(FlSpot(i.toDouble(), val));
     }
@@ -748,7 +745,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     bool allZero = true;
     List<FlSpot> spots = [];
     for (int i = 0; i < data.length; i++) {
-      final val = (data[i]['retention_rate'] ?? 0).toDouble();
+      final val = _number(data[i]['retention_rate']);
       if (val > 0) allZero = false;
       spots.add(FlSpot(i.toDouble(), val));
     }
@@ -947,6 +944,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         row['label']?.toString() ?? 'Unknown':
             (row['value'] as num?)?.toInt() ?? 0,
     };
+  }
+
+  double _number(dynamic value) {
+    return value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
   }
 
   Widget _buildEmptyStateCard(String title, {required double height}) {

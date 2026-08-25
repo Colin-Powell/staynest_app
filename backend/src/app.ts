@@ -8,6 +8,7 @@ import propertiesRouter from './routes/properties.js';
 import usersRouter from './routes/users.js';
 import uploadsRouter from './routes/uploads.js';
 import verificationsRouter from './routes/verifications.js';
+import notificationsRouter from './routes/notifications.js';
 import emailRouter from './routes/email.js';
 import googleAuthRouter from './routes/google_auth.js';
 import tenantProfilesRouter from './routes/tenant_profiles.js';
@@ -16,6 +17,7 @@ import messagesRouter from './routes/messages.js';
 import bookingsRouter from './routes/bookings.js';
 import analyticsRouter from './routes/analytics.js';
 import adminRouter from './routes/admin.js';
+import draftsRouter from './routes/drafts.js';
 import { requireAuth } from './middleware/auth.js'; // Explicitly import requireAuth
 
 const app = express();
@@ -31,9 +33,11 @@ app.use(apiRateLimiter);
 
 app.use('/api/auth', authRouter);
 app.use('/api/properties', propertiesRouter);
+app.use('/api/drafts', draftsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/uploads', uploadsRouter);
 app.use('/api/verifications', verificationsRouter);
+app.use('/api/notifications', notificationsRouter);
 app.use('/api/email', emailRouter);
 app.use('/api/auth/google', googleAuthRouter);
 
@@ -57,3 +61,4 @@ app.get('/api/health', (_req, res) => {
 app.use(errorHandler);
 
 export default app;
+

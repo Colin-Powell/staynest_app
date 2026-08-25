@@ -187,6 +187,7 @@ class _RegisterViewState extends State<RegisterView>
       // Populate session with returned user and token
       AppSession.updateCurrentUser(user);
       AppSession.apiToken = user['token']?.toString() ?? AppSession.apiToken;
+      await AppSession.persistSession();
 
       if (mounted) {
         setState(() => _isLoading = false);

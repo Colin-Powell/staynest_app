@@ -27,7 +27,7 @@ async function sendCheckinReminders() {
        JOIN properties p ON p.id = b.property_id
        JOIN users      t ON t.id = b.tenant_id
        WHERE b.status = 'confirmed'
-         AND b.check_in_date = CURRENT_DATE + INTERVAL '1 day'`, []);
+         AND b.check_in_date = CURRENT_DATE + 1`, []);
         for (const row of res.rows) {
             const dateStr = fmt(row.check_in_date);
             // Notify tenant
@@ -85,6 +85,7 @@ async function sendUnreadMessageNudges() {
         const res = await query(`SELECT m.to_user_id, COUNT(*) AS unread_count
        FROM messages m
        WHERE m.created_at < now() - INTERVAL '1 hour'
+         AND m.created_at >= now() - INTERVAL '3 hours'
          AND NOT EXISTS (
            SELECT 1 FROM message_reads mr
            WHERE mr.message_id = m.id AND mr.user_id = m.to_user_id
@@ -104,18 +105,29 @@ async function sendUnreadMessageNudges() {
 async function sendWeeklyPerformanceDigest() {
     try {
         const res = await query(`SELECT
-         p.user_id AS landlord_id,
+         u.id      AS landlord_id,
          u.name    AS landlord_name,
          u.email   AS landlord_email,
-         COUNT(DISTINCT a.id)                    FILTER (WHERE a.event_type = 'view')    AS views,
-         COUNT(DISTINCT b.id)                    FILTER (WHERE b.created_at > now() - INTERVAL '7 days') AS new_bookings,
-         COALESCE(SUM(b.total_price)             FILTER (WHERE b.status = 'confirmed'
-                                                           AND b.created_at > now() - INTERVAL '7 days'), 0) AS revenue
-       FROM properties p
-       JOIN users u ON u.id = p.user_id
-       LEFT JOIN analytics a ON a.property_id = p.id AND a.event_time > now() - INTERVAL '7 days'
-       LEFT JOIN bookings  b ON b.property_id  = p.id
-       GROUP BY p.user_id, u.name, u.email`, []);
+         (
+           SELECT COUNT(a.id)
+           FROM analytics a
+           JOIN properties p2 ON p2.id = a.property_id
+           WHERE p2.user_id = u.id AND a.event_type = 'view' AND a.event_time > now() - INTERVAL '7 days'
+         ) AS views,
+         (
+           SELECT COUNT(b.id)
+           FROM bookings b
+           JOIN properties p2 ON p2.id = b.property_id
+           WHERE p2.user_id = u.id AND b.created_at > now() - INTERVAL '7 days'
+         ) AS new_bookings,
+         (
+           SELECT COALESCE(SUM(b.total_price), 0)
+           FROM bookings b
+           JOIN properties p2 ON p2.id = b.property_id
+           WHERE p2.user_id = u.id AND b.status = 'confirmed' AND b.created_at > now() - INTERVAL '7 days'
+         ) AS revenue
+       FROM users u
+       WHERE EXISTS (SELECT 1 FROM properties p WHERE p.user_id = u.id)`, []);
         for (const row of res.rows) {
             const { landlord_id, landlord_name, landlord_email, views, new_bookings, revenue } = row;
             const subject = `?? Your Weekly StayNest Report`;

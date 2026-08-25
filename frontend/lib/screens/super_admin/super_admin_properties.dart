@@ -19,6 +19,7 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
   final Set<String> _processingIds = <String>{};
   List<Map<String, dynamic>> _properties = [];
   String _searchQuery = '';
+  String _statusFilter = 'pending_review';
   bool _loading = true;
 
   @override
@@ -30,7 +31,7 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
   Future<void> _loadProperties() async {
     setState(() => _loading = true);
     try {
-      final properties = await SuperAdminService.fetchProperties();
+      final properties = await SuperAdminService.fetchProperties(status: _statusFilter);
       if (mounted) {
         setState(() {
           _properties = properties;
@@ -81,6 +82,37 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
     }
   }
 
+
+  Widget _buildTab(String label, String value) {
+    final isActive = _statusFilter == value;
+    return InkWell(
+      onTap: () {
+        if (_statusFilter != value) {
+          setState(() {
+            _statusFilter = value;
+          });
+          _loadProperties();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.gray900 : Colors.white,
+          border: Border.all(color: isActive ? AppColors.gray900 : StayNestColors.outlineLight),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: isActive ? FontWeight.w500 : FontWeight.w400,
+            color: isActive ? Colors.white : AppColors.gray600,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filtered = _properties.where((prop) {
@@ -112,6 +144,16 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
                   Text('Review full listing metadata and manage inventory.',
                       style: GoogleFonts.inter(
                           fontSize: 14, color: AppColors.gray500)),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      _buildTab('Pending', 'pending_review'),
+                      const SizedBox(width: 8),
+                      _buildTab('Approved', 'approved'),
+                      const SizedBox(width: 8),
+                      _buildTab('Rejected', 'rejected'),
+                    ],
+                  ),
                 ],
               ),
               Container(
@@ -193,9 +235,11 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
     final beds = property['bedrooms']?.toString() ?? '-';
     final baths = property['bathrooms']?.toString() ?? '-';
     final price = property['price']?.toString() ?? '0';
-    final serviceCharge = property['service_charges']?.toString() ?? '0';
-    final deposit = property['security_deposit']?.toString() ?? '0';
-    final minStay = property['minimum_stay']?.toString() ?? 'Not specified';
+    final imageCount = property['image_count']?.toString() ?? '0';
+    final bookingCount = property['booking_count']?.toString() ?? '0';
+    final totalRevenue = property['total_revenue']?.toString() ?? '0';
+    final landlordName = property['landlord_name']?.toString() ?? 'Unknown';
+    final landlordEmail = property['landlord_email']?.toString() ?? 'N/A';
 
     // Amenities list parsing
     final amenitiesList = (property['amenities'] as List<dynamic>?)
@@ -298,12 +342,11 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
                     runSpacing: 16,
                     children: [
                       _buildMetaItem('Rent Price', 'KSh $price /mo'),
-                      _buildMetaItem('Security Deposit', 'KSh $deposit'),
-                      _buildMetaItem(
-                          'Service Charge', 'KSh $serviceCharge /mo'),
                       _buildMetaItem(
                           'Layout', '$category • $beds Bed • $baths Bath'),
-                      _buildMetaItem('Minimum Stay', minStay),
+                      _buildMetaItem('Images', imageCount),
+                      _buildMetaItem('Bookings', bookingCount),
+                      _buildMetaItem('Revenue', 'KSh $totalRevenue'),
                     ],
                   ),
 
@@ -313,6 +356,8 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
                   _buildTextRow('Amenities:', amenitiesDisplay),
                   const SizedBox(height: 6),
                   _buildTextRow('Description:', description, maxLines: 2),
+                  const SizedBox(height: 6),
+                  _buildTextRow('Landlord:', '$landlordName • $landlordEmail'),
 
                   // Action Buttons (Only if pending)
                   if (status == 'pending_review') ...[

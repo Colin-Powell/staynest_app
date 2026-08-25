@@ -52,9 +52,7 @@ class _EditProfileViewState extends State<EditProfileView>
             CurvedAnimation(parent: _pageCtrl, curve: Curves.easeOutCubic));
     _pageFade = CurvedAnimation(parent: _pageCtrl, curve: Curves.easeIn);
 
-    _nameController.text = AppSession.displayName;
-    _emailController.text = AppSession.displayEmail;
-    _phoneController.text = AppSession.displayPhone;
+    _populateFromSession();
 
     // Staggered Content Animation
     _staggerCtrl = AnimationController(
@@ -63,6 +61,24 @@ class _EditProfileViewState extends State<EditProfileView>
     );
 
     _pageCtrl.forward().then((_) => _staggerCtrl.forward());
+  }
+
+  Future<void> _populateFromSession() async {
+    try {
+      if (AppSession.apiToken != null && AppSession.currentUserId != null) {
+        final user = await RemoteDatabaseRepository().loadCurrentUser();
+        AppSession.updateCurrentUser(user);
+        await AppSession.persistSession();
+      }
+    } catch (_) {
+      // Use the cached session values when the profile request is unavailable.
+    }
+
+    if (!mounted) return;
+    _nameController.text = AppSession.displayName;
+    _emailController.text = AppSession.displayEmail;
+    _phoneController.text = AppSession.displayPhone;
+    setState(() {});
   }
 
   @override
@@ -269,10 +285,12 @@ class _EditProfileViewState extends State<EditProfileView>
                               ),
                         if (_isSaving && _selectedImage != null)
                           Container(
-                            color: Colors.black.withValues(alpha: 102), // 0.4 opacity
+                            color: Colors.black
+                                .withValues(alpha: 102), // 0.4 opacity
                             child: const Center(
                               child: CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
                               ),
                             ),
                           ),
@@ -442,6 +460,7 @@ class _EditProfileViewState extends State<EditProfileView>
 
       // Sync the global AppSession with the new data from backend
       AppSession.updateCurrentUser(updatedUser);
+      await AppSession.persistSession();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

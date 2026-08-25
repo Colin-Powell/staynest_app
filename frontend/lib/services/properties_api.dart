@@ -1,5 +1,7 @@
 import 'package:property_app/services/api_client.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/screens/home/cache_engine.dart';
+
 
 class PropertiesApi {
   static ApiClient _client() {
@@ -13,17 +15,29 @@ class PropertiesApi {
 
   /// Fetch all properties for the current landlord.
   static Future<List<Map<String, dynamic>>> getLandlordProperties() async {
-    final client = _client();
-    final response = await client.getJson('/properties/me');
-    final data = response['data'] as List<dynamic>? ?? [];
-    return data.cast<Map<String, dynamic>>();
+    return CacheEngine.instance.getOrFetch<List<Map<String, dynamic>>>(
+      key: 'landlord_props_me',
+      ttl: CacheTTL.listings,
+      networkFetcher: () async {
+        final client = _client();
+        final response = await client.getJson('/properties/me');
+        final data = response['data'] as List<dynamic>? ?? [];
+        return data.cast<Map<String, dynamic>>();
+      },
+    );
   }
 
   /// Fetch a single property by ID.
   static Future<Map<String, dynamic>> getPropertyById(String propertyId) async {
-    final client = _client();
-    final response = await client.getJson('/properties/$propertyId');
-    return response['data'] as Map<String, dynamic>;
+    return CacheEngine.instance.getOrFetch<Map<String, dynamic>>(
+      key: CacheKeys.propertyDetail(propertyId),
+      ttl: CacheTTL.details,
+      networkFetcher: () async {
+        final client = _client();
+        final response = await client.getJson('/properties/$propertyId');
+        return response['data'] as Map<String, dynamic>;
+      },
+    );
   }
 
   /// Fetch all properties with optional filters.
@@ -34,7 +48,6 @@ class PropertiesApi {
     double? lng,
     double? proximity,
   }) async {
-    final client = _client();
     final params = <String, String>{};
     if (category != null) params['category'] = category;
     if (city != null) params['city'] = city;
@@ -42,12 +55,18 @@ class PropertiesApi {
     if (lng != null) params['lng'] = lng.toString();
     if (proximity != null) params['proximity'] = proximity.toString();
 
-    final response = await client.getJson(
-      '/properties',
-      queryParams: params,
+    final cacheKey = 'props_all_' + params.toString();
+
+    return CacheEngine.instance.getOrFetch<List<Map<String, dynamic>>>(
+      key: cacheKey,
+      ttl: CacheTTL.listings,
+      networkFetcher: () async {
+        final client = _client();
+        final response = await client.getJson('/properties', queryParams: params.isNotEmpty ? params : null);
+        final data = response['data'] as List<dynamic>? ?? [];
+        return data.cast<Map<String, dynamic>>();
+      },
     );
-    final data = response['data'] as List<dynamic>? ?? [];
-    return data.cast<Map<String, dynamic>>();
   }
 
   /// Create a new property listing.
@@ -55,6 +74,7 @@ class PropertiesApi {
       Map<String, dynamic> payload) async {
     final client = _client();
     final response = await client.postJson('/properties', body: payload);
+    await CacheEngine.instance.invalidate('landlord_props_me');
     return response['data'] as Map<String, dynamic>;
   }
 
@@ -68,6 +88,8 @@ class PropertiesApi {
       '/properties/$propertyId',
       body: payload,
     );
+    await CacheEngine.instance.invalidate(CacheKeys.propertyDetail(propertyId));
+    await CacheEngine.instance.invalidate('landlord_props_me');
     return response['data'] as Map<String, dynamic>;
   }
 
@@ -75,13 +97,21 @@ class PropertiesApi {
   static Future<void> deleteProperty(String propertyId) async {
     final client = _client();
     await client.deleteJson('/properties/$propertyId');
+    await CacheEngine.instance.invalidate(CacheKeys.propertyDetail(propertyId));
+    await CacheEngine.instance.invalidate('landlord_props_me');
   }
 
   /// Fetch recommendations for the current tenant.
   static Future<List<Map<String, dynamic>>> getRecommendations() async {
-    final client = _client();
-    final response = await client.getJson('/properties/recommendations');
-    final data = response['data'] as List<dynamic>? ?? [];
-    return data.cast<Map<String, dynamic>>();
+    return CacheEngine.instance.getOrFetch<List<Map<String, dynamic>>>(
+      key: 'props_recommendations',
+      ttl: CacheTTL.listings,
+      networkFetcher: () async {
+        final client = _client();
+        final response = await client.getJson('/properties/recommendations');
+        final data = response['data'] as List<dynamic>? ?? [];
+        return data.cast<Map<String, dynamic>>();
+      },
+    );
   }
 }

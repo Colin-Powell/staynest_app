@@ -2,6 +2,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:property_app/services/notification_api.dart';
+import 'package:property_app/services/fcm_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:async';
+
 import 'package:property_app/widgets/property_image.dart';
 
 class LandlordNotificationsPage extends StatefulWidget {
@@ -27,61 +32,96 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage> {
   final TextEditingController _searchController = TextEditingController();
 
   // Notification Data mapping the PDF
-  final List<Map<String, dynamic>> _notifications = [
-    {
-      'title': 'Booking Confirmed',
-      'subtitle': 'Your booking for 11 Green Bank is confirmed.',
-      'time': '2m',
-      'icon': PhosphorIcons.check(PhosphorIconsStyle.bold),
-      'iconBg': const Color(0xFFD1FAE5),
-      'iconColor': primaryGreen,
-      'isAvatar': false,
-    },
-    {
-      'title': 'New Message',
-      'subtitle': 'John Kamau sent you a message.',
-      'time': '10m',
-      'icon': PhosphorIcons.chatCenteredText(PhosphorIconsStyle.fill),
-      'iconBg': const Color(0xFFDBEAFE),
-      'iconColor': const Color(0xFF3B82F6),
-      'isAvatar': false,
-    },
-    {
-      'title': 'GreenHomes Ltd.',
-      'subtitle': 'New Message',
-      'time': '9:15 AM',
-      'icon': PhosphorIcons.houseLine(PhosphorIconsStyle.fill),
-      'iconBg': const Color(0xFFE8F6EF),
-      'iconColor': primaryGreen,
-      'isAvatar': false,
-    },
-    {
-      'title': 'Price Drop',
-      'subtitle': 'Sunset Apartment price dropped by \$100.',
-      'time': 'Yesterday',
-      'icon': PhosphorIcons.warningCircle(PhosphorIconsStyle.fill),
-      'iconBg': const Color(0xFFFEE2E2),
-      'iconColor': const Color(0xFFEF4444),
-      'isAvatar': false,
-    },
-    {
-      'title': 'New Property',
-      'subtitle': '5 new properties available near you.',
-      'time': 'Yesterday',
-      'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&h=256&q=80',
-      'isAvatar': true,
-      'unreadCount': 2,
-    },
-    {
-      'title': 'Verification Update',
-      'subtitle': 'Your profile has been verified.',
-      'time': 'Mon',
-      'icon': PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
-      'iconBg': const Color(0xFFD1FAE5),
-      'iconColor': primaryGreen,
-      'isAvatar': false,
-    },
-  ];
+  List<Map<String, dynamic>> _notifications = [];
+  bool _isLoading = true;
+  StreamSubscription<RemoteMessage>? _fcmSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+
+    _fcmSubscription = FCMService.instance.notificationsStream.listen((message) {
+      final title = message.notification?.title ?? 'Notification';
+      final subtitle = message.notification?.body ?? '';
+      if (!mounted) return;
+      setState(() {
+        _notifications.insert(0, {
+          'title': title,
+          'subtitle': subtitle,
+          'time': 'Just now',
+          'icon': PhosphorIcons.bell(PhosphorIconsStyle.fill),
+          'iconBg': const Color(0xFFE8F6EF),
+          'iconColor': primaryGreen,
+          'isAvatar': false,
+        });
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _fcmSubscription?.cancel();
+    super.dispose();
+  }
+
+  String _formatTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays == 1) return 'Yesterday';
+    return '${dt.day}/${dt.month}';
+  }
+
+  Future<void> _loadNotifications() async {
+    try {
+      final res = await NotificationApi.fetchNotifications(limit: 50);
+      final List<dynamic> data = res['data'] ?? [];
+      
+      if (!mounted) return;
+      setState(() {
+        _notifications.clear();
+        for (var item in data) {
+          final created = DateTime.tryParse(item['created_at'].toString())?.toLocal() ?? DateTime.now();
+          final type = item['data']?['type']?.toString() ?? '';
+          
+          IconData icon = PhosphorIcons.bell(PhosphorIconsStyle.fill);
+          Color iconColor = primaryGreen;
+          Color iconBg = const Color(0xFFE8F6EF);
+          
+          if (type.contains('booking') || type.contains('checkin') || type.contains('checkout')) {
+            icon = PhosphorIcons.calendarCheck(PhosphorIconsStyle.fill);
+            iconColor = const Color(0xFF3B82F6);
+            iconBg = const Color(0xFFDBEAFE);
+          } else if (type.contains('message') || type.contains('unread')) {
+            icon = PhosphorIcons.chatCenteredText(PhosphorIconsStyle.fill);
+            iconColor = const Color(0xFF8B5CF6);
+            iconBg = const Color(0xFFEDE9FE);
+          } else if (type.contains('alert') || type.contains('stale')) {
+            icon = PhosphorIcons.warningCircle(PhosphorIconsStyle.fill);
+            iconColor = const Color(0xFFEF4444);
+            iconBg = const Color(0xFFFEE2E2);
+          }
+
+          _notifications.add({
+            'title': item['title'] ?? 'Notification',
+            'subtitle': item['body'] ?? '',
+            'time': _formatTime(created),
+            'icon': icon,
+            'iconBg': iconBg,
+            'iconColor': iconColor,
+            'isAvatar': false,
+          });
+        }
+        _isLoading = false;
+      });
+      NotificationApi.markAllAsRead().catchError((_) {});
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +147,11 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage> {
                 _buildHeader(context),
                 _buildSearchBar(),
                 Expanded(
-                  child: ListView.builder(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _notifications.isEmpty
+                          ? const Center(child: Text('No notifications'))
+                          : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(24, 10, 24, 100),
                     physics: const BouncingScrollPhysics(),
                     itemCount: _notifications.length,

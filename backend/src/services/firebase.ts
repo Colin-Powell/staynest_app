@@ -44,12 +44,25 @@ export async function sendPushToUser(
     const userRes = await query('SELECT fcm_token, settings FROM users WHERE id = $1', [userId]);
     const user = userRes.rows[0];
 
-    if (!user || !user.fcm_token) return false;
+    if (!user) return false;
+
+    // Always save to database for the in-app notifications tab
+    try {
+      await query(
+        `INSERT INTO notifications (user_id, title, body, data) VALUES ($1, $2, $3, $4)`,
+        [userId, title, body, data ? JSON.stringify(data) : null]
+      );
+    } catch (dbErr) {
+      console.error(`Failed to save notification to DB for user ${userId}:`, dbErr);
+    }
+
+    // Skip actual push if no token
+    if (!user.fcm_token) return true;
 
     // Check if the user has opted out of push notifications
     if (user.settings && typeof user.settings === 'object') {
       const settings = user.settings as { push?: boolean };
-      if (settings.push === false) return false;
+      if (settings.push === false) return true;
     }
 
     await getMessaging().send({

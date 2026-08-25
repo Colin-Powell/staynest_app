@@ -1,6 +1,8 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:property_app/services/fcm_service.dart';
+import 'package:property_app/services/notification_api.dart';
+
 
 class NotificationItem {
   final String title;
@@ -44,6 +46,40 @@ class _NotificationsViewState extends State<NotificationsView>
   late final AnimationController _staggerCtrl;
 
   final List<NotificationItem> _items = [];
+
+  bool _isLoading = true;
+
+  Future<void> _loadNotifications() async {
+    try {
+      final res = await NotificationApi.fetchNotifications(limit: 50);
+      final List<dynamic> data = res['data'] ?? [];
+      
+      if (!mounted) return;
+      setState(() {
+        _items.clear();
+        for (var item in data) {
+          final created = DateTime.tryParse(item['created_at'].toString())?.toLocal() ?? DateTime.now();
+          final dataMap = item['data'] ?? {};
+          final unreadCount = int.tryParse(dataMap['unreadCount']?.toString() ?? '') ?? 0;
+          
+          _items.add(NotificationItem(
+            title: item['title'] ?? 'Notification',
+            subtitle: item['body'] ?? '',
+            time: _formatTime(created),
+            unreadCount: unreadCount,
+          ));
+        }
+        _isLoading = false;
+      });
+      
+      // Mark as read in the background
+      NotificationApi.markAllAsRead().catchError((_) {});
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
+
   Stream<RemoteMessage>? _stream;
 
   @override
@@ -69,6 +105,8 @@ class _NotificationsViewState extends State<NotificationsView>
 
     _pageCtrl.forward().then((_) => _staggerCtrl.forward());
 
+    _loadNotifications();
+
     _stream = FCMService.instance.notificationsStream;
     _stream!.listen((message) {
       final title = message.notification?.title ?? 'Notification';
@@ -77,6 +115,7 @@ class _NotificationsViewState extends State<NotificationsView>
       final unreadCount =
           int.tryParse(message.data['unreadCount']?.toString() ?? '') ?? 0;
 
+      if (!mounted) return;
       setState(() {
         _items.insert(
           0,
@@ -90,7 +129,6 @@ class _NotificationsViewState extends State<NotificationsView>
       });
     });
   }
-
   @override
   void dispose() {
     _pageCtrl.dispose();
@@ -267,8 +305,7 @@ class _NotificationsViewState extends State<NotificationsView>
                 Expanded(
                   child: ScrollConfiguration(
                     behavior: const AppScrollBehavior(),
-                    child: _items.isEmpty
-                        ? const Center(
+                    child: _isLoading ? const Center(child: CircularProgressIndicator()) : _items.isEmpty ? const Center(
                             child: Text(
                               'No notifications',
                               style: TextStyle(color: Color(0xFF6B7280)),

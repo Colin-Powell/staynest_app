@@ -11,11 +11,12 @@ const router = Router();
 // Register new user
 router.post('/register', async (req, res, next) => {
   try {
-    const { name, email, password, phone } = req.body as {
+    const { name, email, password, phone, role } = req.body as {
       name?: string;
       email?: string;
       password?: string;
       phone?: string;
+      role?: string;
     };
 
     if (!name || !email || !password || !phone) {
@@ -33,7 +34,8 @@ router.post('/register', async (req, res, next) => {
 
     const hash = await bcrypt.hash(password, 10);
 
-    const userRole = 'tenant';
+    const allowedRoles = ['tenant', 'landlord', 'host'];
+    const userRole = (role && allowedRoles.includes(role.toLowerCase())) ? role.toLowerCase() : 'tenant';
 
     const result = await query(
       `INSERT INTO users (name, email, phone, password_hash, role, verified)

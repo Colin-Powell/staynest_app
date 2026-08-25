@@ -36,9 +36,13 @@ import 'utils/responsive_layout.dart';
 
 void _initializeFirebaseAsync() async {
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } else {
+      Firebase.app();
+    }
     await AnalyticsService.initialize();
 
     void logFcm(RemoteMessage m, {String source = 'unknown'}) {

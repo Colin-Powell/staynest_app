@@ -539,9 +539,12 @@ class RemoteDatabaseRepository {
   }
 
   Future<Map<String, dynamic>> loadCurrentUser() async {
-    final userId = AppSession.currentUserId;
-    if (userId == null) throw Exception('No user ID found in session');
-    return loadUserById(userId);
+    if (AppSession.apiToken == null)
+      throw Exception('No authenticated session');
+    final response = await apiClient.get(
+      Uri.parse('${AppSession.apiBaseUrl}/users/me'),
+    );
+    return _decodeData(response);
   }
 
   Future<Map<String, dynamic>> updateCurrentUser({
