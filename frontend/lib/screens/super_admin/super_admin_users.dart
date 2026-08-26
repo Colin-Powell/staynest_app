@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/super_admin_service.dart';
+import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/theme.dart';
 
 class SuperAdminUsersPage extends StatefulWidget {
@@ -191,6 +192,7 @@ class _SuperAdminUsersPageState extends State<SuperAdminUsersPage> {
   Widget _buildUserCard(Map<String, dynamic> user) {
     final id = user['id']?.toString() ?? '';
     final name = user['name']?.toString() ?? 'Unknown User';
+    final avatar = user['avatar']?.toString() ?? '';
     final email = user['email']?.toString() ?? 'No email provided';
     final phone = user['phone']?.toString() ?? 'No phone provided';
     final role = (user['role']?.toString() ?? 'tenant').toUpperCase();
@@ -227,16 +229,22 @@ class _SuperAdminUsersPageState extends State<SuperAdminUsersPage> {
               decoration: BoxDecoration(
                 color: AppColors.gray100,
                 border: Border.all(color: StayNestColors.outlineLight),
+                shape: BoxShape.circle,
               ),
-              child: Center(
-                child: Text(
-                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: GoogleFonts.inter(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.gray500),
-                ),
-              ),
+              clipBehavior: Clip.hardEdge,
+              child: avatar.isNotEmpty
+                  ? buildPropertyImage(avatar, fit: BoxFit.cover, errorPlaceholder: Center(
+                      child: Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : '?',
+                        style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.gray500),
+                      ),
+                    ))
+                  : Center(
+                      child: Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : '?',
+                        style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.gray500),
+                      ),
+                    ),
             ),
             const SizedBox(width: 24),
 

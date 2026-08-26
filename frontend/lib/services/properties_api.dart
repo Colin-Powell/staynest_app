@@ -15,6 +15,18 @@ class PropertiesApi {
   }
 
   /// Get active promotions for landlord
+  
+  static Future<List<Map<String, dynamic>>> getRelevantPromotions() async {
+    try {
+      final client = _client();
+      final response = await client.getJson('/promotions/relevant');
+      final data = response['data'] as List<dynamic>? ?? [];
+      return data.cast<Map<String, dynamic>>();
+    } catch (e) {
+      return [];
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> getActivePromotions() async {
     try {
       final client = _client();
@@ -121,6 +133,21 @@ class PropertiesApi {
     await client.deleteJson('/properties/$propertyId');
     await CacheEngine.instance.invalidate(CacheKeys.propertyDetail(propertyId));
     await CacheEngine.instance.invalidate('landlord_props_me');
+  }
+
+  
+  /// Fetch recently viewed properties for the current tenant.
+  static Future<List<Map<String, dynamic>>> getRecentlyViewed() async {
+    return CacheEngine.instance.getOrFetch<List<Map<String, dynamic>>>(
+      key: 'props_recently_viewed',
+      ttl: CacheTTL.listings,
+      networkFetcher: () async {
+        final client = _client();
+        final response = await client.getJson('/properties/me/recently-viewed');
+        final data = response['data'] as List<dynamic>? ?? [];
+        return data.cast<Map<String, dynamic>>();
+      },
+    );
   }
 
   static Future<Map<String, dynamic>> getCategories() async {

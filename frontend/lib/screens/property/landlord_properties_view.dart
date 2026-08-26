@@ -8,7 +8,8 @@ import 'package:property_app/models/property.dart';
 import 'package:property_app/services/property_service.dart';
 
 import 'package:property_app/widgets/property_image.dart';
-import 'package:property_app/screens/dashboard/analytics_service.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/widgets/shared.dart';
 
 class LandlordPropertiesView extends StatefulWidget {
@@ -343,10 +344,7 @@ class _PropertyCardState extends State<_PropertyCard>
     Future.delayed(widget.delay, () {
       if (mounted) {
         // Track Property Impression
-        AnalyticsService.logEvent(
-          eventType: 'property_impression',
-          propertyId: widget.property.id,
-        );
+        AnalyticsService.logListingInteraction('property_impression', listingId: widget.property.id);
       }
       if (mounted) _entryController.forward();
     });
@@ -387,10 +385,7 @@ class _PropertyCardState extends State<_PropertyCard>
           onTapCancel: () => setState(() => _pressed = false),
           onTap: () {
             // Track Property Click
-            AnalyticsService.logEvent(
-              eventType: 'property_click',
-              propertyId: widget.property.id,
-            );
+            AnalyticsService.logListingInteraction('property_click', listingId: widget.property.id);
             // Open property details / booking view
             Navigator.pushNamed(context, '/booking',
                 arguments: <String, String>{'propertyId': widget.property.id});

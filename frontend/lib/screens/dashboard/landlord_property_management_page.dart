@@ -2,7 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:property_app/screens/dashboard/analytics_service.dart';
+import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/session/app_session.dart';
@@ -75,9 +76,9 @@ class _LandlordPropertyManagementPageState
 
     try {
       final results = await Future.wait([
-        AnalyticsService.getPropertyManagementData(id),
+        LandlordDashboardService.getPropertyManagementData(id),
         BookingService.fetchBookings(isLandlord: true),
-        AnalyticsService.getPropertyAvailability(id),
+        LandlordDashboardService.getPropertyAvailability(id),
         PropertiesApi.getActivePromotions(),
       ]);
 
@@ -214,7 +215,7 @@ class _LandlordPropertyManagementPageState
                 Navigator.pop(context);
                 setState(() => _isLoading = true);
                 final success =
-                    await AnalyticsService.deleteProperty(_property['id']);
+                    await LandlordDashboardService.deleteProperty(_property['id']);
                 if (success && mounted) {
                   Navigator.pop(context, true);
                 } else if (mounted) {
@@ -1006,7 +1007,7 @@ class _LandlordPropertyManagementPageState
         }[label];
         if (statusCode == null) return;
 
-        final success = await AnalyticsService.updatePropertyStatus(
+        final success = await LandlordDashboardService.updatePropertyStatus(
             _property['id'].toString(), statusCode);
         if (success && mounted) {
           setState(() => _property['status'] = label);

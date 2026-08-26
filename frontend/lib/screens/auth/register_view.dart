@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/core/responsive/breakpoints.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/responsive_layout.dart';
@@ -188,6 +189,7 @@ class _RegisterViewState extends State<RegisterView>
 
       // Populate session with returned user and token
       AppSession.updateCurrentUser(user);
+      AnalyticsService.logAuthEvent(AnalyticsEvents.signUp, method: 'email');
       AppSession.apiToken = user['token']?.toString() ?? AppSession.apiToken;
       await AppSession.persistSession();
 

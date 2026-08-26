@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -257,7 +258,16 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
                 : '');
 
     // Image parsing
-    final images = property['images'] as List<dynamic>? ?? [];
+    List<dynamic> images = [];
+    if (property['images'] is List) {
+      images = property['images'] as List<dynamic>;
+    } else if (property['images'] is String) {
+      try {
+        final decoded = jsonDecode(property['images']);
+        if (decoded is List) images = decoded;
+      } catch (_) {}
+    }
+    
     final imageUrl = (images.isNotEmpty
             ? images.first.toString()
             : property['image_url']?.toString()) ??

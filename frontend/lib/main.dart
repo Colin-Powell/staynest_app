@@ -9,11 +9,11 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'theme.dart';
 import 'data.dart';
 import 'models/property.dart';
-import 'screens/screens.dart'
-    hide LandlordVerificationEntry, VerificationCenter;
+import 'screens/screens.dart' hide LandlordVerificationEntry, VerificationCenter;
 import 'services/google_auth_service.dart';
 import 'screens/dashboard/landlord_property_management_page.dart';
-import 'screens/dashboard/analytics_service.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
+import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
 import 'screens/dashboard/landlord_tenants_page.dart';
 import 'screens/landlord/verification_flow.dart' show VerificationCenter;
 import 'app_theme.dart';
@@ -180,6 +180,7 @@ class _PropertyAppState extends State<PropertyApp> {
     return MaterialApp(
       title: 'Property App',
       navigatorKey: navigatorKey, // Assign the navigator key to MaterialApp
+      navigatorObservers: [AnalyticsObserver()],
       debugShowCheckedModeBanner: false,
       theme: AppTheme.themeForRole(_role),
       initialRoute: '/',
@@ -546,7 +547,7 @@ class _AppShellState extends State<AppShell> {
 
   void _goTo(_AppScreen s) {
     if (s == _AppScreen.search || s == _AppScreen.home) {
-      AnalyticsService.resetSessionImpressions();
+      // Removed resetSessionImpressions
     }
     setState(() => _screen = s);
   }
@@ -559,7 +560,7 @@ class _AppShellState extends State<AppShell> {
       builder: (context) => FilterView(
         onClose: () => Navigator.of(context).pop(),
         onApplyFilters: (filters) {
-          AnalyticsService.resetSessionImpressions();
+          // Removed resetSessionImpressions
           setState(() => _activeFilters = filters);
         },
       ),
@@ -585,9 +586,9 @@ class _AppShellState extends State<AppShell> {
       _loadingPropertyDetails = false; // No spinner
     });
 
-    AnalyticsService.trackPropertyClick(initialProperty.id, source: 'app_shell');
-    AnalyticsService.trackPropertyView(initialProperty.id, source: 'app_shell');
-    AnalyticsService.trackPropertyDetailView(initialProperty.id);
+    AnalyticsService.logListingInteraction(AnalyticsEvents.listingClick, listingId: initialProperty.id);
+    AnalyticsService.logListingInteraction(AnalyticsEvents.listingView, listingId: initialProperty.id);
+    AnalyticsService.logListingInteraction(AnalyticsEvents.listingView, listingId: initialProperty.id);
     
     try {
       final property = await _propertyService.fetchPropertyById(initialProperty.id);
@@ -614,7 +615,7 @@ class _AppShellState extends State<AppShell> {
   // FIX: avatar is now String? to match MessagesViewScreen.onSelectChat
   void _openChat(String userId, String name, String? avatar) {
     if (_selectedPropertyId != null) {
-      AnalyticsService.trackChatInitiated(_selectedPropertyId!);
+      AnalyticsService.logListingInteraction(AnalyticsEvents.landlordContacted, listingId: _selectedPropertyId!);
     }
     setState(() {
       _selectedChatId = userId;

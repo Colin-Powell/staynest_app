@@ -23,7 +23,7 @@ router.get('/users', requireAuth, authorize('admin'), async (req, res, next) => 
         }
         params.push(limit, offset);
         const usersRes = await query(`
-      SELECT u.id, u.name, u.email, u.phone, u.role, u.verified, 'active' as status, u.created_at, u.created_at as updated_at,
+      SELECT u.id, u.name, u.email, u.phone, u.role, u.verified, u.avatar, 'active' as status, u.created_at, u.created_at as updated_at,
         (SELECT COUNT(*)::int FROM properties p WHERE p.landlord_id = u.id AND p.status = 'approved') AS active_property_count,
         (SELECT COUNT(*)::int FROM properties p WHERE p.landlord_id = u.id) AS total_property_count,
         (SELECT COUNT(*)::int FROM bookings b WHERE b.landlord_id = u.id) AS booking_count_as_landlord,
@@ -41,6 +41,7 @@ router.get('/users', requireAuth, authorize('admin'), async (req, res, next) => 
                 name: row.name,
                 email: row.email,
                 phone: row.phone,
+                avatar: row.avatar,
                 role: row.role,
                 verified: row.verified,
                 created_at: row.created_at,
@@ -208,6 +209,7 @@ router.get('/kyc', requireAuth, authorize('admin'), async (req, res, next) => {
                 name: row.name,
                 email: row.email,
                 phone: row.phone,
+                avatar: row.avatar,
                 role: row.role,
                 documents: row.documents,
                 property_data: row.property_data,

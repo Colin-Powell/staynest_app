@@ -29,7 +29,7 @@ class UploadsService {
     while (true) {
       final request = http.MultipartRequest('POST', uri);
       if ((token ?? AppSession.apiToken) != null) {
-        request.headers['Authorization'] = 'Bearer ';
+        request.headers['Authorization'] = 'Bearer ${token ?? AppSession.apiToken}';
       }
       if (idempotencyKey != null) {
         request.headers['Idempotency-Key'] = idempotencyKey;
@@ -44,7 +44,8 @@ class UploadsService {
         tokenRefreshed = true;
         try {
           await HttpJsonClient().refreshAccessTokenIfPossible();
-          continue;
+            token = null;
+            continue;
         } catch (_) {}
       }
 
@@ -82,7 +83,7 @@ class UploadsService {
         while (true) {
           final request = http.MultipartRequest('POST', uri);
           if ((token ?? AppSession.apiToken) != null) {
-            request.headers['Authorization'] = 'Bearer ';
+            request.headers['Authorization'] = 'Bearer ${token ?? AppSession.apiToken}';
           }
           if (idempotencyKey != null) {
             request.headers['Idempotency-Key'] = idempotencyKey;
@@ -109,7 +110,8 @@ class UploadsService {
             tokenRefreshed = true;
             try {
               await HttpJsonClient().refreshAccessTokenIfPossible();
-              continue;
+            token = null;
+            continue;
             } catch (_) {
               throw Exception('Async Upload failed: 401 Unauthorized (Refresh failed)');
             }
@@ -141,13 +143,14 @@ class UploadsService {
           
           final jobRes = await client.get(
             Uri.parse("$base/uploads/job/$jobId"),
-            headers: {'Authorization': 'Bearer '}
+            headers: {'Authorization': 'Bearer ${token ?? AppSession.apiToken}'}
           );
 
           if (jobRes.statusCode == 401 && !pollTokenRefreshed) {
             pollTokenRefreshed = true;
             try {
               await HttpJsonClient().refreshAccessTokenIfPossible();
+              token = null;
               attempts--; // don't count this attempt
               continue;
             } catch (_) {}

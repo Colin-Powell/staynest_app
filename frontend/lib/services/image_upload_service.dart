@@ -96,7 +96,7 @@ class ImageUploadService {
           );
           emitProgress();
         },
-        token: AppSession.apiToken,
+        
       );
       inProgress[file] = task;
       progressState[file] = progressState[file]!.copyWith(status: 'uploading');

@@ -9,7 +9,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/widgets/property_image.dart';
-import 'package:property_app/screens/dashboard/analytics_service.dart';
+import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/models/review.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:intl/intl.dart';
@@ -66,9 +67,15 @@ class _PropertyDetailsState extends State<PropertyDetails> {
       PageController(viewportFraction: 1.0);
   Timer? _carouselTimer;
 
+
+  DateTime? _viewStartTime;
+
   @override
   void initState() {
     super.initState();
+    _viewStartTime = DateTime.now();
+    AnalyticsService.logListingInteraction(AnalyticsEvents.listingView, listingId: widget.property.id, propertyType: widget.property.category, location: widget.property.location);
+
     _fetchReviews();
   }
 
@@ -135,12 +142,20 @@ class _PropertyDetailsState extends State<PropertyDetails> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AnalyticsService.trackPropertyView(widget.property.id,
           source: 'property_details');
-      AnalyticsService.trackPropertyDetailView(widget.property.id);
+      AnalyticsService.logListingInteraction(AnalyticsEvents.listingView, listingId: widget.property.id);
     });
   }
 
+
   @override
   void dispose() {
+    if (_viewStartTime != null) {
+      final duration = DateTime.now().difference(_viewStartTime!).inSeconds;
+      if (duration > 2) {
+        AnalyticsService.logListingInteraction(AnalyticsEvents.listingEngagement, listingId: widget.property.id, propertyType: widget.property.category, durationSeconds: duration);
+      }
+    }
+
     _carouselTimer?.cancel();
     _reviewPageController.dispose();
     super.dispose();
@@ -636,7 +651,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                   _NavButton(
                     icon: PhosphorIcons.shareNetwork(),
                     onTap: () {
-                      AnalyticsService.trackPropertyShare(widget.property.id);
+                      AnalyticsService.logListingInteraction(AnalyticsEvents.listingShare, listingId: widget.property.id);
                       ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Listing link copied to clipboard.')));
                     },

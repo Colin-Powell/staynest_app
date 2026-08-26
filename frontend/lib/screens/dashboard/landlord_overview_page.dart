@@ -8,7 +8,8 @@ import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/property_mapper.dart';
-import 'analytics_service.dart';
+import 'landlord_dashboard_service.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
 
 import 'dashboard_widgets.dart';
 import 'landlord_analytics_page.dart';
@@ -51,7 +52,7 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
 
       final results = await Future.wait([
         PropertiesApi.getLandlordProperties(),
-        AnalyticsService.getLandlordOverview('This Week'),
+        LandlordDashboardService.getLandlordOverview('This Week'),
       ]);
       
       setState(() {

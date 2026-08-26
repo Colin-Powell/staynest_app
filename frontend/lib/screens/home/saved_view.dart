@@ -4,6 +4,8 @@ import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
 
 import 'package:property_app/models/property.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
+import 'package:property_app/services/properties_api.dart';
+import 'package:property_app/utils/property_mapper.dart';
 import 'package:property_app/services/property_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/widgets/property_image.dart';
@@ -22,6 +24,8 @@ class _SavedViewState extends State<SavedView>
     with SingleTickerProviderStateMixin {
   final _propertyService = PropertyService.instance;
   List<Property> _all = [];
+  List<Property> _recent = [];
+  int _tab = 0;
   bool _loading = true;
 
   late final AnimationController _animController;
@@ -98,12 +102,20 @@ class _SavedViewState extends State<SavedView>
     });
     try {
       final loaded = await _propertyService.fetchProperties();
+      List<Property> recentProps = [];
+      if (AppSession.currentUserId != null) {
+        try {
+          final recentData = await PropertiesApi.getRecentlyViewed();
+          recentProps = recentData.map((e) => mapApiProperty(e)).toList();
+        } catch (_) {}
+      }
+      
       if (!mounted) return;
       setState(() {
         _all = loaded;
+        _recent = recentProps;
         _loading = false;
       });
-      // Start the cascade animation once data is loaded
       _animController.forward();
     } catch (e) {
       if (!mounted) return;
@@ -168,6 +180,45 @@ class _SavedViewState extends State<SavedView>
             ),
           ),
 
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() { _tab = 0; _animController.forward(from: 0); }),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _tab == 0 ? Colors.black : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text('Saved', style: TextStyle(color: _tab == 0 ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() { _tab = 1; _animController.forward(from: 0); }),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _tab == 1 ? Colors.black : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text('Recently Viewed', style: TextStyle(color: _tab == 1 ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
           // List Content
           Expanded(
             child: _loading
@@ -196,10 +247,11 @@ class _SavedViewState extends State<SavedView>
                           ],
                         ),
                       )
+
                     : Builder(builder: (context) {
-                        final savedProperties = _all
-                            .where((p) => AppSession.isSaved(p.id))
-                            .toList();
+                        final savedProperties = _tab == 0 
+                            ? _all.where((p) => AppSession.isSaved(p.id)).toList()
+                            : _recent;
                         
                         if (savedProperties.isEmpty) {
                           return Center(

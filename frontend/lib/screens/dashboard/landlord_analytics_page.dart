@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/widgets/property_image.dart';
-import 'analytics_service.dart';
+import 'landlord_dashboard_service.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
 
 import 'dashboard_widgets.dart';
 
@@ -47,7 +48,7 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
   Future<void> _fetchAnalytics() async {
     setState(() => _isLoading = true);
     try {
-      final data = await AnalyticsService.getLandlordOverview(_selectedFilter);
+      final data = await LandlordDashboardService.getLandlordOverview(_selectedFilter);
 
       if (!mounted) return;
 

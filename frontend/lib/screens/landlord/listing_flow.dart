@@ -1,4 +1,4 @@
-import 'dart:async';
+ï»¿import 'dart:async';
 
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -452,7 +452,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
           _amenities.entries.where((e) => e.value).map((e) => e.key).toList();
       final estimatedArea = (_bedrooms * 35).clamp(30, 500);
 
-      // 3) Create property — use fresh repo with current token
+      // 3) Create property ï¿½ use fresh repo with current token
       final repo = _buildRepo();
       final Map<String, dynamic> propertyPayload = {
         'title': _title.text.trim(),
@@ -869,7 +869,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
               ),
             ),
             
-            const SizedBox(height: 64),
+            const SizedBox(height: 48),
 
             Card(
               elevation: 0,

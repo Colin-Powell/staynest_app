@@ -258,6 +258,41 @@ router.get('/me', requireAuth, authorize('landlord', 'host'), async (req, res, n
 });
 // FIX 2: /categories MUST be before /:id — otherwise Express matches
 // GET /properties/categories as /:id with id="categories" and returns 404.
+// Record a property view (Recently Viewed)
+router.post('/:id/view', requireAuth, async (req, res) => {
+    const propertyId = req.params.id;
+    const userId = req.auth?.id;
+    if (!userId)
+        return res.status(401).json({ error: 'Unauthorized' });
+    try {
+        await query(`INSERT INTO recently_viewed (user_id, property_id, viewed_at) VALUES ($1, $2, NOW()) ON CONFLICT (user_id, property_id) DO UPDATE SET viewed_at = NOW()`, [userId, propertyId]);
+        return res.json({ data: { success: true } });
+    }
+    catch (err) {
+        console.error('Error recording view:', err);
+        return res.status(500).json({ error: 'Failed to record view' });
+    }
+});
+// Get recently viewed properties
+router.get('/me/recently-viewed', requireAuth, async (req, res) => {
+    const userId = req.auth?.id;
+    if (!userId)
+        return res.status(401).json({ error: 'Unauthorized' });
+    try {
+        const result = await query(`SELECT p.*, rv.viewed_at FROM properties p JOIN recently_viewed rv ON p.id = rv.property_id WHERE rv.user_id = $1 ORDER BY rv.viewed_at DESC LIMIT 8`, [userId]);
+        const parsedRows = result.rows.map(row => ({
+            ...row,
+            images: typeof row.images === 'string' ? JSON.parse(row.images) : row.images,
+            features: typeof row.features === 'string' ? JSON.parse(row.features) : row.features,
+            amenities: typeof row.amenities === 'string' ? JSON.parse(row.amenities) : row.amenities,
+        }));
+        return res.json({ data: parsedRows });
+    }
+    catch (err) {
+        console.error('Error fetching recently viewed:', err);
+        return res.status(500).json({ error: 'Failed to fetch recently viewed' });
+    }
+});
 router.get('/categories', async (_req, res, next) => {
     try {
         const cacheKey = 'properties.categories';

@@ -1,67 +1,25 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router } from 'express';
 import { query } from '../db.js';
-import { requireAuth, authorize } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
+import { Request, Response } from 'express';
 
 const router = Router();
 
-// Package definitions
-const PACKAGES: Record<string, { boost_score: number; days: number }> = {
-  basic: { boost_score: 50, days: 7 },
-  premium: { boost_score: 150, days: 14 },
-  elite: { boost_score: 500, days: 30 },
-};
-
-// POST /api/promotions/boost - Purchase a boost for a property
-router.post('/boost', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/relevant', requireAuth, async (_req: Request, res: Response) => {
   try {
-    const { property_id, package_type } = req.body;
-    const landlord_id = req.auth?.id;
-
-    if (!property_id || !package_type) {
-      return res.status(400).json({ success: false, error: 'Property ID and package type are required.' });
+    const result = await query('SELECT * FROM promotions WHERE active = true ORDER BY created_at DESC LIMIT 1');
+    // If no promotions, just send a dummy one for testing the UI
+    if (result.rows.length === 0) {
+      return res.json({ data: [{
+        id: 'promo-1',
+        title: 'Discount on Beach Villas',
+        description: 'Get 20% off your first beach villa booking.',
+        image_url: 'https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?w=800'
+      }] });
     }
-
-    const pkg = PACKAGES[package_type.toLowerCase()];
-    if (!pkg) {
-      return res.status(400).json({ success: false, error: 'Invalid package type.' });
-    }
-
-    // Verify ownership
-    const propCheck = await query('SELECT id FROM properties WHERE id = $1 AND landlord_id = $2', [property_id, landlord_id]);
-    if (propCheck.rowCount === 0) {
-      return res.status(403).json({ success: false, error: 'Property not found or access denied.' });
-    }
-
-    // Terminate any existing active promotions for this property to avoid stacking issues
-    await query(`UPDATE promotion_campaigns SET active = false WHERE property_id = $1`, [property_id]);
-
-    // Create new promotion
-    const result = await query(
-      `INSERT INTO promotion_campaigns (property_id, landlord_id, package_type, boost_score, start_date, end_date, active)
-       VALUES ($1, $2, $3, $4, NOW(), NOW() + interval '1 day' * $5, true)
-       RETURNING *`,
-      [property_id, landlord_id, package_type.toLowerCase(), pkg.boost_score, pkg.days]
-    );
-
-    res.status(201).json({ success: true, data: result.rows[0] });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// GET /api/promotions/me - Get my active promotions
-router.get('/me', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const landlord_id = req.auth?.id;
-    const result = await query(
-      `SELECT * FROM promotion_campaigns 
-       WHERE landlord_id = $1 AND active = true AND end_date > NOW()
-       ORDER BY created_at DESC`,
-      [landlord_id]
-    );
-    res.json({ success: true, data: result.rows });
-  } catch (error) {
-    next(error);
+    return res.json({ data: result.rows });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed' });
   }
 });
 

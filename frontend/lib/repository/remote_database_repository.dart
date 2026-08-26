@@ -4,7 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:property_app/models/property.dart';
 import 'package:property_app/models/user.dart';
-import 'package:property_app/screens/dashboard/analytics_service.dart';
+import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/property_mapper.dart';
 
@@ -144,7 +145,7 @@ class RemoteDatabaseRepository {
     );
 
     await CacheEngine.instance.invalidate(CacheKeys.propertyList);
-    AnalyticsService.logEvent(eventType: 'property_created', propertyId: 'new');
+    AnalyticsService.logEvent('property_created', {'property_id': 'new'});
   }
 
   Future<void> updatePropertyFromListing({
@@ -176,7 +177,7 @@ class RemoteDatabaseRepository {
       Uri.parse('${AppSession.apiBaseUrl}/users/$userId/favorites'),
       body: {'propertyId': propertyId},
     );
-    AnalyticsService.trackPropertySave(propertyId, userId: userId);
+    AnalyticsService.logListingInteraction(AnalyticsEvents.listingSave, listingId: propertyId);
   }
 
   Future<void> removeFavoriteForUser({

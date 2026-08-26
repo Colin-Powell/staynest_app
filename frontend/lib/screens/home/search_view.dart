@@ -11,7 +11,8 @@ import 'package:property_app/services/property_service.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/utils/property_mapper.dart';
 import '../../widgets/phosphor_icons.dart';
-import 'package:property_app/screens/dashboard/analytics_service.dart';
+import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'map_view.dart';
 
@@ -153,7 +154,7 @@ class _SearchViewState extends State<SearchView> {
             propertyId: propertyId,
           );
           AppSession.savedPropertyIds.add(propertyId);
-          AnalyticsService.trackPropertySave(propertyId);
+          AnalyticsService.logListingInteraction(AnalyticsEvents.listingSave, listingId: propertyId);
         }
         return;
       } catch (_) {
@@ -451,7 +452,7 @@ class _SearchViewState extends State<SearchView> {
                           child: TextField(
                             controller: _searchController,
                             onChanged: (value) {
-                              AnalyticsService.resetSessionImpressions();
+                              // Removed resetSessionImpressions
                               setState(() => query = value);
                             },
                             style: GoogleFonts.poppins(
@@ -569,14 +570,7 @@ class _SearchViewState extends State<SearchView> {
                                           'search_impression_${property.id}'),
                                       onVisibilityChanged: (info) {
                                         if (info.visibleFraction > 0.5) {
-                                          AnalyticsService
-                                              .trackPropertyImpression(
-                                            property.id,
-                                            source: 'search',
-                                            position: index,
-                                            query: query,
-                                            filters: _activeFilters,
-                                          );
+                                          AnalyticsService.logListingInteraction(AnalyticsEvents.listingImpression, listingId: property.id);
                                         }
                                       },
                                       child: GestureDetector(

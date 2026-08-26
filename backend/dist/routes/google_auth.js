@@ -6,15 +6,15 @@ import jwt from 'jsonwebtoken';
 const router = Router();
 const client = new OAuth2Client(env.googleClientId);
 // Exchange Google ID token for server JWT and user record
-router.post('/google', async (req, res, next) => {
+router.post('/', async (req, res, next) => {
     try {
-        const { idToken } = req.body;
+        const { idToken, role: requestedRole } = req.body;
         if (!idToken)
             return res.status(400).json({ error: 'idToken is required.' });
         const ticket = await client.verifyIdToken({ idToken, audience: env.googleClientId });
         const payload = ticket.getPayload();
-        if (!payload || !payload.email)
-            return res.status(400).json({ error: 'Invalid Google token.' });
+        if (!payload || !payload.email || payload.email_verified !== true)
+            return res.status(400).json({ error: 'Invalid or unverified Google token.' });
         const email = payload.email.toLowerCase();
         const name = payload.name || '';
         const avatar = payload.picture || null;
@@ -22,7 +22,8 @@ router.post('/google', async (req, res, next) => {
         const exists = await query('SELECT id, name, email, phone, role, verified FROM users WHERE email = $1 LIMIT 1', [email]);
         let user = exists.rows[0];
         if (!user) {
-            const result = await query(`INSERT INTO users (name, email, avatar, verified, password_hash) VALUES ($1, $2, $3, true, '*') RETURNING id, name, email, phone, role, verified`, [name, email, avatar]);
+            const newRole = (requestedRole === 'landlord' || requestedRole === 'tenant') ? requestedRole : 'tenant';
+            const result = await query(`INSERT INTO users (name, email, avatar, verified, password_hash, role) VALUES ($1, $2, $3, true, '*', $4) RETURNING id, name, email, phone, role, verified`, [name, email, avatar, newRole]);
             user = result.rows[0];
         }
         else {

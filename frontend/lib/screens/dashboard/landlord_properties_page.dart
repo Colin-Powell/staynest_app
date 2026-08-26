@@ -13,7 +13,8 @@ import 'package:property_app/utils/property_mapper.dart';
 
 import 'package:property_app/widgets/property_image.dart';
 
-import 'analytics_service.dart';
+import 'landlord_dashboard_service.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
 
 class LandlordPropertiesPage extends StatefulWidget {
   final VoidCallback onAddProperty;
@@ -575,10 +576,7 @@ class _PropertyCardState extends State<_PropertyCard>
 
     Future.delayed(widget.delay, () {
       if (mounted) {
-        AnalyticsService.logEvent(
-          eventType: 'property_impression',
-          propertyId: widget.property.id,
-        );
+        AnalyticsService.logListingInteraction(AnalyticsEvents.listingImpression, listingId: widget.property.id);
       }
       if (mounted) _entryController.forward();
     });
@@ -611,7 +609,7 @@ class _PropertyCardState extends State<_PropertyCard>
   Future<void> _loadMetrics() async {
     try {
       final metrics =
-          await AnalyticsService.getPropertyEngagementStats(widget.property.id);
+          await LandlordDashboardService.getPropertyEngagementStats(widget.property.id);
 
       if (mounted) {
         setState(() {
@@ -666,10 +664,7 @@ class _PropertyCardState extends State<_PropertyCard>
           onTapUp: (_) => setState(() => _pressed = false),
           onTapCancel: () => setState(() => _pressed = false),
           onTap: () {
-            AnalyticsService.logEvent(
-              eventType: 'property_click',
-              propertyId: widget.property.id,
-            );
+            AnalyticsService.logListingInteraction('property_click', listingId: widget.property.id);
             Navigator.pushNamed(context, '/landlord_property_management',
                 arguments: <String, dynamic>{
                   'id': widget.property.id,

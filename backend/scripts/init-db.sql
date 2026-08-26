@@ -368,3 +368,54 @@ CREATE INDEX IF NOT EXISTS idx_properties_landlord_id ON properties(landlord_id)
 CREATE INDEX IF NOT EXISTS idx_properties_status ON properties(status);
 CREATE INDEX IF NOT EXISTS idx_property_analytics_engagement ON property_analytics(engagement_score DESC);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
+-- Property Drafts for landlord dashboard
+CREATE TABLE IF NOT EXISTS property_drafts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  landlord_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title text,
+  description text,
+  category text,
+  city text,
+  address text,
+  price numeric,
+  bedrooms integer,
+  bathrooms integer,
+  area integer,
+  amenities jsonb DEFAULT '[]'::jsonb,
+  lat numeric,
+  lng numeric,
+  photos jsonb DEFAULT '[]'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_property_drafts_landlord ON property_drafts(landlord_id, updated_at DESC);
+
+
+
+CREATE TABLE IF NOT EXISTS recently_viewed (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    property_id UUID REFERENCES properties(id) ON DELETE CASCADE,
+    viewed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, property_id)
+);
+
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    highest_scored_category VARCHAR(100),
+    highest_scored_location VARCHAR(100),
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS promotions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    target_category VARCHAR(100),
+    target_location VARCHAR(100),
+    image_url TEXT,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);

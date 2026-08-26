@@ -12,7 +12,8 @@ import 'package:property_app/widgets/property_card.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/utils/property_mapper.dart';
-import 'package:property_app/screens/dashboard/analytics_service.dart';
+import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/screens/communication/notifications_view.dart';
 
 const _bg = Color(0xFFFAFAFA);
