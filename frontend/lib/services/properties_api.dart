@@ -123,6 +123,18 @@ class PropertiesApi {
     await CacheEngine.instance.invalidate('landlord_props_me');
   }
 
+  static Future<Map<String, dynamic>> getCategories() async {
+    return CacheEngine.instance.getOrFetch<Map<String, dynamic>>(
+      key: 'props_categories',
+      ttl: CacheTTL.listings,
+      networkFetcher: () async {
+        final client = _client();
+        final response = await client.getJson('/properties/categories');
+        return response['data'] as Map<String, dynamic>? ?? {};
+      },
+    );
+  }
+
   /// Fetch recommendations for the current tenant.
   static Future<List<Map<String, dynamic>>> getRecommendations() async {
     return CacheEngine.instance.getOrFetch<List<Map<String, dynamic>>>(

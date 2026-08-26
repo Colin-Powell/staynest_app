@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:property_app/session/onboarding_prefs.dart';
+import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
+
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 
@@ -46,6 +49,19 @@ class _ProfileViewState extends State<ProfileView>
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!OnboardingPrefs.hasSeen('profileSeen')) {
+        OnboardingBottomSheet.show(
+          context: context,
+          imagePath:'assets/images/profile_onboarding.png',
+          title: 'Make StayNest yours',
+          subtitle: 'Manage your account, trips, and preferences.',
+          ctaText: 'Set up profile',
+        ).then((_) => OnboardingPrefs.markAsSeen('profileSeen'));
+      }
+    });
+
     _displayName = AppSession.displayName;
     _displayRole = AppSession.displayRole;
     _displaySubtitle = AppSession.currentUserVerified

@@ -89,7 +89,7 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
                 end: Alignment.bottomRight,
                 colors: [
                   Color(0xFFF7FDF9), // Very light mint
-                  Color(0xFFE8F6EF), // Soft mint green
+                  Color(0xFFFFFFFF), // Soft mint green
                   Color(0xFFD4EFE1), // Deeper mint base
                 ],
                 stops: [0.0, 0.5, 1.0],
@@ -150,7 +150,7 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
                                       color: const Color(0xFFEF4444),
                                       shape: BoxShape.circle,
                                       border: Border.all(
-                                          color: const Color(0xFFE8F6EF),
+                                          color: const Color(0xFFFFFFFF),
                                           width: 2),
                                     ),
                                   ),
@@ -413,7 +413,7 @@ class _PropertyCardState extends State<_PropertyCard>
                       errorPlaceholder: Container(
                           width: 130,
                           height: 130,
-                          color: const Color(0xFFE8F6EF),
+                          color: const Color(0xFFFFFFFF),
                           child: Icon(PhosphorIcons.house(),
                               color: const Color(0xFF75C797), size: 40)),
                     ),

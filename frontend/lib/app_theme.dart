@@ -350,7 +350,7 @@ abstract class AppTheme {
     onSecondaryContainer: Color(0xFF0F3F1D),
     tertiary: Color(0xFF4A7B6D),
     onTertiary: Colors.white,
-    surface: Color(0xFFE8F6EF),
+    surface: Color(0xFFFFFFFF),
     onSurface: Color(0xFF0F172A),
     error: Color(0xFFEF4444),
     onError: Colors.white,

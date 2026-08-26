@@ -381,7 +381,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                   end: Alignment.bottomRight,
                   colors: [
                     Color(0xFFF7FDF9),
-                    Color(0xFFE8F6EF),
+                    Color(0xFFFFFFFF),
                     Color(0xFFD4EFE1),
                   ],
                   stops: [0.0, 0.5, 1.0],

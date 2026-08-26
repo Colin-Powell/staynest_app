@@ -51,7 +51,7 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage> {
           'subtitle': subtitle,
           'time': 'Just now',
           'icon': PhosphorIcons.bell(PhosphorIconsStyle.fill),
-          'iconBg': const Color(0xFFE8F6EF),
+          'iconBg': const Color(0xFFFFFFFF),
           'iconColor': primaryGreen,
           'isAvatar': false,
         });
@@ -88,7 +88,7 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage> {
           
           IconData icon = PhosphorIcons.bell(PhosphorIconsStyle.fill);
           Color iconColor = primaryGreen;
-          Color iconBg = const Color(0xFFE8F6EF);
+          Color iconBg = const Color(0xFFFFFFFF);
           
           if (type.contains('booking') || type.contains('checkin') || type.contains('checkout')) {
             icon = PhosphorIcons.calendarCheck(PhosphorIconsStyle.fill);
@@ -136,7 +136,7 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [const Color(0xFFE8F6EF).withOpacity(0.4), Colors.white],
+                  colors: [const Color(0xFFFFFFFF).withOpacity(0.4), Colors.white],
                 ),
               ),
             ),

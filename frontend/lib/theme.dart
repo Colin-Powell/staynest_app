@@ -314,8 +314,8 @@ abstract class AppShadows {
 
 abstract class AppColors {
   static Color get primary => AppSession.isLandlord ? const Color(0xFF059669) : StayNestColors.primary;
-  static Color get primaryLight => AppSession.isLandlord ? const Color(0xFFDDF6E8) : StayNestColors.primaryLight;
-  static Color get background => AppSession.isLandlord ? const Color(0xFFE8F6EF) : StayNestColors.backgroundLight;
+  static Color get primaryLight => StayNestColors.primaryLight;
+  static Color get background => StayNestColors.backgroundLight;
   static const Color white = Color(0xFFFFFFFF);
 
   static const gray900 = Color(0xFF111827);

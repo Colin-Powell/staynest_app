@@ -150,7 +150,7 @@ class _LandlordTenantsPageState extends State<LandlordTenantsPage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [const Color(0xFFE8F6EF).withOpacity(0.5), Colors.white],
+            colors: [const Color(0xFFFFFFFF).withOpacity(0.5), Colors.white],
           ),
         ),
       ),
@@ -284,7 +284,7 @@ class TenantDetailsPage extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    const Color(0xFFE8F6EF).withOpacity(0.5),
+                    const Color(0xFFFFFFFF).withOpacity(0.5),
                     Colors.white
                   ],
                 ),

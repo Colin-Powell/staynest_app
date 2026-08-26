@@ -4,6 +4,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:geolocator/geolocator.dart';
+
+
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:path/path.dart' as path;
@@ -435,18 +438,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
       if (uploadedUrls.isEmpty) throw Exception('No photos uploaded');
 
       // 2) Build address from the explicitly selected location.
-      final addressParts = [
-        _building.text.trim(),
-        _street.text.trim(),
-        _neighborhood.text.trim(),
-        _zip.text.trim(),
-      ].where((p) => p.isNotEmpty).toList();
-      final fullAddress = addressParts.join(', ');
-      final geocodeQuery = [
-        if (fullAddress.isNotEmpty) fullAddress,
-        _selectedCity,
-        _selectedCountry,
-      ].whereType<String>().where((p) => p.isNotEmpty).join(', ');
+      final resolvedAddress = _locationSearch.text.trim();
+      final addressParts = resolvedAddress.split(',');
+      final derivedCity = addressParts.length > 1 ? addressParts[addressParts.length - 2].trim() : resolvedAddress;
 
       final selectedLatitude = _selectedLatitude;
       final selectedLongitude = _selectedLongitude;
@@ -458,15 +452,14 @@ class _AddListingFlowState extends State<AddListingFlow> {
           _amenities.entries.where((e) => e.value).map((e) => e.key).toList();
       final estimatedArea = (_bedrooms * 35).clamp(30, 500);
 
-      // 3) Create property â€” use fresh repo with current token
+      // 3) Create property — use fresh repo with current token
       final repo = _buildRepo();
       final Map<String, dynamic> propertyPayload = {
         'title': _title.text.trim(),
         'description': _description.text.trim(),
         'category': _propertyType,
-        'city': _selectedCity,
-        'address':
-            fullAddress.isNotEmpty ? fullAddress : _neighborhood.text.trim(),
+        'city': derivedCity,
+        'address': resolvedAddress,
         'price': _rentPrice.text.trim(),
         'bedrooms': _bedrooms,
         'bathrooms': _bathrooms,
@@ -477,7 +470,6 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'lat': selectedLatitude,
         'lng': selectedLongitude,
       };
-
       final existingPropertyId = widget.property?['id']?.toString();
       if (existingPropertyId != null && existingPropertyId.isNotEmpty) {
         await repo.updatePropertyFromListing(
@@ -488,24 +480,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
         await repo.createPropertyFromListing(listingPayload: propertyPayload);
       }
 
-      // 4) Submit verification record
-      final propertyVerificationPayload = {
-        ...propertyPayload,
-        'service_charges': _serviceCharges.text.trim(),
-        'security_deposit': _securityDeposit.text.trim(),
-        'minimum_stay': _minimumStay,
-        'available_from': _availableFrom?.toIso8601String(),
-        'location': geocodeQuery,
-        'type': _propertyType,
-        'photos': uploadedUrls,
-      };
-
-      if (!widget.isEditing) {
-        await repo.submitVerification(verificationPayload: {
-          'documents': uploadedUrls,
-          'property': propertyVerificationPayload,
-        });
-      }
+      // 4) Clean up Drafts
 
       if (_draftId != null) {
           try {
@@ -737,10 +712,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
               spacing: 12,
               runSpacing: 12,
               children: [
-                _buildPropertyTypeChip('Apartment', PhosphorIcons.buildings()),
-                _buildPropertyTypeChip('Bedsitter', PhosphorIcons.armchair()),
-                _buildPropertyTypeChip('Single Room', PhosphorIcons.door()),
-                _buildPropertyTypeChip('Studio', PhosphorIcons.house()),
+                _buildPropertyTypeChip('Apartment', 'assets/images/apartments.webp'),
+                _buildPropertyTypeChip('Bedsitter', 'assets/images/bedsitter.webp'),
+                _buildPropertyTypeChip('Single Room', 'assets/images/singleroom.webp'),
+                _buildPropertyTypeChip('One Bedroom', 'assets/images/onebedroom.webp'),
               ],
             ),
             const SizedBox(height: 32),
@@ -793,6 +768,25 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // ==========================================
   // STEP 2: Location & Address
   // ==========================================
+  void _openLocationPickerSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _LocationPickerSheet(
+        onLocationSelected: (locationStr, lat, lng) {
+          setState(() {
+            _locationSearch.text = locationStr;
+            _selectedLatitude = lat;
+            _selectedLongitude = lng;
+            _selectedLocationLabel = locationStr;
+            _neighborhood.text = locationStr.split(',').first.trim();
+            _locationSuggestions = [];
+          });
+        },
+      ),
+    );
+  }
   Widget _buildStep2Location() {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
@@ -806,32 +800,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
                     .textTheme
                     .titleLarge
                     ?.copyWith(color: AppColors.gray900)),
-            const SizedBox(height: 24),
-            _buildLabel('Country'),
-            _buildDropdown(
-              value: _selectedCountry,
-              items: _countries,
-              hint: 'Select Country',
-              onChanged: (val) => setState(() {
-                _selectedCountry = val;
-                _selectedCity = _citiesByCountry[val]?.first;
-              }),
-            ),
-            const SizedBox(height: 20),
-            _buildLabel('City'),
-            _buildDropdown(
-              value: _selectedCity,
-              items: _citiesByCountry[_selectedCountry] ?? [],
-              hint: 'Select City',
-              onChanged: (val) => setState(() {
-                _selectedCity = val;
-                _selectedLatitude = null;
-                _selectedLongitude = null;
-                _selectedLocationLabel = null;
-                _locationSuggestions = [];
-              }),
-            ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 32),
             _buildLabel('Search exact location'),
             TextFormField(
               controller: _locationSearch,
@@ -888,30 +857,80 @@ class _AddListingFlowState extends State<AddListingFlow> {
                       ),
                 ),
               ),
-            const SizedBox(height: 20),
-            _buildLabel('Area / Neighborhood'),
-            _buildTextField(_neighborhood, 'Kilimani'),
-            const SizedBox(height: 20),
-            _buildLabel('Street Address'),
-            _buildTextField(_street, 'Kindaruma Road'),
-            const SizedBox(height: 20),
-            _buildLabel('Building (Optional)'),
-            _buildTextField(_building, 'Sunset Apartments', required: false),
-            const SizedBox(height: 20),
-            _buildLabel('Zip / Postal Code (Optional)'),
-            _buildTextField(_zip, '00100',
-                required: false, keyboardType: TextInputType.number),
-            const SizedBox(height: 48),
-            _buildNextButton('Next: Amenities', _nextStep),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: _openLocationPickerSheet,
+              child: Row(
+                children: [
+                  Icon(Icons.my_location_rounded, color: AppColors.primary, size: 18),
+                  const SizedBox(width: 8),
+                  Text('Use my current location', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 64),
+
+            Card(
+              elevation: 0,
+              margin: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: Color(0xFFE5E7EB)),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: 100,
+                      child: Image.asset(
+                        'assets/images/mapsheet.webp',
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.info_outline, color: AppColors.primary, size: 20),
+                                const SizedBox(width: 8),
+                                Text('Location Setup', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.gray900)),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Search for the exact location or use your current location. The address will auto-fill.',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: AppColors.gray500,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
+            _buildNextButton('Next: Amenities', _nextStep),
+            const SizedBox(height: 48),
           ],
         ),
       ),
     );
   }
 
-  // ==========================================
-  // STEP 3: Amenities
+  // ==========================================  // STEP 3: Amenities
   // ==========================================
   Widget _buildStep3Amenities() {
     return SingleChildScrollView(
@@ -1591,8 +1610,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
         children: [
           Container(
               padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(
-                  color: StayNestColors.primaryLight, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFE5E7EB)), shape: BoxShape.circle),
               child: Icon(icon, color: AppColors.primary, size: 16)),
           const SizedBox(width: 8),
           Text(label,
@@ -1608,15 +1626,15 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // ==========================================
   // UTILITY BUILDERS
   // ==========================================
-  Widget _buildPropertyTypeChip(String label, IconData icon) {
+  Widget _buildPropertyTypeChip(String label, String imagePath) {
     bool isSelected = _propertyType == label;
     return GestureDetector(
       onTap: () => setState(() => _propertyType = label),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
         decoration: BoxDecoration(
             color: isSelected ? AppColors.primary : AppColors.gray50,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(30),
             border: Border.all(
                 color: isSelected
                     ? AppColors.primary
@@ -1624,9 +1642,21 @@ class _AddListingFlowState extends State<AddListingFlow> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 20,
-                color: isSelected ? AppColors.white : AppColors.gray500),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected ? Colors.white.withOpacity(0.5) : Colors.transparent,
+                  width: 2,
+                ),
+                image: DecorationImage(
+                  image: AssetImage(imagePath),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
             const SizedBox(width: 8),
             Text(label,
                 style: GoogleFonts.poppins(
@@ -1857,6 +1887,174 @@ class ModalUtils {
                         color: AppColors.white, fontWeight: FontWeight.w600)),
               ),
             )
+          ],
+        ),
+      ),
+    );
+  }
+}
+class _LocationPickerSheet extends StatefulWidget {
+  final void Function(String address, double lat, double lng) onLocationSelected;
+  const _LocationPickerSheet({required this.onLocationSelected});
+
+  @override
+  State<_LocationPickerSheet> createState() => _LocationPickerSheetState();
+}
+
+class _LocationPickerSheetState extends State<_LocationPickerSheet> {
+  bool _isLoading = true;
+  String? _locationName;
+  double? _lat;
+  double? _lng;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLocation();
+  }
+
+  Future<void> _fetchLocation() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Location permissions denied');
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception('Location permissions permanently denied');
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high);
+      final address = await reverseGeocode(position.latitude, position.longitude);
+
+      if (mounted) {
+        setState(() {
+          _lat = position.latitude;
+          _lng = position.longitude;
+          _locationName = address ?? '${position.latitude}, ${position.longitude}';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString().replaceAll('Exception: ', '');
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 16),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Text(
+                'Confirm Property Location',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.asset(
+                  'assets/images/mapsheet.webp',
+                  height: 160,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: _isLoading
+                  ? const Column(
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Detecting your location...', style: TextStyle(color: Color(0xFF6B7280))),
+                      ],
+                    )
+                  : _error != null
+                      ? Text('Error: $_error', style: const TextStyle(color: Colors.red))
+                      : Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.location_on, color: AppColors.primary),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  _locationName ?? '',
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF374151),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+            ),
+            Container(
+              padding: const EdgeInsets.only(left: 24, right: 24, bottom: 24),
+              width: double.infinity,
+              height: 76,
+              child: ElevatedButton(
+                onPressed: (_isLoading || _error != null)
+                    ? null
+                    : () {
+                        widget.onLocationSelected(_locationName!, _lat!, _lng!);
+                        Navigator.pop(context);
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  disabledBackgroundColor: const Color(0xFFE5E7EB),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(26),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'Use this location',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
           ],
         ),
       ),

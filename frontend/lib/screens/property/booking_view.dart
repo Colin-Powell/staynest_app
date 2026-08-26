@@ -131,7 +131,7 @@ class _MyBookingsViewState extends State<MyBookingsView>
                 end: Alignment.bottomRight,
                 colors: [
                   Color(0xFFF7FDF9), // Very light mint
-                  Color(0xFFE8F6EF), // Soft mint green
+                  Color(0xFFFFFFFF), // Soft mint green
                   Color(0xFFD4EFE1), // Deeper mint base
                 ],
                 stops: [0.0, 0.5, 1.0],
@@ -317,7 +317,7 @@ class _MyBookingsViewState extends State<MyBookingsView>
                 height: 140,
                 fit: BoxFit.cover,
                 errorPlaceholder: Container(
-                    width: 130, height: 140, color: const Color(0xFFE8F6EF)),
+                    width: 130, height: 140, color: const Color(0xFFFFFFFF)),
               ),
             ),
             Expanded(

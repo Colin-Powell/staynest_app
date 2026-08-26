@@ -78,7 +78,7 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                 end: Alignment.bottomRight,
                 colors: [
                   Color(0xFFF7FDF9),
-                  Color(0xFFE8F6EF),
+                  Color(0xFFFFFFFF),
                   Color(0xFFD4EFE1),
                 ],
                 stops: [0.0, 0.5, 1.0],
@@ -230,7 +230,7 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                                   booking['image'] ?? '',
                                   fit: BoxFit.cover,
                                   errorPlaceholder:
-                                      Container(color: const Color(0xFFE8F6EF)),
+                                      Container(color: const Color(0xFFFFFFFF)),
                                 ),
                                 // Dark Gradient Overlay at the bottom
                                 Container(

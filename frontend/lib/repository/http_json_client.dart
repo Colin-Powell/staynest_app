@@ -36,7 +36,7 @@ class HttpJsonClient {
           'Authorization': 'Bearer ${AppSession.apiToken}',
       };
 
-  Future<void> _refreshAccessTokenIfPossible() async {
+  Future<void> refreshAccessTokenIfPossible() async {
     if (_refreshing != null) {
       await _refreshing;
       return;
@@ -134,7 +134,7 @@ class HttpJsonClient {
 
     // Retry-once logic for 401.
     if (first.statusCode == 401) {
-      await _refreshAccessTokenIfPossible();
+      await refreshAccessTokenIfPossible();
       final second = await send().timeout(timeout);
       if (second.statusCode >= 200 && second.statusCode < 300) return second;
       throw _toApiException(second);

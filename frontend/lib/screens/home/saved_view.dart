@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:property_app/session/onboarding_prefs.dart';
+import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
 
 import 'package:property_app/models/property.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
@@ -8,7 +10,7 @@ import 'package:property_app/widgets/property_image.dart';
 
 class SavedView extends StatefulWidget {
   final VoidCallback? onOpenProperty;
-  final ValueChanged<String>? onSelectProperty;
+  final void Function(Property)? onSelectProperty;
 
   const SavedView({super.key, this.onOpenProperty, this.onSelectProperty});
 
@@ -27,6 +29,19 @@ class _SavedViewState extends State<SavedView>
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!OnboardingPrefs.hasSeen('savedSeen')) {
+        OnboardingBottomSheet.show(
+          context: context,
+          title: 'Keep your favourites close',
+          imagePath: 'assets/images/saved_onboarding.png',
+          subtitle: 'Your favourite stays, all in one place.',
+          ctaText: 'Start saving',
+        ).then((_) => OnboardingPrefs.markAsSeen('savedSeen'));
+      }
+    });
+
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -156,250 +171,465 @@ class _SavedViewState extends State<SavedView>
           // List Content
           Expanded(
             child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      color: Color(0xFF3F37C9),
-                    ),
-                  )
+                ? const _SkeletonListLoader()
                 : _hasError
                     ? Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                            const Icon(Icons.error_outline,
+                                size: 48, color: Colors.red),
                             const SizedBox(height: 16),
                             const Text(
                               'Failed to load properties',
-                              style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600, fontSize: 16),
+                              style: TextStyle(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16),
                             ),
                             const SizedBox(height: 8),
                             TextButton(
                               onPressed: _load,
-                              child: const Text('Retry', style: TextStyle(color: Color(0xFF3F37C9))),
+                              child: const Text('Retry',
+                                  style: TextStyle(color: Color(0xFF3F37C9))),
                             )
                           ],
                         ),
                       )
-                : Builder(builder: (context) {
-                    final savedProperties =
-                        _all.where((p) => AppSession.isSaved(p.id)).toList();
-                    if (savedProperties.isEmpty) {
-                      return const Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 24),
-                          child: Text(
-                            'No saved properties yet. Tap the heart icon on a listing to save it.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Color(0xFF6B7280),
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-                    return ListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.only(
-                        left: 24,
-                        right: 24,
-                        bottom: 112,
-                      ),
-                      itemCount: savedProperties.length,
-                      itemBuilder: (context, index) {
-                        final property = savedProperties[index];
-                        return _buildStaggered(
-                          index: index,
-                          child: GestureDetector(
-                            onTap: () => (widget.onOpenProperty != null
-                                ? widget.onOpenProperty!()
-                                : widget.onSelectProperty?.call(property.id)),
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 20),
-                              height: 140,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(24),
-                              ),
-                              child: Row(
+                    : Builder(builder: (context) {
+                        final savedProperties = _all
+                            .where((p) => AppSession.isSaved(p.id))
+                            .toList();
+                        
+                        if (savedProperties.isEmpty) {
+                          return Center(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 40),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  // Left Image
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(24),
-                                    child: buildPropertyImage(
-                                      property.image,
-                                      width: 140,
-                                      height: double.infinity,
-                                      fit: BoxFit.cover,
+                                  // Empty State Image
+                                  Image.asset(
+                                    'assets/images/save.webp',
+                                    height: 180, // Slightly reduced to give more whitespace
+                                    fit: BoxFit.contain,
+                                  ),
+                                  const SizedBox(height: 32),
+                                  const Text(
+                                    'No saved properties yet',
+                                    style: TextStyle(
+                                      fontSize: 18, // Reduced for whitespace
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.black,
+                                      letterSpacing: -0.3,
                                     ),
                                   ),
-                                  const SizedBox(width: 16),
-
-                                  // Right Content
-                                  Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                          0, 16, 16, 16),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          // Title & Heart
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  property.name,
-                                                  style: const TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.w900,
-                                                    color: Colors.black,
-                                                    height: 1.1,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              GestureDetector(
-                                                onTap: () {
-                                                  _toggleSave(property.id);
-                                                },
-                                                child: const Icon(
-                                                  Icons.favorite,
-                                                  color: Color(
-                                                      0xFFEC4899), // Pink filled heart
-                                                  size: 20,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 6),
-
-                                          // Location
-                                          Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.location_on,
-                                                size: 14,
-                                                color: Color(0xFF9CA3AF),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Expanded(
-                                                child: Text(
-                                                  property.location,
-                                                  style: const TextStyle(
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: Color(0xFF9CA3AF),
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-
-                                          const Spacer(),
-
-                                          // Price
-                                          Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.baseline,
-                                            textBaseline:
-                                                TextBaseline.alphabetic,
-                                            children: [
-                                              Text(
-                                                'Kes. ${property.price ~/ 1000}k',
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w900,
-                                                  color: Colors.black,
-                                                ),
-                                              ),
-                                              const Text(
-                                                '/month',
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: Color(0xFF9CA3AF),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-
-                                          const Spacer(),
-
-                                          // Rating & Beds
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              // Rating Pill
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color:
-                                                      const Color(0xFFF3F4F6),
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                ),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    const Icon(
-                                                      Icons.star_rounded,
-                                                      size: 14,
-                                                      color: Color(0xFFF59E0B),
-                                                    ),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      '${property.rating.toStringAsFixed(1)} (${property.reviews})',
-                                                      style: const TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                        color: Colors.black,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-
-                                              // Beds
-                                              Text(
-                                                '${property.features.beds} Beds',
-                                                style: const TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Color(0xFF9CA3AF),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'Tap the heart icon on a listing to save it and view it here later.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 14, // Reduced for whitespace
+                                      color: Color(0xFF6B7280),
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24), // Tighter spacing to hug the button
+                                  // Call to Action Button hugging content
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      // TODO: Add logic to navigate to listings/home tab
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF3F37C9),
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 32, vertical: 16),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      'View listings',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
+                          );
+                        }
+                        return ListView.builder(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.only(
+                            left: 24,
+                            right: 24,
+                            bottom: 112,
                           ),
+                          itemCount: savedProperties.length,
+                          itemBuilder: (context, index) {
+                            final property = savedProperties[index];
+                            return _buildStaggered(
+                              index: index,
+                              child: GestureDetector(
+                                onTap: () => (widget.onOpenProperty != null
+                                    ? widget.onOpenProperty!()
+                                    : widget.onSelectProperty?.call(property)),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 20),
+                                  height: 140,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(24),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      // Left Image
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(24),
+                                        child: buildPropertyImage(
+                                          property.image,
+                                          width: 140,
+                                          height: double.infinity,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+
+                                      // Right Content
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                              0, 16, 16, 16),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              // Title & Heart
+                                              Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      property.name,
+                                                      style: const TextStyle(
+                                                        fontSize: 18,
+                                                        fontWeight:
+                                                            FontWeight.w900,
+                                                        color: Colors.black,
+                                                        height: 1.1,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                  GestureDetector(
+                                                    onTap: () {
+                                                      _toggleSave(property.id);
+                                                    },
+                                                    child: const Icon(
+                                                      Icons.favorite,
+                                                      color: Color(
+                                                          0xFFEC4899), // Pink filled heart
+                                                      size: 20,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 6),
+
+                                              // Location
+                                              Row(
+                                                children: [
+                                                  const Icon(
+                                                    Icons.location_on,
+                                                    size: 14,
+                                                    color: Color(0xFF9CA3AF),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Expanded(
+                                                    child: Text(
+                                                      property.location,
+                                                      style: const TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                        color:
+                                                            Color(0xFF9CA3AF),
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow
+                                                          .ellipsis,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+
+                                              const Spacer(),
+
+                                              // Price
+                                              Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.baseline,
+                                                textBaseline:
+                                                    TextBaseline.alphabetic,
+                                                children: [
+                                                  Text(
+                                                    'Kes. ${property.price ~/ 1000}k',
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w900,
+                                                      color: Colors.black,
+                                                    ),
+                                                  ),
+                                                  const Text(
+                                                    '/month',
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: Color(0xFF9CA3AF),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+
+                                              const Spacer(),
+
+                                              // Rating & Beds
+                                              Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  // Rating Pill
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(
+                                                          0xFFF3F4F6),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              12),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        const Icon(
+                                                          Icons.star_rounded,
+                                                          size: 14,
+                                                          color:
+                                                              Color(0xFFF59E0B),
+                                                        ),
+                                                        const SizedBox(
+                                                            width: 4),
+                                                        Text(
+                                                          '${property.rating.toStringAsFixed(1)} (${property.reviews})',
+                                                          style: const TextStyle(
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.w800,
+                                                            color: Colors.black,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+
+                                                  // Beds
+                                                  Text(
+                                                    '${property.features.beds} Beds',
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: Color(0xFF9CA3AF),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         );
-                      },
-                    );
-                  }),
+                      }),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// --- Skeleton Loading Components ---
+
+/// Provides a repeating opacity pulse to mimic shimmer without external packages
+class _SkeletonPulse extends StatefulWidget {
+  final Widget child;
+  const _SkeletonPulse({required this.child});
+
+  @override
+  State<_SkeletonPulse> createState() => _SkeletonPulseState();
+}
+
+class _SkeletonPulseState extends State<_SkeletonPulse>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.4, end: 1.0).animate(_controller),
+      child: widget.child,
+    );
+  }
+}
+
+/// Mimics the layout of the property list items while loading
+class _SkeletonListLoader extends StatelessWidget {
+  const _SkeletonListLoader();
+
+  @override
+  Widget build(BuildContext context) {
+    final skeletonColor = const Color(0xFFE5E7EB);
+    
+    return _SkeletonPulse(
+      child: ListView.builder(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(left: 24, right: 24, bottom: 112),
+        itemCount: 6,
+        itemBuilder: (context, index) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 20),
+            height: 140,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Row(
+              children: [
+                // Skeleton Image
+                Container(
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    color: skeletonColor,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Skeleton Content Details
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              height: 18,
+                              width: 120,
+                              decoration: BoxDecoration(
+                                color: skeletonColor,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            Container(
+                              height: 20,
+                              width: 20,
+                              decoration: BoxDecoration(
+                                color: skeletonColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          height: 12,
+                          width: 80,
+                          decoration: BoxDecoration(
+                            color: skeletonColor,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          height: 16,
+                          width: 100,
+                          decoration: BoxDecoration(
+                            color: skeletonColor,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const Spacer(),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              height: 24,
+                              width: 65,
+                              decoration: BoxDecoration(
+                                color: skeletonColor,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            Container(
+                              height: 12,
+                              width: 45,
+                              decoration: BoxDecoration(
+                                color: skeletonColor,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

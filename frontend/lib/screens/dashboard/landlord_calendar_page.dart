@@ -282,7 +282,7 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE8F6EF),
+      backgroundColor: const Color(0xFFFFFFFF),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -312,7 +312,7 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
                 end: Alignment.bottomRight,
                 colors: [
                   Color(0xFFF7FDF9),
-                  Color(0xFFE8F6EF),
+                  Color(0xFFFFFFFF),
                   Color(0xFFD4EFE1),
                 ],
                 stops: [0.0, 0.5, 1.0],

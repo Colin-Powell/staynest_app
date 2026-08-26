@@ -1,47 +1,35 @@
-// START OF FILE
 import 'dart:async';
-import 'dart:convert';
-import 'dart:ui';
-import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/session/app_session.dart';
-import 'package:property_app/screens/communication/notifications_view.dart';
-import 'package:property_app/widgets/shared.dart';
+import 'package:property_app/session/onboarding_prefs.dart';
+import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
+import 'package:property_app/widgets/property_card.dart';
+
 import 'package:property_app/models/property.dart';
 import 'package:property_app/services/properties_api.dart';
-import 'package:property_app/services/property_service.dart';
-import 'package:property_app/utils/category_utils.dart';
 import 'package:property_app/utils/property_mapper.dart';
-import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
-import 'package:visibility_detector/visibility_detector.dart';
+import 'package:property_app/screens/communication/notifications_view.dart';
 
-// ─── Theme colors ─────────────────────────────────────────────────────────────
-const _primaryText = Color(0xFF4F70F8);
 const _bg = Color(0xFFFAFAFA);
 const _dark = Color(0xFF111827);
 const _grey = Color(0xFF9CA3AF);
-const _green = Color(0xFF22C55E);
-
-// ─── HomeView ─────────────────────────────────────────────────────────────────
+const _primaryText = Color(0xFF4F70F8);
 
 class HomeView extends StatefulWidget {
-  final void Function(String id)? onSelectProperty;
+  final void Function(Property)? onSelectProperty;
   final VoidCallback? onNotifications;
-  final VoidCallback?
-      onSeeAllNearby; // Optional callback to switch to search tab in AppShell
+  final void Function(String category)? onSeeCategory;
 
   const HomeView({
     super.key,
     this.onSelectProperty,
     this.onNotifications,
-    this.onSeeAllNearby,
+    this.onSeeCategory,
   });
 
   @override
@@ -49,219 +37,148 @@ class HomeView extends StatefulWidget {
 }
 
 class _HomeViewState extends State<HomeView> {
-  int _activeFilter = 0;
   final _searchController = TextEditingController();
 
-  // Carousel State
-  final PageController _carouselController =
-      PageController(viewportFraction: 0.88);
-  Timer? _carouselTimer;
-  int _currentCarouselPage = 0;
-
-  List<Property> _nearby = [];
-  List<Property> _recommended = [];
-  bool _loadingNearby = true;
-  bool _loadingRecommended = true;
+  Map<String, List<Property>> _collections = {};
+  bool _loading = true;
   bool _hasError = false;
+  String _selectedCategory = 'All';
 
-  List<Property> get _filteredNearby {
-    final filter = homeCategoryFilters[_activeFilter];
-    return _nearby
-        .where((p) =>
-            categoryMatchesUiFilter(p.category, filter, beds: p.features.beds))
-        .toList();
-  }
-
-  List<Property> get _filteredRecommended {
-    final filter = homeCategoryFilters[_activeFilter];
-    return _recommended
-        .where((p) =>
-            categoryMatchesUiFilter(p.category, filter, beds: p.features.beds))
-        .toList();
+  bool _matchesCategory(Property p, String category) {
+    if (category.isEmpty || category.toLowerCase() == 'all') return true;
+    final cat = p.category.toLowerCase().trim();
+    final normalizedType = category.toLowerCase().trim();
+    
+    if (cat == normalizedType || cat.contains(normalizedType)) return true;
+    
+    final beds = p.features.beds;
+    if (normalizedType == 'bedsitter' || normalizedType == 'single room') {
+      return beds <= 1 || cat.contains('studio') || cat.contains('room');
+    }
+    if (normalizedType == 'one bedroom') {
+      return beds == 1;
+    }
+    return false;
   }
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadCollections();
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!OnboardingPrefs.hasSeen('homeSeen')) {
+        OnboardingBottomSheet.show(
+          context: context,
+          imagePath:'assets/images/home_onboarding.png',
+          title: 'Discover your next stay',
+          subtitle: 'Browse curated property collections, discover trending stays, and find highly rated properties near you.',
+          ctaText: 'Explore stays',
+        ).then((_) => OnboardingPrefs.markAsSeen('homeSeen'));
+      }
+    });
   }
 
   @override
   void dispose() {
-    _carouselTimer?.cancel();
     _searchController.dispose();
-    _carouselController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadCollections() async {
     setState(() {
+      _loading = true;
       _hasError = false;
-      _loadingNearby = true;
-      _loadingRecommended = true;
     });
 
     try {
-      // 1. Determine user location for the "Nearby" algorithm
-      Position? position;
-      try {
-        position = await _getCurrentLocation();
-      } catch (e) {
-        debugPrint('HomeView: Location detection skipped ($e)');
+      final categoriesData = await PropertiesApi.getCategories();
+      Map<String, List<Property>> mapped = {};
+      
+      categoriesData.forEach((key, value) {
+        if (value is List) {
+          mapped[key] = value.map((e) => mapApiProperty(Map<String, dynamic>.from(e as Map))).toList();
+        }
+      });
+      
+      // Fallback if categories are empty, fetch all and group manually
+      if (mapped.isEmpty) {
+        final allProps = await PropertiesApi.getAllProperties();
+        final list = allProps.map((e) => mapApiProperty(e)).toList();
+        
+        mapped['New on StayNest'] = list.take(5).toList();
+        mapped['Trending Now'] = list.where((p) => p.rating >= 4.0).take(5).toList();
+        mapped['Budget-Friendly'] = list.where((p) => p.price < 500).take(5).toList();
       }
 
-      List<dynamic> rawNearby = [];
-
-      // 2. Fetch properties centered around user location if coordinates are available
-      if (position != null) {
-        final response = await http.get(
-          Uri.parse(
-              '${AppSession.apiBaseUrl}/properties/nearby?lat=${position.latitude}&lng=${position.longitude}&radius=50'),
-          headers: {
-            'Authorization': 'Bearer ${AppSession.apiToken}',
-            'Content-Type': 'application/json',
-          },
-        );
-
-        if (response.statusCode == 200) {
-          final decoded = jsonDecode(response.body);
-          if (decoded is Map<String, dynamic> && decoded.containsKey('data')) {
-            rawNearby = decoded['data'] as List<dynamic>;
-          } else if (decoded is List) {
-            rawNearby = decoded;
-          }
-        }
-      }
-
-      // Fallback to global properties if location is off or no nearby results found
-      if (rawNearby.isEmpty) {
-        rawNearby = await PropertiesApi.getAllProperties();
-      }
-
-      if (rawNearby.isNotEmpty) {
-        final properties = rawNearby
-            .map((e) => mapApiProperty(e as Map<String, dynamic>))
-            .toList();
-
-        final rec = await PropertiesApi.getRecommendations();
-
-        final recMapped = rec.isNotEmpty
-            ? rec.map(mapApiProperty).toList()
-            : properties.take(3).toList();
-
-        if (mounted) {
-          setState(() {
-            _nearby = properties;
-            _recommended = recMapped;
-            _loadingNearby = false;
-            _loadingRecommended = false;
-          });
-          _startAutoScroll(); // Start the 5-second news-update scroll
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _nearby = [];
-            _recommended = [];
-            _loadingNearby = false;
-            _loadingRecommended = false;
-          });
-        }
+      if (mounted) {
+        setState(() {
+          _collections = mapped;
+          _loading = false;
+        });
       }
     } catch (e) {
-      debugPrint('Error loading properties: $e');
+      debugPrint('Error loading collections: $e');
       if (mounted) {
         setState(() {
           _hasError = true;
-          _nearby = [];
-          _recommended = [];
-          _loadingNearby = false;
-          _loadingRecommended = false;
+          _loading = false;
         });
       }
     }
   }
 
-  /// Requests location permissions and returns current position
-  Future<Position> _getCurrentLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return Future.error('Location services are disabled.');
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return Future.error('Location permissions are denied');
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      return Future.error('Location permissions are permanently denied.');
-    }
-
-    return await Geolocator.getCurrentPosition();
-  }
-
-  // Auto-scrolling logic for the nearby property cards
-  void _startAutoScroll() {
-    _carouselTimer?.cancel();
-    if (_filteredNearby.isEmpty) return;
-
-    _carouselTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (_carouselController.hasClients && _filteredNearby.isNotEmpty) {
-        _currentCarouselPage++;
-        _carouselController.animateToPage(
-          _currentCarouselPage,
-          duration: const Duration(milliseconds: 800),
-          curve: Curves.easeInOutCubic,
-        );
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
-      child: Theme(
-        data: ThemeData(
-          textTheme: GoogleFonts.poppinsTextTheme(),
-        ),
-        child: Scaffold(
-          extendBodyBehindAppBar: true,
-          body: Stack(
-            children: [
-              // Soft Background Gradient tailored to blend cleanly with _bg
-              Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      _bg,
-                      Color(0xFFF3F4F6),
-                      Color(0xFFEEF2FF), // Very subtle hint of blue
-                    ],
-                    stops: [0.0, 0.5, 1.0],
+    final filteredCollections = <String, List<Property>>{};
+    for (final entry in _collections.entries) {
+      final filteredList = entry.value.where((p) => _matchesCategory(p, _selectedCategory)).toList();
+      if (filteredList.isNotEmpty) {
+        filteredCollections[entry.key] = filteredList;
+      }
+    }
+
+    return Scaffold(
+      backgroundColor: _bg,
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _loadCollections,
+          color: _primaryText,
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(child: _buildHeader()),
+              SliverToBoxAdapter(child: _buildCategoryPills()),
+              if (_loading)
+                SliverToBoxAdapter(child: _buildShimmerLoading())
+              else if (_hasError)
+                SliverToBoxAdapter(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
+                      child: Text('Failed to load properties', style: GoogleFonts.poppins(color: _grey)),
+                    ),
                   ),
-                ),
-              ),
-              CustomScrollView(
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  SliverToBoxAdapter(child: _buildHeader(context)),
-                  SliverToBoxAdapter(child: _buildNearbySection()),
-                  SliverToBoxAdapter(child: _buildRecommendedSection()),
-                  const SliverToBoxAdapter(
-                    child: SizedBox(height: 120), // Clearance for bottom nav
+                )
+              else if (filteredCollections.isEmpty)
+                SliverToBoxAdapter(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
+                      child: Text(
+                        _collections.isEmpty ? 'No properties available' : 'No properties match this category', 
+                        style: GoogleFonts.poppins(color: _grey)
+                      ),
+                    ),
                   ),
-                ],
-              ),
+                )
+              else
+                ...filteredCollections.entries.map((entry) {
+                  return SliverToBoxAdapter(
+                    child: _buildHorizontalCollection(entry.key, entry.value),
+                  );
+                }),
+              const SliverToBoxAdapter(child: SizedBox(height: 120)),
             ],
           ),
         ),
@@ -269,833 +186,284 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 
-  // ─── Header ────────────────────────────────────────────────────────────────
-
-  Widget _buildHeader(BuildContext context) {
-    final displayName = AppSession.displayName;
-    final displayAvatar = AppSession.displayAvatar;
-
+  Widget _buildCategoryPills() {
+    final types = [
+      {'name': 'All', 'image': 'assets/images/all.webp'},
+      {'name': 'Apartment', 'image': 'assets/images/apartments.webp'},
+      {'name': 'Bedsitter', 'image': 'assets/images/bedsitter.webp'},
+      {'name': 'Single Room', 'image': 'assets/images/singleroom.webp'},
+      {'name': 'One Bedroom', 'image': 'assets/images/onebedroom.webp'},
+    ];
+    
     return Padding(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 20,
-        left: 24,
-        right: 24,
-        bottom: 4,
+      padding: const EdgeInsets.only(bottom: 24),
+      child: SizedBox(
+        height: 52, // Adjusted height for premium pills
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          itemCount: types.length,
+          separatorBuilder: (context, index) => const SizedBox(width: 16),
+          itemBuilder: (context, index) {
+            final type = types[index];
+            final label = type['name']!;
+            final imagePath = type['image']!;
+            final isSelected = _selectedCategory == label;
+            
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  if (_selectedCategory == label) {
+                    _selectedCategory = 'All'; // Deselect if already selected
+                  } else {
+                    _selectedCategory = label;
+                  }
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(
+                    color: isSelected ? Colors.black : Colors.grey.withOpacity(0.2),
+                    width: isSelected ? 2.0 : 1.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        image: DecorationImage(
+                          image: AssetImage(imagePath),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      label,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: _dark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
       ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Greeting Row
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
                 child: Text(
-                  'Hello, $displayName 👋',
+                  'Where to next?',
                   style: GoogleFonts.poppins(
-                    fontSize: 20,
+                    fontSize: 28,
                     fontWeight: FontWeight.w700,
                     color: _dark,
+                    letterSpacing: -0.5,
                   ),
                 ),
               ),
-              // Notification Bell (Glassmorphism style)
               GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const NotificationsView(),
-                    ),
-                  );
-                },
-                child: _GlassContainer(
-                  padding: const EdgeInsets.all(10),
-                  borderRadius: BorderRadius.circular(24),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      const Icon(
-                        Icons.notifications_rounded,
-                        size: 24,
-                        color: _dark,
-                      ),
-                      Positioned(
-                        top: 2,
-                        right: 2,
-                        child: Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEF4444),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Avatar (Cloudinary fix applied)
-              GestureDetector(
-                onTap: () => Navigator.pushNamed(context, '/profile'),
+                onTap: widget.onNotifications,
                 child: Container(
-                  width: 48,
-                  height: 48,
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
+                    color: Colors.white,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black.withOpacity(0.04),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
+                      )
+                    ],
+                  ),
+                  child: const Icon(PhosphorIconsRegular.bell, color: _dark, size: 24),
+                ),
+              )
+            ],
+          ),
+          const SizedBox(height: 20),
+          GestureDetector(
+            onTap: () => widget.onSeeCategory?.call(''), // Route to search tab
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(32),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  )
+                ],
+              ),
+              child: Row(
+                children: [
+                  const Icon(PhosphorIconsRegular.magnifyingGlass, color: _grey, size: 22),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Search destinations',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _dark,
+                        ),
+                      ),
+                      Text(
+                        'Anywhere • Any week • Add guests',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: _grey,
+                        ),
                       ),
                     ],
                   ),
-                  child: ClipOval(
-                    child: AppSession.buildAvatar(
-                      displayAvatar,
-                      width: 48,
-                      height: 48,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
+                ],
               ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // Hero Text
-          Text(
-            'Find your\nperfect place',
-            style: GoogleFonts.poppins(
-              fontSize: 36,
-              fontWeight: FontWeight.w800,
-              color: _dark,
-              height: 1.2,
-              letterSpacing: -1.0,
             ),
           ),
+        ],
+      ),
+    );
+  }
 
-          const SizedBox(height: 24),
-
-          // Clean Magic Search Bar
-          _GlassContainer(
-            padding: EdgeInsets.zero,
-            height: 54,
-            borderRadius: BorderRadius.circular(28),
-            opacity: 0.6,
+  Widget _buildHorizontalCollection(String title, List<Property> properties) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Padding(
-                  padding: EdgeInsets.only(left: 16),
-                  child: Icon(Icons.search_rounded, color: _dark, size: 24),
-                ),
-                const SizedBox(width: 12),
                 Expanded(
-                  child: TextField(
-                    controller: _searchController,
+                  child: Text(
+                    title,
                     style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
                       color: _dark,
-                    ),
-                    onSubmitted: (v) async {
-                      AnalyticsService.resetSessionImpressions();
-                      await PropertyService.instance.saveSearchTerm(v);
-                      await _loadData();
-                    },
-                    // Stripping all native fills and borders
-                    decoration: InputDecoration(
-                      hintText: 'Search locations, area...',
-                      hintStyle: GoogleFonts.poppins(
-                        color: _grey,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w400,
-                      ),
-                      filled: false,
-                      fillColor: Colors.transparent,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      errorBorder: InputBorder.none,
-                      disabledBorder: InputBorder.none,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      letterSpacing: -0.4,
                     ),
                   ),
                 ),
-                // ValueListenableBuilder dynamically shows/hides X without full rebuilds
-                ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _searchController,
-                  builder: (context, value, child) {
-                    if (value.text.isNotEmpty) {
-                      return GestureDetector(
-                        onTap: () {
-                          _searchController.clear();
-                          FocusScope.of(context).unfocus();
-                        },
-                        child: const Padding(
-                          padding: EdgeInsets.only(right: 16, left: 8),
-                          child: Icon(Icons.cancel, color: _grey, size: 22),
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
+                GestureDetector(
+                  onTap: () => widget.onSeeCategory?.call(title), // Route to search tab with category
+                  child: Text(
+                    'See All',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: _primaryText,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-
-          const SizedBox(height: 24),
-
-          // Filter Chips (Upgraded to Glass Pills)
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            clipBehavior: Clip.none,
-            child: Row(
-              children: homeCategoryFilters.asMap().entries.map((e) {
-                final isActive = e.key == _activeFilter;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: GestureDetector(
-                    onTap: () {
-                      AnalyticsService.resetSessionImpressions();
-                      setState(() {
-                        _activeFilter = e.key;
-                        _currentCarouselPage =
-                            0; // Reset scroll index when filter changes
-                        if (_carouselController.hasClients) {
-                          _carouselController.jumpToPage(0);
-                        }
-                      });
-                      _startAutoScroll();
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeOutCubic,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isActive ? _dark : Colors.white.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color:
-                              isActive ? _dark : Colors.white.withOpacity(0.8),
-                          width: 1.5,
-                        ),
-                        boxShadow: isActive
-                            ? [
-                                BoxShadow(
-                                  color: _dark.withOpacity(0.2),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                )
-                              ]
-                            : null,
-                      ),
-                      child: Text(
-                        e.value,
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight:
-                              isActive ? FontWeight.w700 : FontWeight.w600,
-                          color: isActive ? Colors.white : _dark,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
-
-  // ─── Nearby Section ────────────────────────────────────────────────────────
-
-  Widget _buildNearbySection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'Nearby You',
-                style: GoogleFonts.poppins(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: _dark,
-                  letterSpacing: -0.4,
-                ),
-              ),
-              GestureDetector(
-                onTap: () {
-                  // If wired to AppShell, trigger tab change.
-                  // If not, default fallback pushes SearchView onto stack.
-                  if (widget.onSeeAllNearby != null) {
-                    widget.onSeeAllNearby!();
-                  } else {
-                    Navigator.pushNamed(context, '/search');
-                  }
-                },
-                behavior: HitTestBehavior.opaque,
-                child: Text(
-                  'See all',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: _primaryText,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (_hasError)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Failed to load properties',
-                    style: GoogleFonts.poppins(
-                        color: _dark,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _loadData,
-                    child: Text('Retry',
-                        style: GoogleFonts.poppins(color: _primaryText)),
-                  )
-                ],
-              ),
-            ),
-          )
-        else if (_filteredNearby.isEmpty)
-          _loadingNearby
-              ? SizedBox(
-                  height: 380,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.only(left: 24),
-                    itemCount: 3,
-                    itemBuilder: (context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 16),
-                        child: Shimmer.fromColors(
-                          baseColor: Colors.grey.shade200,
-                          highlightColor: Colors.grey.shade100,
-                          child: Container(
-                            width: 280,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(32),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                )
-              : Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-                  child: Center(
-                    child: Text(
-                      'No ${homeCategoryFilters[_activeFilter]} nearby.',
-                      style: GoogleFonts.poppins(color: _grey),
-                    ),
-                  ),
-                )
-        else
+          const SizedBox(height: 16),
           SizedBox(
             height: 380,
-            child: PageView.builder(
-              controller: _carouselController,
-              clipBehavior: Clip.none,
-              physics: const BouncingScrollPhysics(),
-              onPageChanged: (index) {
-                // Keep track if user swipes manually so the timer continues cleanly
-                _currentCarouselPage = index;
-              },
-              // Removed itemCount to allow infinite scrolling effect
-              itemBuilder: (context, i) {
-                if (_filteredNearby.isEmpty) return const SizedBox();
-
-                // Modulo ensures we loop back to 0 cleanly for infinite scrolling
-                final actualIndex = i % _filteredNearby.length;
-                final property = _filteredNearby[actualIndex];
-
-                return Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: VisibilityDetector(
-                    key: Key('nearby_impression_${property.id}_$i'),
-                    onVisibilityChanged: (info) {
-                      if (info.visibleFraction > 0.5) {
-                        AnalyticsService.trackFeaturedPropertyImpression(
-                          property.id,
-                          position: actualIndex,
-                        );
-                      }
-                    },
-                    child: _NearbyCard(
-                      property: property,
-                      onTap: () => widget.onSelectProperty?.call(property.id),
-                    ),
-                  ),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.only(left: 24),
+              itemCount: properties.length,
+              itemBuilder: (context, index) {
+                final p = properties[index];
+                return PropertyCard(
+                  property: p,
+                  onTap: () => widget.onSelectProperty?.call(p),
                 );
               },
             ),
-          ),
-      ],
-    );
-  }
-
-  // ─── Recommended Section ──────────────────────────────────────────────────
-
-  Widget _buildRecommendedSection() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Recommended For You',
-            style: GoogleFonts.poppins(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: _dark,
-              letterSpacing: -0.4,
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (_hasError)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Text(
-                'Could not load recommendations.',
-                style: GoogleFonts.poppins(color: _grey),
-              ),
-            )
-          else if (_loadingRecommended)
-            Column(
-              children: List.generate(3, (index) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  child: Shimmer.fromColors(
-                    baseColor: Colors.grey.shade200,
-                    highlightColor: Colors.grey.shade100,
-                    child: Container(
-                      height: 140,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            )
-          else if (_filteredRecommended.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Text(
-                'No recommendations found.',
-                style: GoogleFonts.poppins(color: _grey),
-              ),
-            )
-          else
-            ..._filteredRecommended.asMap().entries.map((entry) {
-              final i = entry.key;
-              final p = entry.value;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: VisibilityDetector(
-                  key: Key('recommended_impression_${p.id}'),
-                  onVisibilityChanged: (info) {
-                    if (info.visibleFraction > 0.5) {
-                      AnalyticsService.trackPropertyImpression(
-                        p.id,
-                        source: 'home_recommended',
-                        position: i,
-                      );
-                    }
-                  },
-                  child: _RecommendedCard(
-                    property: p,
-                    onTap: () => widget.onSelectProperty?.call(p.id),
-                  ),
-                ),
-              );
-            }),
+          )
         ],
       ),
     );
   }
-}
 
-// ─── Nearby Card ────────────────────────────────────────────────────────────
-
-class _NearbyCard extends StatelessWidget {
-  final Property property;
-  final VoidCallback onTap;
-
-  const _NearbyCard({required this.property, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(32),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 15,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(32),
-          child: Stack(
-            fit: StackFit.expand,
+  Widget _buildShimmerLoading() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: List.generate(2, (sectionIndex) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              buildPropertyImage(
-                property.image,
-                fit: BoxFit.cover,
-              ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: const [0.4, 1.0],
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withOpacity(0.85),
-                      ],
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Shimmer.fromColors(
+                  baseColor: Colors.grey.shade200,
+                  highlightColor: Colors.grey.shade100,
+                  child: Container(
+                    width: 150,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ),
               ),
-              Positioned(
-                top: 18,
-                left: 18,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.25),
-                        borderRadius: BorderRadius.circular(24),
-                        border:
-                            Border.all(color: Colors.white.withOpacity(0.4)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.star_rounded,
-                              color: Color(0xFFFBBC05), size: 16),
-                          const SizedBox(width: 6),
-                          Text(
-                            '${property.rating.toStringAsFixed(1)} (${property.reviews})',
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 380,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(left: 24),
+                  itemCount: 3,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 20),
+                      child: Shimmer.fromColors(
+                        baseColor: Colors.grey.shade200,
+                        highlightColor: Colors.grey.shade100,
+                        child: Container(
+                          width: 300,
+                          height: 380,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
-              ),
-              const Positioned(
-                top: 18,
-                right: 18,
-                child: VerifiedBadge(size: 36),
-              ),
-              Positioned(
-                left: 20,
-                right: 20,
-                bottom: 24,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      property.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        letterSpacing: -0.4,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill),
-                            size: 16, color: Colors.white70),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            property.location,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          formatPropertyPrice(property.price),
-                          style: GoogleFonts.poppins(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: _green,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                        Text(
-                          '/month',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white60,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              )
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Recommended Card ──────────────────────────────────────────────────────
-
-class _RecommendedCard extends StatelessWidget {
-  final Property property;
-  final VoidCallback onTap;
-
-  const _RecommendedCard({required this.property, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: _GlassContainer(
-        padding: EdgeInsets.zero, // Flush image to the edge
-        borderRadius: BorderRadius.circular(24),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(24),
-                bottomLeft: Radius.circular(24),
-              ),
-              child: buildPropertyImage(
-                property.image,
-                width: 110,
-                height: 110,
-                fit: BoxFit.cover,
-                errorPlaceholder: Container(
-                    width: 110, height: 110, color: const Color(0xFFE5E7EB)),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      property.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w800,
-                        color: _dark,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill),
-                            size: 14, color: _grey),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            property.location,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.poppins(
-                              fontSize: 13,
-                              color: _grey,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Text(
-                              formatPropertyPrice(property.price),
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: _dark,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                            Text(
-                              '/mo',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: _grey,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (property.reviews > 0)
-                          Row(
-                            children: [
-                              const Icon(Icons.star_rounded,
-                                  color: Color(0xFFFBBC05), size: 16),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${property.rating.toStringAsFixed(1)} (${property.reviews})',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: _dark,
-                                ),
-                              ),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Glassmorphism Core Utility ──────────────────────────────────────────────
-class _GlassContainer extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final BorderRadius? borderRadius;
-  final double blur;
-  final double opacity;
-  final double borderWidth;
-  final double? height;
-
-  const _GlassContainer({
-    required this.child,
-    required this.padding,
-    this.borderRadius,
-    this.blur = 24,
-    this.opacity = 0.55,
-    this.borderWidth = 1.2,
-    this.height,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final radius = borderRadius ?? BorderRadius.circular(24);
-
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          height: height,
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: opacity),
-            borderRadius: radius,
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.8),
-              width: borderWidth,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: child,
-        ),
-      ),
+        );
+      }),
     );
   }
 }

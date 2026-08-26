@@ -250,7 +250,8 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
           focusNode: _focusNodes[index],
           keyboardType: TextInputType.number,
           textAlign: TextAlign.center,
-          maxLength: 1,
+          maxLength: 6,
+          autofillHints: const [AutofillHints.oneTimeCode],
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           style: const TextStyle(
             fontSize: 26, // Large, clean, elegant font weight
@@ -279,7 +280,25 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin {
           ),
           onChanged: (value) {
             _resetError();
-            if (value.isNotEmpty) {
+            if (value.length > 1) {
+              // Handle paste or autofill
+              String pasted = value.replaceAll(RegExp(r'[^0-9]'), '');
+              if (pasted.length > 6) pasted = pasted.substring(0, 6);
+              
+              for (int i = 0; i < pasted.length; i++) {
+                if (index + i < 6) {
+                  _controllers[index + i].text = pasted[i];
+                }
+              }
+              
+              int nextIndex = (index + pasted.length).clamp(0, 5);
+              if (index + pasted.length >= 6) {
+                _focusNodes[5].unfocus();
+                _verify();
+              } else {
+                _focusNodes[nextIndex].requestFocus();
+              }
+            } else if (value.isNotEmpty) {
               if (index < _controllers.length - 1) {
                 _focusNodes[index + 1].requestFocus();
               } else {

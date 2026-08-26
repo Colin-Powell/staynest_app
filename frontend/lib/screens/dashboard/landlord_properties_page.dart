@@ -165,7 +165,7 @@ class _LandlordPropertiesPageState extends State<LandlordPropertiesPage>
                 end: Alignment.bottomRight,
                 colors: [
                   Color(0xFFF7FDF9),
-                  Color(0xFFE8F6EF),
+                  Color(0xFFFFFFFF),
                   Color(0xFFD4EFE1),
                 ],
                 stops: [0.0, 0.5, 1.0],
@@ -699,7 +699,7 @@ class _PropertyCardState extends State<_PropertyCard>
                       errorPlaceholder: Container(
                           width: 135,
                           height: 145,
-                          color: const Color(0xFFE8F6EF),
+                          color: const Color(0xFFFFFFFF),
                           child: Icon(PhosphorIcons.house(),
                               color: const Color(0xFF75C797), size: 40)),
                     ),

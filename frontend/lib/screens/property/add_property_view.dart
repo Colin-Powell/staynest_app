@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 class AddPropertyView extends StatefulWidget {
   final VoidCallback onBack;
@@ -213,10 +215,43 @@ class _AddPropertyViewState extends State<AddPropertyView>
         _buildTextInput(
           label: 'Location',
           controller: _locationController,
-          placeholder: 'Enter location',
+          placeholder: 'Search location (e.g., Mombasa)',
+        ),
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: _openLocationPickerSheet,
+          child: Row(
+            children: [
+              const Icon(Icons.my_location_rounded, color: _primary, size: 18),
+              const SizedBox(width: 8),
+              const Text(
+                'Use my current location',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _primary,
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 32),
       ],
+    );
+  }
+
+  void _openLocationPickerSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _LocationPickerSheet(
+        onLocationSelected: (locationStr) {
+          setState(() {
+            _locationController.text = locationStr;
+          });
+        },
+      ),
     );
   }
 
@@ -281,37 +316,68 @@ class _AddPropertyViewState extends State<AddPropertyView>
   }
 
   Widget _buildDropdown() {
-    final types = ['Apartment', 'House', 'Studio'];
+    final types = [
+      {'name': 'Apartment', 'image': 'assets/images/apartments.webp'},
+      {'name': 'Bedsitter', 'image': 'assets/images/bedsitter.webp'},
+      {'name': 'Single Room', 'image': 'assets/images/singleroom.webp'},
+      {'name': 'One Bedroom', 'image': 'assets/images/onebedroom.webp'},
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildLabel('Property Type'),
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF9FAFB),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _selectedType,
-              isExpanded: true,
-              icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                  color: Color(0xFF6B7280)),
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF111827),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: types.map((type) {
+            final label = type['name']!;
+            final imagePath = type['image']!;
+            final isSelected = _selectedType == label;
+            return GestureDetector(
+              onTap: () => setState(() => _selectedType = label),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
+                decoration: BoxDecoration(
+                  color: isSelected ? _primary : const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(
+                    color: isSelected ? _primary : const Color(0xFFE5E7EB),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isSelected ? Colors.white.withOpacity(0.5) : Colors.transparent,
+                          width: 2,
+                        ),
+                        image: DecorationImage(
+                          image: AssetImage(imagePath),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected ? Colors.white : const Color(0xFF374151),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              items: types
-                  .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                  .toList(),
-              onChanged: (val) {
-                if (val != null) setState(() => _selectedType = val);
-              },
-            ),
-          ),
+            );
+          }).toList(),
         ),
       ],
     );
@@ -395,6 +461,129 @@ class _AddPropertyViewState extends State<AddPropertyView>
             ),
           ),
         ),
+      ),
+    );
+  }
+}class _LocationPickerSheet extends StatefulWidget {
+  final ValueChanged<String> onLocationSelected;
+  const _LocationPickerSheet({required this.onLocationSelected});
+
+  @override
+  State<_LocationPickerSheet> createState() => _LocationPickerSheetState();
+}
+
+class _LocationPickerSheetState extends State<_LocationPickerSheet> {
+  final LatLng _currentLocation = const LatLng(-1.2921, 36.8219); // Nairobi fallback for prototype
+  final MapController _mapCtrl = MapController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 16),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE5E7EB),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: Text(
+              'Confirm Property Location',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Stack(
+              children: [
+                FlutterMap(
+                  mapController: _mapCtrl,
+                  options: MapOptions(
+                    initialCenter: _currentLocation,
+                    initialZoom: 14.0,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.rashoti.staynest',
+                    ),
+                  ],
+                ),
+                // Center Pin
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: 40.0),
+                    child: Icon(
+                      Icons.location_on,
+                      color: Color(0xFF6366F1),
+                      size: 40,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Confirm Button
+          Container(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 16,
+              bottom: MediaQuery.of(context).padding.bottom + 16,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -4),
+                )
+              ],
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: () {
+                  widget.onLocationSelected('Nairobi CBD, Kenya');
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(26),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'Use this location',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

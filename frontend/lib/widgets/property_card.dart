@@ -1,125 +1,246 @@
 import 'package:flutter/material.dart';
-import 'package:property_app/widgets/property_image.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:property_app/models/property.dart';
+import 'package:property_app/theme.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:property_app/session/app_session.dart';
+import 'package:property_app/repository/remote_database_repository.dart';
 
-import '../models/property.dart';
-
-class PropertyCard extends StatelessWidget {
+class PropertyCard extends StatefulWidget {
   final Property property;
   final VoidCallback onTap;
+  final bool isHorizontal;
+  final double width;
 
-  const PropertyCard({super.key, required this.property, required this.onTap});
+  const PropertyCard({
+    Key? key,
+    required this.property,
+    required this.onTap,
+    this.isHorizontal = true,
+    this.width = 300,
+  }) : super(key: key);
+
+  @override
+  State<PropertyCard> createState() => _PropertyCardState();
+}
+
+class _PropertyCardState extends State<PropertyCard> {
+  bool get _isSaved => AppSession.isSaved(widget.property.id);
+
+  Future<void> _toggleSave() async {
+    final wasSaved = _isSaved;
+
+    // Optimistic UI
+    setState(() {
+      AppSession.toggleSaved(widget.property.id);
+    });
+
+    // Backend sync
+    if (AppSession.currentUserId != null && AppSession.apiToken != null) {
+      try {
+        final repo = RemoteDatabaseRepository();
+        if (wasSaved) {
+          await repo.removeFavoriteForUser(
+            userId: AppSession.currentUserId!,
+            propertyId: widget.property.id,
+          );
+        } else {
+          await repo.savePropertyForUser(
+            userId: AppSession.currentUserId!,
+            propertyId: widget.property.id,
+          );
+        }
+      } catch (_) {
+        // Revert on failure
+        if (!mounted) return;
+        setState(() {
+          AppSession.toggleSaved(widget.property.id);
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final property = widget.property;
     return GestureDetector(
-      onTap: onTap,
+      onTap: widget.onTap,
       child: Container(
-        width: 260,
-        margin: const EdgeInsets.only(right: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 18,
-                offset: const Offset(0, 8)),
-          ],
-        ),
+        width: widget.isHorizontal ? widget.width : double.infinity,
+        margin: EdgeInsets.only(right: widget.isHorizontal ? 20 : 0, bottom: widget.isHorizontal ? 0 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(24)),
-              child: buildPropertyImage(
-                property.image,
-                height: 180,
-                width: double.infinity,
-                fit: BoxFit.cover,
+            // Image Box
+            Container(
+              height: widget.isHorizontal ? widget.width * 0.9 : 320,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                color: AppColors.gray100,
+              ),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: property.image.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: property.image,
+                              fit: BoxFit.cover,
+                              errorWidget: (context, url, error) =>
+                                  const Icon(Icons.broken_image, color: AppColors.gray400),
+                            )
+                          : const Icon(Icons.image, color: AppColors.gray400),
+                    ),
+                  ),
+                  // Badges
+                  Positioned(
+                    top: 16,
+                    left: 16,
+                    child: _buildBadge(),
+                  ),
+                  // Heart (wired to save/unsave)
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: _toggleSave,
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                            child: Icon(
+                              _isSaved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                              key: ValueKey(_isSaved),
+                              color: _isSaved ? const Color(0xFFEF4444) : Colors.white,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 12),
+            // Details
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    property.location,
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.gray900,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.star_rounded, size: 18, color: AppColors.gray900),
+                    const SizedBox(width: 4),
+                    Text(
+                      property.rating > 0 ? property.rating.toStringAsFixed(1) : "New",
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.gray900,
+                      ),
+                    ),
+                    if (property.reviews > 0) ...[
+                      Text(
+                        ' (${property.reviews})',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: AppColors.gray500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              property.name,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: AppColors.gray500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 6),
+            RichText(
+              text: TextSpan(
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              property.name,
-                              style: Theme.of(context).textTheme.titleMedium,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE0F2FE),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                property.agent.name,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF0369A1),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          property.rating.toStringAsFixed(1),
-                          style: TextStyle(
-                              color: Colors.blue.shade800,
-                              fontWeight: FontWeight.w700),
-                        ),
-                      )
-                    ],
+                  TextSpan(
+                    text: "\$${property.price.toInt()}",
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.gray900,
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined,
-                          size: 16, color: Colors.grey),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          property.location,
-                          style: const TextStyle(
-                              color: Colors.black54,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Kes. ${property.price} / month',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 16),
+                  TextSpan(
+                    text: " / month",
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: AppColors.gray500,
+                    ),
                   ),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBadge() {
+    String text = "";
+    if (widget.property.rating >= 4.8) {
+      text = "Guest Favourite";
+    } else if (widget.property.rating == 0) {
+      text = "New";
+    }
+
+    if (text.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.poppins(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppColors.gray900,
         ),
       ),
     );

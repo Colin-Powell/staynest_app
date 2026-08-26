@@ -1,6 +1,9 @@
 // START OF FILE
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:property_app/session/onboarding_prefs.dart';
+import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
+
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/services/message_service.dart';
 import 'package:property_app/services/socket_service.dart';
@@ -73,6 +76,19 @@ class _MessagesViewScreenState extends State<MessagesViewScreen>
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!OnboardingPrefs.hasSeen('messagesSeen')) {
+        OnboardingBottomSheet.show(
+          context: context,
+          title: 'Your conversations live here',
+          imagePath:'assets/images/message_onboarding.png',
+          subtitle: 'Communicate with hosts seamlessly.',
+          ctaText: 'Got it',
+        ).then((_) => OnboardingPrefs.markAsSeen('messagesSeen'));
+      }
+    });
+
     _skeletonController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),

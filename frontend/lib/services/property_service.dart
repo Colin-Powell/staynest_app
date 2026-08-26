@@ -110,7 +110,7 @@ class PropertyService {
 
       final res = await http
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body) as Map<String, dynamic>;
@@ -180,7 +180,7 @@ class PropertyService {
             headers['Authorization'] = 'Bearer $token';
           }
 
-          final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+          final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 30));
 
           if (res.statusCode == 200) {
             final data = json.decode(res.body) as Map<String, dynamic>;

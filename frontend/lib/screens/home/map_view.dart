@@ -15,7 +15,9 @@ import 'package:property_app/utils/category_utils.dart';
 class MapViewScreen extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onFilter;
-  final void Function(String id)? onSelectProperty;
+  final void Function(Property property)? onSelectProperty;
+  final List<Property>? properties;
+  final String? searchQuery;
   final bool isNavigation;
   final LatLng? navOrigin;
   final LatLng? navDestination;
@@ -25,6 +27,8 @@ class MapViewScreen extends StatefulWidget {
     required this.onBack,
     required this.onFilter,
     this.onSelectProperty,
+    this.properties,
+    this.searchQuery,
     this.isNavigation = false,
     this.navOrigin,
     this.navDestination,
@@ -76,12 +80,17 @@ class _MapViewScreenState extends State<MapViewScreen>
   String? _selectedId;
   List<Property> _properties = [];
 
+  final MapController _mapCtrl = MapController();
+
   @override
   void initState() {
     super.initState();
-    _routeOrigin = widget.navOrigin ?? const LatLng(40.7128, -74.0060);
+    if (widget.properties != null) {
+      _properties = widget.properties!;
+    }
+    _routeOrigin = widget.navOrigin ?? const LatLng(-1.2921, 36.8219);
     _routeDestination =
-        widget.navDestination ?? const LatLng(40.7208, -74.0010);
+        widget.navDestination ?? const LatLng(-1.3000, 36.8300);
     // Default simple route until a real route is fetched
     _navRoute = [_routeOrigin, _routeDestination];
 
@@ -110,10 +119,57 @@ class _MapViewScreenState extends State<MapViewScreen>
 
   Future<void> _loadProperties() async {
     try {
-      final loaded = await PropertyService.instance.fetchProperties();
-      if (mounted) setState(() => _properties = loaded);
+      final loaded = widget.properties ?? await PropertyService.instance.fetchProperties();
+      if (mounted) {
+        setState(() => _properties = loaded);
+        if (_properties.isNotEmpty && !widget.isNavigation) {
+          final validProps = _properties.where((p) => p.lat != 0.0 && p.lng != 0.0).toList();
+          if (validProps.isNotEmpty) {
+            final points = validProps.map((p) => LatLng(p.lat, p.lng)).toList();
+            final bounds = LatLngBounds.fromPoints(points);
+            // Delay to ensure map is mounted and laid out before fitting camera
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _mapCtrl.fitCamera(
+                  CameraFit.bounds(
+                    bounds: bounds,
+                    padding: const EdgeInsets.all(40),
+                    maxZoom: 15.0,
+                  ),
+                );
+              }
+            });
+          }
+        }
+      }
     } catch (error) {
       debugPrint('Property map fetch error: $error');
+    }
+  }
+
+  Future<void> _handleSearch(String query) async {
+    if (query.trim().isEmpty) return;
+    try {
+      final results = await PropertyService.instance.fetchProperties(city: query.trim());
+      if (mounted) {
+        setState(() => _properties = results);
+        if (_properties.isNotEmpty) {
+          final validProps = _properties.where((p) => p.lat != 0.0 && p.lng != 0.0).toList();
+          if (validProps.isNotEmpty) {
+            final points = validProps.map((p) => LatLng(p.lat, p.lng)).toList();
+            final bounds = LatLngBounds.fromPoints(points);
+            _mapCtrl.fitCamera(
+              CameraFit.bounds(
+                bounds: bounds,
+                padding: const EdgeInsets.all(40),
+                maxZoom: 15.0,
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Search error: $e');
     }
   }
 
@@ -220,7 +276,7 @@ class _MapViewScreenState extends State<MapViewScreen>
           phaseOffset: _properties.indexOf(prop) * 0.33,
           onTap: () {
             setState(() => _selectedId = prop.id);
-            widget.onSelectProperty?.call(prop.id);
+            widget.onSelectProperty?.call(prop);
           },
         ),
       );
@@ -230,8 +286,21 @@ class _MapViewScreenState extends State<MapViewScreen>
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
-    final mapCenter =
-        widget.isNavigation ? _routeOrigin : const LatLng(40.7128, -74.0060);
+    final validProps = _properties.where((p) => p.lat != 0.0 && p.lng != 0.0).toList();
+    final mapCenter = widget.isNavigation 
+        ? _routeOrigin 
+        : (validProps.isNotEmpty ? LatLng(validProps.first.lat, validProps.first.lng) : const LatLng(-1.2921, 36.8219));
+    
+    CameraFit? initialFit;
+    if (validProps.isNotEmpty && !widget.isNavigation) {
+      final points = validProps.map((p) => LatLng(p.lat, p.lng)).toList();
+      initialFit = CameraFit.bounds(
+        bounds: LatLngBounds.fromPoints(points),
+        padding: const EdgeInsets.all(40),
+        maxZoom: 15.0,
+      );
+    }
+    
     final markers =
         widget.isNavigation ? _buildNavigationMarkers() : _buildMarkers();
 
@@ -241,8 +310,10 @@ class _MapViewScreenState extends State<MapViewScreen>
         children: [
           // ── Real Map ────────────────────────────────────────
           FlutterMap(
+            mapController: _mapCtrl,
             options: MapOptions(
               initialCenter: mapCenter,
+              initialCameraFit: initialFit,
               initialZoom: 11.5,
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all,
@@ -251,8 +322,7 @@ class _MapViewScreenState extends State<MapViewScreen>
             children: [
               TileLayer(
                 urlTemplate:
-                    'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
+                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.rashoti.staynest',
               ),
               if (widget.isNavigation)
@@ -291,7 +361,12 @@ class _MapViewScreenState extends State<MapViewScreen>
                     const SizedBox(width: 10),
                     // Search pill
                     Expanded(
-                      child: _SearchBar(),
+                      child: _SearchBar(
+                        text: (widget.searchQuery?.isNotEmpty == true) 
+                            ? widget.searchQuery! 
+                            : (_properties.isNotEmpty ? _properties.first.location : 'Nearby'),
+                        onSubmitted: _handleSearch,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     // Filter
@@ -341,7 +416,7 @@ class _MapViewScreenState extends State<MapViewScreen>
               child: _PropertyPreviewCard(
                 property: _properties.firstWhere((p) => p.id == _selectedId),
                 onDismiss: () => setState(() => _selectedId = null),
-                onSelect: () => widget.onSelectProperty?.call(_selectedId!),
+                onSelect: () => widget.onSelectProperty?.call(_properties.firstWhere((p) => p.id == _selectedId)),
               ),
             ),
         ],
@@ -574,7 +649,39 @@ class _PinTailPainter extends CustomPainter {
 }
 
 // ── Search Bar (read-only pill) ──────────────────────────────────────────────
-class _SearchBar extends StatelessWidget {
+class _SearchBar extends StatefulWidget {
+  final String text;
+  final ValueChanged<String>? onSubmitted;
+  
+  const _SearchBar({required this.text, this.onSubmitted});
+
+  @override
+  State<_SearchBar> createState() => _SearchBarState();
+}
+
+class _SearchBarState extends State<_SearchBar> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.text);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SearchBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text && widget.text != _ctrl.text) {
+      _ctrl.text = widget.text;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -586,16 +693,31 @@ class _SearchBar extends StatelessWidget {
         boxShadow: AppShadows.button,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 18),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.search_rounded, size: 18, color: AppColors.gray400),
-          SizedBox(width: 8),
-          Text(
-            'New York, USA',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: AppColors.gray900,
+          const Icon(Icons.search_rounded, size: 18, color: AppColors.gray400),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _ctrl,
+              textInputAction: TextInputAction.search,
+              onSubmitted: widget.onSubmitted, cursorColor: AppColors.gray900,
+              decoration: const InputDecoration(
+                border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: false,
+                hintText: 'Search location...',
+                hintStyle: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: AppColors.gray400,
+                ),
+                contentPadding: EdgeInsets.zero,
+                isDense: true,
+              ),
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.gray900, decorationThickness: 0,
+              ),
             ),
           ),
         ],
@@ -748,7 +870,7 @@ class _PropertyPreviewCardState extends State<_PropertyPreviewCard>
                         style: const TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 15,
-                          color: AppColors.gray900,
+                          color: AppColors.gray900, decorationThickness: 0,
                         )),
                     const SizedBox(height: 3),
                     Text(p.location,

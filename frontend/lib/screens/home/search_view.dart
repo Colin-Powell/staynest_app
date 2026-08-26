@@ -13,6 +13,7 @@ import 'package:property_app/utils/property_mapper.dart';
 import '../../widgets/phosphor_icons.dart';
 import 'package:property_app/screens/dashboard/analytics_service.dart';
 import 'package:visibility_detector/visibility_detector.dart';
+import 'map_view.dart';
 
 // ─── Theme colors ─────────────────────────────────────────────────────────────
 const _primaryText = Color(0xFF4F70F8);
@@ -22,16 +23,18 @@ const _grey = Color(0xFF9CA3AF);
 const _green = Color(0xFF22C55E);
 
 class SearchView extends StatefulWidget {
-  final ValueChanged<String>? onSelectProperty;
+  final void Function(Property)? onSelectProperty;
   final VoidCallback? onOpenFilters;
   final ValueChanged<bool>? onToggleMap;
   final Map<String, dynamic>? activeFilters;
+  final ValueChanged<Map<String, dynamic>>? onFiltersChanged;
 
   const SearchView({
     super.key,
     this.onSelectProperty,
     this.onOpenFilters,
     this.activeFilters,
+    this.onFiltersChanged,
     this.onToggleMap,
   });
 
@@ -68,7 +71,15 @@ class _SearchViewState extends State<SearchView> {
   @override
   void initState() {
     super.initState();
-    _activeFilters = widget.activeFilters ?? {};
+    _activeFilters = Map.from(widget.activeFilters ?? {});
+    if (_activeFilters['propertyType'] != null && _activeFilters['propertyType'].toString().isNotEmpty) {
+      query = _activeFilters['propertyType'].toString();
+      _searchController.text = query;
+      _activeFilters.remove('propertyType');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onFiltersChanged?.call(_activeFilters);
+      });
+    }
     _load();
   }
 
@@ -76,7 +87,17 @@ class _SearchViewState extends State<SearchView> {
   void didUpdateWidget(covariant SearchView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.activeFilters != oldWidget.activeFilters) {
-      setState(() => _activeFilters = widget.activeFilters ?? {});
+      setState(() {
+        _activeFilters = Map.from(widget.activeFilters ?? {});
+        if (_activeFilters['propertyType'] != null && _activeFilters['propertyType'].toString().isNotEmpty) {
+          query = _activeFilters['propertyType'].toString();
+          _searchController.text = query;
+          _activeFilters.remove('propertyType');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onFiltersChanged?.call(_activeFilters);
+          });
+        }
+      });
     }
   }
 
@@ -160,6 +181,10 @@ class _SearchViewState extends State<SearchView> {
       final maxPrice = _activeFilters['maxPrice'];
       final propertyType = _activeFilters['propertyType'];
       final amenities = _activeFilters['amenities'];
+      final filterBeds = _activeFilters['beds'];
+      final filterBaths = _activeFilters['baths'];
+      final landlordAvailability = _activeFilters['landlordAvailability'];
+      final mostReviews = _activeFilters['mostReviews'];
 
       if (minPrice != null) {
         final min = (minPrice is num)
@@ -243,65 +268,57 @@ class _SearchViewState extends State<SearchView> {
           }).toList();
         }
       }
+
+      // Rooms Filter (Beds and Baths)
+      if (filterBeds != null && filterBeds is int && filterBeds > 0) {
+        filtered = filtered.where((p) {
+          return filterBeds >= 5 ? p.features.beds >= 5 : p.features.beds == filterBeds;
+        }).toList();
+      }
+
+      if (filterBaths != null && filterBaths is int && filterBaths > 0) {
+        filtered = filtered.where((p) {
+          return filterBaths >= 5 ? p.features.baths >= 5 : p.features.baths == filterBaths;
+        }).toList();
+      }
+
+      // Landlord Availability
+      if (landlordAvailability != null && landlordAvailability is String) {
+        if (landlordAvailability == 'Superhost') {
+          filtered = filtered.where((p) => p.agent.verified).toList();
+        }
+      }
     }
 
+    // If mostReviews is active, it overrides normal sorting
+    final mostReviews = _activeFilters['mostReviews'] == true;
+
     // Sorting
-    switch (_sortBy) {
-      case 'price_low':
-        filtered.sort((a, b) => a.price.compareTo(b.price));
-        break;
-      case 'price_high':
-        filtered.sort((a, b) => b.price.compareTo(a.price));
-        break;
-      case 'rating':
-        filtered.sort((a, b) => b.rating.compareTo(a.rating));
-        break;
-      case 'name':
-        filtered.sort((a, b) => a.name.compareTo(b.name));
-        break;
-      case 'recommended':
-      default:
-        break;
+    if (mostReviews) {
+      filtered.sort((a, b) => b.reviews.compareTo(a.reviews));
+    } else {
+      switch (_sortBy) {
+        case 'price_low':
+          filtered.sort((a, b) => a.price.compareTo(b.price));
+          break;
+        case 'price_high':
+          filtered.sort((a, b) => b.price.compareTo(a.price));
+          break;
+        case 'rating':
+          filtered.sort((a, b) => b.rating.compareTo(a.rating));
+          break;
+        case 'name':
+          filtered.sort((a, b) => a.name.compareTo(b.name));
+          break;
+        case 'recommended':
+        default:
+          break;
+      }
     }
 
     return filtered;
   }
 
-  void _showSortOptions() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return _GlassContainer(
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-          opacity: 0.9,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(2))),
-              const SizedBox(height: 24),
-              Text('Sort By',
-                  style: GoogleFonts.poppins(
-                      fontSize: 20, fontWeight: FontWeight.w800, color: _dark)),
-              const SizedBox(height: 16),
-              _buildSortOption('Recommended', 'recommended'),
-              _buildSortOption('Price: Low to High', 'price_low'),
-              _buildSortOption('Price: High to Low', 'price_high'),
-              _buildSortOption('Highest Rated', 'rating'),
-              _buildSortOption('Name (A-Z)', 'name'),
-              const SizedBox(height: 20),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
   Widget _buildEmptyState() {
     final hasFilter = _activeFilters.isNotEmpty;
@@ -353,23 +370,6 @@ class _SearchViewState extends State<SearchView> {
     );
   }
 
-  Widget _buildSortOption(String title, String value) {
-    final isSelected = _sortBy == value;
-    return ListTile(
-      title: Text(title,
-          style: GoogleFonts.poppins(
-              fontSize: 15,
-              color: isSelected ? _primaryText : _dark,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500)),
-      trailing: isSelected
-          ? const Icon(Icons.check_circle_rounded, color: _primaryText)
-          : null,
-      onTap: () {
-        setState(() => _sortBy = value);
-        Navigator.pop(context);
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -425,23 +425,28 @@ class _SearchViewState extends State<SearchView> {
 
                 const SizedBox(height: 24),
 
-                /// SEARCH BAR (Clean Magic Glass Pill)
+                /// SEARCH BAR (HomeView Style)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: _GlassContainer(
-                    padding: EdgeInsets.zero,
-                    height: 54,
-                    borderRadius: BorderRadius.circular(28),
-                    opacity: 0.6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(32),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        )
+                      ],
+                    ),
                     child: Row(
                       children: [
                         Padding(
-                            padding: const EdgeInsets.only(left: 16),
-                            child: SvgPicture.string(searchSvg,
-                                width: 24,
-                                height: 24,
-                                colorFilter: const ColorFilter.mode(
-                                    _grey, BlendMode.srcIn))),
+                          padding: const EdgeInsets.only(left: 16),
+                          child: SvgPicture.string(searchSvg, width: 22, height: 22, colorFilter: const ColorFilter.mode(_grey, BlendMode.srcIn)),
+                        ),
                         Expanded(
                           child: TextField(
                             controller: _searchController,
@@ -450,14 +455,13 @@ class _SearchViewState extends State<SearchView> {
                               setState(() => query = value);
                             },
                             style: GoogleFonts.poppins(
-                                fontSize: 16,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: _dark),
-                            // Disable native lines and fills
                             decoration: InputDecoration(
-                              hintText: 'Kilifi, Kenya',
+                              hintText: 'Search destinations',
                               hintStyle: GoogleFonts.poppins(
-                                  color: _grey, fontSize: 16),
+                                  color: _dark, fontSize: 14, fontWeight: FontWeight.w600),
                               filled: false,
                               fillColor: Colors.transparent,
                               border: InputBorder.none,
@@ -471,7 +475,6 @@ class _SearchViewState extends State<SearchView> {
                             ),
                           ),
                         ),
-                        // Smart Clear Button
                         ValueListenableBuilder<TextEditingValue>(
                           valueListenable: _searchController,
                           builder: (context, value, child) {
@@ -482,19 +485,27 @@ class _SearchViewState extends State<SearchView> {
                                   setState(() => query = '');
                                   FocusScope.of(context).unfocus();
                                 },
-                                child: Padding(
-                                  padding:
-                                      const EdgeInsets.only(right: 16, left: 8),
-                                  child: SvgPicture.string(xCircleSvg,
-                                      width: 22,
-                                      height: 22,
-                                      colorFilter: const ColorFilter.mode(
-                                          _grey, BlendMode.srcIn)),
+                                child: const Padding(
+                                  padding: EdgeInsets.only(right: 8, left: 8),
+                                  child: Icon(Icons.cancel, color: _grey, size: 22),
                                 ),
                               );
                             }
                             return const SizedBox.shrink();
                           },
+                        ),
+                        // Divider
+                        Container(width: 1, height: 24, color: _grey.withValues(alpha: 0.3)),
+                        // Filter Icon
+                        GestureDetector(
+                          onTap: widget.onOpenFilters,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 16, left: 12),
+                            child: SvgPicture.string(filterSvg,
+                                width: 20,
+                                height: 20,
+                                colorFilter: const ColorFilter.mode(_dark, BlendMode.srcIn)),
+                          ),
                         ),
                       ],
                     ),
@@ -502,66 +513,6 @@ class _SearchViewState extends State<SearchView> {
                 ),
 
                 const SizedBox(height: 24),
-
-                /// FILTERS & SORT (Floating Icons/Text without Glass Boundaries)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: widget.onOpenFilters,
-                          behavior: HitTestBehavior.opaque,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SvgPicture.string(filterSvg,
-                                      width: 22,
-                                      height: 22,
-                                      colorFilter: const ColorFilter.mode(
-                                          _dark, BlendMode.srcIn)),
-                                  const SizedBox(width: 8),
-                                  Text('Filters',
-                                      style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 15,
-                                          color: _dark)),
-                                ]),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: _showSortOptions,
-                          behavior: HitTestBehavior.opaque,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SvgPicture.string(sortSvg,
-                                      width: 22,
-                                      height: 22,
-                                      colorFilter: const ColorFilter.mode(
-                                          _dark, BlendMode.srcIn)),
-                                  const SizedBox(width: 8),
-                                  Text('Sort',
-                                      style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 15,
-                                          color: _dark)),
-                                ]),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
 
                 /// RESULTS
                 Expanded(
@@ -630,7 +581,7 @@ class _SearchViewState extends State<SearchView> {
                                       },
                                       child: GestureDetector(
                                         onTap: () => widget.onSelectProperty
-                                            ?.call(property.id),
+                                            ?.call(property),
                                         child: SizedBox(
                                           height: 140,
                                           child: _GlassContainer(
@@ -877,6 +828,47 @@ class _SearchViewState extends State<SearchView> {
                             ),
                 ),
               ],
+            ),
+          ),
+          Positioned(
+            bottom: MediaQuery.of(context).padding.bottom + 92,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MapViewScreen(
+                            onBack: () => Navigator.pop(context),
+                            onFilter: () {
+                              if (widget.onOpenFilters != null) widget.onOpenFilters!();
+                            },
+                            onSelectProperty: widget.onSelectProperty,
+                            properties: results,
+                            searchQuery: query,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.map_rounded, size: 20),
+                    label: const Text('Map', style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.2)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF111827),
+                      foregroundColor: Colors.white,
+                      elevation: 8,
+                      shadowColor: Colors.black45,
+                      minimumSize: Size.zero,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

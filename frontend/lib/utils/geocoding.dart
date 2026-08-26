@@ -73,3 +73,20 @@ Future<({double lat, double lng})?> geocodeAddress(String query) async {
     return null;
   }
 }
+Future<String?> reverseGeocode(double lat, double lng) async {
+  try {
+    final uri = Uri.parse(
+      'https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng',
+    );
+    final response = await http.get(uri, headers: {
+      'User-Agent': 'StayNest/1.0',
+      'Accept-Language': 'en',
+    }).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) return null;
+    final data = json.decode(response.body) as Map<String, dynamic>;
+    return data['display_name']?.toString();
+  } catch (_) {
+    return null;
+  }
+}

@@ -1,5 +1,7 @@
 // lib/screens/dashboard/property_details.dart
 
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -42,8 +44,9 @@ class PropertyDetails extends StatefulWidget {
 
 class _PropertyDetailsState extends State<PropertyDetails> {
   static const Color tenantPrimary = Color(0xFF3F37C9); // Tenant Blue
-  static const Color textDark = Color(0xFF111827);
-  static const Color textLight = Color(0xFF6B7280);
+  static const Color textDark = Color(0xFF222222); // Airbnb-style dark grey
+  static const Color textLight = Color(0xFF717171); // Airbnb-style light grey
+  static const Color dividerColor = Color(0xFFEBEBEB);
 
   List<Review> _reviews = [];
   bool _loadingReviews = true;
@@ -154,164 +157,99 @@ class _PropertyDetailsState extends State<PropertyDetails> {
       previewPhotos.add(widget.property.image);
     }
 
+    final double expandedImageHeight = MediaQuery.of(context).size.width * 0.85;
+
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // 1. Soft Gradient Background (Tenant Blue Theme)
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFF5F7FF), // Soft icy blue
-                  Color(0xFFEBF0FF), // Light indigo
-                  Color(0xFFDCE4FF), // Deeper soft blue
-                ],
-                stops: [0.0, 0.5, 1.0],
-              ),
-            ),
-          ),
-
-          // 2. Fading Hero Image
+          // 1. Fixed Background Image at the Top
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            height: 440,
-            child: ShaderMask(
-              shaderCallback: (rect) => const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.black, Colors.black, Colors.transparent],
-                stops: [0.0, 0.6, 1.0],
-              ).createShader(rect),
-              blendMode: BlendMode.dstIn,
-              child: GestureDetector(
-                onTap: widget.onViewGallery,
-                child: Hero(
-                  tag: 'property-${widget.property.id}',
-                  child: buildPropertyImage(
-                    widget.property.image,
-                    fit: BoxFit.cover,
-                  ),
+            height: expandedImageHeight,
+            child: GestureDetector(
+              onTap: widget.onViewGallery,
+              child: Hero(
+                tag: 'property-${widget.property.id}',
+                child: buildPropertyImage(
+                  widget.property.image,
+                  fit: BoxFit.cover,
                 ),
               ),
             ),
           ),
 
-          // 3. Main Scrolling Content
-          SafeArea(
-            bottom: false,
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                // Top Navigation Row
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _GlassCircleButton(
-                          icon: Icons.arrow_back_ios_new_rounded,
-                          onTap: widget.onBack ?? () => Navigator.pop(context),
-                        ),
-                        _GlassCircleButton(
-                          icon: PhosphorIcons.shareNetwork(),
-                          onTap: () {
-                            AnalyticsService.trackPropertyShare(
-                                widget.property.id);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text(
-                                        'Listing link copied to clipboard.')));
-                          },
-                        ),
-                      ],
-                    ),
+          // 2. Main Scrolling White Card
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              // Transparent space to reveal the image behind
+              SliverToBoxAdapter(
+                child: SizedBox(height: expandedImageHeight - 40),
+              ),
+
+              // The Solid White Card that slides up
+              SliverToBoxAdapter(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, -4),
+                      ),
+                    ],
                   ),
-                ),
-
-                // Spacer to push content down into the faded area of the image
-                const SliverToBoxAdapter(child: SizedBox(height: 200)),
-
-                // Content
-                SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                        20, 0, 20, 140), // Bottom padding for fixed buttons
+                    padding: const EdgeInsets.only(bottom: 120), // Bottom padding for fixed buttons
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // --- Header & Snapshot Section ---
-                        _GlassContainer(
-                          padding: const EdgeInsets.all(24),
+                        const SizedBox(height: 12),
+                        // Small handle indicator
+                        Center(
+                          child: Container(
+                            width: 48,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // --- Header Section (Centered) ---
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Text(
                                 widget.property.name,
+                                textAlign: TextAlign.center,
                                 style: GoogleFonts.poppins(
                                   fontSize: 26,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w700,
                                   height: 1.2,
                                   color: textDark,
-                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                widget.property.location,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 15,
+                                  color: textLight,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.baseline,
-                                textBaseline: TextBaseline.alphabetic,
-                                children: [
-                                  Text(
-                                    'Kes. ${widget.property.price}',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 26,
-                                      fontWeight: FontWeight.w900,
-                                      color: tenantPrimary,
-                                    ),
-                                  ),
-                                  Text(
-                                    '/mo',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 16,
-                                      color: textLight,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              Divider(
-                                  color: Colors.white.withOpacity(0.6),
-                                  height: 1,
-                                  thickness: 1.5),
-                              const SizedBox(height: 16),
-                              Row(
-                                children: [
-                                  Icon(
-                                      PhosphorIcons.mapPin(
-                                          PhosphorIconsStyle.fill),
-                                      size: 18,
-                                      color: textLight),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      widget.property.location,
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        color: textLight,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
                               GestureDetector(
                                 onTap: () {
                                   Navigator.push(
@@ -331,37 +269,35 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                 },
                                 behavior: HitTestBehavior.opaque,
                                 child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(Icons.star_rounded,
-                                        color: Color(0xFFFBBF24), size: 20),
-                                    const SizedBox(width: 6),
+                                    const Icon(Icons.star_rounded, color: textDark, size: 18),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _reviewCount > 0 ? _avgRating.toStringAsFixed(1) : 'New',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: textDark,
+                                      ),
+                                    ),
                                     if (_reviewCount > 0) ...[
+                                      const SizedBox(width: 4),
+                                      const Text(
+                                        '·',
+                                        style: TextStyle(fontWeight: FontWeight.bold, color: textDark),
+                                      ),
+                                      const SizedBox(width: 4),
                                       Text(
-                                        _avgRating.toStringAsFixed(1),
+                                        '$_reviewCount reviews',
                                         style: GoogleFonts.poppins(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w800,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
                                           color: textDark,
+                                          decoration: TextDecoration.underline,
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '($_reviewCount Reviews)',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 13,
-                                          color: textLight,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ] else
-                                      Text(
-                                        'No reviews yet',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 13,
-                                          color: textLight,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -369,140 +305,175 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                           ),
                         ),
 
-                        const SizedBox(height: 24),
+                        _buildDivider(),
 
-                        // --- Property Tags (Your Signature Pills) ---
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: [
-                            _buildTag(Icons.apartment_rounded,
-                                widget.property.category, true),
-                            _buildTag(
-                                Icons.door_front_door_rounded,
-                                '${widget.property.features.rooms} Room',
-                                false),
-                            _buildTag(Icons.bed_rounded,
-                                '${widget.property.features.beds} beds', false),
-                            if (widget.property.features.furnished)
-                              _buildTag(
-                                  Icons.weekend_rounded, 'Furnished', false),
-                          ],
-                        ),
-
-                        const SizedBox(height: 32),
-
-                        // --- Quick Navigation Action Pills ---
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          child: Row(
-                            children: [
-                              _ShortcutPill(
-                                  icon: PhosphorIcons.image(),
-                                  label: 'Gallery',
-                                  onTap: widget.onViewGallery ?? () {}),
-                              _ShortcutPill(
-                                  icon: PhosphorIcons.listChecks(),
-                                  label: 'Amenities',
-                                  onTap: widget.onViewAmenities ?? () {}),
-                              _ShortcutPill(
-                                  icon: PhosphorIcons.mapTrifold(),
-                                  label: 'Location',
-                                  onTap: widget.onViewLocation ?? () {}),
-                              _ShortcutPill(
-                                  icon: PhosphorIcons.userCircle(),
-                                  label: 'Landlord',
-                                  onTap: widget.onViewLandlord ?? () {}),
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(height: 32),
-
-                        // --- About Property Section ---
-                        Text(
-                          'About Property',
-                          style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: textDark),
-                        ),
-                        const SizedBox(height: 16),
-                        _GlassContainer(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            widget.property.description.isNotEmpty
-                                ? widget.property.description
-                                : 'No description provided for this property.',
-                            style: GoogleFonts.poppins(
-                              fontSize: 14.5,
-                              height: 1.6,
-                              color: textDark.withOpacity(0.8),
-                              fontWeight: FontWeight.w500,
+                        // --- Property Snapshot (Rooms/Beds) ---
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Center(
+                            child: Wrap(
+                              alignment: WrapAlignment.center,
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _buildMinimalTag(Icons.apartment_rounded, widget.property.category),
+                                _buildMinimalTag(Icons.door_front_door_rounded, '${widget.property.features.rooms} Room'),
+                                _buildMinimalTag(Icons.bed_rounded, '${widget.property.features.beds} beds'),
+                                if (widget.property.features.furnished)
+                                  _buildMinimalTag(Icons.weekend_rounded, 'Furnished'),
+                              ],
                             ),
                           ),
                         ),
 
-                        const SizedBox(height: 32),
+                        _buildDivider(),
 
-                        // --- Spacious Rooms Area ---
-                        Text(
-                          'Interior Preview',
-                          style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: textDark),
+                        // --- Host Section ---
+                        GestureDetector(
+                          onTap: widget.onViewLandlord,
+                          behavior: HitTestBehavior.opaque,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Row(
+                              children: [
+                                ClipOval(
+                                  child: Container(
+                                    width: 56,
+                                    height: 56,
+                                    color: Colors.grey.shade200,
+                                    child: widget.property.agent.avatar.isNotEmpty
+                                        ? Image.network(
+                                            widget.property.agent.avatar,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (context, error, stackTrace) => Icon(PhosphorIcons.user(), color: textLight, size: 28),
+                                          )
+                                        : Icon(PhosphorIcons.user(), color: textLight, size: 28),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              'Hosted by ${widget.property.agent.name}',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w600,
+                                                color: textDark,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (widget.property.agent.verified) ...[
+                                            const SizedBox(width: 4),
+                                            const Icon(Icons.verified, color: Colors.blue, size: 18),
+                                          ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        widget.property.agent.verified ? 'Verified Landlord' : 'Landlord',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: textLight,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 16),
-                        _GlassContainer(
-                          padding: const EdgeInsets.all(20),
-                          child: Row(
+
+                        _buildDivider(),
+
+                        // --- About Property Section ---
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (widget.property.amenities.isNotEmpty)
-                                Column(
-                                  children: widget.property.amenities
-                                      .take(2)
-                                      .map((a) => Padding(
-                                            padding: const EdgeInsets.only(
-                                                bottom: 12),
-                                            child: _buildWhiteCircleIcon(
-                                                PhosphorIcons.checkCircle()),
-                                          ))
-                                      .toList(),
-                                )
-                              else
-                                Column(
-                                  children: [
-                                    _buildWhiteCircleIcon(PhosphorIcons.drop()),
-                                    const SizedBox(height: 12),
-                                    _buildWhiteCircleIcon(PhosphorIcons.car()),
-                                  ],
+                              Text(
+                                'About this property',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: textDark),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                widget.property.description.isNotEmpty
+                                    ? widget.property.description
+                                    : 'No description provided for this property.',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 15,
+                                  height: 1.6,
+                                  color: textDark.withOpacity(0.85),
+                                  fontWeight: FontWeight.w400,
                                 ),
-                              if (widget.property.amenities.isNotEmpty)
-                                const SizedBox(width: 16),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: widget.onViewGallery,
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        _buildDivider(),
+
+                        // --- Amenities Snapshot ---
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'What this place offers',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: textDark),
+                              ),
+                              const SizedBox(height: 24),
+                              ...widget.property.amenities.take(5).map((amenity) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 16),
                                   child: Row(
                                     children: [
-                                      Expanded(
-                                          child: _buildRoomImage(
-                                              previewPhotos[0],
-                                              height: 110)),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                          child: _buildRoomImage(
-                                              previewPhotos[1],
-                                              height: 110)),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                          child: _buildRoomImage(
-                                              previewPhotos[2],
-                                              height: 110)),
+                                      Icon(_getAmenityIcon(amenity), size: 26, color: textDark.withOpacity(0.8)),
+                                      const SizedBox(width: 16),
+                                      Text(
+                                        amenity,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 16,
+                                          color: textDark,
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                      ),
                                     ],
+                                  ),
+                                );
+                              }),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton(
+                                  onPressed: widget.onViewAmenities,
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    side: const BorderSide(color: textDark, width: 1.2),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  child: Text(
+                                    'Show all ${widget.property.amenities.length} amenities',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: textDark,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -510,128 +481,241 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                           ),
                         ),
 
-                        const SizedBox(height: 32),
+                        _buildDivider(),
+
+                        // --- Location Snapshot ---
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Where you\'ll be',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: textDark),
+                              ),
+                              const SizedBox(height: 24),
+                              GestureDetector(
+                                onTap: widget.onViewLocation,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: SizedBox(
+                                    height: 220,
+                                    width: double.infinity,
+                                    child: IgnorePointer(
+                                      child: FlutterMap(
+                                        options: MapOptions(
+                                          initialCenter: LatLng(widget.property.lat, widget.property.lng),
+                                          initialZoom: 14.0,
+                                        ),
+                                        children: [
+                                          TileLayer(
+                                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                            userAgentPackageName: 'com.rashoti.staynest',
+                                          ),
+                                          MarkerLayer(
+                                            markers: [
+                                              Marker(
+                                                point: LatLng(widget.property.lat, widget.property.lng),
+                                                width: 60,
+                                                height: 60,
+                                                child: Center(
+                                                  child: Container(
+                                                    width: 44,
+                                                    height: 44,
+                                                    decoration: BoxDecoration(
+                                                      color: tenantPrimary,
+                                                      shape: BoxShape.circle,
+                                                      border: Border.all(color: Colors.white, width: 3),
+                                                      boxShadow: [
+                                                        BoxShadow(
+                                                          color: Colors.black.withOpacity(0.2),
+                                                          blurRadius: 8,
+                                                          offset: const Offset(0, 4),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    child: Center(
+                                                      child: Icon(PhosphorIcons.house(PhosphorIconsStyle.fill), color: Colors.white, size: 20),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                widget.property.location,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: textDark,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Exact location provided after booking.',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: textLight,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        _buildDivider(),
+
+                        // --- Interior Preview ---
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Interior Preview',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: textDark),
+                              ),
+                              const SizedBox(height: 24),
+                              GestureDetector(
+                                onTap: widget.onViewGallery,
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                        child: _buildRoomImage(previewPhotos[0], height: 120)),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                        child: _buildRoomImage(previewPhotos[1], height: 120)),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                        child: _buildRoomImage(previewPhotos[2], height: 120)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        _buildDivider(),
 
                         // --- Reviews Carousel Section ---
-                        _buildReviewsCarousel(),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: _buildReviewsSection(),
+                        ),
                       ],
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
 
-          // 4. Subtle Bottom Gradient Fade (Ensures buttons pop)
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 140,
-            child: IgnorePointer(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      const Color(0xFFDCE4FF).withOpacity(0.6),
-                      const Color(0xFFDCE4FF),
-                    ],
+          // 3. Top Navigation Bar (Fixed)
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _NavButton(
+                    icon: Icons.arrow_back_ios_new_rounded,
+                    onTap: widget.onBack ?? () => Navigator.pop(context),
                   ),
-                ),
+                  _NavButton(
+                    icon: PhosphorIcons.shareNetwork(),
+                    onTap: () {
+                      AnalyticsService.trackPropertyShare(widget.property.id);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Listing link copied to clipboard.')));
+                    },
+                  ),
+                ],
               ),
             ),
           ),
 
-          // 5. Floating Action Buttons (No clunky white container)
+          // 4. Fixed Bottom Action Bar
           Align(
             alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                  24, 0, 24, MediaQuery.of(context).padding.bottom + 24),
+            child: Container(
+              padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: const Border(top: BorderSide(color: dividerColor, width: 1.2)),
+              ),
               child: Row(
                 children: [
                   Expanded(
-                    child: _GlassContainer(
-                      padding: EdgeInsets.zero,
-                      borderRadius: BorderRadius.circular(16),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {
-                            if (widget.onMessage != null) {
-                              widget.onMessage!(
-                                widget.property.agent.userId,
-                                widget.property.agent.name,
-                                widget.property.agent.avatar,
-                              );
-                            } else {
-                              Navigator.pushNamed(
-                                context,
-                                '/chat',
-                                arguments: <String, String>{
-                                  'userId': widget.property.agent.userId,
-                                  'name': widget.property.agent.name,
-                                  'avatar': widget.property.agent.avatar,
-                                },
-                              );
-                            }
-                          },
-                          child: Container(
-                            height: 56,
-                            alignment: Alignment.center,
-                            child: Text(
-                              'Message',
-                              style: GoogleFonts.poppins(
-                                color: tenantPrimary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
+                    child: OutlinedButton(
+                      onPressed: () {
+                        if (widget.onMessage != null) {
+                          widget.onMessage!(
+                            widget.property.agent.userId,
+                            widget.property.agent.name,
+                            widget.property.agent.avatar,
+                          );
+                        } else {
+                          Navigator.pushNamed(
+                            context,
+                            '/chat',
+                            arguments: <String, String>{
+                              'userId': widget.property.agent.userId,
+                              'name': widget.property.agent.name,
+                              'avatar': widget.property.agent.avatar,
+                            },
+                          );
+                        }
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: BorderSide(color: Colors.grey.shade400, width: 1),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(
+                        'Message',
+                        style: GoogleFonts.poppins(
+                          color: textDark,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: Container(
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: tenantPrimary,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: tenantPrimary.withOpacity(0.4),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BookingView(
+                            propertyId: widget.property.id,
                           ),
-                        ],
+                        ),
                       ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => BookingView(
-                                propertyId: widget.property.id,
-                              ),
-                            ),
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          child: Center(
-                            child: Text(
-                              'Book a Visit',
-                              style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: tenantPrimary,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(
+                        'Book a Visit',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
                         ),
                       ),
                     ),
@@ -647,48 +731,37 @@ class _PropertyDetailsState extends State<PropertyDetails> {
 
   // ─── Internal UI Components ───────────────────────────────────────────────
 
-  Widget _buildReviewsCarousel() {
+  Widget _buildDivider() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+      child: Divider(height: 1, color: dividerColor, thickness: 1.2),
+    );
+  }
+
+  Widget _buildReviewsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Reviews',
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: textDark,
-              ),
-            ),
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ReviewsView(
-                    propertyId: widget.property.id,
-                    propertyName: widget.property.name,
-                    averageRating: _avgRating,
-                    reviewCount: _reviewCount,
-                    canReview: _eligibleBookingId != null,
-                    hasReviewed: _hasReviewed,
-                    bookingId: _eligibleBookingId,
+            Row(
+              children: [
+                const Icon(Icons.star_rounded, color: textDark, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  _reviewCount > 0 ? '${_avgRating.toStringAsFixed(1)} · $_reviewCount reviews' : 'No reviews yet',
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: textDark,
                   ),
                 ),
-              ),
-              child: Text(
-                'See All',
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: tenantPrimary,
-                ),
-              ),
+              ],
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 24),
         if (_loadingReviews)
           const Center(
             child: Padding(
@@ -697,76 +770,85 @@ class _PropertyDetailsState extends State<PropertyDetails> {
             ),
           )
         else if (_reviews.isEmpty)
-          _GlassContainer(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                Icon(PhosphorIcons.star(), color: textLight, size: 32),
-                const SizedBox(height: 12),
-                Text(
-                  'No reviews yet',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: textLight,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+          Text(
+            'This property doesn\'t have any reviews yet.',
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              color: textLight,
             ),
           )
         else
           SizedBox(
-            height: 150,
-            child: ShaderMask(
-              shaderCallback: (Rect bounds) {
-                return const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.white,
-                    Colors.white,
-                    Colors.transparent,
-                  ],
-                  stops: [0.0, 0.1, 0.9, 1.0],
-                ).createShader(bounds);
+            height: 180,
+            child: PageView.builder(
+              controller: _reviewPageController,
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemBuilder: (context, index) {
+                final review = _reviews[index % _reviews.length];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 16.0),
+                  child: _buildCarouselCard(review),
+                );
               },
-              blendMode: BlendMode.dstIn,
-              child: PageView.builder(
-                controller: _reviewPageController,
-                scrollDirection: Axis.vertical,
-                physics: const BouncingScrollPhysics(),
-                itemBuilder: (context, index) {
-                  final review = _reviews[index % _reviews.length];
-                  return _buildCarouselCard(review);
-                },
+            ),
+          ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ReviewsView(
+                  propertyId: widget.property.id,
+                  propertyName: widget.property.name,
+                  averageRating: _avgRating,
+                  reviewCount: _reviewCount,
+                  canReview: _eligibleBookingId != null,
+                  hasReviewed: _hasReviewed,
+                  bookingId: _eligibleBookingId,
+                ),
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              side: const BorderSide(color: textDark, width: 1.2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(
+              'Show all $_reviewCount reviews',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: textDark,
               ),
             ),
           ),
+        ),
       ],
     );
   }
 
   Widget _buildCarouselCard(Review review) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(16),
+      width: MediaQuery.of(context).size.width * 0.8,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.6),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.8)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: dividerColor, width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(
             children: [
               ClipOval(
                 child: AppSession.buildAvatar(
                   review.reviewer?.avatar ?? '',
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   fit: BoxFit.cover,
                 ),
               ),
@@ -778,113 +860,87 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                     Text(
                       review.reviewer?.name ?? 'Anonymous',
                       style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                           color: textDark,
-                          fontSize: 14),
+                          fontSize: 15),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Row(
-                      children: [
-                        const Icon(Icons.star_rounded,
-                            color: Color(0xFFFBBF24), size: 16),
-                        const SizedBox(width: 4),
-                        Text(
-                          review.rating.toStringAsFixed(1),
-                          style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                              color: textLight),
-                        ),
-                      ],
+                    Text(
+                      DateFormat.yMMMd().format(review.createdAt),
+                      style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: textLight,
+                          fontWeight: FontWeight.w400),
                     ),
                   ],
                 ),
               ),
-              Text(
-                DateFormat.yMMMd().format(review.createdAt),
-                style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    color: textLight,
-                    fontWeight: FontWeight.w500),
-              ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            review.comment ?? 'No comment provided.',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: textDark.withOpacity(0.8),
-                height: 1.4,
-                fontWeight: FontWeight.w500),
+          const SizedBox(height: 16),
+          Expanded(
+            child: Text(
+              review.comment ?? 'No comment provided.',
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  color: textDark.withOpacity(0.85),
+                  height: 1.5,
+                  fontWeight: FontWeight.w400),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // NOTE: SIGNATURE PILLS KEPT INTACT AS REQUESTED
-  Widget _buildTag(IconData icon, String label, bool isPrimary) {
+  IconData _getAmenityIcon(String amenity) {
+    final lower = amenity.toLowerCase();
+    if (lower.contains('wifi') || lower.contains('internet')) return PhosphorIcons.wifiHigh();
+    if (lower.contains('water')) return PhosphorIcons.drop();
+    if (lower.contains('electric') || lower.contains('power')) return PhosphorIcons.lightning();
+    if (lower.contains('furnish')) return PhosphorIcons.armchair();
+    if (lower.contains('park') || lower.contains('garage')) return PhosphorIcons.car();
+    if (lower.contains('secur') || lower.contains('guard')) return PhosphorIcons.shieldCheck();
+    if (lower.contains('cctv') || lower.contains('camera')) return PhosphorIcons.videoCamera();
+    if (lower.contains('heat')) return PhosphorIcons.thermometer();
+    if (lower.contains('ac') || lower.contains('air')) return PhosphorIcons.wind();
+    if (lower.contains('pool')) return PhosphorIcons.swimmingPool();
+    if (lower.contains('gym') || lower.contains('fitness')) return PhosphorIcons.barbell();
+    return PhosphorIcons.checkCircle();
+  }
+
+  Widget _buildMinimalTag(IconData icon, String label) {
     return Container(
-      padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: isPrimary ? tenantPrimary : Colors.white.withOpacity(0.6),
-        border: Border.all(
-            color: isPrimary ? tenantPrimary : Colors.white, width: 1.5),
+        color: Colors.white,
+        border: Border.all(color: dividerColor, width: 1.2),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              size: 16,
-              color: isPrimary ? tenantPrimary : textLight,
-            ),
-          ),
+          Icon(icon, size: 16, color: textDark),
           const SizedBox(width: 8),
           Text(
             label,
             style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: isPrimary ? Colors.white : textDark,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: textDark,
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildWhiteCircleIcon(IconData icon) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.8),
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white),
-      ),
-      child: Icon(
-        icon,
-        color: tenantPrimary,
-        size: 20,
       ),
     );
   }
 
   Widget _buildRoomImage(String url, {double height = 120}) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(12),
       child: buildPropertyImage(
         url,
         height: height,
@@ -894,111 +950,30 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   }
 }
 
-class _ShortcutPill extends StatelessWidget {
+class _NavButton extends StatelessWidget {
   final IconData icon;
-  final String label;
   final VoidCallback onTap;
-  const _ShortcutPill(
-      {required this.icon, required this.label, required this.onTap});
+
+  const _NavButton({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(right: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.6),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white, width: 1.5)),
-        child: Row(children: [
-          Icon(icon, size: 18, color: const Color(0xFF3F37C9)), // Tenant Blue
-          const SizedBox(width: 8),
-          Text(label,
-              style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF111827))),
-        ]),
-      ),
-    );
-  }
-}
-
-class _GlassCircleButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _GlassCircleButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.25),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withOpacity(0.4)),
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
             ),
-            child: Icon(icon, color: Colors.white, size: 20),
-          ),
+          ],
         ),
-      ),
-    );
-  }
-}
-
-class _GlassContainer extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final BorderRadius? borderRadius;
-  final double blur;
-  final double opacity;
-  final double borderWidth;
-
-const _GlassContainer({
-  required this.child,
-  this.padding = EdgeInsets.zero,
-  this.borderRadius,
-  this.blur = 24,
-  this.opacity = 0.20,
-  this.borderWidth = 1.2,
-});
-
-  @override
-  Widget build(BuildContext context) {
-    final radius = borderRadius ?? BorderRadius.circular(24);
-
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: opacity),
-            borderRadius: radius,
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.8),
-              width: borderWidth,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: child,
-        ),
+        child: Icon(icon, color: Colors.black87, size: 20),
       ),
     );
   }

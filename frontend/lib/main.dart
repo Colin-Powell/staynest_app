@@ -18,6 +18,7 @@ import 'screens/dashboard/landlord_tenants_page.dart';
 import 'screens/landlord/verification_flow.dart' show VerificationCenter;
 import 'app_theme.dart';
 import 'session/app_session.dart';
+import 'session/onboarding_prefs.dart';
 import 'screens/dashboard/landlord_bookings_page.dart';
 import 'screens/privacy_policy.dart';
 import 'screens/auth/tenant_survey.dart';
@@ -75,6 +76,7 @@ void _initializeFirebaseAsync() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await OnboardingPrefs.init();
 
   // GoogleFonts.config.allowRuntimeFetching = false;
 
@@ -539,7 +541,6 @@ class _AppShellState extends State<AppShell> {
   bool _showAmenities = false;
   bool _showLocation = false;
   bool _showLandlordInfo = false;
-  bool _showFilter = false;
   bool _isMessageSelectionMode = false;
   Map<String, dynamic> _activeFilters = {};
 
@@ -550,8 +551,20 @@ class _AppShellState extends State<AppShell> {
     setState(() => _screen = s);
   }
 
-  void _openFilter() => setState(() => _showFilter = true);
-  void _closeFilter() => setState(() => _showFilter = false);
+  void _openFilter() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => FilterView(
+        onClose: () => Navigator.of(context).pop(),
+        onApplyFilters: (filters) {
+          AnalyticsService.resetSessionImpressions();
+          setState(() => _activeFilters = filters);
+        },
+      ),
+    );
+  }
 
   void _openPhotoGallery() => setState(() => _showPhotoGallery = true);
   void _closePhotoGallery() => setState(() => _showPhotoGallery = false);
@@ -565,23 +578,29 @@ class _AppShellState extends State<AppShell> {
   void _openLandlordInfo() => setState(() => _showLandlordInfo = true);
   void _closeLandlordInfo() => setState(() => _showLandlordInfo = false);
 
-  Future<void> _openProperty(String id) async {
+  Future<void> _openProperty(Property initialProperty) async {
     setState(() {
-      _selectedPropertyId = id;
-      _selectedProperty = null;
-      _loadingPropertyDetails = true;
+      _selectedPropertyId = initialProperty.id;
+      _selectedProperty = initialProperty;
+      _loadingPropertyDetails = false; // No spinner
     });
 
-    AnalyticsService.trackPropertyClick(id, source: 'app_shell');
-    AnalyticsService.trackPropertyView(id, source: 'app_shell');
-    AnalyticsService.trackPropertyDetailView(id);
-    final property = await _propertyService.fetchPropertyById(id);
-    if (!mounted) return;
+    AnalyticsService.trackPropertyClick(initialProperty.id, source: 'app_shell');
+    AnalyticsService.trackPropertyView(initialProperty.id, source: 'app_shell');
+    AnalyticsService.trackPropertyDetailView(initialProperty.id);
+    
+    try {
+      final property = await _propertyService.fetchPropertyById(initialProperty.id);
+      if (!mounted) return;
 
-    setState(() {
-      _selectedProperty = property;
-      _loadingPropertyDetails = false;
-    });
+      if (property != null) {
+        setState(() {
+          _selectedProperty = property;
+        });
+      }
+    } catch (e) {
+      // Ignore fetch errors to keep displaying the initial property
+    }
   }
 
   void _closeProperty() {
@@ -613,7 +632,6 @@ class _AppShellState extends State<AppShell> {
   }
 
   bool get _isOverlayOpen =>
-      _showFilter ||
       _selectedPropertyId != null ||
       _selectedChatName != null ||
       _showPhotoGallery ||
@@ -675,7 +693,6 @@ class _AppShellState extends State<AppShell> {
               Expanded(child: baseScreen),
             ],
           ),
-          if (_showFilter) _buildFilterOverlay(),
           if (_selectedPropertyId != null) _buildPropertyDetailsOverlay(),
           if (_showPhotoGallery) _buildPhotoGalleryOverlay(),
           if (_showAmenities) _buildAmenitiesOverlay(),
@@ -685,8 +702,8 @@ class _AppShellState extends State<AppShell> {
           if (isCompactScreen)
             Positioned(
               bottom: MediaQuery.of(context).padding.bottom + 16,
-              left: 24,
-              right: 24,
+              left: 0,
+              right: 0,
               child: AnimatedSlide(
                 offset: hideBottomNav ? const Offset(0, 1.5) : Offset.zero,
                 duration: const Duration(milliseconds: 250),
@@ -694,7 +711,7 @@ class _AppShellState extends State<AppShell> {
                 child: AnimatedOpacity(
                   duration: const Duration(milliseconds: 200),
                   opacity: hideBottomNav ? 0.0 : 1.0,
-                  child: _BottomNav(current: _screen, onTap: _goTo),
+                  child: Center(child: _BottomNav(current: _screen, onTap: _goTo)),
                 ),
               ),
             ),
@@ -709,10 +726,18 @@ class _AppShellState extends State<AppShell> {
         return HomeView(
           key: const ValueKey('home'),
           onSelectProperty: _openProperty,
-          onSeeAllNearby: () => _goTo(_AppScreen.search),
+          onSeeCategory: (cat) {
+            if (cat.isNotEmpty) {
+              setState(() => _activeFilters = {'propertyType': cat});
+            } else {
+              setState(() => _activeFilters = {});
+            }
+            _goTo(_AppScreen.search);
+          },
           onNotifications: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Notifications tapped')),
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const NotificationsView()),
             );
           },
         );
@@ -723,11 +748,12 @@ class _AppShellState extends State<AppShell> {
           onToggleMap: (visible) {},
           onOpenFilters: _openFilter,
           activeFilters: _activeFilters,
+          onFiltersChanged: (f) => setState(() => _activeFilters = f),
         );
       case _AppScreen.saved:
         return SavedView(
           key: const ValueKey('saved'),
-          onSelectProperty: (id) => _openProperty(id),
+          onSelectProperty: (property) => _openProperty(property),
         );
       case _AppScreen.messages:
         return MessagesViewScreen(
@@ -780,18 +806,7 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  Widget _buildFilterOverlay() {
-    return Material(
-      color: Colors.black38,
-      child: FilterView(
-        onClose: _closeFilter,
-        onApplyFilters: (filters) {
-          AnalyticsService.resetSessionImpressions();
-          setState(() => _activeFilters = filters);
-        },
-      ),
-    );
-  }
+
 
   Widget _buildPropertyDetailsOverlay() {
     if (_loadingPropertyDetails) {
@@ -956,9 +971,10 @@ class _BottomNav extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           _NavItem(
             icon: Icons.home_outlined,
@@ -967,6 +983,7 @@ class _BottomNav extends StatelessWidget {
             active: current == _AppScreen.home,
             onTap: () => onTap(_AppScreen.home),
           ),
+          const SizedBox(width: 4),
           _NavItem(
             icon: Icons.search_outlined,
             activeIcon: Icons.search_rounded,
@@ -974,6 +991,7 @@ class _BottomNav extends StatelessWidget {
             active: current == _AppScreen.search,
             onTap: () => onTap(_AppScreen.search),
           ),
+          const SizedBox(width: 4),
           _NavItem(
             icon: Icons.bookmark_border,
             activeIcon: Icons.bookmark,
@@ -981,6 +999,7 @@ class _BottomNav extends StatelessWidget {
             active: current == _AppScreen.saved,
             onTap: () => onTap(_AppScreen.saved),
           ),
+          const SizedBox(width: 4),
           _NavItem(
             icon: Icons.chat_bubble_outline_rounded,
             activeIcon: Icons.chat_bubble_rounded,
@@ -988,6 +1007,7 @@ class _BottomNav extends StatelessWidget {
             active: current == _AppScreen.messages,
             onTap: () => onTap(_AppScreen.messages),
           ),
+          const SizedBox(width: 4),
           _NavItem(
             icon: Icons.person_outline,
             activeIcon: Icons.person,
