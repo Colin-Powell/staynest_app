@@ -263,7 +263,7 @@ router.get('/landlord-overview', requireAuth, async (req: Request, res: Response
 
     // Parallelize all queries to prevent sequential processing bottlenecks 
     // and resolve "Connection reset by peer" errors caused by Render timeouts.
-    const [statsResult, occupancyResult, chartResult, topProps, photoRows] = await Promise.all([
+    const [statsResult, occupancyResult, chartResult, topProps, photoRows, deviationResult] = await Promise.all([
       query(
         `SELECT
            COALESCE((SELECT COUNT(*) FROM property_unique_views puv
@@ -329,6 +329,14 @@ router.get('/landlord-overview', requireAuth, async (req: Request, res: Response
          ORDER BY engagement DESC
          LIMIT 3`,
         [landlordId]
+      ),
+      query(
+        `SELECT 
+          (SELECT COUNT(*) FROM property_unique_views puv JOIN properties pv ON pv.id = puv.property_id WHERE pv.landlord_id = $1 AND puv.viewed_date >= CURRENT_DATE - INTERVAL '${daysCount} days') AS current_views,
+          (SELECT COUNT(*) FROM property_unique_views puv JOIN properties pv ON pv.id = puv.property_id WHERE pv.landlord_id = $1 AND puv.viewed_date >= CURRENT_DATE - INTERVAL '${daysCount * 2} days' AND puv.viewed_date < CURRENT_DATE - INTERVAL '${daysCount} days') AS previous_views,
+          (SELECT COALESCE(SUM(bookings_completed), 0) FROM property_analytics pa JOIN properties pv ON pv.id = pa.property_id WHERE pv.landlord_id = $1) AS current_bookings
+        `,
+        [landlordId]
       )
     ]);
 
@@ -352,18 +360,38 @@ router.get('/landlord-overview', requireAuth, async (req: Request, res: Response
       seriesData.push(dateMap.get(key) || 0);
     }
 
+    const devRow = deviationResult.rows[0] ?? {};
+    const currViews = toNumber(devRow.current_views);
+    const prevViews = toNumber(devRow.previous_views);
+    const bookings = toNumber(row.bookings);
+    
+    let growthValue = 0;
+    if (prevViews > 0) {
+      growthValue = ((currViews - prevViews) / prevViews) * 100;
+    } else if (currViews > 0) {
+      growthValue = 100;
+    }
+    
+    // Naive booking growth approximation since we don't have historical booking aggregation in `property_analytics` easily, 
+    // we can return a default or static calculation. We'll pass a default 0% for now.
+    const growthStr = (growthValue > 0 ? '+' : '') + growthValue.toFixed(1) + '%';
+    const bookingsGrowthStr = '+0.0%';
+    const occGrowthStr = '+0.0%';
+
     res.json({
       overview: {
         totalViews: totalViews.toLocaleString(),
-        growth: '0%',
+        growth: growthStr,
         chartData: seriesData,
       },
       metrics: {
         uniqueViewers: toNumber(row.unique_viewers).toLocaleString(),
         saves: toNumber(row.saves).toLocaleString(),
         shares: toNumber(row.shares).toLocaleString(),
-        totalBookings: toNumber(row.bookings).toLocaleString(),
+        totalBookings: bookings.toLocaleString(),
+        bookingsGrowth: bookingsGrowthStr,
         occupancyRate: occupancyResult.rows[0]?.rate ? Number(occupancyResult.rows[0].rate).toFixed(1) + '%' : '0%',
+        occupancyGrowth: occGrowthStr,
         avgCtr:
           totalImpressions > 0
             ? `${((totalClicks / totalImpressions) * 100).toFixed(1)}%`

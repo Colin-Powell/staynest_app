@@ -10,6 +10,8 @@ import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/property_mapper.dart';
 import 'landlord_dashboard_service.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
+import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
+import 'package:property_app/session/onboarding_prefs.dart';
 
 import 'dashboard_widgets.dart';
 import 'landlord_analytics_page.dart';
@@ -32,15 +34,28 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
   List<Map<String, dynamic>> _properties = [];
   Map<String, String> _metrics = {
     'totalViews': '0',
-    'viewsGrowth': '0%',
+    'viewsGrowth': '+0%',
     'totalBookings': '0',
+    'bookingsGrowth': '+0%',
     'occupancyRate': '0%',
+    'occupancyGrowth': '+0%',
   };
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!OnboardingPrefs.hasSeen('landlordOverviewSeen')) {
+        OnboardingBottomSheet.show(
+          context: context,
+          imagePath: 'assets/images/home_onboarding.png',
+          title: 'Welcome to your Dashboard',
+          subtitle: 'Track your total views, manage properties, and monitor your occupancy rate all in one place.',
+          ctaText: 'Get Started',
+        ).then((_) => OnboardingPrefs.markAsSeen('landlordOverviewSeen'));
+      }
+    });
   }
 
   Future<void> _loadData() async {
@@ -60,16 +75,13 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
         final analyticsData = results[1] as Map<String, dynamic>?;
 
         if (analyticsData != null) {
-          // Calculate occupancy based on properties marked 'rented' as requested
-          final rentedCount = _properties.where((p) => 
-              p['status']?.toString().toLowerCase() == 'rented').length;
-          final occRate = _properties.isEmpty ? 0 : (rentedCount / _properties.length * 100);
-
           _metrics = {
             'totalViews': analyticsData['overview']?['totalViews']?.toString() ?? '0',
             'viewsGrowth': analyticsData['overview']?['growth']?.toString() ?? '0%',
             'totalBookings': analyticsData['metrics']?['totalBookings']?.toString() ?? '0',
-            'occupancyRate': '${occRate.toStringAsFixed(0)}%',
+            'bookingsGrowth': analyticsData['metrics']?['bookingsGrowth']?.toString() ?? '+0%',
+            'occupancyRate': analyticsData['metrics']?['occupancyRate']?.toString() ?? '0%',
+            'occupancyGrowth': analyticsData['metrics']?['occupancyGrowth']?.toString() ?? '+0%',
           };
         }
         _isLoading = false;
@@ -205,9 +217,9 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
               childAspectRatio: 1.25,
               children: [
                 _buildStatCard('Properties', _properties.length.toString(), '+0', true),
-                _buildStatCard('Bookings', _metrics['totalBookings']!, '+0', true),
+                _buildStatCard('Bookings', _metrics['totalBookings']!, _metrics['bookingsGrowth']!, !_metrics['bookingsGrowth']!.startsWith('-')),
                 _buildStatCard('Views', _metrics['totalViews']!, _metrics['viewsGrowth']!, !_metrics['viewsGrowth']!.startsWith('-')),
-                _buildStatCard('Occupancy', _metrics['occupancyRate']!, '+0', true),
+                _buildStatCard('Occupancy', _metrics['occupancyRate']!, _metrics['occupancyGrowth']!, !_metrics['occupancyGrowth']!.startsWith('-')),
               ],
             ),
             const SizedBox(height: 16),

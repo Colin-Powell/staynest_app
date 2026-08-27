@@ -1,5 +1,7 @@
 // lib/screens/dashboard/landlord_analytics_page.dart
 import 'package:flutter/material.dart';
+import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
+import 'package:property_app/session/onboarding_prefs.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/widgets/property_image.dart';
@@ -43,6 +45,17 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
   void initState() {
     super.initState();
     _fetchAnalytics();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!OnboardingPrefs.hasSeen('landlordAnalyticsSeen')) {
+        OnboardingBottomSheet.show(
+          context: context,
+          imagePath: 'assets/images/home_onboarding.png',
+          title: 'Insights & Analytics',
+          subtitle: 'Dive deep into your portfolio performance, see engagement rates, and track conversion funnel metrics.',
+          ctaText: 'View Insights',
+          ).then((_) => OnboardingPrefs.markAsSeen('landlordAnalyticsSeen'));
+      }
+    });
   }
 
   Future<void> _fetchAnalytics() async {

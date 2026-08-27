@@ -14,7 +14,7 @@ class VersionService {
         final data = jsonDecode(response.body);
         final String latestVersion = data['latestVersion'] ?? '1.0.0';
         final String updateUrl = data['updateUrl'] ?? 'https://staynest.top/update.html';
-        final bool forceUpdate = data['forceUpdate'] ?? false;
+        final bool forceUpdate = false; // Overridden to always allow skipping
 
         // Simple string comparison for versions (assumes semantic versioning like 1.0.1)
         if (_isUpdateAvailable(AppSession.currentAppVersion, latestVersion)) {
@@ -94,8 +94,10 @@ class VersionService {
                   child: ElevatedButton(
                     onPressed: () async {
                       final uri = Uri.parse(url);
-                      if (await canLaunchUrl(uri)) {
+                      try {
                         await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      } catch (e) {
+                        debugPrint('Could not launch update URL: $e');
                       }
                     },
                     style: ElevatedButton.styleFrom(

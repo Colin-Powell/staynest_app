@@ -1,5 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
+import 'package:property_app/session/onboarding_prefs.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/booking_service.dart';
@@ -53,6 +55,17 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
   void initState() {
     super.initState();
     _loadBookings();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!OnboardingPrefs.hasSeen('landlordBookingsSeen')) {
+        OnboardingBottomSheet.show(
+          context: context,
+          imagePath: 'assets/images/home_onboarding.png',
+          title: 'Booking Requests',
+          subtitle: 'Review tenant applications, approve bookings, and manage your reservation calendar.',
+          ctaText: 'View Bookings',
+          ).then((_) => OnboardingPrefs.markAsSeen('landlordBookingsSeen'));
+      }
+    });
   }
 
   Future<void> _loadBookings() async {
