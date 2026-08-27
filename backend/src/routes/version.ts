@@ -3,7 +3,7 @@ import { env } from '../config.js';
 
 const router = express.Router();
 
-router.get('/', (req, res) => {
+router.get('/', (_req, res) => {
   res.json({
     latestVersion: env.appLatestVersion || '1.0.0',
     updateUrl: env.appUpdateUrl || 'https://staynest.top/update.html',
