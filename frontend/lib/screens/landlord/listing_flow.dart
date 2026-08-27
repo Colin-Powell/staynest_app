@@ -1166,10 +1166,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
             _buildLabel('Rent Price'),
             _buildPricingField(_rentPrice, '12000', '/month'),
             const SizedBox(height: 20),
-            _buildLabel('Service Charges (KES)'),
+            _buildLabel('Service Charges (Ksh.)'),
             _buildPricingField(_serviceCharges, '1500', '/month'),
             const SizedBox(height: 20),
-            _buildLabel('Security Deposit (KES)'),
+            _buildLabel('Security Deposit (Ksh.)'),
             _buildPricingField(_securityDeposit, '12000', '/month'),
             const SizedBox(height: 20),
             _buildLabel('Minimum Stay'),
@@ -1344,7 +1344,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
                             text: TextSpan(children: [
                           TextSpan(
                               text:
-                                  'Kes. ${_rentPrice.text.isEmpty ? '0' : _rentPrice.text}',
+                                  'Ksh. ${_rentPrice.text.isEmpty ? '0' : _rentPrice.text}',
                               style: GoogleFonts.poppins(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14,
@@ -1477,10 +1477,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
                   .headlineSmall
                   ?.copyWith(color: AppColors.gray900)),
           const SizedBox(height: 24),
-          _buildReviewRow('Rent Price', 'Kes. ${_rentPrice.text} /month'),
+          _buildReviewRow('Rent Price', 'Ksh. ${_rentPrice.text} /month'),
           _buildReviewRow(
-              'Service Charges', 'Kes. ${_serviceCharges.text} /month'),
-          _buildReviewRow('Security Deposit', 'Kes. ${_securityDeposit.text}'),
+              'Service Charges', 'Ksh. ${_serviceCharges.text} /month'),
+          _buildReviewRow('Security Deposit', 'Ksh. ${_securityDeposit.text}'),
           _buildReviewRow('Minimum Stay', _minimumStay),
           _buildReviewRow(
               'Available From',

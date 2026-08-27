@@ -66,6 +66,6 @@ bool categoryMatchesUiFilter(String propertyCategory, String uiFilter,
 }
 
 String formatPropertyPrice(int price) {
-  if (price <= 0) return 'Kes. -';
-  return 'Kes. $price';
+  if (price <= 0) return 'Ksh. -';
+  return 'Ksh. $price';
 }

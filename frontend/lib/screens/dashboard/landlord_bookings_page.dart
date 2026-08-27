@@ -511,7 +511,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
 
                     // Price
                     Text(
-                      'Kes. ${booking['price']}',
+                      'Ksh. ${booking['price']}',
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,

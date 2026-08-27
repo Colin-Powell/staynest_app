@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+
+import 'package:property_app/session/app_session.dart';
 
 class SettingView extends StatefulWidget {
   final VoidCallback onBack;
@@ -313,36 +314,23 @@ class AboutView extends StatelessWidget {
           ),
         ),
       ),
-      body: SizedBox(
-        width: double.infinity,
+      body: SizedBox.expand(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Logo SVG
-            SvgPicture.asset(
-              'assets/images/logo.svg',
-              height: 120,
-              width: 120,
+            
+            Image.asset(
+              'assets/images/logo.webp',
+              height: 200,
+              width: 200,
               fit: BoxFit.contain,
             ),
             const SizedBox(height: 32),
 
-            // App Name
-            const Text(
-              'StayNest',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-                color: Colors.black,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 8),
-
             // Version Info
-            const Text(
-              'Version 1.0.0',
+            Text(
+              'Version ${AppSession.currentAppVersion}',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,

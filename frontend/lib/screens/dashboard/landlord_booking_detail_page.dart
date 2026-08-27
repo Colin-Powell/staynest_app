@@ -330,7 +330,7 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                                               child: _buildInfoColumn(
                                                   PhosphorIcons.wallet(),
                                                   'Price',
-                                                  'Kes. ${booking['price'] ?? 0}',
+                                                  'Ksh. ${booking['price'] ?? 0}',
                                                   isLight: true),
                                             ),
                                           ],

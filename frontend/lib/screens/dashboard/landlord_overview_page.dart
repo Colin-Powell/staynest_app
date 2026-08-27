@@ -422,7 +422,7 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                 Row(
                   children: [
                     Text(
-                      'KES ${price.toStringAsFixed(0)}',
+                      'Ksh. ${price.toStringAsFixed(0)}',
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,

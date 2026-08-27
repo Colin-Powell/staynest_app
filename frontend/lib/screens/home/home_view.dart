@@ -8,6 +8,7 @@ import 'package:property_app/session/app_session.dart';
 import 'package:property_app/session/onboarding_prefs.dart';
 import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
 import 'package:property_app/widgets/property_card.dart';
+import 'package:property_app/services/version_service.dart';
 
 import 'package:property_app/models/property.dart';
 import 'package:property_app/services/properties_api.dart';
@@ -68,6 +69,8 @@ class _HomeViewState extends State<HomeView> {
     _loadCollections();
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      VersionService.checkVersion(context);
+
       if (!OnboardingPrefs.hasSeen('homeSeen')) {
         OnboardingBottomSheet.show(
           context: context,

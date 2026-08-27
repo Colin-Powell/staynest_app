@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+    <!-- ═══════════════════════════════════════════
+         PRIMARY SEO
+    ═══════════════════════════════════════════ -->
+    <title>Update StayNest</title>
+    <meta name="description" content="StayNest connects tenants, landlords and property managers on one secure platform. Browse verified rental listings, pay rent online, and manage your property — all in one place." />
+    <meta name="keywords" content="rent apartment, find rental, verified listings, property management app, landlord app, tenant app, rental platform, StayNest" />
+    <meta name="author" content="StayNest" />
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <link rel="canonical" href="https://staynest.top/" />
+
+    <!-- ═══════════════════════════════════════════
+         OPEN GRAPH (Facebook / LinkedIn / WhatsApp)
+    ═══════════════════════════════════════════ -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="StayNest" />
+    <meta property="og:title" content="StayNest — Find, Rent &amp; Live | Verified Rental Listings" />
+    <meta property="og:description" content="StayNest connects tenants, landlords and property managers on one secure platform. Browse verified listings, pay rent online, and manage your property in one place." />
+    <meta property="og:url" content="https://staynest.top/" />
+    <meta property="og:image" content="https://staynest.top/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="StayNest — Find. Rent. Live." />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- ═══════════════════════════════════════════
+         TWITTER / X CARD
+    ═══════════════════════════════════════════ -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@StayNestApp" />
+    <meta name="twitter:creator" content="@StayNestApp" />
+    <meta name="twitter:title" content="StayNest — Find, Rent &amp; Live" />
+    <meta name="twitter:description" content="Browse verified rentals, pay rent, and manage properties — all in one trusted platform." />
+    <meta name="twitter:image" content="https://staynest.top/og-image.png" />
+    <meta name="twitter:image:alt" content="StayNest — Find. Rent. Live." />
+
+    <!-- ═══════════════════════════════════════════
+         STRUCTURED DATA — JSON-LD
+    ═══════════════════════════════════════════ -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://staynest.top/#website",
+          "url": "https://staynest.top/",
+          "name": "StayNest",
+          "description": "StayNest connects tenants, landlords and property managers on one secure platform.",
+          "inLanguage": "en-US",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://staynest.top/?s={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://staynest.top/#organization",
+          "name": "StayNest",
+          "url": "https://staynest.top/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://staynest.top/logo.svg",
+            "width": 200,
+            "height": 60
+          },
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "email": "support@staynest.app",
+            "contactType": "customer support",
+            "availableLanguage": "English"
+          },
+          "sameAs": [
+            "https://twitter.com/StayNestApp",
+            "https://www.instagram.com/StayNestApp",
+            "https://www.linkedin.com/company/staynest"
+          ]
+        },
+        {
+          "@type": "MobileApplication",
+          "@id": "https://staynest.top/#app",
+          "name": "StayNest",
+          "operatingSystem": ["iOS", "Android"],
+          "applicationCategory": "LifestyleApplication",
+          "description": "Browse verified rental listings, pay rent online, and manage properties — all in one trusted app.",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.8",
+            "reviewCount": "1240"
+          }
+        },
+        {
+          "@type": "WebPage",
+          "@id": "https://staynest.top/#webpage",
+          "url": "https://staynest.top/",
+          "name": "StayNest — Find, Rent & Live | Verified Rental Listings",
+          "description": "StayNest connects tenants, landlords and property managers on one secure platform.",
+          "isPartOf": { "@id": "https://staynest.top/#website" },
+          "publisher": { "@id": "https://staynest.top/#organization" },
+          "breadcrumb": {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://staynest.top/"
+              }
+            ]
+          }
+        }
+      ]
+    }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Plus Jakarta Sans"', "sans-serif"],
+            },
+            colors: {
+              primary: "#3D36E8",
+              light: "#EEF1FF",
+              dark: "#20203A",
+              graycustom: "#707070",
+            },
+            boxShadow: {
+              soft: "0 10px 30px rgba(61, 54, 232, 0.08)",
+              strong: "0 20px 40px rgba(61, 54, 232, 0.15)",
+            },
+            borderRadius: {
+              "2xl": "1rem",
+              "3xl": "1.5rem",
+            },
+            animation: {
+              blob: "blob 7s infinite",
+              "fade-in": "fadeIn 1s ease-out forwards",
+            },
+            keyframes: {
+              blob: {
+                "0%": { transform: "translate(0px, 0px) scale(1)" },
+                "33%": { transform: "translate(30px, -50px) scale(1.1)" },
+                "66%": { transform: "translate(-20px, 20px) scale(0.9)" },
+                "100%": { transform: "translate(0px, 0px) scale(1)" },
+              },
+              fadeIn: {
+                "0%": { opacity: "0", transform: "translateY(20px)" },
+                "100%": { opacity: "1", transform: "translateY(0)" },
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+    </style>
+  </head>
+  <body class="antialiased text-dark bg-white selection:bg-primary selection:text-white pt-24">
+    <header
+      id="navbar"
+      class="fixed top-0 w-full z-50 transition-all duration-300 bg-white/80 backdrop-blur-md border-b border-transparent"
+    >
+      <div
+        class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between relative"
+      >
+        <div class="flex items-center gap-3 cursor-pointer">
+          <img
+            src="logo.svg"
+            alt="StayNest Logo"
+            class="h-10 w-auto object-contain"
+          />
+        </div>
+        <nav
+          class="hidden md:flex items-center gap-8 font-medium text-sm text-graycustom"
+        >
+          <a href="#home" class="hover:text-primary transition-colors">Home</a>
+          <a href="#features" class="hover:text-primary transition-colors"
+            >Features</a
+          >
+          <a href="#contact" class="hover:text-primary transition-colors"
+            >Contact</a
+          >
+        </nav>
+
+        <div class="flex items-center gap-4">
+          <a
+            href="Staynest.apk"
+            class="hidden md:inline-block px-6 py-3 bg-primary text-white font-semibold rounded-2xl shadow-strong hover:scale-105 transition-all duration-300"
+            >Download the App</a
+          >
+          <!-- Mobile Menu Button -->
+          <button
+            id="mobile-menu-btn"
+            class="md:hidden p-2 text-dark focus:outline-none hover:text-primary transition-colors"
+          >
+            <svg
+              class="w-7 h-7"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6h16M4 12h16M4 18h16"
+              ></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile Menu Dropdown -->
+      <div
+        id="mobile-menu"
+        class="hidden absolute top-full left-0 w-full bg-white border-t border-gray-100 shadow-xl md:hidden"
+      >
+        <div class="px-6 py-6 flex flex-col gap-4 font-medium text-graycustom">
+          <a
+            href="#home"
+            class="mobile-link block py-2 hover:text-primary transition-colors"
+            >Home</a
+          >
+          <a
+            href="#features"
+            class="mobile-link block py-2 hover:text-primary transition-colors"
+            >Features</a
+          >
+          <a
+            href="#contact"
+            class="mobile-link block py-2 hover:text-primary transition-colors"
+            >Contact</a
+          >
+          <a
+            href="Staynest.apk"
+            class="mobile-link block mt-2 text-center px-6 py-3 bg-primary text-white font-semibold rounded-xl shadow-soft"
+            >Download the App</a
+          >
+        </div>
+      </div>
+    </header>
+
+    <main class="min-h-[60vh] flex items-center justify-center py-20 px-4">
+      <div class="max-w-md w-full bg-white p-10 rounded-3xl shadow-strong text-center border border-gray-100 mt-10">
+        <img src="logo.svg" alt="StayNest Logo" class="h-24 w-auto mx-auto mb-6 object-contain drop-shadow-sm" />
+        <h1 class="text-3xl font-extrabold text-dark mb-4 tracking-tight">Update Available</h1>
+        <p class="text-graycustom mb-8 text-lg leading-relaxed">
+          A new version of StayNest is ready! Please update to continue enjoying a secure and smooth experience.
+        </p>
+        <a 
+          href="Staynest.apk" 
+          class="inline-block px-8 py-4 bg-primary text-white font-bold rounded-2xl shadow-strong hover:scale-105 transition-all duration-300 w-full"
+        >
+          Download Latest Version
+        </a>
+      </div>
+    </main>
+
+    <footer class="bg-white border-t border-gray-100 pt-16 pb-8">
+      <div
+        class="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-5 gap-8 mb-12"
+      >
+        <div class="col-span-4 md:col-span-2">
+        <div class="flex items-center gap-3 cursor-pointer">
+          <img
+            src="logo.svg"
+            alt="StayNest Logo"
+            class="h-10 w-auto object-contain"
+          />
+        </div>
+          <p class="text-graycustom text-sm max-w-xs mb-6">
+            The modern platform for renting, discovering, and managing
+            properties with ease and total security.
+          </p>
+        </div>
+
+        <div>
+          <h4 class="font-bold text-dark mb-4">Product</h4>
+          <ul class="space-y-3 text-sm text-graycustom">
+            <li>
+              <a href="/features" class="hover:text-primary transition-colors"
+                >Features</a
+              >
+            </li>
+            <li>
+              <a href="/pricing" class="hover:text-primary transition-colors"
+                >Pricing</a
+              >
+            </li>
+            <li>
+              <a href="/blog" class="hover:text-primary transition-colors">Blog</a>
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 class="font-bold text-dark mb-4">Company</h4>
+          <ul class="space-y-3 text-sm text-graycustom">
+            <li>
+              <a href="/about" class="hover:text-primary transition-colors">About</a>
+            </li>
+            <li>
+              <a href="/contact" class="hover:text-primary transition-colors"
+                >Careers</a
+              >
+            </li>
+            <li>
+              <a href="/contact" class="hover:text-primary transition-colors"
+                >Support</a
+              >
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 class="font-bold text-dark mb-4">Developers</h4>
+          <ul class="space-y-3 text-sm text-graycustom">
+            <li>
+              <a href="#join-waitlist" data-waitlist-open class="hover:text-primary transition-colors">API</a>
+            </li>
+            <li>
+              <a href="#join-waitlist" data-waitlist-open class="hover:text-primary transition-colors"
+                >Documentation</a
+              >
+            </li>
+          </ul>
+          <h4 class="font-bold text-dark mb-4 mt-6">Legal</h4>
+          <ul class="space-y-3 text-sm text-graycustom">
+            <li>
+              <a href="/privacy" class="hover:text-primary transition-colors"
+                >Privacy</a
+              >
+            </li>
+            <li>
+              <a href="/terms" class="hover:text-primary transition-colors">Terms</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div
+        class="max-w-7xl mx-auto px-6 border-t border-gray-100 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-400"
+      >
+        <div>© 2026 StayNest. All rights reserved.</div>
+        <div class="flex items-center gap-6">
+          <a href="#" class="hover:text-gray-900 transition-colors">Twitter</a>
+          <a href="#" class="hover:text-gray-900 transition-colors">LinkedIn</a>
+          <a href="#" class="hover:text-gray-900 transition-colors"
+            >Instagram</a
+          >
+        </div>
+      </div>
+    </footer>
+
+    <script src="app.js"></script>
+    <script>
+      // 1. Navbar Scroll Effect
+      window.addEventListener("scroll", () => {
+        const navbar = document.getElementById("navbar");
+        if (window.scrollY > 20) {
+          navbar.classList.add("shadow-sm", "border-gray-100");
+          navbar.classList.remove("border-transparent");
+        } else {
+          navbar.classList.remove("shadow-sm", "border-gray-100");
+          navbar.classList.add("border-transparent");
+        }
+      });
+
+      // 2. Feature Tab Switcher Logic
+      function switchTab(tabId) {
+        const btnTenants = document.getElementById("btn-tenants");
+        const btnLandlords = document.getElementById("btn-landlords");
+        const tabTenants = document.getElementById("tab-tenants");
+        const tabLandlords = document.getElementById("tab-landlords");
+
+        if (tabId === "tenants") {
+          // Show Tenants
+          tabTenants.classList.remove("hidden");
+          tabLandlords.classList.add("hidden");
+          // Update Buttons
+          btnTenants.className =
+            "px-8 py-3 rounded-full bg-primary text-white font-bold shadow-soft transition-all duration-300";
+          btnLandlords.className =
+            "px-8 py-3 rounded-full bg-gray-100 text-graycustom hover:bg-gray-200 font-bold transition-all duration-300";
+        } else {
+          // Show Landlords
+          tabLandlords.classList.remove("hidden");
+          tabTenants.classList.add("hidden");
+          // Update Buttons
+          btnLandlords.className =
+            "px-8 py-3 rounded-full bg-green-500 text-white font-bold shadow-soft transition-all duration-300";
+          btnTenants.className =
+            "px-8 py-3 rounded-full bg-gray-100 text-graycustom hover:bg-gray-200 font-bold transition-all duration-300";
+        }
+      }
+
+      // 3. Simple Count Up Animation
+      const counters = document.querySelectorAll(".counter");
+      const speed = 100;
+
+      const animateCounters = () => {
+        counters.forEach((counter) => {
+          const updateCount = () => {
+            const target = +counter.getAttribute("data-target");
+            const count = +counter.innerText;
+            const inc = target / speed;
+
+            if (count < target) {
+              counter.innerText = Math.ceil(count + inc);
+              setTimeout(updateCount, 20);
+            } else {
+              counter.innerText = target;
+            }
+          };
+          updateCount();
+        });
+      };
+
+      const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          animateCounters();
+          observer.disconnect();
+        }
+      });
+      if (counters.length > 0) {
+        observer.observe(counters[0]);
+      }
+
+      // 4. Mobile Menu Toggle
+      const mobileMenuBtn = document.getElementById("mobile-menu-btn");
+      const mobileMenu = document.getElementById("mobile-menu");
+      const mobileLinks = document.querySelectorAll(".mobile-link");
+
+      mobileMenuBtn.addEventListener("click", () => {
+        mobileMenu.classList.toggle("hidden");
+      });
+
+      mobileLinks.forEach((link) => {
+        link.addEventListener("click", () => {
+          mobileMenu.classList.add("hidden");
+        });
+      });
+    </script>
+  </body>
+</html>

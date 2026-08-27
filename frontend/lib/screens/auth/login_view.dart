@@ -8,21 +8,6 @@ import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/services/api_client.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
-import 'package:property_app/theme.dart';
-import 'package:property_app/core/responsive/breakpoints.dart';
-import 'package:property_app/utils/responsive_layout.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  StayNest — Login Screen
-//  Design ref: 06_login.pdf
-//
-//  Usage:
-//    LoginView(
-//      onLogin:    () => Navigator.pushReplacementNamed(context, '/home'),
-//      onRegister: () => Navigator.pushNamed(context, '/register'),
-//      onForgotPassword: () => Navigator.pushNamed(context, '/forgot'),
-//    )
-// ─────────────────────────────────────────────────────────────────────────────
 
 class LoginView extends StatefulWidget {
   final VoidCallback onLogin;
@@ -43,37 +28,31 @@ class LoginView extends StatefulWidget {
 }
 
 class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
+  // ─── Theme Constants (Minimalist Style) ──────────────────────────────────────
+  static const Color _primary = Color(0xFF3F37C9);      // Tenant Blue
+  static const Color _textDark = Color(0xFF222222);     // Dark Grey/Black
+  static const Color _textLight = Color(0xFF717171);    // Light Grey
+  static const Color _dividerColor = Color(0xFFEBEBEB); // Soft Border Color
+  static const Color _errorColor = Color(0xFFE53935);
+
   // ── Controllers ────────────────────────────────────────────────────────────
+  final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
-  final _emailFocus = FocusNode();
-  final _passwordFocus = FocusNode();
 
-  bool _emailFocused = false;
-  bool _passwordFocused = false;
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _isGoogleSigningIn = false;
 
   // ── Animation controllers ──────────────────────────────────────────────────
-
-  /// Staggered content entrance
   late final AnimationController _entranceCtrl;
-
-  /// Wave hand emoji — plays on mount, repeats 3×
   late final AnimationController _waveCtrl;
-
-  /// Shake on failed login attempt
   late final AnimationController _shakeCtrl;
 
-  // Derived entrance animations (7 layers, staggered)
-  late final List<Animation<double>> _fadeAnims;
-  late final List<Animation<Offset>> _slideAnims;
+  late final Animation<double> _fadeAnim;
+  late final Animation<Offset> _slideAnim;
   late final Animation<double> _waveAnim;
   late final Animation<double> _shakeAnim;
-
-  static const _layerCount =
-      7; // header, email, password, forgot, btn, divider, social+link
 
   @override
   void initState() {
@@ -84,28 +63,16 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
       statusBarIconBrightness: Brightness.dark,
     ));
 
-    // ── Entrance ─────────────────────────────────────────────────
+    // ── Entrance Animation ───────────────────────────────────────
     _entranceCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 600),
     );
 
-    _fadeAnims = [];
-    _slideAnims = [];
-
-    for (var i = 0; i < _layerCount; i++) {
-      final start = (i * 0.10).clamp(0.0, 0.7);
-      final end = (start + 0.40).clamp(0.0, 1.0);
-      final curve = CurvedAnimation(
-        parent: _entranceCtrl,
-        curve: Interval(start, end, curve: Curves.easeOutCubic),
-      );
-      _fadeAnims.add(curve);
-      _slideAnims.add(
-        Tween<Offset>(begin: const Offset(0, 0.18), end: Offset.zero)
-            .animate(curve),
-      );
-    }
+    _fadeAnim = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
+      CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic),
+    );
 
     // ── Wave emoji ───────────────────────────────────────────────
     _waveCtrl = AnimationController(
@@ -119,10 +86,10 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
       TweenSequenceItem(tween: Tween(begin: 0.25, end: 0.0), weight: 25),
     ]).animate(CurvedAnimation(parent: _waveCtrl, curve: Curves.easeInOut));
 
-    // ── Shake ────────────────────────────────────────────────────
+    // ── Error Shake Animation ────────────────────────────────────
     _shakeCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 420),
+      duration: const Duration(milliseconds: 400),
     );
     _shakeAnim = TweenSequence<double>([
       TweenSequenceItem(tween: Tween(begin: 0.0, end: 8.0), weight: 15),
@@ -132,17 +99,9 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
       TweenSequenceItem(tween: Tween(begin: -4.0, end: 0.0), weight: 25),
     ]).animate(CurvedAnimation(parent: _shakeCtrl, curve: Curves.easeInOut));
 
-    // ── Focus listeners ──────────────────────────────────────────
-    _emailFocus.addListener(
-        () => setState(() => _emailFocused = _emailFocus.hasFocus));
-    _passwordFocus.addListener(
-        () => setState(() => _passwordFocused = _passwordFocus.hasFocus));
-
     // ── Fire sequences ────────────────────────────────────────────
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) _entranceCtrl.forward();
-    });
-    Future.delayed(const Duration(milliseconds: 700), () {
+    _entranceCtrl.forward();
+    Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) _waveCtrl.repeat(count: 3);
     });
   }
@@ -154,8 +113,6 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
     _shakeCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
-    _emailFocus.dispose();
-    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -172,22 +129,15 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   }
 
   Future<void> _handleLogin() async {
-    // Basic validation — shake if fields empty
-    if (_emailCtrl.text.trim().isEmpty || _passwordCtrl.text.isEmpty) {
+    FocusScope.of(context).unfocus();
+
+    if (!(_formKey.currentState?.validate() ?? false)) {
       _shakeCtrl.reset();
       _shakeCtrl.forward();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter both email and password.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       final repository = RemoteDatabaseRepository();
@@ -197,17 +147,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
       );
 
       if (user == null) {
-        _shakeCtrl.reset();
-        _shakeCtrl.forward();
-        if (mounted) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Invalid email or password. Please try again.'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
+        _triggerErrorShake('Invalid email or password. Please try again.');
         return;
       }
 
@@ -230,52 +170,40 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
               .whereType<String>();
           AppSession.setSavedPropertyIds(favoriteIds);
         } catch (_) {
-          // Ignore favorites fetch failures and continue with local session state.
+          // Ignore favorites fetch failures
         }
       }
 
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Login successful. Redirecting...'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        await Future.delayed(const Duration(milliseconds: 300));
-        if (mounted) widget.onLogin();
+        widget.onLogin();
       }
     } catch (err) {
-      _shakeCtrl.reset();
-      _shakeCtrl.forward();
-      final message = _buildErrorMessage(err);
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      _triggerErrorShake(_buildErrorMessage(err));
+    }
+  }
+
+  void _triggerErrorShake(String message) {
+    _shakeCtrl.reset();
+    _shakeCtrl.forward();
+    if (mounted) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: _errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
   String _buildErrorMessage(Object err) {
-    if (err is TimeoutException) {
-      return 'Server is taking too long to respond. Please check your internet connection.';
-    }
-
+    if (err is TimeoutException) return 'Server taking too long. Check your internet.';
     if (err is ApiException) {
-      if (err.statusCode == 401) {
-        return 'Invalid email or password. Please try again.';
-      }
-      if (err.statusCode == 400) {
-        return 'Invalid login request. Please check your details.';
-      }
-      return 'Unable to login right now. Please try again later.';
+      if (err.statusCode == 401) return 'Invalid email or password.';
+      if (err.statusCode == 400) return 'Invalid login request.';
     }
-
     return 'Unable to login right now. Please try again later.';
   }
 
@@ -283,139 +211,272 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final isCompactScreen = ResponsiveLayout.isCompact(context);
-    final isDesktop = ResponsiveLayout.isDesktopOrLarger(context);
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: FadeTransition(
+          opacity: _fadeAnim,
+          child: SlideTransition(
+            position: _slideAnim,
+            child: GestureDetector(
+              onTap: () => FocusScope.of(context).unfocus(),
+              behavior: HitTestBehavior.opaque,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // --- Back Button (Optional context pop) ---
+                    if (Navigator.canPop(context)) ...[
+                      GestureDetector(
+                        onTap: () => Navigator.maybePop(context),
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: _dividerColor, width: 1.2),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            color: _textDark,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                    ] else
+                      const SizedBox(height: 48), // Padding if no back button
 
-    return _LoginPageShell(
-      isDesktop: isDesktop,
-      child: SafeArea(
-        child: GestureDetector(
-          onTap: () => FocusScope.of(context).unfocus(),
-          behavior: HitTestBehavior.opaque,
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(
-              isCompactScreen ? 24 : 32,
-              isCompactScreen ? 48 : 56,
-              isCompactScreen ? 24 : 32,
-              isCompactScreen ? 32 : 40,
-            ),
-            child: ResponsiveLayout.authShell(
-              context: context,
-              maxWidth: AppBreakpoints.loginMaxWidth,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── [0] Header ───────────────────────────────────
-                  _Entrance(
-                    fade: _fadeAnims[0],
-                    slide: _slideAnims[0],
-                    child: _Header(waveAnim: _waveAnim),
-                  ),
-
-                  SizedBox(height: isCompactScreen ? 32 : 40),
-
-                  // ── [1] Email field ──────────────────────────────
-                  _Entrance(
-                    fade: _fadeAnims[1],
-                    slide: _slideAnims[1],
-                    child: _InputField(
-                      controller: _emailCtrl,
-                      focusNode: _emailFocus,
-                      isFocused: _emailFocused,
-                      placeholder: 'Phone number or Email',
-                      keyboardType: TextInputType.emailAddress,
+                    // --- Header ---
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'Welcome Back ',
+                          style: GoogleFonts.poppins(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w700,
+                            color: _textDark,
+                            letterSpacing: -0.5,
+                            height: 1.2,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: AnimatedBuilder(
+                            animation: _waveAnim,
+                            builder: (_, __) => Transform.rotate(
+                              angle: _waveAnim.value,
+                              alignment: const Alignment(0.7, 0.8),
+                              child: Text('👋', style: GoogleFonts.poppins(fontSize: 28)),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Log in to your StayNest account.',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        color: _textLight,
+                      ),
+                    ),
+                    const SizedBox(height: 40),
 
-                  const SizedBox(height: 14),
-
-                  // ── [2] Password field ───────────────────────────
-                  _Entrance(
-                    fade: _fadeAnims[2],
-                    slide: _slideAnims[2],
-                    child: AnimatedBuilder(
+                    // --- Form ---
+                    AnimatedBuilder(
                       animation: _shakeAnim,
                       builder: (_, child) => Transform.translate(
                         offset: Offset(_shakeAnim.value, 0),
                         child: child,
                       ),
-                      child: _InputField(
-                        controller: _passwordCtrl,
-                        focusNode: _passwordFocus,
-                        isFocused: _passwordFocused,
-                        placeholder: 'Password',
-                        obscure: _obscurePassword,
-                        suffixWidget: _EyeToggle(
-                          obscure: _obscurePassword,
-                          onToggle: () => setState(
-                              () => _obscurePassword = !_obscurePassword),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // ── [3] Forgot password ──────────────────────────
-                  _Entrance(
-                    fade: _fadeAnims[3],
-                    slide: _slideAnims[3],
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: _ForgotButton(
-                        onTap: widget.onForgotPassword ?? () {},
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // ── [4] Login button ─────────────────────────────
-                  _Entrance(
-                    fade: _fadeAnims[4],
-                    slide: _slideAnims[4],
-                    child: _LoginButton(
-                      isLoading: _isLoading,
-                      onPressed: _handleLogin,
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // ── [5] Divider ──────────────────────────────────
-                  _Entrance(
-                    fade: _fadeAnims[5],
-                    slide: _slideAnims[5],
-                    child: const _OrDivider(),
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // ── [6] Social sign-in ──────────────────────────
-                  _Entrance(
-                    fade: _fadeAnims[6],
-                    slide: _slideAnims[6],
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
                           children: [
-                            _SocialCircle(
-                              type: _SocialType.google,
-                              isLoading: _isGoogleSigningIn,
-                              onTap: _handleGoogleSignIn,
+                            _InputField(
+                              controller: _emailCtrl,
+                              label: 'Email Address',
+                              keyboardType: TextInputType.emailAddress,
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) return 'Enter your email';
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            
+                            _InputField(
+                              controller: _passwordCtrl,
+                              label: 'Password',
+                              obscureText: _obscurePassword,
+                              textInputAction: TextInputAction.done,
+                              onSubmitted: (_) => _handleLogin(),
+                              suffixIcon: GestureDetector(
+                                onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+                                child: Icon(
+                                  _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                  size: 22,
+                                  color: _textLight,
+                                ),
+                              ),
+                              validator: (v) => (v == null || v.isEmpty)
+                                  ? 'Enter your password'
+                                  : null,
                             ),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                        _SignUpLink(onTap: widget.onRegister),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // --- Forgot Password ---
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: GestureDetector(
+                        onTap: widget.onForgotPassword ?? () {},
+                        child: Text(
+                          'Forgot Password?',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: _textDark,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // --- Login Button ---
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _handleLogin,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primary,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: _primary.withOpacity(0.5),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  valueColor: AlwaysStoppedAnimation(Colors.white),
+                                ),
+                              )
+                            : Text(
+                                'Login',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 32),
+
+                    // --- Divider ---
+                    Row(
+                      children: [
+                        const Expanded(child: Divider(color: _dividerColor, thickness: 1.2)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            'or',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: _textLight,
+                            ),
+                          ),
+                        ),
+                        const Expanded(child: Divider(color: _dividerColor, thickness: 1.2)),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 32),
 
-                  const SizedBox(height: 16),
-                ],
+                    // --- Google Button ---
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: OutlinedButton(
+                        onPressed: _isGoogleSigningIn ? null : _handleGoogleSignIn,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _textDark,
+                          side: const BorderSide(color: _textDark, width: 1.2),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: _isGoogleSigningIn
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  valueColor: AlwaysStoppedAnimation(_textDark),
+                                ),
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SvgPicture.asset(
+                                    'assets/images/google.svg',
+                                    width: 24,
+                                    height: 24,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'Continue with Google',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _textDark,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // --- Sign Up Prompt ---
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "Don't have an account? ",
+                          style: GoogleFonts.poppins(fontSize: 15, color: _textLight),
+                        ),
+                        GestureDetector(
+                          onTap: widget.onRegister,
+                          child: Text(
+                          'Sign Up',
+                          style: GoogleFonts.poppins(
+                            fontSize: 15,
+                            color: _textDark,
+                            fontWeight: FontWeight.w700,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
             ),
           ),
@@ -425,627 +486,122 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   }
 }
 
-// ─── Entrance wrapper ─────────────────────────────────────────────────────────
-// DRY helper: wraps any child in fade + slide-up animation
+// ── Input field ────────────────────────────────────────────────────────────
 
-class _LoginPageShell extends StatelessWidget {
-  const _LoginPageShell({
-    required this.isDesktop,
-    required this.child,
-  });
-
-  final bool isDesktop;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      resizeToAvoidBottomInset: true,
-      body: child,
-    );
-  }
-}
-
-class _LoginBrandPanel extends StatelessWidget {
-  const _LoginBrandPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppBreakpoints.spacingXxl),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF1A1BAA),
-            Color(0xFF3D3EDB),
-            Color(0xFF2BBFB3),
-          ],
-        ),
-      ),
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.32),
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.home_work_rounded,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Text(
-                  'StayNest',
-                  style: GoogleFonts.poppins(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Image.asset(
-                  'assets/illustrations/slide_1_house.png',
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-            const Spacer(),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Find a better place to land.',
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 44,
-                      fontWeight: FontWeight.w900,
-                      height: 1.08,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Browse verified homes, connect with trusted landlords, and manage your next move from one calm dashboard.',
-                    style: GoogleFonts.poppins(
-                      color: Colors.white.withValues(alpha: 0.82),
-                      fontSize: 16,
-                      height: 1.6,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Entrance extends StatelessWidget {
-  final Animation<double> fade;
-  final Animation<Offset> slide;
-  final Widget child;
-
-  const _Entrance({
-    required this.fade,
-    required this.slide,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) => FadeTransition(
-        opacity: fade,
-        child: SlideTransition(position: slide, child: child),
-      );
-}
-
-// ─── Header ───────────────────────────────────────────────────────────────────
-
-class _Header extends StatelessWidget {
-  final Animation<double> waveAnim;
-  const _Header({required this.waveAnim});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // "Welcome Back 👋"
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              'Welcome Back ',
-              style: GoogleFonts.poppins(
-                fontSize: 42,
-                fontWeight: FontWeight.w900,
-                color: const Color(0xFF0D0D0D),
-                height: 1.08,
-                letterSpacing: -1.0,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: AnimatedBuilder(
-                animation: waveAnim,
-                builder: (_, __) => Transform.rotate(
-                  angle: waveAnim.value,
-                  alignment: const Alignment(0.7, 0.8),
-                  child: Text('👋', style: GoogleFonts.poppins(fontSize: 34)),
-                ),
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 8),
-
-        // Subtitle
-        Text(
-          'Login to Continue',
-          style: GoogleFonts.poppins(
-            fontSize: 16,
-            fontWeight: FontWeight.w400,
-            color: const Color(0xFF8C8C9A),
-            height: 1.45,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Input field ──────────────────────────────────────────────────────────────
-
-class _InputField extends StatelessWidget {
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final bool isFocused;
-  final String placeholder;
-  final bool obscure;
-  final TextInputType keyboardType;
-  final Widget? suffixWidget;
-
+class _InputField extends StatefulWidget {
   const _InputField({
     required this.controller,
-    required this.focusNode,
-    required this.isFocused,
-    required this.placeholder,
-    this.obscure = false,
-    this.keyboardType = TextInputType.text,
-    this.suffixWidget,
+    required this.label,
+    this.obscureText = false,
+    this.keyboardType,
+    this.textInputAction = TextInputAction.next,
+    this.suffixIcon,
+    this.validator,
+    this.onSubmitted,
   });
 
+  final TextEditingController controller;
+  final String label;
+  final bool obscureText;
+  final TextInputType? keyboardType;
+  final TextInputAction textInputAction;
+  final Widget? suffixIcon;
+  final FormFieldValidator<String>? validator;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  State<_InputField> createState() => _InputFieldState();
+}
+
+class _InputFieldState extends State<_InputField> {
+  final _focus = FocusNode();
+  bool _isFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      setState(() => _isFocused = _focus.hasFocus);
+    });
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: AppDuration.normal,
-      curve: AppCurve.enter,
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAFAFB),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isFocused
-              ? StayNestColors.primary.withAlpha((0.55 * 255).round())
-              : const Color(0xFFE5E7EB),
-          width: isFocused ? 1.8 : 1.0,
-        ),
-        boxShadow: isFocused
-            ? [
-                BoxShadow(
-                  color: StayNestColors.primary.withAlpha((0.08 * 255).round()),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : [],
+    return TextFormField(
+      controller: widget.controller,
+      focusNode: _focus,
+      obscureText: widget.obscureText,
+      keyboardType: widget.keyboardType,
+      textInputAction: widget.textInputAction,
+      onFieldSubmitted: widget.onSubmitted,
+      style: GoogleFonts.poppins(
+        fontSize: 16,
+        color: _LoginViewState._textDark,
+        fontWeight: FontWeight.w500,
       ),
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        obscureText: obscure,
-        keyboardType: keyboardType,
-        style: GoogleFonts.poppins(
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      decoration: InputDecoration(
+        labelText: widget.label,
+        labelStyle: GoogleFonts.poppins(
+          color: _isFocused ? _LoginViewState._textDark : _LoginViewState._textLight,
           fontSize: 15,
-          fontWeight: FontWeight.w500,
-          color: const Color(0xFF111827),
         ),
-        decoration: InputDecoration(
-          hintText: placeholder,
-          hintStyle: GoogleFonts.poppins(
-            color: const Color(0xFFB0B3BE),
-            fontSize: 15,
-            fontWeight: FontWeight.w400,
+        floatingLabelStyle: GoogleFonts.poppins(
+          color: _LoginViewState._textDark,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+        suffixIcon: widget.suffixIcon,
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: _LoginViewState._dividerColor,
+            width: 1.2,
           ),
-          suffixIcon: suffixWidget,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 18,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: _LoginViewState._dividerColor,
+            width: 1.2,
           ),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: _LoginViewState._textDark,
+            width: 1.5,
+          ),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: _LoginViewState._errorColor,
+            width: 1.2,
+          ),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: _LoginViewState._errorColor,
+            width: 1.5,
+          ),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        errorStyle: GoogleFonts.poppins(
+          color: _LoginViewState._errorColor,
+          fontSize: 12,
         ),
       ),
+      validator: widget.validator,
     );
   }
-}
-
-// ─── Eye toggle (password visibility) ────────────────────────────────────────
-
-class _EyeToggle extends StatelessWidget {
-  final bool obscure;
-  final VoidCallback onToggle;
-
-  const _EyeToggle({required this.obscure, required this.onToggle});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onToggle,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: AnimatedSwitcher(
-          duration: AppDuration.fast,
-          transitionBuilder: (child, anim) =>
-              ScaleTransition(scale: anim, child: child),
-          child: Icon(
-            obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-            key: ValueKey(obscure),
-            color: const Color(0xFF9CA3AF),
-            size: 22,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Forgot password ──────────────────────────────────────────────────────────
-
-class _ForgotButton extends StatefulWidget {
-  final VoidCallback onTap;
-  const _ForgotButton({required this.onTap});
-
-  @override
-  State<_ForgotButton> createState() => _ForgotButtonState();
-}
-
-class _ForgotButtonState extends State<_ForgotButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedDefaultTextStyle(
-        duration: AppDuration.fast,
-        style: GoogleFonts.poppins(
-          fontSize: 13.5,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.1,
-          color:
-              _pressed ? StayNestColors.primaryDark : const Color(0xFF6B7280),
-        ),
-        child: const Text('Forgot Password?'),
-      ),
-    );
-  }
-}
-
-// ─── Login button ─────────────────────────────────────────────────────────────
-
-class _LoginButton extends StatefulWidget {
-  final bool isLoading;
-  final VoidCallback onPressed;
-
-  const _LoginButton({required this.isLoading, required this.onPressed});
-
-  @override
-  State<_LoginButton> createState() => _LoginButtonState();
-}
-
-class _LoginButtonState extends State<_LoginButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pressCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _pressCtrl = AnimationController(
-      vsync: this,
-      duration: AppDuration.press,
-      lowerBound: 0.97,
-      upperBound: 1.0,
-      value: 1.0,
-    );
-  }
-
-  @override
-  void dispose() {
-    _pressCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: widget.isLoading ? null : (_) => _pressCtrl.reverse(),
-      onTapUp: widget.isLoading
-          ? null
-          : (_) {
-              _pressCtrl.forward();
-              widget.onPressed();
-            },
-      onTapCancel: widget.isLoading ? null : () => _pressCtrl.forward(),
-      child: ScaleTransition(
-        scale: _pressCtrl,
-        child: AnimatedContainer(
-          duration: AppDuration.normal,
-          height: 58,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.button),
-            color: StayNestColors.primary,
-          ),
-          child: Center(
-            child: AnimatedSwitcher(
-              duration: AppDuration.fast,
-              child: widget.isLoading
-                  ? const SizedBox(
-                      key: ValueKey('loader'),
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2.5,
-                      ),
-                    )
-                  : Text(
-                      'Login',
-                      key: const ValueKey('label'),
-                      style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Or divider ───────────────────────────────────────────────────────────────
-
-class _OrDivider extends StatelessWidget {
-  const _OrDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(height: 1, color: const Color(0xFFE8E8EE)),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'Or continue with',
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: const Color(0xFFB0B3BE),
-              letterSpacing: 0.1,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Container(height: 1, color: const Color(0xFFE8E8EE)),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Social circles ───────────────────────────────────────────────────────────
-// PDF: circular buttons (not rectangular cards), centered side by side
-
-enum _SocialType { google }
-
-class _SocialSvg extends StatelessWidget {
-  final _SocialType type;
-
-  const _SocialSvg({required this.type});
-
-  @override
-  Widget build(BuildContext context) {
-    return SvgPicture.asset(
-      'assets/images/google.svg',
-      width: 28,
-      height: 28,
-    );
-  }
-}
-
-class _SocialCircle extends StatefulWidget {
-  final _SocialType type;
-  final VoidCallback onTap;
-  final bool isLoading;
-
-  const _SocialCircle(
-      {required this.type, required this.onTap, this.isLoading = false});
-
-  @override
-  State<_SocialCircle> createState() => _SocialCircleState();
-}
-
-class _SocialCircleState extends State<_SocialCircle>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  bool _pressed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: AppDuration.press,
-      lowerBound: 0.92,
-      upperBound: 1.0,
-      value: 1.0,
-    );
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: widget.isLoading
-          ? null
-          : (_) {
-              _ctrl.reverse();
-              setState(() => _pressed = true);
-            },
-      onTapUp: widget.isLoading
-          ? null
-          : (_) {
-              _ctrl.forward();
-              setState(() => _pressed = false);
-              widget.onTap();
-            },
-      onTapCancel: widget.isLoading
-          ? null
-          : () {
-              _ctrl.forward();
-              setState(() => _pressed = false);
-            },
-      child: ScaleTransition(
-        scale: _ctrl,
-        child: AnimatedContainer(
-          duration: AppDuration.fast,
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _pressed ? const Color(0xFFF3F4F6) : Colors.white,
-            border: Border.all(
-              color: const Color(0xFFE5E7EB),
-              width: 1.5,
-            ),
-          ),
-          child: Center(
-            child: widget.isLoading
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2.2, color: StayNestColors.primary),
-                  )
-                : _SocialSvg(type: widget.type),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Sign up link ─────────────────────────────────────────────────────────────
-
-class _SignUpLink extends StatefulWidget {
-  final VoidCallback onTap;
-  const _SignUpLink({required this.onTap});
-
-  @override
-  State<_SignUpLink> createState() => _SignUpLinkState();
-}
-
-class _SignUpLinkState extends State<_SignUpLink> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          "Don't have an account? ",
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            color: const Color(0xFF8C8C9A),
-          ),
-        ),
-        GestureDetector(
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapUp: (_) {
-            setState(() => _pressed = false);
-            widget.onTap();
-          },
-          onTapCancel: () => setState(() => _pressed = false),
-          child: AnimatedDefaultTextStyle(
-            duration: AppDuration.fast,
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: _pressed
-                  ? StayNestColors.primaryDark
-                  : StayNestColors.primary,
-            ),
-            child: const Text('Sign Up'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Standalone test entry ────────────────────────────────────────────────────
-
-void main() {
-  runApp(MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: LoginView(
-      onLogin: () => debugPrint('Login tapped'),
-      onRegister: () => debugPrint('Register tapped'),
-    ),
-  ));
 }

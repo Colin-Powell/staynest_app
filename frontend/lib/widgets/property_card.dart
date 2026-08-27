@@ -11,6 +11,7 @@ class PropertyCard extends StatefulWidget {
   final VoidCallback onTap;
   final bool isHorizontal;
   final double width;
+  final bool isGrid;
 
   const PropertyCard({
     Key? key,
@@ -18,6 +19,7 @@ class PropertyCard extends StatefulWidget {
     required this.onTap,
     this.isHorizontal = true,
     this.width = 300,
+    this.isGrid = false,
   }) : super(key: key);
 
   @override
@@ -67,11 +69,73 @@ class _PropertyCardState extends State<PropertyCard> {
       onTap: widget.onTap,
       child: Container(
         width: widget.isHorizontal ? widget.width : double.infinity,
-        margin: EdgeInsets.only(right: widget.isHorizontal ? 20 : 0, bottom: widget.isHorizontal ? 0 : 24),
+        margin: EdgeInsets.only(right: widget.isHorizontal ? 20 : 0, bottom: widget.isGrid ? 0 : (widget.isHorizontal ? 0 : 24)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Image Box
+            if (widget.isGrid)
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: AppColors.gray100,
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: widget.property.image.isNotEmpty
+                              ? CachedNetworkImage(
+                                  imageUrl: widget.property.image,
+                                  fit: BoxFit.cover,
+                                  errorWidget: (context, url, error) =>
+                                      const Icon(Icons.broken_image, color: AppColors.gray400),
+                                )
+                              : const Icon(Icons.image, color: AppColors.gray400),
+                        ),
+                      ),
+                      // Badges
+                      Positioned(
+                        top: 16,
+                        left: 16,
+                        child: _buildBadge(),
+                      ),
+                      // Heart (wired to save/unsave)
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: GestureDetector(
+                          onTap: _toggleSave,
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.25),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 250),
+                                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                                child: Icon(
+                                  _isSaved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                  key: ValueKey(_isSaved),
+                                  color: _isSaved ? const Color(0xFFEF4444) : Colors.white,
+                                  size: 22,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
             Container(
               height: widget.isHorizontal ? widget.width * 0.9 : 320,
               width: double.infinity,
@@ -189,7 +253,7 @@ class _PropertyCardState extends State<PropertyCard> {
               text: TextSpan(
                 children: [
                   TextSpan(
-                    text: "\$${property.price.toInt()}",
+                    text: "Ksh. ${property.price.toInt()}",
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

@@ -690,7 +690,7 @@ class _LandlordPropertyManagementPageState
                                 ],
                               ),
                             ),
-                            Text('Kes. ${booking['total_price']}',
+                            Text('Ksh. ${booking['total_price']}',
                                 style: GoogleFonts.poppins(
                                     fontWeight: FontWeight.w800,
                                     color: primaryGreen)),

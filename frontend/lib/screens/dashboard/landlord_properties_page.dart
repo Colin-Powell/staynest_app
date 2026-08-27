@@ -753,7 +753,7 @@ class _PropertyCardState extends State<_PropertyCard>
                                   TextSpan(children: [
                                     TextSpan(
                                       text:
-                                          'Kes. ${_formatPriceToK(widget.property.price)}',
+                                          'Ksh. ${_formatPriceToK(widget.property.price)}',
                                       style: GoogleFonts.poppins(
                                         fontWeight: FontWeight.w800,
                                         fontSize: 16.0,

@@ -8,8 +8,9 @@ class GoogleAuthService {
   static final GoogleAuthService instance = GoogleAuthService._();
   GoogleAuthService._();
 
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
+    serverClientId: const String.fromEnvironment('GOOGLE_CLIENT_ID', defaultValue: '193200636263-02mmqpu8fa9urq35p46432bdinilc29l.apps.googleusercontent.com'),
   );
 
   Future<bool> signInWithGoogle({String? role}) async {

@@ -19,6 +19,9 @@ import bookingsRouter from './routes/bookings.js';
 import analyticsRouter from './routes/analytics.js';
 import adminRouter from './routes/admin.js';
 import draftsRouter from './routes/drafts.js';
+import versionRouter from './routes/version.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { requireAuth } from './middleware/auth.js'; // Explicitly import requireAuth
 
 const app = express();
@@ -28,6 +31,9 @@ app.set('trust proxy', 1);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.use(express.static(path.join(__dirname, '../public')));
 app.use(cors()); // Totally open CORS for all origins, headers, and methods
 app.use(requestLogger);
 app.use(apiRateLimiter);
@@ -36,6 +42,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/properties', propertiesRouter);
 app.use('/api/promotions', promotionsRouter);
 app.use('/api/drafts', draftsRouter);
+app.use('/api/version', versionRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/uploads', uploadsRouter);
 app.use('/api/verifications', verificationsRouter);

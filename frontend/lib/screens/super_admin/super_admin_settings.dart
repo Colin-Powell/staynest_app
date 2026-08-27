@@ -20,7 +20,7 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
   bool _requireManualKyc = true;
   bool _autoApproveListings = false;
   String _globalFee = '10%';
-  String _defaultCurrency = 'KES';
+  String _defaultCurrency = 'Ksh.';
   
   // Security
   bool _enforce2FA = true;
@@ -42,7 +42,7 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
             _requireManualKyc = settings['general']['requireManualKyc'] ?? true;
             _autoApproveListings = settings['general']['autoApproveListings'] ?? false;
             _globalFee = '${settings['general']['globalFee'] ?? 10}%';
-            _defaultCurrency = settings['general']['defaultCurrency'] ?? 'KES';
+            _defaultCurrency = settings['general']['defaultCurrency'] ?? 'Ksh.';
           }
           if (settings['security'] != null) {
             _enforce2FA = settings['security']['enforce2FA'] ?? true;
@@ -194,7 +194,7 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
           title: 'Default currency', 
           subtitle: 'Used for reporting and dashboard stats', 
           value: _defaultCurrency,
-          items: const ['KES', 'USD', 'EUR'],
+          items: const ['Ksh.', 'USD', 'EUR'],
           onChanged: (v) => setState(() => _defaultCurrency = v!),
         ),
       ],

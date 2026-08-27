@@ -109,6 +109,7 @@ class Property {
   final List<String> amenities;
   final String description;
   final Agent agent;
+  final DateTime? viewedAt;
 
   const Property({
     required this.id,
@@ -126,6 +127,7 @@ class Property {
     required this.amenities,
     required this.description,
     required this.agent,
+    this.viewedAt,
   }) : images = images ?? const [];
 
   factory Property.fromJson(Map<String, dynamic> json) {

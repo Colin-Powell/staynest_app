@@ -58,6 +58,6 @@ export const env = {
   smtpUser: process.env.SMTP_USER || '',
   smtpPass: process.env.SMTP_PASS || '',
   emailFrom: process.env.EMAIL_FROM || process.env.SMTP_USER || '',
-  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '193200636263-02mmqpu8fa9urq35p46432bdinilc29l.apps.googleusercontent.com',
   firebaseServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT || '',
 };

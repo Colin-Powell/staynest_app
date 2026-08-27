@@ -1,4 +1,4 @@
-import 'package:property_app/services/api_client.dart';
+﻿import 'package:property_app/services/api_client.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/screens/home/cache_engine.dart';
 
@@ -7,7 +7,9 @@ class PropertiesApi {
   static Future<void> recordPropertyView(String propertyId) async {
     try {
       final client = _client();
-      await client.postJson('/properties//view');
+      await client.postJson('/properties/$propertyId/view');
+      // Invalidate the cache so the home screen reflects the new view immediately
+      await CacheEngine.instance.invalidate('props_recently_viewed');
     } catch (e) {
       // Silently fail for analytics
     }

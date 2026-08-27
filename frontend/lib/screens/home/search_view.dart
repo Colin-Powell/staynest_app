@@ -691,7 +691,7 @@ class _SearchViewState extends State<SearchView> {
                                                         const SizedBox(
                                                             height: 6),
                                                         Text(
-                                                          'Kes. ${property.price ~/ 1000}k/mo',
+                                                          'Ksh. ${property.price ~/ 1000}k/mo',
                                                           style: GoogleFonts
                                                               .poppins(
                                                             fontSize: 16,

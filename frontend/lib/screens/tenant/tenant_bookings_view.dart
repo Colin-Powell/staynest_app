@@ -383,7 +383,7 @@ class _BookingCard extends StatelessWidget {
 
           // Price
           Text(
-            'Total: KES $totalPrice',
+            'Total: Ksh. $totalPrice',
             style: const TextStyle(
               color: Color(0xFF111827),
               fontSize: 14,

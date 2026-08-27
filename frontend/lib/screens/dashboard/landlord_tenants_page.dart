@@ -318,7 +318,7 @@ class TenantDetailsPage extends StatelessWidget {
                         label: 'Contract Period', value: '12 Months'),
                     const _DetailRow(label: 'Start Date', value: '01 Jan 2024'),
                     const _DetailRow(
-                        label: 'Monthly Rent', value: 'Kes. 45,000'),
+                        label: 'Monthly Rent', value: 'Ksh. 45,000'),
                     const _DetailRow(label: 'Security Deposit', value: 'Paid'),
                   ]),
                   const SizedBox(height: 24),

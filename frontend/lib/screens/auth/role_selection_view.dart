@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:property_app/theme.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  StayNest — Role Selection Screen
-//  Design ref: 05_roles.pdf
-//
-//  Usage:
-//    RoleSelectionView(
-//      onBack:   () => Navigator.pop(context),
-//      onSelect: (role) => Navigator.pushNamed(context, '/$role'),
-//    )
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Theme Constants (Minimalist Style) ──────────────────────────────────────
+const Color _primary = Color(0xFF3F37C9);      // Tenant Blue
+const Color _textDark = Color(0xFF222222);     // Dark Grey/Black
+const Color _textLight = Color(0xFF717171);    // Light Grey
+const Color _dividerColor = Color(0xFFEBEBEB); // Soft Border Color
+
+const Duration _durNormal = Duration(milliseconds: 250);
+const Duration _durPress = Duration(milliseconds: 150);
+const Curve _curveEnter = Curves.easeOutCubic;
 
 // ─── Role model ──────────────────────────────────────────────────────────────
 
@@ -37,7 +35,6 @@ extension StayNestRoleX on StayNestRole {
     }
   }
 
-  /// Shown in muted gray below title — empty string hides the row
   String get subtitle {
     switch (this) {
       case StayNestRole.tenant:
@@ -47,12 +44,13 @@ extension StayNestRoleX on StayNestRole {
     }
   }
 
-  IconData get icon {
+  // Replace IconData with webp image paths
+  String get imagePath {
     switch (this) {
       case StayNestRole.tenant:
-        return Icons.key_rounded;
+        return 'assets/images/tenant.webp';
       case StayNestRole.landlord:
-        return Icons.home_rounded;
+        return 'assets/images/landlord.webp';
     }
   }
 }
@@ -60,11 +58,7 @@ extension StayNestRoleX on StayNestRole {
 // ─── View ────────────────────────────────────────────────────────────────────
 
 class RoleSelectionView extends StatefulWidget {
-  /// Called when the user taps the back button (if shown).
-  /// Pass null to hide the back button entirely (matches PDF design).
   final VoidCallback? onBack;
-
-  /// Called with the selected role key when Continue is tapped.
   final void Function(String role) onSelect;
 
   const RoleSelectionView({
@@ -81,7 +75,6 @@ class _RoleSelectionViewState extends State<RoleSelectionView>
     with SingleTickerProviderStateMixin {
   StayNestRole? _selected;
 
-  // Subtle entrance animation for the card list
   late final AnimationController _entranceCtrl;
   late final List<Animation<double>> _cardAnims;
 
@@ -101,18 +94,15 @@ class _RoleSelectionViewState extends State<RoleSelectionView>
       duration: const Duration(milliseconds: 600),
     );
 
-    // Stagger each card by 80ms
     _cardAnims = List.generate(_roles.length, (i) {
       final start = i * 0.15;
       final end = start + 0.55;
       return CurvedAnimation(
         parent: _entranceCtrl,
-        curve: Interval(start.clamp(0, 1), end.clamp(0, 1),
-            curve: Curves.easeOutCubic),
+        curve: Interval(start.clamp(0, 1), end.clamp(0, 1), curve: _curveEnter),
       );
     });
 
-    // Slight delay so scaffold renders first
     Future.delayed(const Duration(milliseconds: 80), () {
       if (mounted) _entranceCtrl.forward();
     });
@@ -129,13 +119,11 @@ class _RoleSelectionViewState extends State<RoleSelectionView>
     widget.onSelect(_selected!.key);
   }
 
-  // ─── Build ─────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // PDF background: very light gray, NOT pure white
-      backgroundColor: const Color(0xFFF4F4F6),
+      // Ultra-clean solid white background
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -146,10 +134,10 @@ class _RoleSelectionViewState extends State<RoleSelectionView>
             // ── Role cards ────────────────────────────────────────
             Expanded(
               child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(22, 36, 22, 24),
+                padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
                 physics: const BouncingScrollPhysics(),
                 itemCount: _roles.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 16),
+                separatorBuilder: (_, __) => const SizedBox(height: 20),
                 itemBuilder: (context, i) {
                   final role = _roles[i];
                   return _AnimatedCard(
@@ -177,7 +165,6 @@ class _RoleSelectionViewState extends State<RoleSelectionView>
 }
 
 // ─── Header ──────────────────────────────────────────────────────────────────
-//  PDF: No back arrow on this screen. Back arrow is optional (pass onBack).
 
 class _Header extends StatelessWidget {
   final VoidCallback? onBack;
@@ -186,37 +173,32 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Optional back button — hidden when onBack is null
           if (onBack != null) ...[
             _BackButton(onTap: onBack!),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
           ],
-
-          // "Choose Your Role" — very large, black, heavy
+          
           Text(
             'Choose Your Role',
             style: GoogleFonts.poppins(
-              fontSize: 48,
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF0D0D0D),
-              height: 1.08,
-              letterSpacing: -1.0,
+              fontSize: 32,
+              fontWeight: FontWeight.w700,
+              color: _textDark,
+              height: 1.1,
+              letterSpacing: -0.5,
             ),
           ),
-
-          const SizedBox(height: 10),
-
-          // Subtitle
+          const SizedBox(height: 12),
           Text(
             'Select the option that best describes you.',
             style: GoogleFonts.poppins(
               fontSize: 16,
               fontWeight: FontWeight.w400,
-              color: const Color(0xFF8C8C9A),
+              color: _textLight,
               height: 1.50,
             ),
           ),
@@ -235,13 +217,18 @@ class _BackButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: const SizedBox(
+      child: Container(
         width: 44,
         height: 44,
-        child: Icon(
-          Icons.chevron_left_rounded,
-          color: Color(0xFF374151),
-          size: 26,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: _dividerColor, width: 1.2),
+        ),
+        child: const Icon(
+          Icons.arrow_back_ios_new_rounded,
+          color: _textDark,
+          size: 20,
         ),
       ),
     );
@@ -296,8 +283,8 @@ class _RoleCardState extends State<_RoleCard>
     super.initState();
     _pressCtrl = AnimationController(
       vsync: this,
-      duration: AppDuration.press,
-      lowerBound: 0.975,
+      duration: _durPress,
+      lowerBound: 0.96,
       upperBound: 1.0,
       value: 1.0,
     );
@@ -324,64 +311,39 @@ class _RoleCardState extends State<_RoleCard>
       child: ScaleTransition(
         scale: _pressCtrl,
         child: AnimatedContainer(
-          duration: AppDuration.normal,
-          curve: AppCurve.enter,
-          padding: const EdgeInsets.all(18),
+          duration: _durNormal,
+          curve: _curveEnter,
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-
-            // Selected: indigo border; unselected: near-invisible hairline
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color:
-                  selected ? StayNestColors.primary : const Color(0xFFE8E8EE),
-              width: selected ? 2.0 : 1.0,
+              color: selected ? _primary : _dividerColor,
+              width: selected ? 2.0 : 1.2,
             ),
-
-            boxShadow: selected
-                ? [
-                    const BoxShadow(
-                      color: Color.fromRGBO(61, 62, 219, 0.10),
-                      blurRadius: 20,
-                      offset: Offset(0, 6),
-                    ),
-                  ]
-                : const [
-                    BoxShadow(
-                      color: Color.fromRGBO(0, 0, 0, 0.04),
-                      blurRadius: 12,
-                      offset: Offset(0, 3),
-                    ),
-                  ],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(selected ? 0.08 : 0.02),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Row(
             children: [
-              // ── Icon box ─────────────────────────────────────────
-              AnimatedContainer(
-                duration: AppDuration.normal,
-                curve: AppCurve.enter,
+              // ── Image box (No background styling) ──────────────────
+              SizedBox(
                 width: 72,
                 height: 72,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? StayNestColors.primaryLight
-                      : const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: AnimatedSwitcher(
-                  duration: AppDuration.fast,
-                  child: Icon(
-                    role.icon,
-                    key: ValueKey(selected),
-                    color: selected
-                        ? StayNestColors.primary
-                        : const Color(0xFF6B7280),
-                    size: 32,
-                  ),
+                child: Image.asset(
+                  role.imagePath,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const Icon(Icons.image_not_supported, color: _textLight),
                 ),
               ),
 
-              const SizedBox(width: 18),
+              const SizedBox(width: 20),
 
               // ── Text block ───────────────────────────────────────
               Expanded(
@@ -392,29 +354,43 @@ class _RoleCardState extends State<_RoleCard>
                     Text(
                       role.title,
                       style: GoogleFonts.poppins(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: selected
-                            ? StayNestColors.primary
-                            : const Color(0xFF111827),
-                        height: 1.22,
-                        letterSpacing: -0.2,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: _textDark,
+                        height: 1.2,
                       ),
                     ),
                     if (role.subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(
                         role.subtitle,
                         style: GoogleFonts.poppins(
                           fontSize: 14,
                           fontWeight: FontWeight.w400,
-                          color: const Color(0xFF9CA3AF),
-                          height: 1.35,
+                          color: _textLight,
                         ),
                       ),
                     ],
                   ],
                 ),
+              ),
+              
+              // ── Optional Selection Indicator (Circle Check) ─────────
+              AnimatedContainer(
+                duration: _durNormal,
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selected ? _primary : Colors.transparent,
+                  border: Border.all(
+                    color: selected ? _primary : _dividerColor,
+                    width: 2,
+                  ),
+                ),
+                child: selected 
+                    ? const Icon(Icons.check, size: 14, color: Colors.white) 
+                    : null,
               ),
             ],
           ),
@@ -448,7 +424,7 @@ class _ContinueButtonState extends State<_ContinueButton>
     super.initState();
     _pressCtrl = AnimationController(
       vsync: this,
-      duration: AppDuration.press,
+      duration: _durPress,
       lowerBound: 0.97,
       upperBound: 1.0,
       value: 1.0,
@@ -464,7 +440,7 @@ class _ContinueButtonState extends State<_ContinueButton>
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 8, 22, 32),
+      padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(context).padding.bottom + 24),
       child: GestureDetector(
         onTapDown: widget.enabled ? (_) => _pressCtrl.reverse() : null,
         onTapUp: widget.enabled
@@ -477,24 +453,19 @@ class _ContinueButtonState extends State<_ContinueButton>
         child: ScaleTransition(
           scale: _pressCtrl,
           child: AnimatedContainer(
-            duration: AppDuration.normal,
-            height: 58,
+            duration: _durNormal,
+            height: 56,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadius.button),
-              color: widget.enabled
-                  ? StayNestColors.primary
-                  : const Color.fromRGBO(61, 62, 219, 0.38),
+              borderRadius: BorderRadius.circular(16),
+              color: widget.enabled ? _primary : _primary.withOpacity(0.4),
             ),
             child: Center(
               child: Text(
                 'Continue',
                 style: GoogleFonts.poppins(
-                  fontSize: 24,
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 0.3,
-                  color: widget.enabled
-                      ? Colors.white
-                      : const Color.fromRGBO(255, 255, 255, 0.55),
+                  color: Colors.white,
                 ),
               ),
             ),

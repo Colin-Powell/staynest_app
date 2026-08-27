@@ -97,6 +97,7 @@ Property mapApiProperty(Map<String, dynamic> json) {
     amenities: amenities,
     description: json['description']?.toString() ?? '',
     agent: agent,
+    viewedAt: json['viewed_at'] != null ? DateTime.tryParse(json['viewed_at'].toString()) : null,
   );
 }
 

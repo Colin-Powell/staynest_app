@@ -13,6 +13,7 @@ import 'package:property_app/services/socket_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AppSession {
+  static const String currentAppVersion = "1.0.0";
   static const String _prefsKey = 'staynest.session';
 
   static String currentRole = 'tenant';
