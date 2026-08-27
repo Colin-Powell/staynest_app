@@ -13,8 +13,9 @@ import 'package:property_app/widgets/property_image.dart';
 class SavedView extends StatefulWidget {
   final VoidCallback? onOpenProperty;
   final void Function(Property)? onSelectProperty;
+  final int initialTab;
 
-  const SavedView({super.key, this.onOpenProperty, this.onSelectProperty});
+  const SavedView({super.key, this.onOpenProperty, this.onSelectProperty, this.initialTab = 0});
 
   @override
   State<SavedView> createState() => _SavedViewState();
@@ -25,7 +26,7 @@ class _SavedViewState extends State<SavedView>
   final _propertyService = PropertyService.instance;
   List<Property> _all = [];
   List<Property> _recent = [];
-  int _tab = 0;
+  late int _tab;
   bool _loading = true;
 
   late final AnimationController _animController;
@@ -33,6 +34,7 @@ class _SavedViewState extends State<SavedView>
   @override
   void initState() {
     super.initState();
+    _tab = widget.initialTab;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!OnboardingPrefs.hasSeen('savedSeen')) {
@@ -51,6 +53,17 @@ class _SavedViewState extends State<SavedView>
       duration: const Duration(milliseconds: 800),
     );
     _load();
+  }
+
+  @override
+  void didUpdateWidget(SavedView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialTab != oldWidget.initialTab) {
+      setState(() {
+        _tab = widget.initialTab;
+        _animController.forward(from: 0);
+      });
+    }
   }
 
   Future<void> _toggleSave(String propertyId) async {

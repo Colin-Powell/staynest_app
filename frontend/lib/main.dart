@@ -515,6 +515,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   _AppScreen _screen = _AppScreen.home;
+  int _savedTab = 0;
 
   @override
   void initState() {

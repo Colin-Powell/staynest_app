@@ -96,6 +96,20 @@ class _HomeViewState extends State<HomeView> {
       final categoriesData = await PropertiesApi.getCategories();
       Map<String, List<Property>> mapped = {};
       
+      // Fetch Recently Viewed and Promotions
+      try {
+        if (AppSession.currentUserId != null) {
+          final recentData = await PropertiesApi.getRecentlyViewed();
+          if (recentData.isNotEmpty) {
+            mapped['Recently Viewed'] = recentData.map((e) => mapApiProperty(e)).toList();
+          }
+        }
+        
+
+      } catch (e) {
+        debugPrint('Error loading analytics layers: ');
+      }
+
       categoriesData.forEach((key, value) {
         if (value is List) {
           mapped[key] = value.map((e) => mapApiProperty(Map<String, dynamic>.from(e as Map))).toList();
@@ -103,13 +117,13 @@ class _HomeViewState extends State<HomeView> {
       });
       
       // Fallback if categories are empty, fetch all and group manually
-      if (mapped.isEmpty) {
+      if (categoriesData.isEmpty) {
         final allProps = await PropertiesApi.getAllProperties();
         final list = allProps.map((e) => mapApiProperty(e)).toList();
         
         mapped['New on StayNest'] = list.take(5).toList();
         mapped['Trending Now'] = list.where((p) => p.rating >= 4.0).take(5).toList();
-        mapped['Budget-Friendly'] = list.where((p) => p.price < 500).take(5).toList();
+        mapped['Budget-Friendly'] = list.where((p) => p.price < 25000).take(5).toList();
       }
 
       if (mounted) {

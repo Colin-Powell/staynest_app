@@ -4,6 +4,15 @@ import 'package:property_app/screens/home/cache_engine.dart';
 
 
 class PropertiesApi {
+  static Future<void> recordPropertyView(String propertyId) async {
+    try {
+      final client = _client();
+      await client.postJson('/properties//view');
+    } catch (e) {
+      // Silently fail for analytics
+    }
+  }
+
   /// Boost a property
   static Future<Map<String, dynamic>> boostProperty(String propertyId, String packageType) async {
     final client = _client();

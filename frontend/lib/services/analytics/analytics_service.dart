@@ -1,5 +1,6 @@
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/widgets.dart';
+import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/session/app_session.dart';
 
 class AnalyticsEvents {
@@ -128,6 +129,10 @@ class AnalyticsService {
     int? durationSeconds,
     int? position,
   }) async {
+    if (eventName == AnalyticsEvents.listingView) {
+      PropertiesApi.recordPropertyView(listingId);
+    }
+    
     await logEvent(eventName, {
       AnalyticsParameters.listingId: listingId,
       AnalyticsParameters.source: source,
