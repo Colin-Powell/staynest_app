@@ -90,10 +90,11 @@ class FCMService {
         ),
       );
 
-      // Note: createNotificationChannel requires a platform-specific plugin
-      // resolve API which differs across flutter_local_notifications versions.
-      // If channel creation fails to compile, we safely skip it here; the
-      // channel will still be usable with valid Android channel identifiers.
+      // Create Android Notification Channel
+      final androidImplementation = _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      if (androidImplementation != null) {
+        await androidImplementation.createNotificationChannel(_channel);
+      }
 
       // 3. Handle Foreground Messages & Trigger Modal
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {

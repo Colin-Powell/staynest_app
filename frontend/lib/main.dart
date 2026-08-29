@@ -92,6 +92,10 @@ Future<void> main() async {
   }
 
   await AppSession.restoreSession();
+  
+  if (AppSession.currentUserId != null) {
+    AuthService.instance.syncFCMToken();
+  }
 
   if (kDebugMode) {
     debugPrint('Effective API_BASE_URL = ${AppSession.apiBaseUrl}');

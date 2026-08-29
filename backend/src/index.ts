@@ -1,6 +1,7 @@
-import app from './app.js';
+﻿import app from './app.js';
 import { env } from './config.js';
 import { startCronJobs } from './services/cron.js';
+import './services/queue.js';
 import './workers/mediaWorker.js';
 
 async function startServer() {
@@ -28,4 +29,5 @@ startServer().catch((error) => {
   console.error('Backend startup failed:', error);
   process.exit(1);
 });
+
 

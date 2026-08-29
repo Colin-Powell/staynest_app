@@ -1,17 +1,17 @@
-/**
- * cron.ts — StayNest scheduled background jobs
+ï»¿/**
+ * cron.ts â€” StayNest scheduled background jobs
  *
  * Jobs:
- *  1. Check-in reminders     — daily 7 AM  — tenant + landlord
- *  2. Check-out reminders    — daily 8 AM  — tenant
- *  3. Stale booking alerts   — daily 6 PM  — landlord with pending >48h
- *  4. Unread message nudge   — every 2h    — users with unread >1h
- *  5. Weekly perf digest     — Mon 9 AM    — landlord email + push
+ *  1. Check-in reminders     â€” daily 7 AM  â€” tenant + landlord
+ *  2. Check-out reminders    â€” daily 8 AM  â€” tenant
+ *  3. Stale booking alerts   â€” daily 6 PM  â€” landlord with pending >48h
+ *  4. Unread message nudge   â€” every 2h    â€” users with unread >1h
+ *  5. Weekly perf digest     â€” Mon 9 AM    â€” landlord email + push
  */
 
 import cron from 'node-cron';
 import { query } from '../db.js';
-import { sendPushToUser } from './firebase.js';
+import { queueUserPush } from './queue.js';
 import { sendAlertEmail } from './email.js';
 
 // --- helpers ------------------------------------------------------------------
@@ -41,7 +41,7 @@ async function sendCheckinReminders() {
       const dateStr = fmt(row.check_in_date);
 
       // Notify tenant
-      await sendPushToUser(
+      await queueUserPush(
         row.tenant_id,
         '?? Check-in Tomorrow!',
         `Your check-in at ${row.property_name} is tomorrow (${dateStr}). Get ready!`,
@@ -49,7 +49,7 @@ async function sendCheckinReminders() {
       );
 
       // Notify landlord
-      await sendPushToUser(
+      await queueUserPush(
         row.landlord_id,
         '?? Tenant Arrives Tomorrow',
         `${row.tenant_name} checks in to ${row.property_name} tomorrow (${dateStr}).`,
@@ -78,7 +78,7 @@ async function sendCheckoutReminders() {
     );
 
     for (const row of res.rows) {
-      await sendPushToUser(
+      await queueUserPush(
         row.tenant_id,
         '?? Check-out Today',
         `Your check-out at ${row.property_name} is today. Safe travels!`,
@@ -108,7 +108,7 @@ async function sendStalePendingAlerts() {
 
     for (const row of res.rows) {
       const n = parseInt(row.pending_count);
-      await sendPushToUser(
+      await queueUserPush(
         row.landlord_id,
         '? Pending Booking Requests',
         `You have ${n} pending booking request${n === 1 ? '' : 's'} waiting for your response.`,
@@ -142,7 +142,7 @@ async function sendUnreadMessageNudges() {
 
     for (const row of res.rows) {
       const n = parseInt(row.unread_count);
-      await sendPushToUser(
+      await queueUserPush(
         row.to_user_id,
         '?? Unread Messages',
         `You have ${n} unread message${n === 1 ? '' : 's'} on StayNest.`,
@@ -210,7 +210,7 @@ async function sendWeeklyPerformanceDigest() {
         console.error(`[cron] weekly digest email failed for ${landlord_email}:`, emailErr);
       }
 
-      await sendPushToUser(
+      await queueUserPush(
         landlord_id,
         '?? Weekly Report Ready',
         `Last 7 days: ${views} views, ${new_bookings} bookings, Ksh ${Number(revenue).toLocaleString()} revenue.`,
@@ -227,20 +227,21 @@ async function sendWeeklyPerformanceDigest() {
 // --- Scheduler ----------------------------------------------------------------
 
 export function startCronJobs() {
-  // 1. Check-in reminders — daily 7:00 AM
+  // 1. Check-in reminders â€” daily 7:00 AM
   cron.schedule('0 7 * * *', sendCheckinReminders, { timezone: 'Africa/Nairobi' });
 
-  // 2. Check-out reminders — daily 8:00 AM
+  // 2. Check-out reminders â€” daily 8:00 AM
   cron.schedule('0 8 * * *', sendCheckoutReminders, { timezone: 'Africa/Nairobi' });
 
-  // 3. Stale pending alerts — daily 6:00 PM
+  // 3. Stale pending alerts â€” daily 6:00 PM
   cron.schedule('0 18 * * *', sendStalePendingAlerts, { timezone: 'Africa/Nairobi' });
 
-  // 4. Unread message nudge — every 2 hours
+  // 4. Unread message nudge â€” every 2 hours
   cron.schedule('0 */2 * * *', sendUnreadMessageNudges, { timezone: 'Africa/Nairobi' });
 
-  // 5. Weekly landlord digest — every Monday 9:00 AM
+  // 5. Weekly landlord digest â€” every Monday 9:00 AM
   cron.schedule('0 9 * * 1', sendWeeklyPerformanceDigest, { timezone: 'Africa/Nairobi' });
 
   console.log('[cron] All scheduled jobs registered (timezone: Africa/Nairobi)');
 }
+

@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import cors from 'cors';
 import { apiRateLimiter } from './middleware/rateLimiter.js';
 import { requestLogger } from './middleware/logger.js';
@@ -70,4 +70,5 @@ app.get('/api/health', (_req, res) => {
 app.use(errorHandler);
 
 export default app;
+
 

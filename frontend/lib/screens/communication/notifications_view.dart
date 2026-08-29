@@ -1,35 +1,38 @@
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
 import 'package:property_app/services/fcm_service.dart';
 import 'package:property_app/services/notification_api.dart';
 
+// ─── Design System Constants ──────────────────────────────────────────────────
+const _bg = Color(0xFFFAFAFA);
+const _dark = Color(0xFF111827);
+const _grey = Color(0xFF9CA3AF);
+const _primaryText = Color(0xFF4F70F8);
+const _surface = Colors.white;
 
+// ─── Model ────────────────────────────────────────────────────────────────────
 class NotificationItem {
+  final String id;
   final String title;
   final String subtitle;
   final String time;
-  final int unreadCount;
+  bool isRead;
 
-  const NotificationItem({
+  NotificationItem({
+    required this.id,
     required this.title,
     required this.subtitle,
     required this.time,
-    required this.unreadCount,
+    this.isRead = false,
   });
 }
 
-class AppScrollBehavior extends ScrollBehavior {
-  const AppScrollBehavior();
-
-  Widget buildViewportChrome(
-    BuildContext context,
-    Widget child,
-    AxisDirection axisDirection,
-  ) {
-    return child;
-  }
-}
-
+// ─── View ─────────────────────────────────────────────────────────────────────
 class NotificationsView extends StatefulWidget {
   const NotificationsView({super.key});
 
@@ -42,43 +45,14 @@ class _NotificationsViewState extends State<NotificationsView>
   late final AnimationController _pageCtrl;
   late final Animation<double> _pageFade;
   late final Animation<Offset> _pageSlide;
-
   late final AnimationController _staggerCtrl;
 
   final List<NotificationItem> _items = [];
-
   bool _isLoading = true;
 
-  Future<void> _loadNotifications() async {
-    try {
-      final res = await NotificationApi.fetchNotifications(limit: 50);
-      final List<dynamic> data = res['data'] ?? [];
-      
-      if (!mounted) return;
-      setState(() {
-        _items.clear();
-        for (var item in data) {
-          final created = DateTime.tryParse(item['created_at'].toString())?.toLocal() ?? DateTime.now();
-          final dataMap = item['data'] ?? {};
-          final unreadCount = int.tryParse(dataMap['unreadCount']?.toString() ?? '') ?? 0;
-          
-          _items.add(NotificationItem(
-            title: item['title'] ?? 'Notification',
-            subtitle: item['body'] ?? '',
-            time: _formatTime(created),
-            unreadCount: unreadCount,
-          ));
-        }
-        _isLoading = false;
-      });
-      
-      // Mark as read in the background
-      NotificationApi.markAllAsRead().catchError((_) {});
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-    }
-  }
+  // Selection Mode State
+  bool _isSelectionMode = false;
+  final Set<String> _selectedIds = {};
 
   Stream<RemoteMessage>? _stream;
 
@@ -94,9 +68,7 @@ class _NotificationsViewState extends State<NotificationsView>
     _pageSlide = Tween<Offset>(
       begin: const Offset(0.05, 0),
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _pageCtrl, curve: Curves.easeOutCubic),
-    );
+    ).animate(CurvedAnimation(parent: _pageCtrl, curve: Curves.easeOutCubic));
 
     _staggerCtrl = AnimationController(
       vsync: this,
@@ -106,128 +78,66 @@ class _NotificationsViewState extends State<NotificationsView>
     _pageCtrl.forward().then((_) => _staggerCtrl.forward());
 
     _loadNotifications();
+    _setupFCMStream();
+  }
 
+  void _setupFCMStream() {
     _stream = FCMService.instance.notificationsStream;
     _stream!.listen((message) {
+      if (!mounted) return;
       final title = message.notification?.title ?? 'Notification';
       final subtitle = message.notification?.body ?? '';
       final now = DateTime.now();
-      final unreadCount =
-          int.tryParse(message.data['unreadCount']?.toString() ?? '') ?? 0;
 
-      if (!mounted) return;
       setState(() {
         _items.insert(
           0,
           NotificationItem(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
             title: title,
             subtitle: subtitle,
             time: _formatTime(now),
-            unreadCount: unreadCount,
+            isRead: false,
           ),
         );
       });
     });
   }
+
+  Future<void> _loadNotifications() async {
+    try {
+      final res = await NotificationApi.fetchNotifications(limit: 50);
+      final List<dynamic> data = res['data'] ?? [];
+
+      if (!mounted) return;
+      setState(() {
+        _items.clear();
+        for (var item in data) {
+          final created = DateTime.tryParse(item['created_at'].toString())?.toLocal() ?? DateTime.now();
+          final dataMap = item['data'] ?? {};
+          final unreadCount = int.tryParse(dataMap['unreadCount']?.toString() ?? '') ?? 0;
+          
+          _items.add(NotificationItem(
+            id: item['id']?.toString() ?? UniqueKey().toString(),
+            title: item['title'] ?? 'Notification',
+            subtitle: item['body'] ?? '',
+            time: _formatTime(created),
+            isRead: unreadCount == 0,
+          ));
+        }
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
+
   @override
   void dispose() {
     _pageCtrl.dispose();
     _staggerCtrl.dispose();
     super.dispose();
-  }
-
-  Widget _buildStaggered({required int index, required Widget child}) {
-    final start = (index * 0.1).clamp(0.0, 1.0);
-    final end = (start + 0.4).clamp(0.0, 1.0);
-
-    final animation = CurvedAnimation(
-      parent: _staggerCtrl,
-      curve: Interval(start, end, curve: Curves.easeOutCubic),
-    );
-
-    return FadeTransition(
-      opacity: animation,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 0.2),
-          end: Offset.zero,
-        ).animate(animation),
-        child: child,
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            behavior: HitTestBehavior.opaque,
-            child: const Padding(
-              padding: EdgeInsets.only(right: 16, top: 4, bottom: 4),
-              child: Icon(
-                Icons.arrow_back,
-                size: 28,
-                color: Color(0xFF111827),
-              ),
-            ),
-          ),
-          const Expanded(
-            child: Text(
-              'Notifications',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFF111827),
-                letterSpacing: -0.5,
-              ),
-            ),
-          ),
-          GestureDetector(
-            onTap: () {},
-            behavior: HitTestBehavior.opaque,
-            child: const Icon(
-              Icons.more_vert,
-              size: 28,
-              color: Color(0xFF111827),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: TextField(
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-        ),
-        decoration: InputDecoration(
-          hintText: 'Search notifications',
-          hintStyle: const TextStyle(color: Color(0xFF6B7280)),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFF111827)),
-          ),
-          prefixIcon:
-              const Icon(Icons.search, color: Color(0xFF6B7280)),
-        ),
-        onChanged: (_) {},
-      ),
-    );
   }
 
   String _formatTime(DateTime dateTime) {
@@ -240,50 +150,379 @@ class _NotificationsViewState extends State<NotificationsView>
     return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
   }
 
-  Widget _NotificationItemTile({required NotificationItem item}) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(
-        item.title,
-        style:
-            const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF111827)),
-      ),
-      subtitle: Text(
-        item.subtitle,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: Color(0xFF6B7280)),
-      ),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            item.time,
-            style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
-          ),
-          if (item.unreadCount > 0) ...[
-            const SizedBox(height: 6),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF111827),
-                borderRadius: BorderRadius.circular(999),
+  // ─── Actions ────────────────────────────────────────────────────────────────
+  void _toggleSelectionMode() {
+    setState(() {
+      _isSelectionMode = !_isSelectionMode;
+      if (!_isSelectionMode) _selectedIds.clear();
+    });
+  }
+
+  void _toggleItemSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        if (_selectedIds.isEmpty) _isSelectionMode = false;
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  void _selectAll() {
+    setState(() {
+      if (_selectedIds.length == _items.length) {
+        _selectedIds.clear();
+        _isSelectionMode = false;
+      } else {
+        _selectedIds.addAll(_items.map((e) => e.id));
+      }
+    });
+  }
+
+  void _markSelectedAsRead() {
+    setState(() {
+      for (var item in _items) {
+        if (_selectedIds.contains(item.id)) item.isRead = true;
+      }
+      _selectedIds.clear();
+      _isSelectionMode = false;
+    });
+    // NotificationApi.markAsRead(ids: _selectedIds.toList()).catchError((_) {});
+  }
+
+  void _deleteSelected() {
+    setState(() {
+      _items.removeWhere((item) => _selectedIds.contains(item.id));
+      _selectedIds.clear();
+      _isSelectionMode = false;
+    });
+    // NotificationApi.delete(ids: _selectedIds.toList()).catchError((_) {});
+  }
+
+  void _markAllAsRead() {
+    setState(() {
+      for (var item in _items) {
+        item.isRead = true;
+      }
+    });
+    NotificationApi.markAllAsRead().catchError((_) {});
+  }
+
+  // ─── UI Builders ────────────────────────────────────────────────────────────
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _isSelectionMode
+            ? Row(
+                key: const ValueKey('selection_header'),
+                children: [
+                  GestureDetector(
+                    onTap: _toggleSelectionMode,
+                    child: const Icon(PhosphorIconsRegular.x, color: _dark, size: 24),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      '${_selectedIds.length} Selected',
+                      style: GoogleFonts.poppins(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: _dark,
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _selectAll,
+                    child: const Icon(PhosphorIconsRegular.checkSquareOffset, color: _dark, size: 28),
+                  ),
+                ],
+              )
+            : Row(
+                key: const ValueKey('normal_header'),
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                      ),
+                      child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      'Notifications',
+                      style: GoogleFonts.poppins(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        color: _dark,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    icon: const Icon(PhosphorIconsRegular.dotsThreeVertical, color: _dark, size: 28),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    color: Colors.white,
+                    elevation: 4,
+                    onSelected: (value) {
+                      if (value == 'read_all') _markAllAsRead();
+                      if (value == 'select') _toggleSelectionMode();
+                    },
+                    itemBuilder: (BuildContext context) => [
+                      PopupMenuItem(
+                        value: 'read_all',
+                        child: Text('Mark all as read', style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                      ),
+                      PopupMenuItem(
+                        value: 'select',
+                        child: Text('Select messages', style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              child: Text(
-                item.unreadCount.toString(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+      ),
+    );
+  }
+
+  Widget _buildShimmerLoading() {
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      itemCount: 6,
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (context, index) {
+        return Shimmer.fromColors(
+          baseColor: Colors.grey.shade200,
+          highlightColor: Colors.grey.shade100,
+          child: Container(
+            height: 88,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
             ),
-          ]
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(PhosphorIconsRegular.bellSlash, color: _grey, size: 64),
+          const SizedBox(height: 16),
+          Text(
+            'No notifications yet',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: _dark,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'When you get updates, they\'ll show up here.',
+            style: GoogleFonts.poppins(fontSize: 14, color: _grey),
+          ),
         ],
       ),
-      onTap: () {},
+    );
+  }
+
+  Widget _buildNotificationItem(int index, NotificationItem item) {
+    final start = (index * 0.1).clamp(0.0, 1.0);
+    final end = (start + 0.4).clamp(0.0, 1.0);
+    final animation = CurvedAnimation(
+      parent: _staggerCtrl,
+      curve: Interval(start, end, curve: Curves.easeOutCubic),
+    );
+
+    final isSelected = _selectedIds.contains(item.id);
+
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(animation),
+        child: GestureDetector(
+          onLongPress: () {
+            if (!_isSelectionMode) {
+              setState(() => _isSelectionMode = true);
+            }
+            _toggleItemSelection(item.id);
+          },
+          onTap: () {
+            if (_isSelectionMode) {
+              _toggleItemSelection(item.id);
+            } else {
+              setState(() => item.isRead = true);
+              // Handle regular tap (navigation, etc)
+            }
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: item.isRead ? Colors.white : _primaryText.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSelected ? _primaryText : (item.isRead ? Colors.transparent : _primaryText.withOpacity(0.1)),
+                width: isSelected ? 2.0 : 1.0,
+              ),
+              boxShadow: item.isRead
+                  ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]
+                  : [],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_isSelectionMode)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16, top: 4),
+                    child: Icon(
+                      isSelected ? PhosphorIconsRegular.checkCircle : PhosphorIconsRegular.circle,
+                      color: isSelected ? _primaryText : _grey,
+                      size: 24,
+                    ),
+                  )
+                else
+                  Container(
+                    margin: const EdgeInsets.only(right: 16),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: item.isRead ? _bg : _primaryText.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      PhosphorIconsRegular.bellRinging,
+                      color: item.isRead ? _grey : _primaryText,
+                      size: 20,
+                    ),
+                  ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.title,
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: item.isRead ? FontWeight.w600 : FontWeight.w700,
+                                color: _dark,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            item.time,
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: item.isRead ? _grey : _primaryText,
+                              fontWeight: item.isRead ? FontWeight.w400 : FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.subtitle,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: _grey,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomActionBar() {
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      bottom: _isSelectionMode ? 32 : -100,
+      left: 24,
+      right: 24,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        decoration: BoxDecoration(
+          color: _dark,
+          borderRadius: BorderRadius.circular(32), // Pill shape
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            )
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            GestureDetector(
+              onTap: _selectedIds.isEmpty ? null : _markSelectedAsRead,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(PhosphorIconsRegular.envelopeOpen,
+                      color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white),
+                  const SizedBox(height: 4),
+                  Text('Read',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white)),
+                ],
+              ),
+            ),
+            Container(width: 1, height: 30, color: _grey.withOpacity(0.3)),
+            GestureDetector(
+              onTap: _selectedIds.isEmpty ? null : _deleteSelected,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(PhosphorIconsRegular.trash,
+                      color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444)), // Red
+                  const SizedBox(height: 4),
+                  Text('Delete',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444))),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -294,53 +533,32 @@ class _NotificationsViewState extends State<NotificationsView>
       child: SlideTransition(
         position: _pageSlide,
         child: Scaffold(
-          backgroundColor: const Color(0xFFF9FAFB),
+          backgroundColor: _bg,
           body: SafeArea(
             bottom: false,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Stack(
               children: [
-                _buildHeader(context),
-                _buildSearchBar(),
-                Expanded(
-                  child: ScrollConfiguration(
-                    behavior: const AppScrollBehavior(),
-                    child: _isLoading ? const Center(child: CircularProgressIndicator()) : _items.isEmpty ? const Center(
-                            child: Text(
-                              'No notifications',
-                              style: TextStyle(color: Color(0xFF6B7280)),
-                            ),
-                          )
-                        : ListView.separated(
-                            padding: EdgeInsets.fromLTRB(
-                              20,
-                              24,
-                              20,
-                              MediaQuery.of(context).padding.bottom + 24,
-                            ),
-                            physics: const BouncingScrollPhysics(
-                              decelerationRate: ScrollDecelerationRate.fast,
-                            ),
-                            itemCount: _items.length,
-                            separatorBuilder: (context, index) =>
-                                const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Divider(
-                                color: Colors.transparent,
-                                height: 1,
-                              ),
-                            ),
-                            itemBuilder: (context, index) {
-                              return _buildStaggered(
-                                index: index,
-                                child: _NotificationItemTile(
-                                  item: _items[index],
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(),
+                    Expanded(
+                      child: _isLoading
+                          ? _buildShimmerLoading()
+                          : _items.isEmpty
+                              ? _buildEmptyState()
+                              : ListView.builder(
+                                  padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(context).padding.bottom + 100),
+                                  physics: const BouncingScrollPhysics(),
+                                  itemCount: _items.length,
+                                  itemBuilder: (context, index) {
+                                    return _buildNotificationItem(index, _items[index]);
+                                  },
                                 ),
-                              );
-                            },
-                          ),
-                  ),
+                    ),
+                  ],
                 ),
+                _buildBottomActionBar(),
               ],
             ),
           ),
@@ -349,4 +567,3 @@ class _NotificationsViewState extends State<NotificationsView>
     );
   }
 }
-

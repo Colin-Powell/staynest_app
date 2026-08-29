@@ -63,4 +63,5 @@ export const env = {
   appLatestVersion: process.env.APP_LATEST_VERSION || '1.0.0',
   appUpdateUrl: process.env.APP_UPDATE_URL || 'https://staynest.top/update.html',
   forceUpdate: process.env.FORCE_UPDATE === 'true',
+  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
 };

@@ -1,570 +1,524 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:property_app/app_theme.dart';
-import 'package:property_app/services/verification_api.dart';
-import 'package:property_app/session/app_session.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:property_app/screens/screens.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+import 'package:property_app/services/fcm_service.dart';
+import 'package:property_app/services/notification_api.dart';
 
-String formatPrice(int? amount) {
-  if (amount == null) return 'N/A';
-  final formatted = amount.toString().replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-        (m) => '${m[1]},',
-      );
-  return 'KSh $formatted';
+// ─── Design System Constants ──────────────────────────────────────────────────
+const _bg = Color(0xFFFAFAFA);
+const _dark = Color(0xFF111827);
+const _grey = Color(0xFF9CA3AF);
+const _primaryText = Color(0xFF4F70F8);
+const _surface = Colors.white;
+
+// ─── Model ────────────────────────────────────────────────────────────────────
+class AdminNotificationItem {
+  final String id;
+  final String title;
+  final String subtitle;
+  final String time;
+  bool isRead;
+
+  AdminNotificationItem({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.time,
+    this.isRead = false,
+  });
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const Color _primary = Color(0xFF6366F1);
-Color get _bgColor => AppTheme.background;
-
-// ─── Main Widget ──────────────────────────────────────────────────────────────
-
-class AdminDashboardView extends StatefulWidget {
-  const AdminDashboardView({super.key});
+// ─── View ─────────────────────────────────────────────────────────────────────
+class AdminNotificationsView extends StatefulWidget {
+  const AdminNotificationsView({super.key});
 
   @override
-  State<AdminDashboardView> createState() => _AdminDashboardViewState();
+  State<AdminNotificationsView> createState() => _AdminNotificationsViewState();
 }
 
-class _AdminDashboardViewState extends State<AdminDashboardView> {
-  List<Map<String, dynamic>> _pendingVerifications = [];
-  int _totalVerifications = 0;
+class _AdminNotificationsViewState extends State<AdminNotificationsView>
+    with TickerProviderStateMixin {
+  late final AnimationController _pageCtrl;
+  late final Animation<double> _pageFade;
+  late final Animation<Offset> _pageSlide;
+  late final AnimationController _staggerCtrl;
+
+  final List<AdminNotificationItem> _items = [];
   bool _isLoading = true;
-  String? _errorMessage;
+
+  // Selection Mode State
+  bool _isSelectionMode = false;
+  final Set<String> _selectedIds = {};
+
+  Stream<RemoteMessage>? _stream;
 
   @override
   void initState() {
     super.initState();
-    _loadPendingVerifications();
+
+    _pageCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _pageFade = CurvedAnimation(parent: _pageCtrl, curve: Curves.easeOut);
+    _pageSlide = Tween<Offset>(
+      begin: const Offset(0.05, 0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _pageCtrl, curve: Curves.easeOutCubic));
+
+    _staggerCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+
+    _pageCtrl.forward().then((_) => _staggerCtrl.forward());
+
+    _loadNotifications();
+    _setupFCMStream();
   }
 
-  Future<void> _loadPendingVerifications() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+  void _setupFCMStream() {
+    _stream = FCMService.instance.notificationsStream;
+    _stream!.listen((message) {
+      if (!mounted) return;
+      final title = message.notification?.title ?? 'Notification';
+      final subtitle = message.notification?.body ?? '';
+      final now = DateTime.now();
+
+      setState(() {
+        _items.insert(
+          0,
+          AdminNotificationItem(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            title: title,
+            subtitle: subtitle,
+            time: _formatTime(now),
+            isRead: false,
+          ),
+        );
+      });
     });
+  }
 
+  Future<void> _loadNotifications() async {
     try {
-      final verifications =
-          await VerificationApi.getPendingVerifications(limit: 10);
-      final allVerifications = await VerificationApi.getAdminVerifications();
+      final res = await NotificationApi.fetchNotifications(limit: 50);
+      final List<dynamic> data = res['data'] ?? [];
 
+      if (!mounted) return;
       setState(() {
-        _pendingVerifications = verifications;
-        _totalVerifications = allVerifications['total'] as int;
+        _items.clear();
+        for (var item in data) {
+          final created = DateTime.tryParse(item['created_at'].toString())?.toLocal() ?? DateTime.now();
+          final dataMap = item['data'] ?? {};
+          final unreadCount = int.tryParse(dataMap['unreadCount']?.toString() ?? '') ?? 0;
+          
+          _items.add(AdminNotificationItem(
+            id: item['id']?.toString() ?? UniqueKey().toString(),
+            title: item['title'] ?? 'Notification',
+            subtitle: item['body'] ?? '',
+            time: _formatTime(created),
+            isRead: unreadCount == 0,
+          ));
+        }
         _isLoading = false;
       });
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to load verifications: ${e.toString()}';
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _approveVerification(String verificationId) async {
-    try {
-      await VerificationApi.approveVerification(verificationId: verificationId);
-      await _loadPendingVerifications();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Verification approved')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error approving: ${e.toString()}')),
-        );
-      }
-    }
-  }
-
-  Future<void> _rejectVerification(String verificationId) async {
-    try {
-      await VerificationApi.rejectVerification(verificationId: verificationId);
-      await _loadPendingVerifications();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Verification rejected')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error rejecting: ${e.toString()}')),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _isLoading = false);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bgColor,
-      body: CustomScrollView(
-        slivers: [
-          _buildStickyHeader(context),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 112),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                _buildStatCards(),
-                const SizedBox(height: 24),
-                _buildMiniStats(),
-                const SizedBox(height: 32),
-                _buildSectionTitle('Pending Verifications'),
-                const SizedBox(height: 16),
-                _buildPendingVerificationsSection(),
-              ]),
-            ),
-          ),
-        ],
-      ),
-    );
+  void dispose() {
+    _pageCtrl.dispose();
+    _staggerCtrl.dispose();
+    super.dispose();
   }
 
-  // ─── Sticky Header ──────────────────────────────────────────────────────────
+  String _formatTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final diff = now.difference(dateTime);
+    if (diff.inSeconds < 60) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+  }
 
-  SliverAppBar _buildStickyHeader(BuildContext context) {
-    return SliverAppBar(
-      pinned: true,
-      floating: false,
-      backgroundColor: _bgColor,
-      elevation: 0,
-      expandedHeight: 0,
-      toolbarHeight: 64,
-      automaticallyImplyLeading: false,
-      flexibleSpace: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Admin Dashboard',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF111827),
-                  letterSpacing: -0.4,
-                ),
-              ),
-              Row(
+  // ─── Actions ────────────────────────────────────────────────────────────────
+  void _toggleSelectionMode() {
+    setState(() {
+      _isSelectionMode = !_isSelectionMode;
+      if (!_isSelectionMode) _selectedIds.clear();
+    });
+  }
+
+  void _toggleItemSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        if (_selectedIds.isEmpty) _isSelectionMode = false;
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  void _selectAll() {
+    setState(() {
+      if (_selectedIds.length == _items.length) {
+        _selectedIds.clear();
+        _isSelectionMode = false;
+      } else {
+        _selectedIds.addAll(_items.map((e) => e.id));
+      }
+    });
+  }
+
+  void _markSelectedAsRead() {
+    setState(() {
+      for (var item in _items) {
+        if (_selectedIds.contains(item.id)) item.isRead = true;
+      }
+      _selectedIds.clear();
+      _isSelectionMode = false;
+    });
+    // NotificationApi.markAsRead(ids: _selectedIds.toList()).catchError((_) {});
+  }
+
+  void _deleteSelected() {
+    setState(() {
+      _items.removeWhere((item) => _selectedIds.contains(item.id));
+      _selectedIds.clear();
+      _isSelectionMode = false;
+    });
+    // NotificationApi.delete(ids: _selectedIds.toList()).catchError((_) {});
+  }
+
+  void _markAllAsRead() {
+    setState(() {
+      for (var item in _items) {
+        item.isRead = true;
+      }
+    });
+    NotificationApi.markAllAsRead().catchError((_) {});
+  }
+
+  // ─── UI Builders ────────────────────────────────────────────────────────────
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: _isSelectionMode
+            ? Row(
+                key: const ValueKey('selection_header'),
                 children: [
-                  if (AppSession.isAdmin)
-                    TextButton.icon(
-                      onPressed: () =>
-                          Navigator.pushNamed(context, '/super_admin'),
-                      icon: const Icon(Icons.dashboard_customize_outlined),
-                      label: const Text('Open Super Admin'),
+                  GestureDetector(
+                    onTap: _toggleSelectionMode,
+                    child: const Icon(PhosphorIconsRegular.x, color: _dark, size: 24),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      '${_selectedIds.length} Selected',
+                      style: GoogleFonts.poppins(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: _dark,
+                        letterSpacing: -0.4,
+                      ),
                     ),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: _primary.withOpacity(0.10),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: _primary.withOpacity(0.08),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+                  ),
+                  GestureDetector(
+                    onTap: _selectAll,
+                    child: const Icon(PhosphorIconsRegular.checkSquareOffset, color: _dark, size: 28),
+                  ),
+                ],
+              )
+            : Row(
+                key: const ValueKey('normal_header'),
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                      ),
+                      child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 20),
                     ),
-                    child: const Icon(Icons.shield_outlined,
-                        color: _primary, size: 20),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      'Notifications',
+                      style: GoogleFonts.poppins(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        color: _dark,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    icon: const Icon(PhosphorIconsRegular.dotsThreeVertical, color: _dark, size: 28),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    color: Colors.white,
+                    elevation: 4,
+                    onSelected: (value) {
+                      if (value == 'read_all') _markAllAsRead();
+                      if (value == 'select') _toggleSelectionMode();
+                    },
+                    itemBuilder: (BuildContext context) => [
+                      PopupMenuItem(
+                        value: 'read_all',
+                        child: Text('Mark all as read', style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                      ),
+                      PopupMenuItem(
+                        value: 'select',
+                        child: Text('Select messages', style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
       ),
     );
   }
 
-  // ─── Stat Cards Row ─────────────────────────────────────────────────────────
-
-  Widget _buildStatCards() {
-    final stats = [
-      _StatData(
-          icon: Icons.description_outlined,
-          label: 'Pending',
-          value: _pendingVerifications.length.toString()),
-      _StatData(
-          icon: Icons.check_circle_outline,
-          label: 'Total',
-          value: _totalVerifications.toString()),
-      _StatData(
-          icon: Icons.info_outline,
-          label: 'Status',
-          value: _isLoading ? '...' : 'Active'),
-    ];
-
-    return Row(
-      children: stats.map((s) {
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: s != stats.last ? 12 : 0),
-            child: _StatCard(data: s),
+  Widget _buildShimmerLoading() {
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      itemCount: 6,
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (context, index) {
+        return Shimmer.fromColors(
+          baseColor: Colors.grey.shade200,
+          highlightColor: Colors.grey.shade100,
+          child: Container(
+            height: 88,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
           ),
         );
-      }).toList(),
+      },
     );
   }
 
-  // ─── Mini Stats Grid ────────────────────────────────────────────────────────
-
-  Widget _buildMiniStats() {
-    return Row(
-      children: [
-        _MiniStat(
-            value: _pendingVerifications.length.toString(),
-            label: 'Awaiting',
-            valueColor: const Color(0xFF111827)),
-        const SizedBox(width: 12),
-        _MiniStat(
-            value: _totalVerifications.toString(),
-            label: 'All Time',
-            valueColor: const Color(0xFF111827)),
-        const SizedBox(width: 12),
-        _MiniStat(
-            value: _isLoading ? '-' : 'OK',
-            label: 'System',
-            valueColor:
-                _isLoading ? const Color(0xFF9CA3AF) : const Color(0xFF22C55E)),
-      ],
-    );
-  }
-
-  // ─── Section Title ──────────────────────────────────────────────────────────
-
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 17,
-        fontWeight: FontWeight.w800,
-        color: Color(0xFF111827),
-        letterSpacing: -0.3,
-      ),
-    );
-  }
-
-  // ─── Pending Verifications Section ──────────────────────────────────────────
-
-  Widget _buildPendingVerificationsSection() {
-    if (_isLoading) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 32),
-          child: CircularProgressIndicator(color: _primary),
-        ),
-      );
-    }
-
-    if (_errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 32),
-          child: Column(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.red, size: 48),
-              const SizedBox(height: 16),
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.red),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _loadPendingVerifications,
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_pendingVerifications.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
-        alignment: Alignment.center,
-        child: const Column(
-          children: [
-            Icon(Icons.inbox_outlined, color: Color(0xFFC4B5FD), size: 64),
-            SizedBox(height: 16),
-            Text(
-              'No Pending Verifications',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF111827),
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'All verifications have been reviewed',
-              style: TextStyle(
-                fontSize: 13,
-                color: Color(0xFF6B7280),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        ..._pendingVerifications.asMap().entries.map((entry) {
-          final index = entry.key;
-          final verification = entry.value;
-          return Column(
-            children: [
-              _buildVerificationCard(verification),
-              if (index < _pendingVerifications.length - 1)
-                const SizedBox(height: 12),
-            ],
-          );
-        }),
-        if (_pendingVerifications.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _buildViewAllButton(),
-        ]
-      ],
-    );
-  }
-
-  // ─── Verification Card ──────────────────────────────────────────────────────
-
-  Widget _buildVerificationCard(Map<String, dynamic> verification) {
-    final propertyData = verification['property_data'] as Map<String, dynamic>?;
-    final userData = verification['user_name'] as String? ?? 'Unknown';
-    final price = propertyData?['price'] as int?;
-    final title = propertyData?['title'] as String? ?? 'Unnamed Property';
-    final city = propertyData?['city'] as String? ?? 'Unknown';
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF3F4F6)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Avatar
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: _primary.withOpacity(0.1),
-            child: const Icon(Icons.person, color: _primary, size: 28),
-          ),
-          const SizedBox(width: 12),
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '$city • $userData',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF6B7280),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  formatPrice(price),
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: _primary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Action buttons
-          Column(
-            children: [
-              _ActionButton(
-                icon: Icons.check,
-                bgColor: const Color(0xFFF0FDF4),
-                iconColor: const Color(0xFF22C55E),
-                borderColor: const Color(0xFFDCFCE7),
-                onTap: () => _approveVerification(verification['id']),
-              ),
-              const SizedBox(height: 8),
-              _ActionButton(
-                icon: Icons.close,
-                bgColor: const Color(0xFFFFF1F2),
-                iconColor: const Color(0xFFEF4444),
-                borderColor: const Color(0xFFFFE4E6),
-                onTap: () => _rejectVerification(verification['id']),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── View All Button ────────────────────────────────────────────────────────
-
-  Widget _buildViewAllButton() {
+  Widget _buildEmptyState() {
     return Center(
-      child: TextButton(
-        onPressed: () {},
-        child: const Text(
-          'View All Verifications',
-          style: TextStyle(
-            color: _primary,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Sub-widgets ──────────────────────────────────────────────────────────────
-
-class _StatData {
-  final IconData? icon;
-  final String label;
-  final String value;
-  const _StatData({this.icon, required this.label, required this.value});
-}
-
-class _StatCard extends StatelessWidget {
-  final _StatData data;
-  const _StatCard({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF3F4F6)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              if (data.icon != null) ...[
-                Icon(data.icon, size: 14, color: const Color(0xFF6B7280)),
-                const SizedBox(width: 4),
-              ],
-              Text(
-                data.label,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
-            ],
+          const Icon(PhosphorIconsRegular.bellSlash, color: _grey, size: 64),
+          const SizedBox(height: 16),
+          Text(
+            'No notifications yet',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: _dark,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
-            data.value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF111827),
-              letterSpacing: -0.5,
-            ),
+            'When you get updates, they\'ll show up here.',
+            style: GoogleFonts.poppins(fontSize: 14, color: _grey),
           ),
         ],
       ),
     );
   }
-}
 
-class _MiniStat extends StatelessWidget {
-  final String value;
-  final String label;
-  final Color valueColor;
-  const _MiniStat({
-    required this.value,
-    required this.label,
-    required this.valueColor,
-  });
+  Widget _buildAdminNotificationItem(int index, AdminNotificationItem item) {
+    final start = (index * 0.1).clamp(0.0, 1.0);
+    final end = (start + 0.4).clamp(0.0, 1.0);
+    final animation = CurvedAnimation(
+      parent: _staggerCtrl,
+      curve: Interval(start, end, curve: Curves.easeOutCubic),
+    );
 
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
+    final isSelected = _selectedIds.contains(item.id);
+
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(animation),
+        child: GestureDetector(
+          onLongPress: () {
+            if (!_isSelectionMode) {
+              setState(() => _isSelectionMode = true);
+            }
+            _toggleItemSelection(item.id);
+          },
+          onTap: () {
+            if (_isSelectionMode) {
+              _toggleItemSelection(item.id);
+            } else {
+              setState(() => item.isRead = true);
+              // Handle regular tap (navigation, etc)
+            }
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: item.isRead ? Colors.white : _primaryText.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSelected ? _primaryText : (item.isRead ? Colors.transparent : _primaryText.withOpacity(0.1)),
+                width: isSelected ? 2.0 : 1.0,
+              ),
+              boxShadow: item.isRead
+                  ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]
+                  : [],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_isSelectionMode)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16, top: 4),
+                    child: Icon(
+                      isSelected ? PhosphorIconsRegular.checkCircle : PhosphorIconsRegular.circle,
+                      color: isSelected ? _primaryText : _grey,
+                      size: 24,
+                    ),
+                  )
+                else
+                  Container(
+                    margin: const EdgeInsets.only(right: 16),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: item.isRead ? _bg : _primaryText.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      PhosphorIconsRegular.bellRinging,
+                      color: item.isRead ? _grey : _primaryText,
+                      size: 20,
+                    ),
+                  ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.title,
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: item.isRead ? FontWeight.w600 : FontWeight.w700,
+                                color: _dark,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            item.time,
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: item.isRead ? _grey : _primaryText,
+                              fontWeight: item.isRead ? FontWeight.w400 : FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.subtitle,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: _grey,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomActionBar() {
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      bottom: _isSelectionMode ? 32 : -100,
+      left: 24,
+      right: 24,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFF3F4F6)),
+          color: _dark,
+          borderRadius: BorderRadius.circular(32), // Pill shape
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            )
           ],
         ),
-        child: Column(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: valueColor,
-                letterSpacing: -0.5,
+            GestureDetector(
+              onTap: _selectedIds.isEmpty ? null : _markSelectedAsRead,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(PhosphorIconsRegular.envelopeOpen,
+                      color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white),
+                  const SizedBox(height: 4),
+                  Text('Read',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white)),
+                ],
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF9CA3AF),
+            Container(width: 1, height: 30, color: _grey.withOpacity(0.3)),
+            GestureDetector(
+              onTap: _selectedIds.isEmpty ? null : _deleteSelected,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(PhosphorIconsRegular.trash,
+                      color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444)), // Red
+                  const SizedBox(height: 4),
+                  Text('Delete',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444))),
+                ],
               ),
             ),
           ],
@@ -572,36 +526,44 @@ class _MiniStat extends StatelessWidget {
       ),
     );
   }
-}
-
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final Color bgColor;
-  final Color iconColor;
-  final Color borderColor;
-  final VoidCallback onTap;
-
-  const _ActionButton({
-    required this.icon,
-    required this.bgColor,
-    required this.iconColor,
-    required this.borderColor,
-    required this.onTap,
-  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 28,
-        height: 28,
-        decoration: BoxDecoration(
-          color: bgColor,
-          border: Border.all(color: borderColor),
-          borderRadius: BorderRadius.circular(8),
+    return FadeTransition(
+      opacity: _pageFade,
+      child: SlideTransition(
+        position: _pageSlide,
+        child: Scaffold(
+          backgroundColor: _bg,
+          body: SafeArea(
+            bottom: false,
+            child: Stack(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(),
+                    Expanded(
+                      child: _isLoading
+                          ? _buildShimmerLoading()
+                          : _items.isEmpty
+                              ? _buildEmptyState()
+                              : ListView.builder(
+                                  padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(context).padding.bottom + 100),
+                                  physics: const BouncingScrollPhysics(),
+                                  itemCount: _items.length,
+                                  itemBuilder: (context, index) {
+                                    return _buildAdminNotificationItem(index, _items[index]);
+                                  },
+                                ),
+                    ),
+                  ],
+                ),
+                _buildBottomActionBar(),
+              ],
+            ),
+          ),
         ),
-        child: Icon(icon, color: iconColor, size: 14),
       ),
     );
   }

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
-import { sendPushToUser } from '../services/firebase.js';
+import { queueUserPush } from '../services/queue.js';
 const router = Router();
 // Create a new booking (tenant creates booking)
 router.post('/', requireAuth, async (req, res, next) => {
@@ -61,7 +61,7 @@ router.post('/', requireAuth, async (req, res, next) => {
                 const pRes = await query('SELECT title FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
                 const tenantName = tenantRes.rows[0]?.name || 'A tenant';
                 const pName = pRes.rows[0]?.title || 'your property';
-                await sendPushToUser(landlordId, '?? New Booking Request', `${tenantName} requested to book ${pName}.`, { type: 'new_booking', bookingId: bookingData.id });
+                await queueUserPush(landlordId, '?? New Booking Request', `${tenantName} requested to book ${pName}.`, { type: 'new_booking', bookingId: bookingData.id });
             }
             catch (e) {
                 console.error('Push error:', e);
@@ -163,7 +163,7 @@ router.patch('/:id/confirm', requireAuth, async (req, res, next) => {
             const b = result.rows[0];
             const pRes = await query('SELECT title FROM properties WHERE id = $1 LIMIT 1', [b.property_id]);
             const pName = pRes.rows[0]?.title || 'a property';
-            await sendPushToUser(b.tenant_id, '? Booking Approved', `Your booking for ${pName} was approved!`, { type: 'booking_approved', bookingId });
+            await queueUserPush(b.tenant_id, '? Booking Approved', `Your booking for ${pName} was approved!`, { type: 'booking_approved', bookingId });
         }
         catch (e) {
             console.error('Push error:', e);
@@ -200,7 +200,7 @@ router.patch('/:id/reject', requireAuth, async (req, res, next) => {
             const b = result.rows[0];
             const pRes = await query('SELECT title FROM properties WHERE id = $1 LIMIT 1', [b.property_id]);
             const pName = pRes.rows[0]?.title || 'a property';
-            await sendPushToUser(b.tenant_id, '? Booking Declined', `Your booking for ${pName} was declined.`, { type: 'booking_declined', bookingId });
+            await queueUserPush(b.tenant_id, '? Booking Declined', `Your booking for ${pName} was declined.`, { type: 'booking_declined', bookingId });
         }
         catch (e) {
             console.error('Push error:', e);
@@ -240,7 +240,7 @@ router.patch('/:id/cancel', requireAuth, async (req, res, next) => {
             const actor = isTenant ? 'Tenant' : 'Landlord';
             const pRes = await query('SELECT title FROM properties WHERE id = $1 LIMIT 1', [b.property_id]);
             const pName = pRes.rows[0]?.title || 'a property';
-            await sendPushToUser(notifyUserId, '?? Booking Cancelled', `${actor} cancelled the booking for ${pName}.`, { type: 'booking_cancelled', bookingId });
+            await queueUserPush(notifyUserId, '?? Booking Cancelled', `${actor} cancelled the booking for ${pName}.`, { type: 'booking_cancelled', bookingId });
         }
         catch (e) {
             console.error('Push error:', e);

@@ -1,16 +1,16 @@
 /**
- * cron.ts � StayNest scheduled background jobs
+ * cron.ts — StayNest scheduled background jobs
  *
  * Jobs:
- *  1. Check-in reminders     � daily 7 AM  � tenant + landlord
- *  2. Check-out reminders    � daily 8 AM  � tenant
- *  3. Stale booking alerts   � daily 6 PM  � landlord with pending >48h
- *  4. Unread message nudge   � every 2h    � users with unread >1h
- *  5. Weekly perf digest     � Mon 9 AM    � landlord email + push
+ *  1. Check-in reminders     — daily 7 AM  — tenant + landlord
+ *  2. Check-out reminders    — daily 8 AM  — tenant
+ *  3. Stale booking alerts   — daily 6 PM  — landlord with pending >48h
+ *  4. Unread message nudge   — every 2h    — users with unread >1h
+ *  5. Weekly perf digest     — Mon 9 AM    — landlord email + push
  */
 import cron from 'node-cron';
 import { query } from '../db.js';
-import { sendPushToUser } from './firebase.js';
+import { queueUserPush } from './queue.js';
 import { sendAlertEmail } from './email.js';
 // --- helpers ------------------------------------------------------------------
 function fmt(date) {
@@ -31,9 +31,9 @@ async function sendCheckinReminders() {
         for (const row of res.rows) {
             const dateStr = fmt(row.check_in_date);
             // Notify tenant
-            await sendPushToUser(row.tenant_id, '?? Check-in Tomorrow!', `Your check-in at ${row.property_name} is tomorrow (${dateStr}). Get ready!`, { type: 'checkin_reminder', bookingId: row.id });
+            await queueUserPush(row.tenant_id, '?? Check-in Tomorrow!', `Your check-in at ${row.property_name} is tomorrow (${dateStr}). Get ready!`, { type: 'checkin_reminder', bookingId: row.id });
             // Notify landlord
-            await sendPushToUser(row.landlord_id, '?? Tenant Arrives Tomorrow', `${row.tenant_name} checks in to ${row.property_name} tomorrow (${dateStr}).`, { type: 'checkin_landlord', bookingId: row.id });
+            await queueUserPush(row.landlord_id, '?? Tenant Arrives Tomorrow', `${row.tenant_name} checks in to ${row.property_name} tomorrow (${dateStr}).`, { type: 'checkin_landlord', bookingId: row.id });
         }
         console.log(`[cron] check-in reminders sent for ${res.rowCount} bookings`);
     }
@@ -51,7 +51,7 @@ async function sendCheckoutReminders() {
        WHERE b.status = 'confirmed'
          AND b.check_out_date = CURRENT_DATE`, []);
         for (const row of res.rows) {
-            await sendPushToUser(row.tenant_id, '?? Check-out Today', `Your check-out at ${row.property_name} is today. Safe travels!`, { type: 'checkout_reminder', bookingId: row.id });
+            await queueUserPush(row.tenant_id, '?? Check-out Today', `Your check-out at ${row.property_name} is today. Safe travels!`, { type: 'checkout_reminder', bookingId: row.id });
         }
         console.log(`[cron] check-out reminders sent for ${res.rowCount} bookings`);
     }
@@ -70,7 +70,7 @@ async function sendStalePendingAlerts() {
        GROUP BY b.landlord_id`, []);
         for (const row of res.rows) {
             const n = parseInt(row.pending_count);
-            await sendPushToUser(row.landlord_id, '? Pending Booking Requests', `You have ${n} pending booking request${n === 1 ? '' : 's'} waiting for your response.`, { type: 'stale_pending' });
+            await queueUserPush(row.landlord_id, '? Pending Booking Requests', `You have ${n} pending booking request${n === 1 ? '' : 's'} waiting for your response.`, { type: 'stale_pending' });
         }
         console.log(`[cron] stale-pending alerts sent to ${res.rowCount} landlords`);
     }
@@ -93,7 +93,7 @@ async function sendUnreadMessageNudges() {
        GROUP BY m.to_user_id`, []);
         for (const row of res.rows) {
             const n = parseInt(row.unread_count);
-            await sendPushToUser(row.to_user_id, '?? Unread Messages', `You have ${n} unread message${n === 1 ? '' : 's'} on StayNest.`, { type: 'unread_nudge' });
+            await queueUserPush(row.to_user_id, '?? Unread Messages', `You have ${n} unread message${n === 1 ? '' : 's'} on StayNest.`, { type: 'unread_nudge' });
         }
         console.log(`[cron] unread nudges sent to ${res.rowCount} users`);
     }
@@ -148,7 +148,7 @@ async function sendWeeklyPerformanceDigest() {
             catch (emailErr) {
                 console.error(`[cron] weekly digest email failed for ${landlord_email}:`, emailErr);
             }
-            await sendPushToUser(landlord_id, '?? Weekly Report Ready', `Last 7 days: ${views} views, ${new_bookings} bookings, Ksh ${Number(revenue).toLocaleString()} revenue.`, { type: 'weekly_digest' });
+            await queueUserPush(landlord_id, '?? Weekly Report Ready', `Last 7 days: ${views} views, ${new_bookings} bookings, Ksh ${Number(revenue).toLocaleString()} revenue.`, { type: 'weekly_digest' });
         }
         console.log(`[cron] weekly digest sent to ${res.rowCount} landlords`);
     }
@@ -158,15 +158,15 @@ async function sendWeeklyPerformanceDigest() {
 }
 // --- Scheduler ----------------------------------------------------------------
 export function startCronJobs() {
-    // 1. Check-in reminders � daily 7:00 AM
+    // 1. Check-in reminders — daily 7:00 AM
     cron.schedule('0 7 * * *', sendCheckinReminders, { timezone: 'Africa/Nairobi' });
-    // 2. Check-out reminders � daily 8:00 AM
+    // 2. Check-out reminders — daily 8:00 AM
     cron.schedule('0 8 * * *', sendCheckoutReminders, { timezone: 'Africa/Nairobi' });
-    // 3. Stale pending alerts � daily 6:00 PM
+    // 3. Stale pending alerts — daily 6:00 PM
     cron.schedule('0 18 * * *', sendStalePendingAlerts, { timezone: 'Africa/Nairobi' });
-    // 4. Unread message nudge � every 2 hours
+    // 4. Unread message nudge — every 2 hours
     cron.schedule('0 */2 * * *', sendUnreadMessageNudges, { timezone: 'Africa/Nairobi' });
-    // 5. Weekly landlord digest � every Monday 9:00 AM
+    // 5. Weekly landlord digest — every Monday 9:00 AM
     cron.schedule('0 9 * * 1', sendWeeklyPerformanceDigest, { timezone: 'Africa/Nairobi' });
     console.log('[cron] All scheduled jobs registered (timezone: Africa/Nairobi)');
 }
