@@ -1,14 +1,10 @@
-// lib/screens/dashboard/landlord_settings_page.dart
-
-import 'dart:ui';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:io';
-
 import 'package:image_picker/image_picker.dart';
-
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/user_service.dart';
 import 'package:property_app/services/avatar_service.dart';
@@ -19,13 +15,17 @@ import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'landlord_analytics_page.dart';
 
+// ─── Landlord Design System Constants ─────────────────────────────────────────
+const Color _bg = Color(0xFFFAFAFA);
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF9CA3AF);
+const Color _surface = Colors.white;
+const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
+
 // --- MAIN SETTINGS PAGE ---
 
 class LandlordSettingsPage extends StatelessWidget {
   const LandlordSettingsPage({super.key});
-  static const Color textDark = Color(0xFF111827);
-  static const Color textLight = Color(0xFF9CA3AF);
-  static const Color primaryGreen = Color(0xFF059669);
 
   // Smooth slide transition for navigating to subpages
   void _navigateTo(BuildContext context, Widget page) {
@@ -37,8 +37,7 @@ class LandlordSettingsPage extends StatelessWidget {
           const end = Offset.zero;
           const curve = Curves.easeOutCubic;
 
-          var tween =
-              Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
           var offsetAnimation = animation.drive(tween);
 
           return SlideTransition(
@@ -54,27 +53,28 @@ class LandlordSettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = AppSession.currentUser;
+    
     return Scaffold(
-      backgroundColor: Colors.transparent, // Let portal gradient show through
+      backgroundColor: _bg,
       body: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 130),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 130),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // --- HEADER ---
               Row(
                 children: [
-                  const Icon(Icons.arrow_back, color: textDark, size: 28),
+                  const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 28), // Or hide if it's a main tab
                   const SizedBox(width: 16),
                   Text(
                     'Settings',
                     style: GoogleFonts.poppins(
                       fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: textDark,
+                      fontWeight: FontWeight.w700,
+                      color: _dark,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -82,9 +82,17 @@ class LandlordSettingsPage extends StatelessWidget {
               ),
               const SizedBox(height: 32),
 
-              // --- PROFILE GLASS CARD ---
-              _GlassContainer(
+              // --- PROFILE CARD ---
+              Container(
                 padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: _surface,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                  ],
+                  border: Border.all(color: _grey.withOpacity(0.1)),
+                ),
                 child: Row(
                   children: [
                     Container(
@@ -92,14 +100,7 @@ class LandlordSettingsPage extends StatelessWidget {
                       height: 64,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                        border: Border.all(color: _grey.withOpacity(0.1)),
                       ),
                       child: ClipOval(
                         child: AppSession.buildAvatar(
@@ -120,8 +121,10 @@ class LandlordSettingsPage extends StatelessWidget {
                             style: GoogleFonts.poppins(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
-                              color: textDark,
+                              color: _dark,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -129,20 +132,19 @@ class LandlordSettingsPage extends StatelessWidget {
                             style: GoogleFonts.poppins(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
-                              color: textLight,
+                              color: _grey,
                             ),
                           ),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: primaryGreen.withOpacity(0.1),
+                        color: _green.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.edit_rounded,
-                          color: primaryGreen, size: 20),
+                      child: const Icon(PhosphorIconsRegular.pencilSimple, color: _green, size: 20),
                     )
                   ],
                 ),
@@ -155,38 +157,30 @@ class LandlordSettingsPage extends StatelessWidget {
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: primaryGreen,
-                  letterSpacing: 1.2,
+                  color: _grey,
+                  letterSpacing: 1.0,
                 ),
               ),
               const SizedBox(height: 12),
-              _GlassContainer(
-                padding: EdgeInsets.zero,
-                child: Column(
-                  children: [
-                    _buildSettingRow(
-                      title: 'Performance & Insights',
-                      icon: PhosphorIcons.chartLineUp(PhosphorIconsStyle.fill),
-                      onTap: () =>
-                          _navigateTo(context, const LandlordAnalyticsPage()),
-                    ),
-                    _buildDivider(),
-                    _buildSettingRow(
-                      title: 'Business Information',
-                      icon: PhosphorIcons.buildings(PhosphorIconsStyle.fill),
-                      onTap: () =>
-                          _navigateTo(context, const BusinessInfoPage()),
-                    ),
-                    _buildDivider(),
-                    _buildSettingRow(
-                      title: 'Bank Details',
-                      icon: PhosphorIcons.creditCard(PhosphorIconsStyle.fill),
-                      onTap: () =>
-                          _navigateTo(context, const BankDetailsPage()),
-                    ),
-                  ],
+              _buildSettingsBlock([
+                _buildSettingRow(
+                  title: 'Performance & Insights',
+                  icon: PhosphorIconsRegular.trendUp,
+                  onTap: () => _navigateTo(context, const LandlordAnalyticsPage()),
                 ),
-              ),
+                _buildDivider(),
+                _buildSettingRow(
+                  title: 'Business Information',
+                  icon: PhosphorIconsRegular.buildings,
+                  onTap: () => _navigateTo(context, const BusinessInfoPage()),
+                ),
+                _buildDivider(),
+                _buildSettingRow(
+                  title: 'Bank Details',
+                  icon: PhosphorIconsRegular.bank,
+                  onTap: () => _navigateTo(context, const BankDetailsPage()),
+                ),
+              ]),
               const SizedBox(height: 32),
 
               // --- ACCOUNT & SECURITY ---
@@ -195,48 +189,37 @@ class LandlordSettingsPage extends StatelessWidget {
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: primaryGreen,
-                  letterSpacing: 1.2,
+                  color: _grey,
+                  letterSpacing: 1.0,
                 ),
               ),
               const SizedBox(height: 12),
-              _GlassContainer(
-                padding: EdgeInsets.zero,
-                child: Column(
-                  children: [
-                    _buildSettingRow(
-                      title: 'Personal Information',
-                      icon: PhosphorIcons.user(PhosphorIconsStyle.fill),
-                      onTap: () =>
-                          _navigateTo(context, const PersonalInfoPage()),
-                    ),
-                    _buildDivider(),
-                    _buildSettingRow(
-                      title: 'Notification Settings',
-                      icon: PhosphorIcons.bell(PhosphorIconsStyle.fill),
-                      onTap: () => _navigateTo(
-                          context, const NotificationSettingsPage()),
-                    ),
-                    _buildDivider(),
-                    _buildSettingRow(
-                      title: 'Change Password',
-                      icon: PhosphorIcons.lockKey(PhosphorIconsStyle.fill),
-                      onTap: () =>
-                          _navigateTo(context, const ChangePasswordPage()),
-                    ),
-                    _buildDivider(),
-                    _buildSettingRow(
-                      title: 'Two-Factor Authentication',
-                      icon: PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill),
-                      trailingText: (user['settings']?['two_factor'] ?? false)
-                          ? 'On'
-                          : 'Off',
-                      onTap: () =>
-                          _navigateTo(context, const TwoFactorAuthPage()),
-                    ),
-                  ],
+              _buildSettingsBlock([
+                _buildSettingRow(
+                  title: 'Personal Information',
+                  icon: PhosphorIconsRegular.user,
+                  onTap: () => _navigateTo(context, const PersonalInfoPage()),
                 ),
-              ),
+                _buildDivider(),
+                _buildSettingRow(
+                  title: 'Notification Settings',
+                  icon: PhosphorIconsRegular.bell,
+                  onTap: () => _navigateTo(context, const NotificationSettingsPage()),
+                ),
+                _buildDivider(),
+                _buildSettingRow(
+                  title: 'Change Password',
+                  icon: PhosphorIconsRegular.lockKey,
+                  onTap: () => _navigateTo(context, const ChangePasswordPage()),
+                ),
+                _buildDivider(),
+                _buildSettingRow(
+                  title: 'Two-Factor Authentication',
+                  icon: PhosphorIconsRegular.shieldCheck,
+                  trailingText: (user['settings']?['two_factor'] ?? false) ? 'On' : 'Off',
+                  onTap: () => _navigateTo(context, const TwoFactorAuthPage()),
+                ),
+              ]),
               const SizedBox(height: 32),
 
               // --- ABOUT & SUPPORT ---
@@ -245,51 +228,45 @@ class LandlordSettingsPage extends StatelessWidget {
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: primaryGreen,
-                  letterSpacing: 1.2,
+                  color: _grey,
+                  letterSpacing: 1.0,
                 ),
               ),
               const SizedBox(height: 12),
-              _GlassContainer(
-                padding: EdgeInsets.zero,
-                child: Column(
-                  children: [
-                    _buildSettingRow(
-                      title: 'Help & Support',
-                      icon: PhosphorIcons.question(PhosphorIconsStyle.fill),
-                      onTap: () => _navigateTo(
-                          context,
-                          HelpSupportView(
-                              onBack: () => Navigator.pop(context))),
-                    ),
-                    _buildDivider(),
-                    _buildSettingRow(
-                      title: 'Privacy Policy',
-                      icon: PhosphorIcons.fileLock(PhosphorIconsStyle.fill),
-                      onTap: () =>
-                          _navigateTo(context, const PrivacyPolicyPage()),
-                    ),
-                  ],
+              _buildSettingsBlock([
+                _buildSettingRow(
+                  title: 'Help & Support',
+                  icon: PhosphorIconsRegular.question,
+                  onTap: () => _navigateTo(context, HelpSupportView(onBack: () => Navigator.pop(context))),
                 ),
-              ),
+                _buildDivider(),
+                _buildSettingRow(
+                  title: 'Privacy Policy',
+                  icon: PhosphorIconsRegular.fileText,
+                  onTap: () => _navigateTo(context, const PrivacyPolicyPage()),
+                ),
+              ]),
               const SizedBox(height: 32),
 
               // --- LOGOUT BUTTON ---
               GestureDetector(
                 onTap: () {
                   AppSession.logout();
-                  Navigator.of(context, rootNavigator: true)
-                      .pushNamedAndRemoveUntil('/login', (route) => false);
+                  Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/login', (route) => false);
                 },
                 behavior: HitTestBehavior.opaque,
-                child: _GlassContainer(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                  decoration: BoxDecoration(
+                    color: _surface,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+                    border: Border.all(color: const Color(0xFFFCA5A5).withOpacity(0.3)), // Subtle red border
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(PhosphorIcons.signOut(),
-                          color: const Color(0xFFEF4444), size: 24),
+                      const Icon(PhosphorIconsRegular.signOut, color: Color(0xFFEF4444), size: 24),
                       const SizedBox(width: 12),
                       Text(
                         'Logout',
@@ -310,11 +287,23 @@ class LandlordSettingsPage extends StatelessWidget {
     );
   }
 
+  Widget _buildSettingsBlock(List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        border: Border.all(color: _grey.withOpacity(0.1)),
+      ),
+      child: Column(children: children),
+    );
+  }
+
   Widget _buildDivider() {
     return Divider(
       height: 1,
       thickness: 1,
-      color: Colors.white.withOpacity(0.6),
+      color: _grey.withOpacity(0.1),
       indent: 64, // Aligns with text start
       endIndent: 20,
     );
@@ -330,25 +319,25 @@ class LandlordSettingsPage extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.6),
+                color: _green.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: primaryGreen, size: 22),
+              child: Icon(icon, color: _green, size: 20),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Text(
                 title,
                 style: GoogleFonts.poppins(
-                  fontSize: 15.5,
+                  fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: textDark,
+                  color: _dark,
                 ),
               ),
             ),
@@ -358,15 +347,15 @@ class LandlordSettingsPage extends StatelessWidget {
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: primaryGreen,
+                  color: _green,
                 ),
               ),
               const SizedBox(width: 12),
             ],
-            Icon(
-              Icons.arrow_forward_ios_rounded,
-              color: textLight.withOpacity(0.6),
-              size: 18,
+            const Icon(
+              PhosphorIconsRegular.caretRight,
+              color: _grey,
+              size: 20,
             ),
           ],
         ),
@@ -391,70 +380,46 @@ class SettingsPageLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      extendBody: true, // Let content flow under bottom nav glass
+      backgroundColor: _bg,
+      extendBody: true,
       bottomNavigationBar: bottomNavigationBar,
-      body: Stack(
-        children: [
-          // Background Gradient (Matches Portal)
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFF7FDF9),
-                  Color(0xFFFFFFFF),
-                  Color(0xFFD4EFE1),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // Custom Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    behavior: HitTestBehavior.opaque,
+                    child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    title,
+                    style: GoogleFonts.poppins(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: _dark,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
                 ],
-                stops: [0.0, 0.5, 1.0],
               ),
             ),
-          ),
-
-          SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                // Custom Header
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        behavior: HitTestBehavior.opaque,
-                        child: const Icon(
-                          Icons.arrow_back,
-                          color: Color(0xFF111827),
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(
-                        title,
-                        style: GoogleFonts.poppins(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF111827),
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Page Content
-                Expanded(child: child),
-              ],
-            ),
-          ),
-        ],
+            // Page Content
+            Expanded(child: child),
+          ],
+        ),
       ),
     );
   }
 }
 
-// Shared UI helper for Glass Input Fields
+// Shared UI helper for Input Fields
 Widget _buildTextField(String label,
     {String? hintText,
     bool isPassword = false,
@@ -470,37 +435,32 @@ Widget _buildTextField(String label,
           style: GoogleFonts.poppins(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: const Color(0xFF374151),
+            color: _dark,
           ),
         ),
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
           obscureText: isPassword,
-          style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w500),
+          style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w500, color: _dark),
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: GoogleFonts.poppins(
-                color: const Color(0xFF9CA3AF), fontSize: 15),
-            prefixIcon: prefixIcon != null
-                ? Icon(prefixIcon, color: const Color(0xFF9CA3AF), size: 22)
-                : null,
+            hintStyle: GoogleFonts.poppins(color: _grey, fontSize: 14, fontWeight: FontWeight.w400),
+            prefixIcon: prefixIcon != null ? Icon(prefixIcon, color: _grey, size: 22) : null,
             filled: true,
-            fillColor: Colors.white.withOpacity(0.55), // Glassy fill
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            fillColor: _surface,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
+              borderSide: BorderSide(color: _grey.withOpacity(0.2)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide:
-                  BorderSide(color: Colors.white.withOpacity(0.8), width: 1.5),
+              borderSide: BorderSide(color: _grey.withOpacity(0.2)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: Color(0xFF059669), width: 2),
+              borderSide: const BorderSide(color: _green, width: 1.5),
             ),
           ),
         ),
@@ -509,53 +469,39 @@ Widget _buildTextField(String label,
   );
 }
 
-// Shared UI helper for Save Buttons (Glass Bottom Bar)
-Widget _buildSaveButton(BuildContext context,
-    {String text = "Save Changes", VoidCallback? onPressed}) {
-  return ClipRRect(
-    child: BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-      child: Container(
-        padding: EdgeInsets.fromLTRB(
-            24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.55),
-          border: Border(
-              top:
-                  BorderSide(color: Colors.white.withOpacity(0.8), width: 1.5)),
-        ),
-        child: ElevatedButton(
-          onPressed: onPressed ?? () => Navigator.pop(context),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF059669),
-            elevation: 0,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            minimumSize: const Size(double.infinity, 56),
-          ),
-          child: onPressed == null &&
-                  text != "Save Changes" &&
-                  text != "Update Password" &&
-                  text != "Save Bank Details"
-              ? const SizedBox(
-                  height: 22,
-                  width: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : Text(
-                  text,
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-        ),
+// Shared UI helper for Save Buttons
+Widget _buildSaveButton(BuildContext context, {String text = "Save Changes", VoidCallback? onPressed}) {
+  return Container(
+    padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
+    decoration: BoxDecoration(
+      color: _surface,
+      boxShadow: [
+        BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, -4)),
+      ],
+    ),
+    child: ElevatedButton(
+      onPressed: onPressed ?? () => Navigator.pop(context),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _green,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)), // Pill shape
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        minimumSize: const Size(double.infinity, 56),
       ),
+      child: onPressed == null && text != "Save Changes" && text != "Update Password" && text != "Save Bank Details"
+          ? const SizedBox(
+              height: 22,
+              width: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+            )
+          : Text(
+              text,
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
     ),
   );
 }
@@ -592,9 +538,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
         AppSession.updateCurrentUser(user);
         await AppSession.persistSession();
       }
-    } catch (_) {
-      // Keep the cached session values if the refresh fails.
-    }
+    } catch (_) {}
 
     if (!mounted) return;
     _nameController.text = AppSession.displayName;
@@ -614,10 +558,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
   Future<void> _pickImage() async {
     try {
       final picker = ImagePicker();
-      final image = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-      );
+      final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
       if (image == null) return;
       setState(() => _selectedImage = File(image.path));
     } catch (e) {
@@ -631,9 +572,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
     final phone = _phoneController.text.trim();
 
     if (name.isEmpty || email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name and email are required.')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Name and email are required.')));
       return;
     }
 
@@ -656,16 +595,11 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
       await AppSession.persistSession();
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated successfully')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated successfully')));
       Navigator.pop(context);
     } catch (err) {
       if (!mounted) return;
-      final message = ApiResult.mapError(err);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiResult.mapError(err))));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -673,19 +607,9 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
 
   Widget _buildAvatar() {
     if (_selectedImage != null) {
-      return Image.file(
-        _selectedImage!,
-        width: 100,
-        height: 100,
-        fit: BoxFit.cover,
-      );
+      return Image.file(_selectedImage!, width: 110, height: 110, fit: BoxFit.cover);
     }
-    return AppSession.buildAvatar(
-      AppSession.displayAvatar,
-      width: 100,
-      height: 100,
-      fit: BoxFit.cover,
-    );
+    return AppSession.buildAvatar(AppSession.displayAvatar, width: 110, height: 110, fit: BoxFit.cover);
   }
 
   @override
@@ -713,14 +637,8 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                     height: 110,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 4),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
-                        )
-                      ],
+                      border: Border.all(color: _grey.withOpacity(0.2), width: 2),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, 5))],
                     ),
                     child: ClipOval(child: _buildAvatar()),
                   ),
@@ -730,25 +648,20 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                   child: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF059669),
+                      color: _green,
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
+                      border: Border.all(color: _surface, width: 3),
                     ),
-                    child: const Icon(Icons.camera_alt,
-                        color: Colors.white, size: 18),
+                    child: const Icon(PhosphorIconsRegular.camera, color: Colors.white, size: 18),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 40),
-            _buildTextField('Full Name', controller: _nameController),
-            _buildTextField('Email Address',
-                controller: _emailController,
-                prefixIcon: PhosphorIcons.envelopeSimple()),
-            _buildTextField('Phone Number',
-                controller: _phoneController,
-                prefixIcon: PhosphorIcons.phone()),
-            const SizedBox(height: 40), // Extra space for bottom nav
+            _buildTextField('Full Name', controller: _nameController, prefixIcon: PhosphorIconsRegular.user),
+            _buildTextField('Email Address', controller: _emailController, prefixIcon: PhosphorIconsRegular.envelopeSimple),
+            _buildTextField('Phone Number', controller: _phoneController, prefixIcon: PhosphorIconsRegular.phone),
+            const SizedBox(height: 40), 
           ],
         ),
       ),
@@ -777,16 +690,10 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
     super.initState();
     final user = AppSession.currentUser;
     final business = (user['businessInfo'] as Map?) ?? user;
-    _companyController = TextEditingController(
-        text:
-            (business['companyName'] ?? business['businessName'])?.toString() ??
-                '');
-    _regNumberController = TextEditingController(
-        text: business['registrationNumber']?.toString() ?? '');
-    _addressController =
-        TextEditingController(text: business['address']?.toString() ?? '');
-    _tinController = TextEditingController(
-        text: (business['tin'] ?? business['taxId'])?.toString() ?? '');
+    _companyController = TextEditingController(text: (business['companyName'] ?? business['businessName'])?.toString() ?? '');
+    _regNumberController = TextEditingController(text: business['registrationNumber']?.toString() ?? '');
+    _addressController = TextEditingController(text: business['address']?.toString() ?? '');
+    _tinController = TextEditingController(text: (business['tin'] ?? business['taxId'])?.toString() ?? '');
   }
 
   @override
@@ -811,16 +718,11 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
       AppSession.updateCurrentUser(updatedUser);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Business info updated successfully')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Business info updated successfully')));
       Navigator.pop(context);
     } catch (err) {
       if (!mounted) return;
-      final message = ApiResult.mapError(err);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiResult.mapError(err))));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -840,18 +742,10 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
         child: Column(
           children: [
-            _buildTextField('Company / Agency Name',
-                controller: _companyController,
-                hintText: 'StayNest Properties LLC',
-                prefixIcon: PhosphorIcons.buildings()),
-            _buildTextField('Business Registration Number',
-                controller: _regNumberController, hintText: 'RC-123456789'),
-            _buildTextField('Business Address',
-                controller: _addressController,
-                hintText: '123 Real Estate Ave, Suite 100',
-                prefixIcon: PhosphorIcons.mapPin()),
-            _buildTextField('Tax Identification Number (TIN)',
-                controller: _tinController, hintText: 'XXX-XX-XXXX'),
+            _buildTextField('Company / Agency Name', controller: _companyController, hintText: 'StayNest Properties LLC', prefixIcon: PhosphorIconsRegular.buildings),
+            _buildTextField('Business Registration Number', controller: _regNumberController, hintText: 'RC-123456789', prefixIcon: PhosphorIconsRegular.fileText),
+            _buildTextField('Business Address', controller: _addressController, hintText: '123 Real Estate Ave', prefixIcon: PhosphorIconsRegular.mapPin),
+            _buildTextField('Tax Identification Number (TIN)', controller: _tinController, hintText: 'XXX-XX-XXXX', prefixIcon: PhosphorIconsRegular.receipt),
             const SizedBox(height: 40),
           ],
         ),
@@ -865,8 +759,7 @@ class NotificationSettingsPage extends StatefulWidget {
   const NotificationSettingsPage({super.key});
 
   @override
-  State<NotificationSettingsPage> createState() =>
-      _NotificationSettingsPageState();
+  State<NotificationSettingsPage> createState() => _NotificationSettingsPageState();
 }
 
 class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
@@ -907,17 +800,11 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       });
       AppSession.updateCurrentUser(updated);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Notification settings updated')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Notification settings updated')));
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ApiResult.mapError(e))),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -937,29 +824,15 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
         children: [
           _buildSectionHeader('Email Notifications'),
-          _buildSwitchTile(
-              'New Bookings',
-              'Get notified when a new booking is made',
-              emailNewBooking,
-              (v) => setState(() => emailNewBooking = v)),
-          _buildSwitchTile(
-              'New Messages',
-              'Get notified of new tenant messages',
-              emailMessages,
-              (v) => setState(() => emailMessages = v)),
+          _buildSwitchTile('New Bookings', 'Get notified when a new booking is made', emailNewBooking, (v) => setState(() => emailNewBooking = v)),
+          _buildSwitchTile('New Messages', 'Get notified of new tenant messages', emailMessages, (v) => setState(() => emailMessages = v)),
           const SizedBox(height: 16),
           _buildSectionHeader('Push Notifications'),
-          _buildSwitchTile('New Bookings', 'Push alerts for new bookings',
-              pushNewBooking, (v) => setState(() => pushNewBooking = v)),
-          _buildSwitchTile('New Messages', 'Push alerts for new messages',
-              pushMessages, (v) => setState(() => pushMessages = v)),
+          _buildSwitchTile('New Bookings', 'Push alerts for new bookings', pushNewBooking, (v) => setState(() => pushNewBooking = v)),
+          _buildSwitchTile('New Messages', 'Push alerts for new messages', pushMessages, (v) => setState(() => pushMessages = v)),
           const SizedBox(height: 16),
           _buildSectionHeader('SMS Notifications'),
-          _buildSwitchTile(
-              'Critical Alerts',
-              'Important account or booking updates via SMS',
-              smsAlerts,
-              (v) => setState(() => smsAlerts = v)),
+          _buildSwitchTile('Critical Alerts', 'Important account or booking updates via SMS', smsAlerts, (v) => setState(() => smsAlerts = v)),
           const SizedBox(height: 40),
         ],
       ),
@@ -974,52 +847,47 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         style: GoogleFonts.poppins(
           fontSize: 14,
           fontWeight: FontWeight.w700,
-          color: const Color(0xFF059669),
-          letterSpacing: 1.2,
+          color: _dark,
+          letterSpacing: 1.0,
         ),
       ),
     );
   }
 
-  Widget _buildSwitchTile(
-      String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: _GlassContainer(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF111827),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF6B7280),
-                    ),
-                  ),
-                ],
-              ),
+  Widget _buildSwitchTile(String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _grey.withOpacity(0.1)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: _dark),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.poppins(fontSize: 13, color: _grey),
+                ),
+              ],
             ),
-            CupertinoSwitch(
-              value: value,
-              activeTrackColor: const Color(0xFF059669),
-              onChanged: onChanged,
-            ),
-          ],
-        ),
+          ),
+          CupertinoSwitch(
+            value: value,
+            activeColor: _green,
+            onChanged: onChanged,
+          ),
+        ],
       ),
     );
   }
@@ -1068,17 +936,11 @@ class _BankDetailsPageState extends State<BankDetailsPage> {
       });
       AppSession.updateCurrentUser(updated);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Bank details updated')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bank details updated')));
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ApiResult.mapError(e))),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -1098,44 +960,31 @@ class _BankDetailsPageState extends State<BankDetailsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
         child: Column(
           children: [
-            _GlassContainer(
+            Container(
               padding: const EdgeInsets.all(16),
-              opacity: 0.8,
+              decoration: BoxDecoration(
+                color: _green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _green.withOpacity(0.2)),
+              ),
               child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF059669).withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(PhosphorIcons.info(PhosphorIconsStyle.fill),
-                        color: const Color(0xFF059669), size: 24),
-                  ),
+                  const Icon(PhosphorIconsRegular.info, color: _green, size: 24),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(
                       'These details will be used to process your rental payouts.',
-                      style: GoogleFonts.poppins(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFF374151)),
+                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: _dark),
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 32),
-            _buildTextField('Bank Name',
-                controller: _bankNameController,
-                hintText: 'e.g. Chase Bank',
-                prefixIcon: PhosphorIcons.bank()),
-            _buildTextField('Account Holder Name',
-                controller: _holderController, hintText: 'Jomison Real Estate'),
-            _buildTextField('Account Number',
-                controller: _accountController, hintText: '1234567890'),
-            _buildTextField('Routing Number',
-                controller: _routingController, hintText: '098765432'),
+            _buildTextField('Bank Name', controller: _bankNameController, hintText: 'e.g. Chase Bank', prefixIcon: PhosphorIconsRegular.bank),
+            _buildTextField('Account Holder Name', controller: _holderController, hintText: 'Jomison Real Estate', prefixIcon: PhosphorIconsRegular.user),
+            _buildTextField('Account Number', controller: _accountController, hintText: '1234567890', prefixIcon: PhosphorIconsRegular.hash),
+            _buildTextField('Routing Number', controller: _routingController, hintText: '098765432', prefixIcon: PhosphorIconsRegular.cornersIn),
             const SizedBox(height: 40),
           ],
         ),
@@ -1155,53 +1004,34 @@ class PrivacyPolicyPage extends StatelessWidget {
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
-        child: _GlassContainer(
+        child: Container(
           padding: const EdgeInsets.all(24),
-          opacity: 0.85,
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: _grey.withOpacity(0.1)),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Data Collection & Usage',
-                style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF111827)),
-              ),
+              Text('Data Collection & Usage', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
               const SizedBox(height: 12),
               Text(
                 'We collect information to provide better services to all our users. Information collected includes your name, email address, phone number, and properties managed.\n\nYour data is securely stored and never shared with third parties without your explicit consent.',
-                style: GoogleFonts.poppins(
-                    fontSize: 14.5,
-                    color: const Color(0xFF4B5563),
-                    height: 1.6,
-                    fontWeight: FontWeight.w500),
+                style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.6, fontWeight: FontWeight.w400),
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Your Rights',
-                style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF111827)),
-              ),
+              const SizedBox(height: 32),
+              Text('Your Rights', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
               const SizedBox(height: 12),
               Text(
                 'You have the right to request access to the data we hold about you. You can also request deletion of your account and associated data at any time from the account settings.',
-                style: GoogleFonts.poppins(
-                    fontSize: 14.5,
-                    color: const Color(0xFF4B5563),
-                    height: 1.6,
-                    fontWeight: FontWeight.w500),
+                style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.6, fontWeight: FontWeight.w400),
               ),
               const SizedBox(height: 32),
-              Text(
-                'Last updated: October 2024',
-                style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontStyle: FontStyle.italic,
-                    color: const Color(0xFF9CA3AF)),
-              ),
+              Divider(color: _grey.withOpacity(0.2)),
+              const SizedBox(height: 16),
+              Text('Last updated: October 2024', style: GoogleFonts.poppins(fontSize: 12, fontStyle: FontStyle.italic, color: _grey)),
             ],
           ),
         ),
@@ -1234,32 +1064,21 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
   Future<void> _handleUpdate() async {
     if (_newController.text != _confirmController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
       return;
     }
 
     setState(() => _isUpdating = true);
-    final res = await UserService.changePassword(
-        _currentController.text, _newController.text);
+    final res = await UserService.changePassword(_currentController.text, _newController.text);
 
     if (mounted) {
       setState(() => _isUpdating = false);
       if (res['ok'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Password updated successfully')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password updated successfully')));
         Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              (res['error'] != null)
-                  ? ApiResult.mapError(res['error'])
-                  : (res['error'] ?? 'Failed to update password'),
-            ),
-          ),
+          SnackBar(content: Text((res['error'] != null) ? ApiResult.mapError(res['error']) : (res['error'] ?? 'Failed to update password'))),
         );
       }
     }
@@ -1279,19 +1098,10 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
         child: Column(
           children: [
-            _buildTextField('Current Password',
-                controller: _currentController,
-                isPassword: true,
-                prefixIcon: PhosphorIcons.lock()),
+            _buildTextField('Current Password', controller: _currentController, isPassword: true, prefixIcon: PhosphorIconsRegular.lock),
             const SizedBox(height: 8),
-            _buildTextField('New Password',
-                controller: _newController,
-                isPassword: true,
-                prefixIcon: PhosphorIcons.lockKey()),
-            _buildTextField('Confirm New Password',
-                controller: _confirmController,
-                isPassword: true,
-                prefixIcon: PhosphorIcons.lockKey()),
+            _buildTextField('New Password', controller: _newController, isPassword: true, prefixIcon: PhosphorIconsRegular.lockKey),
+            _buildTextField('Confirm New Password', controller: _confirmController, isPassword: true, prefixIcon: PhosphorIconsRegular.lockKey),
             const SizedBox(height: 40),
           ],
         ),
@@ -1337,9 +1147,7 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
       if (mounted) {
         final message = ApiResult.mapError(err);
         setState(() => is2faEnabled = !value); // revert on failure
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -1355,79 +1163,57 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _GlassContainer(
-              padding: const EdgeInsets.all(24),
-              opacity: 0.8,
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: _surface,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: _grey.withOpacity(0.1)),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+              ),
               child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: is2faEnabled
-                          ? const Color(0xFF059669).withOpacity(0.15)
-                          : const Color(0xFFF3F4F6),
+                      color: is2faEnabled ? _green.withOpacity(0.1) : _grey.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill),
+                      PhosphorIconsFill.shieldCheck,
                       size: 56,
-                      color: is2faEnabled
-                          ? const Color(0xFF059669)
-                          : const Color(0xFF9CA3AF),
+                      color: is2faEnabled ? _green : _grey,
                     ),
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    is2faEnabled
-                        ? '2FA is currently Enabled'
-                        : '2FA is currently Disabled',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF111827),
-                    ),
+                    is2faEnabled ? '2FA is currently Enabled' : '2FA is currently Disabled',
+                    style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'Two-factor authentication adds an extra layer of security to your account by requiring more than just a password to log in.',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF4B5563),
-                      height: 1.6,
-                    ),
+                    style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.6),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 40),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      color: _bg,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: _grey.withOpacity(0.2)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Enable 2FA',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF111827),
-                          ),
-                        ),
+                        Text('Enable 2FA', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: _dark)),
                         _isSaving
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2.5, color: Color(0xFF059669)),
-                              )
+                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: _green))
                             : CupertinoSwitch(
                                 value: is2faEnabled,
-                                activeTrackColor: const Color(0xFF059669),
+                                activeColor: _green,
                                 onChanged: _handleToggle,
                               ),
                       ],
@@ -1437,56 +1223,6 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Glassmorphism Core Utility ──────────────────────────────────────────────
-class _GlassContainer extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final BorderRadius? borderRadius;
-  final double blur;
-  final double opacity;
-  final double borderWidth;
-
-  const _GlassContainer({
-    required this.child,
-    this.padding = EdgeInsets.zero,
-    this.borderRadius,
-    this.blur = 24,
-    this.opacity = 0.18,
-    this.borderWidth = 1.2,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final radius = borderRadius ?? BorderRadius.circular(24);
-
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(opacity),
-            borderRadius: radius,
-            border: Border.all(
-              color: Colors.white.withOpacity(0.8),
-              width: borderWidth,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: child,
         ),
       ),
     );

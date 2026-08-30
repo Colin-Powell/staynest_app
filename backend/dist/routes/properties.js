@@ -457,6 +457,7 @@ router.delete('/:id', requireAuth, authorize('landlord', 'host'), async (req, re
             return res.status(404).json({ error: 'Property not found or access denied.' });
         }
         clearCachePattern('properties.');
+        clearCachePattern('/api/properties');
         res.json({ data: { id: result.rows[0].id, deleted: true } });
     }
     catch (error) {
@@ -679,6 +680,7 @@ async function handleCreateProperty(req, res, next, logRouteName) {
         // The listing remains pending-review until an admin approves it.
         // Do not surface it to tenants before approval.
         clearCachePattern('properties.');
+        clearCachePattern('/api/properties');
         const property = result.rows[0];
         // Notify the landlord that their listing was submitted
         await sendPushToUser(userId, 'Listing Submitted ??', `Your property "${property.title}" has been successfully submitted and is pending admin review.`, { type: 'property_submitted', propertyId: property.id });
@@ -715,6 +717,7 @@ router.put('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host'),
         if (result.rowCount === 0)
             return res.status(404).json({ error: 'Property not found or access denied.' });
         clearCachePattern('properties.');
+        clearCachePattern('/api/properties');
         res.json({ data: normalizePropertyRow(result.rows[0]) });
     }
     catch (error) {

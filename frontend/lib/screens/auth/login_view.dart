@@ -13,7 +13,7 @@ class LoginView extends StatefulWidget {
   final VoidCallback onLogin;
   final VoidCallback onRegister;
   final VoidCallback? onForgotPassword;
-  final VoidCallback? onGoogleSignIn;
+  final Future<void> Function()? onGoogleSignIn;
 
   const LoginView({
     super.key,
@@ -122,7 +122,11 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
     if (_isGoogleSigningIn) return;
     setState(() => _isGoogleSigningIn = true);
     try {
-      widget.onGoogleSignIn?.call();
+      if (widget.onGoogleSignIn != null) {
+        await widget.onGoogleSignIn!();
+      }
+    } catch (e) {
+      _triggerErrorShake('Google Sign-In failed. Please try again.');
     } finally {
       if (mounted) setState(() => _isGoogleSigningIn = false);
     }

@@ -217,8 +217,8 @@ class _PropertyAppState extends State<PropertyApp> {
               },
               onRegister: () => Navigator.pushNamed(context, '/register'),
               onGoogleSignIn: () async {
-                final success =
-                    await GoogleAuthService.instance.signInWithGoogle();
+                final success = await GoogleAuthService.instance.signInWithGoogle();
+                if (!success) throw Exception("Sign in failed");
                 if (success) {
                   if (!AppSession.currentUserVerified) {
                     Navigator.pushReplacementNamed(context, '/otp');
@@ -248,8 +248,8 @@ class _PropertyAppState extends State<PropertyApp> {
             }),
         '/register_form': (context) => RegisterView(
               onGoogleSignIn: () async {
-                final success =
-                    await GoogleAuthService.instance.signInWithGoogle();
+                final success = await GoogleAuthService.instance.signInWithGoogle();
+                if (!success) throw Exception("Sign in failed");
                 if (success) {
                   if (!AppSession.currentUserVerified) {
                     Navigator.pushReplacementNamed(context, '/otp');

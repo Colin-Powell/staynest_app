@@ -10,7 +10,7 @@ import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/utils/api_result.dart';
 
 class RegisterView extends StatefulWidget {
-  final VoidCallback? onGoogleSignIn;
+  final Future<void> Function()? onGoogleSignIn;
 
   const RegisterView({super.key, this.onGoogleSignIn});
 
@@ -158,7 +158,19 @@ class _RegisterViewState extends State<RegisterView>
     if (_isGoogleSigningIn) return;
     setState(() => _isGoogleSigningIn = true);
     try {
-      widget.onGoogleSignIn?.call();
+      if (widget.onGoogleSignIn != null) {
+        await widget.onGoogleSignIn!();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Google Sign-In failed. Please try again.'),
+            backgroundColor: _errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isGoogleSigningIn = false);
     }

@@ -1,19 +1,20 @@
-// START OF FILE
-import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/message_service.dart';
 import 'package:property_app/services/socket_service.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'landlord_chat_view.dart';
-import 'package:uuid/uuid.dart';
 import 'package:property_app/utils/api_result.dart';
+import 'landlord_chat_view.dart';
 
-const Color _landlordPrimary = Color(0xFF059669);
-const Color _textDark = Color(0xFF111827);
-const Color _textLight = Color(0xFF9CA3AF);
+// ─── Landlord Design System Constants ─────────────────────────────────────────
+const Color _bg = Color(0xFFFAFAFA);
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF9CA3AF);
+const Color _surface = Colors.white;
+const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 
 enum _LandlordFilter { all, applicants, tenants, archived }
 
@@ -35,6 +36,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
   ConversationModel? _selectedConversation;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  
   bool _isLoading = true;
   String? _errorMessage;
   bool _isSelectionMode = false;
@@ -43,7 +45,6 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
   final Set<String> _onlineUserIds = {};
 
   List<ConversationModel> _conversations = [];
-  List<ConversationModel> _suggestedTenants = [];
   StreamSubscription? _messageSubscription;
   StreamSubscription? _presenceSubscription;
 
@@ -54,13 +55,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       setState(() => _searchQuery = _searchController.text.toLowerCase());
     });
     _loadConversations();
-    _loadSuggested();
     _setupSocketListener();
-  }
-
-  Future<void> _loadSuggested() async {
-    final contacts = await MessageService.instance.fetchRecentContacts();
-    if (mounted) setState(() => _suggestedTenants = contacts);
   }
 
   void _setupSocketListener() {
@@ -78,9 +73,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
             userAvatar: old.userAvatar,
             lastMessage: msg.text,
             lastMessageAt: DateTime.fromMillisecondsSinceEpoch(msg.ts),
-            unreadCount: msg.from != currentUserId
-                ? old.unreadCount + 1
-                : old.unreadCount,
+            unreadCount: msg.from != currentUserId ? old.unreadCount + 1 : old.unreadCount,
           );
           final item = _conversations.removeAt(index);
           _conversations.insert(0, item);
@@ -93,6 +86,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
     _presenceSubscription = SocketService.instance.presence.listen((data) {
       final userId = data['userId']?.toString();
       if (userId == null) return;
+      if (!mounted) return;
       setState(() {
         if (data['online'] == true) {
           _onlineUserIds.add(userId);
@@ -111,11 +105,13 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
 
     try {
       final conversations = await MessageService.instance.fetchConversations();
+      if (!mounted) return;
       setState(() {
         _conversations = conversations;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = ApiResult.mapError(e);
         _isLoading = false;
@@ -133,16 +129,12 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
 
   List<ConversationModel> get _filteredConversations {
     Iterable<ConversationModel> filtered = _conversations;
-
-    // Filter Logic based on the top-right menu selection
     if (_currentFilter == _LandlordFilter.archived) {
-      filtered = filtered.where((c) => false); // Add real condition later
+      filtered = filtered.where((c) => false); // Expand logic later if needed
     }
-
     if (_searchQuery.isEmpty) return filtered.toList();
     return filtered
-        .where((conv) =>
-            conv.userName.toLowerCase().contains(_searchQuery.toLowerCase()))
+        .where((conv) => conv.userName.toLowerCase().contains(_searchQuery.toLowerCase()))
         .toList();
   }
 
@@ -162,156 +154,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
     return '${dt.day}/${dt.month}';
   }
 
-  Widget _buildConversationsList() {
-    if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: _landlordPrimary),
-      );
-    }
-
-    if (_errorMessage != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
-            const SizedBox(height: 16),
-            Text(
-              _errorMessage!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.red),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadConversations,
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_filteredConversations.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.mail_outline, size: 48, color: _textLight),
-            const SizedBox(height: 16),
-            Text(
-              'No messages yet',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: _textDark,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Messages will appear here',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(fontSize: 13, color: _textLight),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final filtered = _filteredConversations;
-
-    return RefreshIndicator(
-      color: _landlordPrimary,
-      onRefresh: _loadConversations,
-      child: ListView.builder(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 160),
-        itemCount: filtered.length,
-        itemBuilder: (context, index) {
-          final conv = filtered[index];
-          final isSelected = _selectedIds.contains(conv.userId);
-
-          return Dismissible(
-            key: ValueKey(conv.userId),
-            direction: DismissDirection.horizontal,
-            background: Container(
-              margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade700,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              alignment: Alignment.centerLeft,
-              child: const Row(
-                children: [
-                  Icon(Icons.notifications_off_outlined,
-                      color: Colors.white, size: 28),
-                  SizedBox(width: 12),
-                  Text('Mute',
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
-            secondaryBackground: Container(
-              margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEF4444),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              alignment: Alignment.centerRight,
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text('Delete',
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold)),
-                  SizedBox(width: 12),
-                  Icon(Icons.delete_outline, color: Colors.white, size: 28),
-                ],
-              ),
-            ),
-            onDismissed: (direction) async {
-              if (direction == DismissDirection.endToStart) {
-                final userId = conv.userId;
-                setState(() =>
-                    _conversations.removeWhere((c) => c.userId == userId));
-                await MessageService.instance.deleteConversation(userId);
-              } else {
-                _loadConversations();
-              }
-            },
-            child: _ConversationTile(
-              name: conv.userName,
-              avatarUrl: conv.userAvatar,
-              lastMessage: conv.lastMessage ?? 'No messages yet',
-              time: _formatTime(conv.lastMessageAt),
-              unread: conv.unreadCount,
-              isOnline: _onlineUserIds.contains(conv.userId),
-              isSelected: isSelected,
-              isSelectionMode: _isSelectionMode,
-              onTap: () {
-                if (_isSelectionMode) {
-                  _toggleSelection(conv.userId);
-                } else {
-                  widget.onChatOpen();
-                  setState(() => _selectedConversation = conv);
-                }
-              },
-              onLongPress: () {
-                if (!_isSelectionMode) {
-                  setState(() {
-                    _isSelectionMode = true;
-                    _selectedIds.add(conv.userId);
-                  });
-                }
-              },
-            ),
-          );
-        },
-      ),
-    );
-  }
+  // ─── ACTIONS ────────────────────────────────────────────────────────────────
 
   void _toggleSelection(String id) {
     setState(() {
@@ -348,10 +191,353 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       _exitSelectionMode();
       _loadConversations();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ApiResult.mapError(e))),
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
+    }
+  }
+
+  Future<void> _deleteSelected() async {
+    try {
+      final idsToDelete = _selectedIds.toList();
+      setState(() {
+        _conversations.removeWhere((c) => idsToDelete.contains(c.userId));
+        _selectedIds.clear();
+        _isSelectionMode = false;
+      });
+      for (var id in idsToDelete) {
+        await MessageService.instance.deleteConversation(id);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
+    }
+  }
+
+  // ─── UI BUILDERS ────────────────────────────────────────────────────────────
+
+  Widget _buildNormalHeader() {
+    return Row(
+      key: const ValueKey('normal_header'),
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'Messages',
+          style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -1.0),
+        ),
+        PopupMenuButton<_LandlordFilter>(
+          icon: const Icon(PhosphorIconsRegular.dotsThreeVertical, color: _dark, size: 28),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          color: Colors.white,
+          elevation: 4,
+          onSelected: (filter) => setState(() => _currentFilter = filter),
+          itemBuilder: (context) => _LandlordFilter.values.map((filter) {
+            final isSelected = _currentFilter == filter;
+            final name = filter.name[0].toUpperCase() + filter.name.substring(1);
+            return PopupMenuItem(
+              value: filter,
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected ? PhosphorIconsFill.checkCircle : PhosphorIconsRegular.circle,
+                    color: isSelected ? _green : _grey,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    name,
+                    style: GoogleFonts.poppins(
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      color: isSelected ? _green : _dark,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectionHeader() {
+    return Row(
+      key: const ValueKey('selection_header'),
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            GestureDetector(
+              onTap: _exitSelectionMode,
+              child: const Icon(PhosphorIconsRegular.x, color: _dark, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Text(
+              '${_selectedIds.length} Selected',
+              style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.4),
+            ),
+          ],
+        ),
+        GestureDetector(
+          onTap: _selectAll,
+          child: const Icon(PhosphorIconsRegular.checkSquareOffset, color: _dark, size: 28),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(left: 16),
+            child: Icon(PhosphorIconsRegular.magnifyingGlass, color: _dark, size: 22),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) => setState(() => _searchQuery = value),
+              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: _dark),
+              decoration: InputDecoration(
+                hintText: 'Search Messages',
+                hintStyle: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w400, color: _grey),
+                filled: false,
+                fillColor: Colors.transparent,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          if (_searchQuery.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                _searchController.clear();
+                setState(() => _searchQuery = '');
+                FocusScope.of(context).unfocus();
+              },
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Icon(PhosphorIconsFill.xCircle, color: _grey, size: 20),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShimmerLoading() {
+    return ListView.separated(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 160),
+      itemCount: 6,
+      separatorBuilder: (_, __) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Divider(color: _grey.withOpacity(0.1), height: 1),
+      ),
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Shimmer.fromColors(
+                baseColor: Colors.grey.shade200,
+                highlightColor: Colors.grey.shade100,
+                child: Container(width: 56, height: 56, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Shimmer.fromColors(
+                      baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+                      child: Container(width: 120, height: 16, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                    ),
+                    const SizedBox(height: 8),
+                    Shimmer.fromColors(
+                      baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+                      child: Container(width: double.infinity, height: 14, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(PhosphorIconsRegular.chatTeardropSlash, size: 64, color: _grey),
+          const SizedBox(height: 16),
+          Text(
+            'No messages yet',
+            style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'When tenants contact you, messages will appear here.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(fontSize: 14, color: _grey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConversationsList() {
+    if (_isLoading) return _buildShimmerLoading();
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(PhosphorIconsRegular.warningCircle, color: Colors.redAccent, size: 48),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _loadConversations,
+              child: Text('Retry', style: GoogleFonts.poppins(color: _green, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
       );
     }
+
+    if (_filteredConversations.isEmpty) return _buildEmptyState();
+
+    return RefreshIndicator(
+      color: _green,
+      onRefresh: _loadConversations,
+      child: ListView.separated(
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(context).padding.bottom + 160),
+        itemCount: _filteredConversations.length,
+        separatorBuilder: (_, __) => Divider(color: _grey.withOpacity(0.1), height: 1),
+        itemBuilder: (context, index) {
+          final conv = _filteredConversations[index];
+          final isSelected = _selectedIds.contains(conv.userId);
+
+          return Dismissible(
+            key: ValueKey(conv.userId),
+            direction: DismissDirection.endToStart, // Only swipe to delete
+            background: Container(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              decoration: BoxDecoration(color: const Color(0xFFEF4444), borderRadius: BorderRadius.circular(12)),
+              alignment: Alignment.centerRight,
+              child: const Icon(PhosphorIconsRegular.trash, color: Colors.white, size: 28),
+            ),
+            onDismissed: (direction) async {
+              final userId = conv.userId;
+              setState(() => _conversations.removeWhere((c) => c.userId == userId));
+              await MessageService.instance.deleteConversation(userId);
+            },
+            child: _ConversationTile(
+              name: conv.userName,
+              avatarUrl: conv.userAvatar,
+              lastMessage: conv.lastMessage ?? 'No messages yet',
+              time: _formatTime(conv.lastMessageAt),
+              unread: conv.unreadCount,
+              isOnline: _onlineUserIds.contains(conv.userId),
+              isSelected: isSelected,
+              isSelectionMode: _isSelectionMode,
+              onTap: () {
+                if (_isSelectionMode) {
+                  _toggleSelection(conv.userId);
+                } else {
+                  widget.onChatOpen();
+                  setState(() => _selectedConversation = conv);
+                }
+              },
+              onLongPress: () {
+                if (!_isSelectionMode) {
+                  setState(() {
+                    _isSelectionMode = true;
+                    _selectedIds.add(conv.userId);
+                  });
+                }
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBottomSelectionBar() {
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      // Float it safely above the bottom navigation bar
+      bottom: _isSelectionMode ? MediaQuery.of(context).padding.bottom + 100 : -100,
+      left: 24,
+      right: 24,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        decoration: BoxDecoration(
+          color: _dark,
+          borderRadius: BorderRadius.circular(32), // Elegant floating pill shape
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 10))
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            GestureDetector(
+              onTap: _selectedIds.isEmpty ? null : _markSelectedAsRead,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(PhosphorIconsRegular.envelopeOpen, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white),
+                  const SizedBox(height: 4),
+                  Text('Read', style: GoogleFonts.poppins(fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white)),
+                ],
+              ),
+            ),
+            Container(width: 1, height: 30, color: _grey.withOpacity(0.3)),
+            GestureDetector(
+              onTap: _selectedIds.isEmpty ? null : _deleteSelected,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(PhosphorIconsRegular.trash, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444)),
+                  const SizedBox(height: 4),
+                  Text('Delete', style: GoogleFonts.poppins(fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444))),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -370,352 +556,32 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFFF7FDF9),
-                    Color(0xFFFFFFFF),
-                    Color(0xFFD4EFE1),
-                  ],
-                  stops: [0.0, 0.5, 1.0],
-                ),
-              ),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: EdgeInsets.only(
-                  top: MediaQuery.of(context).padding.top + 24,
-                  left: 24,
-                  right: 24,
-                  bottom: 16,
-                ),
-                child: AnimatedCrossFade(
-                  duration: const Duration(milliseconds: 250),
-                  crossFadeState: _isSelectionMode
-                      ? CrossFadeState.showSecond
-                      : CrossFadeState.showFirst,
-                  firstChild: _buildNormalHeader(),
-                  secondChild: _buildSelectionHeader(),
-                ),
-              ),
-
-              // Clean Search Bar UI
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                child: _GlassContainer(
-                  padding: EdgeInsets.zero,
-                  opacity: 0.6,
-                  borderRadius:
-                      BorderRadius.circular(26), // Smooth rounded pill
-                  child: SizedBox(
-                    height: 52,
-                    child: Row(
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(left: 16),
-                          child: Icon(Icons.search, color: _textDark, size: 24),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: _searchController,
-                            onChanged: (value) =>
-                                setState(() => _searchQuery = value),
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: _textDark,
-                            ),
-                            // Disable ALL default material fills and borders to prevent green active outlines
-                            decoration: InputDecoration(
-                              hintText: 'Search Messages',
-                              hintStyle: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: _textLight,
-                              ),
-                              filled: false,
-                              fillColor: Colors.transparent,
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              errorBorder: InputBorder.none,
-                              disabledBorder: InputBorder.none,
-                              contentPadding:
-                                  const EdgeInsets.symmetric(vertical: 14),
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                        if (_searchQuery.isNotEmpty)
-                          GestureDetector(
-                            onTap: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                              FocusScope.of(context)
-                                  .unfocus(); // Drops the keyboard
-                            },
-                            child: const Padding(
-                              padding: EdgeInsets.only(right: 16, left: 16),
-                              child: Icon(Icons.cancel,
-                                  color: _textLight, size: 22),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(child: _buildConversationsList()),
-            ],
-          ),
-          _buildBottomSelectionBar(),
-        ],
-      ),
-    );
-  }
-
-  // --- REFACTORED NORMAL HEADER WITH MENU ---
-  Widget _buildNormalHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          'Messages',
-          style: GoogleFonts.poppins(
-              fontSize: 32, fontWeight: FontWeight.w800, color: _textDark),
-        ),
-        // Filter pills replaced with this clean Top-Right Popup Menu
-        PopupMenuButton<_LandlordFilter>(
-          icon: const Icon(Icons.more_vert_rounded, color: _textDark, size: 28),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          color: Colors.white,
-          elevation: 8,
-          onSelected: (filter) {
-            setState(() => _currentFilter = filter);
-          },
-          itemBuilder: (context) => _LandlordFilter.values.map((filter) {
-            final isSelected = _currentFilter == filter;
-            final name =
-                filter.name[0].toUpperCase() + filter.name.substring(1);
-            return PopupMenuItem(
-              value: filter,
-              child: Row(
-                children: [
-                  Icon(
-                    isSelected
-                        ? Icons.check_circle_rounded
-                        : Icons.circle_outlined,
-                    color: isSelected ? _landlordPrimary : _textLight,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    name,
-                    style: GoogleFonts.poppins(
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w500,
-                      color: isSelected ? _landlordPrimary : _textDark,
-                      fontSize: 15,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSelectionHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
+      backgroundColor: _bg,
+      body: SafeArea(
+        bottom: false,
+        child: Stack(
           children: [
-            IconButton(
-              icon: const Icon(Icons.close, color: _textDark),
-              onPressed: _exitSelectionMode,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: _isSelectionMode ? _buildSelectionHeader() : _buildNormalHeader(),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  child: _buildSearchBar(),
+                ),
+                const SizedBox(height: 8),
+                Expanded(child: _buildConversationsList()),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text(
-              '${_selectedIds.length} Selected',
-              style: GoogleFonts.poppins(
-                  fontSize: 22, fontWeight: FontWeight.w700, color: _textDark),
-            ),
+            _buildBottomSelectionBar(),
           ],
         ),
-        TextButton(
-          onPressed: _selectAll,
-          child: Text(_selectedIds.length == _filteredConversations.length
-              ? 'Unselect All'
-              : 'Select All'),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBottomSelectionBar() {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: AnimatedSlide(
-        offset: _isSelectionMode ? Offset.zero : const Offset(0, 1.2),
-        duration: const Duration(milliseconds: 250),
-        child: Container(
-          padding: EdgeInsets.fromLTRB(
-              24, 20, 24, MediaQuery.of(context).padding.bottom + 20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20)
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _BottomBarIcon(
-                  icon: Icons.notifications_off_outlined,
-                  label: 'Mute',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Mute coming soon')));
-                  }),
-              _BottomBarIcon(
-                icon: Icons.delete_outline,
-                label: 'Delete',
-                color: Colors.red,
-                onTap: () async {
-                  final ids = _selectedIds.toList();
-                  setState(() => _conversations
-                      .removeWhere((c) => ids.contains(c.userId)));
-                  for (var id in ids) {
-                    await MessageService.instance.deleteConversation(id);
-                  }
-                  _exitSelectionMode();
-                },
-              ),
-              PopupMenuButton<String>(
-                offset: const Offset(0, -120),
-                onSelected: (value) {
-                  if (value == 'read') _markSelectedAsRead();
-                },
-                icon: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.more_horiz, color: _textDark, size: 28),
-                    const SizedBox(height: 4),
-                    Text(
-                      'More',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: _textDark,
-                      ),
-                    ),
-                  ],
-                ),
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'read',
-                    child: Row(
-                      children: [
-                        Icon(Icons.mark_chat_read_outlined, size: 20),
-                        SizedBox(width: 12),
-                        Text('Mark as read'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Shared Glass Container ──────────────────────────────────────────────────
-
-class _GlassContainer extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final BorderRadius? borderRadius;
-  final double blur;
-  final double opacity;
-  final double borderWidth;
-
-const _GlassContainer({
-  required this.child,
-  this.padding = EdgeInsets.zero,
-  this.borderRadius,
-  this.blur = 24,
-  this.opacity = 0.18,
-  this.borderWidth = 1.2,
-});
-
-  @override
-  Widget build(BuildContext context) {
-    final radius = borderRadius ?? BorderRadius.circular(24);
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(opacity),
-            borderRadius: radius,
-            border: Border.all(
-                color: Colors.white.withOpacity(0.4), width: borderWidth),
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomBarIcon extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _BottomBarIcon(
-      {required this.icon,
-      required this.label,
-      this.color = _textDark,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 4),
-          Text(label,
-              style: GoogleFonts.poppins(
-                  fontSize: 12, fontWeight: FontWeight.w600, color: color)),
-        ],
       ),
     );
   }
@@ -750,100 +616,103 @@ class _ConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool hasUnread = unread > 0;
+
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
       behavior: HitTestBehavior.opaque,
-      child: _GlassContainer(
-        padding: const EdgeInsets.all(16),
-        opacity: isSelected ? 0.8 : 0.4,
-        borderRadius: BorderRadius.circular(28),
+      child: Container(
+        color: isSelected ? _green.withOpacity(0.05) : Colors.transparent, // Highlight background if selected
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8), // Flat list padding
         child: Row(
           children: [
-            // Visual hierarchy accent bar
-            if (unread > 0 && !isSelectionMode)
-              Container(
-                width: 4,
-                height: 40,
-                margin: const EdgeInsets.only(right: 12),
-                decoration: BoxDecoration(
-                  color: _landlordPrimary,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-
             if (isSelectionMode)
               Padding(
-                padding: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.only(right: 16),
                 child: Icon(
-                  isSelected
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                  color: isSelected ? _landlordPrimary : _textLight,
+                  isSelected ? PhosphorIconsFill.checkCircle : PhosphorIconsRegular.circle,
+                  color: isSelected ? _green : _grey,
+                  size: 24,
                 ),
+              )
+            else if (hasUnread)
+              Container(
+                margin: const EdgeInsets.only(right: 12),
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
               ),
+
             _buildAvatar(),
-            const SizedBox(width: 20),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    name,
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: _textDark,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: GoogleFonts.poppins(
+                            fontSize: 15,
+                            fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
+                            color: _dark,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        time,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500,
+                          color: hasUnread ? _green : _grey,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    lastMessage,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: _textLight,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          lastMessage,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: hasUnread ? FontWeight.w500 : FontWeight.w400,
+                            color: hasUnread ? _dark : _grey,
+                          ),
+                        ),
+                      ),
+                      if (hasUnread) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: const BoxDecoration(
+                            color: _green,
+                            borderRadius: BorderRadius.all(Radius.circular(10)),
+                          ),
+                          child: Text(
+                            unread > 99 ? '99+' : unread.toString(),
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  time,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: _textLight,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (unread > 0)
-                  Container(
-                    width: unread > 9 ? 32 : 24,
-                    height: 24,
-                    decoration: const BoxDecoration(
-                      color: _landlordPrimary,
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      unread > 99 ? '99+' : unread.toString(),
-                      style: GoogleFonts.poppins(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  )
-                else
-                  const SizedBox(height: 22),
-              ],
             ),
           ],
         ),
@@ -851,39 +720,23 @@ class _ConversationTile extends StatelessWidget {
     );
   }
 
-  /// Resolves the conversation participant's avatar using the same logic
-  /// as the rest of the app (AppSession.buildAvatar), so Cloudinary public
-  /// IDs, full URLs, and local asset paths all render correctly and
-  /// consistently with profile screens elsewhere in the app.
   Widget _buildAvatar() {
-    final Widget avatarWidget =
-        avatarUrl != null && avatarUrl!.trim().isNotEmpty
-            ? AppSession.buildAvatar(
-                avatarUrl,
-                width: 64,
-                height: 64,
-                fit: BoxFit.cover,
-              )
-            : Container(
-                color: const Color(0xFFF3F4F6),
-                child: const Icon(Icons.person, color: _textLight, size: 32),
-              );
+    final Widget avatarWidget = avatarUrl != null && avatarUrl!.trim().isNotEmpty
+        ? AppSession.buildAvatar(avatarUrl, width: 56, height: 56, fit: BoxFit.cover)
+        : Container(
+            color: _grey.withOpacity(0.1),
+            child: const Icon(PhosphorIconsRegular.user, color: _grey, size: 24),
+          );
 
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Container(
-          width: 64,
-          height: 64,
+          width: 56,
+          height: 56,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              )
-            ],
+            border: Border.all(color: _grey.withOpacity(0.1)),
           ),
           child: ClipOval(child: avatarWidget),
         ),
@@ -895,7 +748,7 @@ class _ConversationTile extends StatelessWidget {
               width: 14,
               height: 14,
               decoration: BoxDecoration(
-                color: const Color(0xFF10B981),
+                color: _green,
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
               ),

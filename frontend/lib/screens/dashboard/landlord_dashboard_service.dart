@@ -8,10 +8,12 @@ class LandlordDashboardService {
 
   static Future<Map<String, dynamic>?> getPropertyEngagementStats(String propertyId) async {
     try {
-      final response = await _client.get(Uri.parse('/stats/'));
-      return jsonDecode(response.body);
+      final response = await _client.get(Uri.parse('${AppSession.apiBaseUrl}/analytics/stats/$propertyId'));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      }
     } catch (e) {
-      print('Failed to fetch stats: ');
+      print('Failed to fetch stats: $e');
     }
     return null;
   }
@@ -60,17 +62,19 @@ class LandlordDashboardService {
 
   static Future<Map<String, dynamic>?> getPropertyManagementData(String propertyId) async {
     try {
-      final response = await _client.get(Uri.parse('/management/'));
-      return jsonDecode(response.body);
+      final response = await _client.get(Uri.parse('${AppSession.apiBaseUrl}/analytics/management/$propertyId'));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      }
     } catch (e) {
-      print('Failed to fetch property management data: ');
+      print('Failed to fetch property management data: $e');
     }
     return null;
   }
 
   static Future<bool> deleteProperty(String propertyId) async {
     try {
-      await _client.delete(Uri.parse('/properties/'));
+      await _client.delete(Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId'));
       return true;
     } catch (e) {
       return false;
@@ -79,7 +83,7 @@ class LandlordDashboardService {
 
   static Future<bool> updatePropertyStatus(String propertyId, String status) async {
     try {
-      await _client.patch(Uri.parse('/properties//status'), body: {'status': status});
+      await _client.patch(Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId/status'), body: jsonEncode({'status': status}));
       return true;
     } catch (e) {
       return false;
@@ -89,7 +93,7 @@ class LandlordDashboardService {
   static Future<bool> updateBookingStatus(String bookingId, String action) async {
     try {
       final endpoint = action == 'Accepted' ? 'confirm' : 'cancel';
-      await _client.patch(Uri.parse('/bookings//'));
+      await _client.patch(Uri.parse('${AppSession.apiBaseUrl}/bookings/$bookingId/$endpoint'), body: jsonEncode({}));
       return true;
     } catch (e) {
       return false;
@@ -98,8 +102,14 @@ class LandlordDashboardService {
 
   static Future<List<int>> getPropertyAvailability(String propertyId) async {
     try {
-      final response = await _client.get(Uri.parse('/properties//availability'));
-      return List<int>.from(jsonDecode(response.body)['blocked_days']);
+      final response = await _client.get(Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId/availability'));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final body = jsonDecode(response.body);
+        if (body['blocked_days'] != null) {
+          return List<int>.from(body['blocked_days']);
+        }
+      }
+      return [];
     } catch (e) {
       return [];
     }

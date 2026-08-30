@@ -286,6 +286,7 @@ router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (r
         const property = updateRes.rows[0];
         // Clear property cache since visibility changed
         await cache.del('cache:properties*');
+        await cache.del('cache:/api/properties*');
         // Notify the landlord
         if (status === 'approved') {
             await sendPushToUser(property.landlord_id, 'Property Approved! ??', `Your listing "${property.title}" has been approved and is now live on StayNest.`, { type: 'property_status', propertyId: id, status: 'approved' });

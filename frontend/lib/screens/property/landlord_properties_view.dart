@@ -1,16 +1,19 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:property_app/widgets/skeleton_property_card.dart';
+import 'package:shimmer/shimmer.dart';
 
 import 'package:property_app/models/property.dart';
 import 'package:property_app/services/property_service.dart';
-
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
-import 'package:property_app/services/analytics/analytics_service.dart';
-import 'package:property_app/widgets/shared.dart';
+
+// ─── Landlord Design System Constants ─────────────────────────────────────────
+const Color _bg = Color(0xFFFAFAFA);
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF9CA3AF);
+const Color _surface = Colors.white;
+const Color _green = Color(0xFF10B981); // Emerald Green
 
 class LandlordPropertiesView extends StatefulWidget {
   final VoidCallback onAddProperty;
@@ -31,21 +34,24 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
   List<Property> _properties = [];
   bool _loading = true;
   String _selectedCategory = 'All';
-
-  // Design Tokens
-  static const Color textDark = Color(0xFF111827);
-  static const Color textLight = Color(0xFF6B7280);
-  static const Color primaryGreen = Color(0xFF75C797); // Floating button base
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _entryController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 300));
-    _fadeAnim =
-        CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
+    _fadeAnim = CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
     _scaleAnim = Tween<double>(begin: 0.95, end: 1.0).animate(
         CurvedAnimation(parent: _entryController, curve: Curves.easeOutCubic));
+    
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase();
+      });
+    });
+
     _entryController.forward();
     _loadProperties();
   }
@@ -57,8 +63,20 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
   }
 
   List<Property> get _visibleProperties {
-    if (_selectedCategory == 'All') return _properties;
-    return _properties.where((p) => p.category == _selectedCategory).toList();
+    List<Property> filtered = _properties;
+    
+    if (_selectedCategory != 'All') {
+      filtered = filtered.where((p) => p.category == _selectedCategory).toList();
+    }
+    
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered.where((p) => 
+        p.name.toLowerCase().contains(_searchQuery) || 
+        p.location.toLowerCase().contains(_searchQuery)
+      ).toList();
+    }
+    
+    return filtered;
   }
 
   Future<void> _loadProperties() async {
@@ -70,239 +88,337 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
     });
   }
 
+  String _getCategoryAsset(String category) {
+    final c = category.toLowerCase();
+    if (c == 'all') return 'assets/images/all.webp';
+    if (c.contains('apartment')) return 'assets/images/apartments.webp';
+    if (c.contains('bedsitter')) return 'assets/images/bedsitter.webp';
+    if (c.contains('single')) return 'assets/images/singleroom.webp';
+    if (c.contains('one bedroom') || c.contains('1 bedroom')) return 'assets/images/onebedroom.webp';
+    return 'assets/images/all.webp'; // Fallback
+  }
+
   @override
   void dispose() {
+    _searchController.dispose();
     _entryController.dispose();
     super.dispose();
+  }
+
+  // ─── UI BUILDERS ─────────────────────────────────────────────────────────────
+
+  Widget _buildCategoryPills() {
+    final tabs = _categoryTabs;
+    
+    return SizedBox(
+      height: 52,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        itemCount: tabs.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          final tab = tabs[index];
+          final isSelected = _selectedCategory == tab;
+          final imagePath = _getCategoryAsset(tab);
+          
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedCategory = tab;
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
+              decoration: BoxDecoration(
+                color: _surface,
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(
+                  color: isSelected ? _dark : _grey.withOpacity(0.2),
+                  width: isSelected ? 2.0 : 1.5,
+                ),
+                boxShadow: isSelected ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))] : [],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      image: DecorationImage(
+                        image: AssetImage(imagePath),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    tab,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                      color: isSelected ? _dark : _grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(left: 16),
+            child: Icon(PhosphorIconsRegular.magnifyingGlass, color: _dark, size: 22),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: _dark),
+              decoration: InputDecoration(
+                hintText: 'Search listings',
+                hintStyle: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w400, color: _grey),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          if (_searchQuery.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                _searchController.clear();
+                FocusScope.of(context).unfocus();
+              },
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Icon(PhosphorIconsFill.xCircle, color: _grey, size: 20),
+              ),
+            ),
+          Container(width: 1, height: 24, color: _grey.withOpacity(0.2)),
+          GestureDetector(
+            onTap: () {}, // Future filter expansion
+            child: const Padding(
+              padding: EdgeInsets.only(right: 16, left: 14),
+              child: Icon(PhosphorIconsRegular.faders, size: 22, color: _dark),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShimmerGrid() {
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 24,
+          mainAxisExtent: 268,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Shimmer.fromColors(
+                  baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16))),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Shimmer.fromColors(
+                  baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+                  child: Container(height: 14, width: double.infinity, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                ),
+                const SizedBox(height: 8),
+                Shimmer.fromColors(
+                  baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+                  child: Container(height: 12, width: 80, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                ),
+              ],
+            );
+          },
+          childCount: 6,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBody: true,
+      backgroundColor: _bg,
       body: Stack(
         children: [
-          // 1. Soft Gradient Background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFF7FDF9), // Very light mint
-                  Color(0xFFFFFFFF), // Soft mint green
-                  Color(0xFFD4EFE1), // Deeper mint base
-                ],
-                stops: [0.0, 0.5, 1.0],
-              ),
-            ),
-          ),
-
-          // 2. Main Content
           FadeTransition(
             opacity: _fadeAnim,
             child: ScaleTransition(
               scale: _scaleAnim,
-              child: CustomScrollView(
-                slivers: [
-                  // Header
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        top: MediaQuery.of(context).padding.top + 24,
-                        left: 24,
-                        right: 24,
-                        bottom: 16,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'My Properties',
-                            style: GoogleFonts.poppins(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w700,
-                              color: textDark,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          // Notification Bell (Glass Circle)
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.black.withValues(alpha: 0.05),
-                            ),
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Icon(
-                                    PhosphorIcons.bell(PhosphorIconsStyle.fill),
-                                    color: textDark,
-                                    size: 24),
-                                Positioned(
-                                  top: 12,
-                                  right: 12,
-                                  child: Container(
-                                    width: 10,
-                                    height: 10,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEF4444),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                          color: const Color(0xFFFFFFFF),
-                                          width: 2),
-                                    ),
-                                  ),
-                                )
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Category tabs (PropertyPill)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
+              child: SafeArea(
+                bottom: false,
+                child: CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    // ─── Header ───
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
                         child: Row(
-                          children: _categoryTabs.map((tab) {
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: PropertyPill(
-                                label: tab,
-                                icon: PhosphorIcons.house(
-                                    PhosphorIconsStyle.fill),
-                                selected: _selectedCategory == tab,
-                                onTap: () {
-                                  setState(() {
-                                    _selectedCategory = tab;
-                                  });
-                                },
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'My Properties',
+                              style: GoogleFonts.poppins(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                                color: _dark,
+                                letterSpacing: -0.5,
                               ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Search & Filters Row
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                      child: Row(
-                        children: [
-                          // Search Bar
-                          Expanded(
-                            child: Container(
-                              height: 50,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
+                            ),
+                            Container(
+                              width: 44,
+                              height: 44,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFEAF5EF)
-                                    .withValues(alpha: 0.6), // Translucent mint
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.8),
-                                    width: 1.5),
+                                color: _surface,
+                                shape: BoxShape.circle,
+                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
                               ),
-                              child: Row(
+                              child: Stack(
+                                alignment: Alignment.center,
                                 children: [
-                                  Icon(PhosphorIcons.magnifyingGlass(),
-                                      color: textDark, size: 20),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    'Search listings',
-                                    style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        color: textLight,
-                                        fontWeight: FontWeight.w500),
-                                  ),
+                                  const Icon(PhosphorIconsRegular.bell, color: _dark, size: 22),
+                                  Positioned(
+                                    top: 10,
+                                    right: 12,
+                                    child: Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
+                                    ),
+                                  )
                                 ],
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          // Filter Button
-                          Row(
-                            children: [
-                              Icon(PhosphorIcons.faders(),
-                                  color: textDark, size: 24),
-                              const SizedBox(width: 8),
-                              Text('Filters',
-                                  style: GoogleFonts.poppins(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                      color: textDark)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Property Cards List (filtered or loading)
-                  if (_loading)
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) => const Padding(
-                            padding: EdgeInsets.only(bottom: 20),
-                            child: SkeletonPropertyCard(
-                                width: double.infinity,
-                                margin: EdgeInsets.zero),
-                          ),
-                          childCount: 3,
+                          ],
                         ),
                       ),
-                    )
-                  else if (_visibleProperties.isEmpty)
+                    ),
+
+                    // ─── Category Pills ───
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 40),
-                        child: Center(
-                          child: Text('No properties found.',
-                              style: GoogleFonts.poppins(color: textLight)),
-                        ),
-                      ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final property = _visibleProperties[index];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 20),
-                              child: _PropertyCard(
-                                property: property,
-                                delay: Duration(milliseconds: 80 * index),
-                              ),
-                            );
-                          },
-                          childCount: _visibleProperties.length,
-                        ),
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _buildCategoryPills(),
                       ),
                     ),
-                ],
+
+                    // ─── Search Bar ───
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                        child: _buildSearchBar(),
+                      ),
+                    ),
+
+                    // ─── Grid Content ───
+                    if (_loading)
+                      _buildShimmerGrid()
+                    else if (_visibleProperties.isEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 64),
+                          child: Center(
+                            child: Column(
+                              children: [
+                                const Icon(PhosphorIconsRegular.houseLine, size: 64, color: _grey),
+                                const SizedBox(height: 16),
+                                Text('No properties found', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
+                                const SizedBox(height: 8),
+                                Text('Try adjusting your search or filters.', style: GoogleFonts.poppins(color: _grey)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(24, 0, 24, MediaQuery.of(context).padding.bottom + 120),
+                        sliver: SliverGrid(
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 24,
+                            mainAxisExtent: 268,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final property = _visibleProperties[index];
+                              return _PropertyCard(
+                                property: property,
+                                delay: Duration(milliseconds: 60 * index),
+                              );
+                            },
+                            childCount: _visibleProperties.length,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
 
-          // 3. Floating Glass Add Button
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 40, left: 32, right: 32),
-              child: _GlassFloatingButton(onPressed: widget.onAddProperty),
+          // ─── Floating Action Button ───
+          Positioned(
+            bottom: MediaQuery.of(context).padding.bottom + 32, // Safely above bottom nav
+            left: 24,
+            right: 24,
+            child: SizedBox(
+              height: 56,
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: widget.onAddProperty,
+                icon: const Icon(PhosphorIconsRegular.plus, size: 20, color: Colors.white),
+                label: Text(
+                  'Add New Property',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    color: Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _dark, // Premium dark high-contrast FAB
+                  foregroundColor: Colors.white,
+                  elevation: 8,
+                  shadowColor: Colors.black.withOpacity(0.3),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                ),
+              ),
             ),
           ),
         ],
@@ -311,7 +427,7 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
   }
 }
 
-// ─── Property Glass Card ──────────────────────────────────────────────────────
+// ─── Square Grid Property Card ────────────────────────────────────────────────
 
 class _PropertyCard extends StatefulWidget {
   final Property property;
@@ -328,25 +444,21 @@ class _PropertyCardState extends State<_PropertyCard>
   late AnimationController _entryController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
-  bool _pressed = false;
 
   @override
   void initState() {
     super.initState();
     _entryController = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 500));
-    _fadeAnim =
-        CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
+        vsync: this, duration: const Duration(milliseconds: 400));
+    _fadeAnim = CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
-        .animate(CurvedAnimation(
-            parent: _entryController, curve: Curves.easeOutCubic));
+        .animate(CurvedAnimation(parent: _entryController, curve: Curves.easeOutCubic));
 
     Future.delayed(widget.delay, () {
       if (mounted) {
-        // Track Property Impression
         AnalyticsService.logListingInteraction('property_impression', listingId: widget.property.id);
+        _entryController.forward();
       }
-      if (mounted) _entryController.forward();
     });
   }
 
@@ -356,316 +468,143 @@ class _PropertyCardState extends State<_PropertyCard>
     super.dispose();
   }
 
-  // Visual helper to format exactly like "Ksh. 12k/month"
   String _formatPriceToK(num price) {
     final value = price.toDouble();
-    if (value >= 1000) {
-      return '${(value / 1000).toStringAsFixed(0)}k';
-    }
+    if (value >= 1000) return '${(value / 1000).toStringAsFixed(0)}k';
     return value.toStringAsFixed(0);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Generate dummy visual data to match PDF if missing from model
-    final isDraft = widget.property.name.toLowerCase().contains('single room');
+    // Generate dummy visual data if missing from model
+    final isDraft = widget.property.name.toLowerCase().contains('single room'); // Placeholder logic
     final statusText = isDraft ? 'Draft' : 'Published';
-    final statusBgColor =
-        isDraft ? const Color(0xFFE5E7EB) : const Color(0xFFB0DDC3);
-    final statusTextColor =
-        isDraft ? const Color(0xFF4B5563) : const Color(0xFF059669);
+    final statusBgColor = isDraft ? _grey.withOpacity(0.15) : _green.withOpacity(0.15);
+    final statusTextColor = isDraft ? _dark : _green;
 
     return FadeTransition(
       opacity: _fadeAnim,
       child: SlideTransition(
         position: _slideAnim,
         child: GestureDetector(
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapUp: (_) => setState(() => _pressed = false),
-          onTapCancel: () => setState(() => _pressed = false),
           onTap: () {
-            // Track Property Click
             AnalyticsService.logListingInteraction('property_click', listingId: widget.property.id);
-            // Open property details / booking view
-            Navigator.pushNamed(context, '/booking',
-                arguments: <String, String>{'propertyId': widget.property.id});
+            Navigator.pushNamed(context, '/booking', arguments: <String, String>{'propertyId': widget.property.id});
           },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            transform: Matrix4.translationValues(0, _pressed ? 2 : 0, 0),
-            child: _GlassContainer(
-              padding: const EdgeInsets.all(12),
-              child: Row(
+          behavior: HitTestBehavior.opaque,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. Square Image Box
+              Stack(
                 children: [
-                  // Property Image
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: buildPropertyImage(
-                      widget.property.image,
-                      width: 130,
-                      height: 130,
-                      fit: BoxFit.cover,
-                      errorPlaceholder: Container(
-                          width: 130,
-                          height: 130,
-                          color: const Color(0xFFFFFFFF),
-                          child: Icon(PhosphorIcons.house(),
-                              color: const Color(0xFF75C797), size: 40)),
+                  AspectRatio(
+                    aspectRatio: 1,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: buildPropertyImage(
+                        widget.property.image,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
+                        errorPlaceholder: Container(color: _grey.withOpacity(0.1), child: const Icon(PhosphorIconsRegular.house, color: _grey, size: 32)),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 16),
-
-                  // Details Column
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Title
-                          Text(
-                            widget.property.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF111827)),
-                          ),
-                          const SizedBox(height: 4),
-
-                          // Location
-                          Row(
-                            children: [
-                              Icon(
-                                  PhosphorIcons.mapPin(PhosphorIconsStyle.fill),
-                                  size: 14,
-                                  color: const Color(0xFF9CA3AF)),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  widget.property.location,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.poppins(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: const Color(0xFF9CA3AF)),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Price & Status Badge
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text.rich(
-                                  TextSpan(children: [
-                                    TextSpan(
-                                      text:
-                                          'Ksh. ${_formatPriceToK(widget.property.price)}',
-                                      style: GoogleFonts.poppins(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 16.0,
-                                        color: const Color(0xFF111827),
-                                      ),
-                                    ),
-                                    TextSpan(
-                                      text: '/month',
-                                      style: GoogleFonts.poppins(
-                                        color: const Color(0xFF9CA3AF),
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 13.0,
-                                      ),
-                                    ),
-                                  ]),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                    color: statusBgColor,
-                                    borderRadius: BorderRadius.circular(6)),
-                                child: Text(
-                                  statusText,
-                                  style: GoogleFonts.poppins(
-                                      fontSize: 10.0,
-                                      fontWeight: FontWeight.w700,
-                                      color: statusTextColor),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          // Footer Icons (Views & Likes)
-                          Row(
-                            children: [
-                              Icon(PhosphorIcons.eye(PhosphorIconsStyle.fill),
-                                  size: 18, color: const Color(0xFF9CA3AF)),
-                              const SizedBox(width: 4),
-                              Text('1,243',
-                                  style: GoogleFonts.poppins(
-                                      fontSize: 13.0,
-                                      color: const Color(0xFF9CA3AF),
-                                      fontWeight: FontWeight.w500)),
-                              const SizedBox(width: 16),
-                              Icon(PhosphorIcons.heart(PhosphorIconsStyle.fill),
-                                  size: 16, color: const Color(0xFFEC4899)),
-                              const SizedBox(width: 4),
-                              Text('24',
-                                  style: GoogleFonts.poppins(
-                                      fontSize: 13.0,
-                                      color: const Color(0xFF9CA3AF),
-                                      fontWeight: FontWeight.w500)),
-                            ],
-                          ),
-                        ],
+                  // Floating Status Badge inside image
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDraft ? Colors.white.withOpacity(0.9) : _green,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)],
+                      ),
+                      child: Text(
+                        statusText,
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: isDraft ? _dark : Colors.white,
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Floating Glass Button ────────────────────────────────────────────────────
-
-class _GlassFloatingButton extends StatefulWidget {
-  final VoidCallback onPressed;
-  const _GlassFloatingButton({required this.onPressed});
-
-  @override
-  State<_GlassFloatingButton> createState() => _GlassFloatingButtonState();
-}
-
-class _GlassFloatingButtonState extends State<_GlassFloatingButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _c;
-  bool _pressed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 120));
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.onPressed();
-      },
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        transform: Matrix4.translationValues(0, _pressed ? 4 : 0, 0),
-        height: 64,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(32),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF75C797).withValues(alpha: 0.3),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            )
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(32),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF75C797)
-                    .withValues(alpha: 0.85), // Emerald translucent green
-                border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.4), width: 1.5),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              const SizedBox(height: 12),
+              
+              // 2. Details Section
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(PhosphorIcons.plus(), color: Colors.white, size: 28),
-                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.property.location,
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: _dark,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      const Icon(PhosphorIconsFill.eye, size: 12, color: _grey),
+                      const SizedBox(width: 4),
+                      Text(
+                        '1.2k', // Mock data from original
+                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: _grey),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                widget.property.name,
+                style: GoogleFonts.poppins(fontSize: 12, color: _grey),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${widget.property.features.beds} Beds • ${widget.property.category}',
+                style: GoogleFonts.poppins(fontSize: 12, color: _grey),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
                   Text(
-                    'Add New Property',
+                    'Ksh. ${_formatPriceToK(widget.property.price)}',
                     style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: _dark,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  Text(
+                    ' /mo',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _grey,
                     ),
                   ),
                 ],
               ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Glassmorphism Core Utility ──────────────────────────────────────────────
-
-class _GlassContainer extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final double blur = 20.0;
-  final double opacity = 0.55;
-  final double borderWidth = 1.5;
-
-  const _GlassContainer({
-    required this.child,
-    required this.padding,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(24);
-
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: opacity),
-            borderRadius: radius,
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.8),
-              width: borderWidth,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              ),
             ],
           ),
-          child: child,
         ),
       ),
     );

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:property_app/screens/screens.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
@@ -10,11 +9,11 @@ import 'package:property_app/services/fcm_service.dart';
 import 'package:property_app/services/notification_api.dart';
 
 // ─── Design System Constants ──────────────────────────────────────────────────
-const _bg = Color(0xFFFAFAFA);
-const _dark = Color(0xFF111827);
-const _grey = Color(0xFF9CA3AF);
-const _primaryText = Color(0xFF4F70F8);
-const _surface = Colors.white;
+const Color _bg = Color(0xFFFAFAFA);
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF9CA3AF);
+const Color _primaryText = Color(0xFF4F70F8); // Vibrant Blue Accent
+const Color _surface = Colors.white;
 
 // ─── Model ────────────────────────────────────────────────────────────────────
 class AdminNotificationItem {
@@ -212,111 +211,144 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
 
   // ─── UI Builders ────────────────────────────────────────────────────────────
 
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: _isSelectionMode
-            ? Row(
-                key: const ValueKey('selection_header'),
+  Widget _buildNormalHeader() {
+    return Row(
+      key: const ValueKey('normal_header'),
+      children: [
+        GestureDetector(
+          onTap: () => Navigator.pop(context),
+          behavior: HitTestBehavior.opaque,
+          child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 28),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            'Notifications',
+            style: GoogleFonts.poppins(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              color: _dark,
+              letterSpacing: -0.5,
+            ),
+          ),
+        ),
+        PopupMenuButton<String>(
+          icon: const Icon(PhosphorIconsRegular.dotsThreeVertical, color: _dark, size: 28),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          color: _surface,
+          elevation: 8,
+          offset: const Offset(0, 40),
+          onSelected: (value) {
+            if (value == 'read_all') _markAllAsRead();
+            if (value == 'select') _toggleSelectionMode();
+          },
+          itemBuilder: (BuildContext context) => [
+            PopupMenuItem(
+              value: 'read_all',
+              child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: _toggleSelectionMode,
-                    child: const Icon(PhosphorIconsRegular.x, color: _dark, size: 24),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      '${_selectedIds.length} Selected',
-                      style: GoogleFonts.poppins(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        color: _dark,
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: _selectAll,
-                    child: const Icon(PhosphorIconsRegular.checkSquareOffset, color: _dark, size: 28),
-                  ),
-                ],
-              )
-            : Row(
-                key: const ValueKey('normal_header'),
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          )
-                        ],
-                      ),
-                      child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 20),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      'Notifications',
-                      style: GoogleFonts.poppins(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: _dark,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ),
-                  PopupMenuButton<String>(
-                    icon: const Icon(PhosphorIconsRegular.dotsThreeVertical, color: _dark, size: 28),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    color: Colors.white,
-                    elevation: 4,
-                    onSelected: (value) {
-                      if (value == 'read_all') _markAllAsRead();
-                      if (value == 'select') _toggleSelectionMode();
-                    },
-                    itemBuilder: (BuildContext context) => [
-                      PopupMenuItem(
-                        value: 'read_all',
-                        child: Text('Mark all as read', style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
-                      ),
-                      PopupMenuItem(
-                        value: 'select',
-                        child: Text('Select messages', style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
-                      ),
-                    ],
-                  ),
+                  const Icon(PhosphorIconsRegular.checkCircle, color: _dark, size: 20),
+                  const SizedBox(width: 12),
+                  Text('Mark all as read', style: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 14)),
                 ],
               ),
-      ),
+            ),
+            PopupMenuItem(
+              value: 'select',
+              child: Row(
+                children: [
+                  const Icon(PhosphorIconsRegular.checkSquareOffset, color: _dark, size: 20),
+                  const SizedBox(width: 12),
+                  Text('Select messages', style: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 14)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectionHeader() {
+    return Row(
+      key: const ValueKey('selection_header'),
+      children: [
+        GestureDetector(
+          onTap: _toggleSelectionMode,
+          behavior: HitTestBehavior.opaque,
+          child: const Icon(PhosphorIconsRegular.x, color: _dark, size: 24),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            '${_selectedIds.length} Selected',
+            style: GoogleFonts.poppins(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: _dark,
+              letterSpacing: -0.5,
+            ),
+          ),
+        ),
+        GestureDetector(
+          onTap: _selectAll,
+          behavior: HitTestBehavior.opaque,
+          child: Text(
+            _selectedIds.length == _items.length ? 'Unselect All' : 'Select All',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: _primaryText,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildShimmerLoading() {
-    return ListView.separated(
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      itemCount: 6,
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemCount: 8,
       itemBuilder: (context, index) {
-        return Shimmer.fromColors(
-          baseColor: Colors.grey.shade200,
-          highlightColor: Colors.grey.shade100,
-          child: Container(
-            height: 88,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Shimmer.fromColors(
+                baseColor: Colors.grey.shade200,
+                highlightColor: Colors.grey.shade100,
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Shimmer.fromColors(
+                      baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+                      child: Container(width: 150, height: 16, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                    ),
+                    const SizedBox(height: 8),
+                    Shimmer.fromColors(
+                      baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+                      child: Container(width: double.infinity, height: 14, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                    ),
+                    const SizedBox(height: 6),
+                    Shimmer.fromColors(
+                      baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+                      child: Container(width: 200, height: 14, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -325,31 +357,35 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(PhosphorIconsRegular.bellSlash, color: _grey, size: 64),
-          const SizedBox(height: 16),
-          Text(
-            'No notifications yet',
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: _dark,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(color: _grey.withOpacity(0.1), shape: BoxShape.circle),
+              child: const Icon(PhosphorIconsRegular.bellSlash, color: _grey, size: 48),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'When you get updates, they\'ll show up here.',
-            style: GoogleFonts.poppins(fontSize: 14, color: _grey),
-          ),
-        ],
+            const SizedBox(height: 24),
+            Text(
+              'No notifications yet',
+              style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'When you get updates, alerts, or new activities, they\'ll show up here.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 14, color: _grey),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildAdminNotificationItem(int index, AdminNotificationItem item) {
-    final start = (index * 0.1).clamp(0.0, 1.0);
+    final start = (index * 0.05).clamp(0.0, 1.0);
     final end = (start + 0.4).clamp(0.0, 1.0);
     final animation = CurvedAnimation(
       parent: _staggerCtrl,
@@ -374,49 +410,62 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
               _toggleItemSelection(item.id);
             } else {
               setState(() => item.isRead = true);
-              // Handle regular tap (navigation, etc)
+              // Route to action based on notification type
             }
           },
-          child: Container(
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: item.isRead ? Colors.white : _primaryText.withOpacity(0.04),
+              color: item.isRead ? _surface : _primaryText.withOpacity(0.04),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isSelected ? _primaryText : (item.isRead ? Colors.transparent : _primaryText.withOpacity(0.1)),
+                color: isSelected ? _primaryText : (item.isRead ? _grey.withOpacity(0.15) : _primaryText.withOpacity(0.1)),
                 width: isSelected ? 2.0 : 1.0,
               ),
-              boxShadow: item.isRead
-                  ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]
-                  : [],
+              boxShadow: (item.isRead && !isSelected)
+                  ? []
+                  : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (_isSelectionMode)
                   Padding(
-                    padding: const EdgeInsets.only(right: 16, top: 4),
+                    padding: const EdgeInsets.only(right: 16, top: 12),
                     child: Icon(
-                      isSelected ? PhosphorIconsRegular.checkCircle : PhosphorIconsRegular.circle,
+                      isSelected ? PhosphorIconsFill.checkCircle : PhosphorIconsRegular.circle,
                       color: isSelected ? _primaryText : _grey,
                       size: 24,
                     ),
                   )
-                else
+                else if (!item.isRead)
                   Container(
-                    margin: const EdgeInsets.only(right: 16),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: item.isRead ? _bg : _primaryText.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      PhosphorIconsRegular.bellRinging,
-                      color: item.isRead ? _grey : _primaryText,
-                      size: 20,
-                    ),
+                    margin: const EdgeInsets.only(right: 12, top: 18),
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(color: _primaryText, shape: BoxShape.circle),
                   ),
+
+                // Icon Container
+                Container(
+                  margin: const EdgeInsets.only(right: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: item.isRead ? _bg : _surface,
+                    shape: BoxShape.circle,
+                    border: item.isRead ? null : Border.all(color: _primaryText.withOpacity(0.2)),
+                  ),
+                  child: Icon(
+                    item.isRead ? PhosphorIconsRegular.bell : PhosphorIconsFill.bellRinging,
+                    color: item.isRead ? _grey : _primaryText,
+                    size: 20,
+                  ),
+                ),
+
+                // Text Content
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -428,7 +477,7 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                             child: Text(
                               item.title,
                               style: GoogleFonts.poppins(
-                                fontSize: 14,
+                                fontSize: 15,
                                 fontWeight: item.isRead ? FontWeight.w600 : FontWeight.w700,
                                 color: _dark,
                               ),
@@ -442,7 +491,7 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                             style: GoogleFonts.poppins(
                               fontSize: 12,
                               color: item.isRead ? _grey : _primaryText,
-                              fontWeight: item.isRead ? FontWeight.w400 : FontWeight.w600,
+                              fontWeight: item.isRead ? FontWeight.w500 : FontWeight.w600,
                             ),
                           ),
                         ],
@@ -452,8 +501,9 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                         item.subtitle,
                         style: GoogleFonts.poppins(
                           fontSize: 13,
-                          color: _grey,
-                          fontWeight: FontWeight.w400,
+                          color: item.isRead ? _grey : _dark.withOpacity(0.8),
+                          fontWeight: item.isRead ? FontWeight.w400 : FontWeight.w500,
+                          height: 1.4,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -473,14 +523,14 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
-      bottom: _isSelectionMode ? 32 : -100,
+      bottom: _isSelectionMode ? MediaQuery.of(context).padding.bottom + 24 : -100,
       left: 24,
       right: 24,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         decoration: BoxDecoration(
           color: _dark,
-          borderRadius: BorderRadius.circular(32), // Pill shape
+          borderRadius: BorderRadius.circular(32), // Elegant Pill Shape
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.15),
@@ -494,6 +544,7 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
           children: [
             GestureDetector(
               onTap: _selectedIds.isEmpty ? null : _markSelectedAsRead,
+              behavior: HitTestBehavior.opaque,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -502,22 +553,23 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                   const SizedBox(height: 4),
                   Text('Read',
                       style: GoogleFonts.poppins(
-                          fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white)),
+                          fontSize: 12, fontWeight: FontWeight.w600, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white)),
                 ],
               ),
             ),
-            Container(width: 1, height: 30, color: _grey.withOpacity(0.3)),
+            Container(width: 1, height: 32, color: _grey.withOpacity(0.3)),
             GestureDetector(
               onTap: _selectedIds.isEmpty ? null : _deleteSelected,
+              behavior: HitTestBehavior.opaque,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(PhosphorIconsRegular.trash,
-                      color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444)), // Red
+                      color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444)),
                   const SizedBox(height: 4),
                   Text('Delete',
                       style: GoogleFonts.poppins(
-                          fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444))),
+                          fontSize: 12, fontWeight: FontWeight.w600, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444))),
                 ],
               ),
             ),
@@ -542,19 +594,30 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildHeader(),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: _isSelectionMode ? _buildSelectionHeader() : _buildNormalHeader(),
+                      ),
+                    ),
                     Expanded(
                       child: _isLoading
                           ? _buildShimmerLoading()
                           : _items.isEmpty
                               ? _buildEmptyState()
-                              : ListView.builder(
-                                  padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(context).padding.bottom + 100),
-                                  physics: const BouncingScrollPhysics(),
-                                  itemCount: _items.length,
-                                  itemBuilder: (context, index) {
-                                    return _buildAdminNotificationItem(index, _items[index]);
-                                  },
+                              : RefreshIndicator(
+                                  color: _primaryText,
+                                  backgroundColor: _surface,
+                                  onRefresh: _loadNotifications,
+                                  child: ListView.builder(
+                                    padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(context).padding.bottom + 120),
+                                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                                    itemCount: _items.length,
+                                    itemBuilder: (context, index) {
+                                      return _buildAdminNotificationItem(index, _items[index]);
+                                    },
+                                  ),
                                 ),
                     ),
                   ],

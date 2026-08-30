@@ -315,6 +315,7 @@ router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (r
 
     // Clear property cache since visibility changed
     await cache.del('cache:properties*');
+    await cache.del('cache:/api/properties*');
 
     // Notify the landlord
     if (status === 'approved') {

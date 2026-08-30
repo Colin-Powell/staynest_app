@@ -9,7 +9,12 @@ import 'package:property_app/session/app_session.dart';
 import 'package:uuid/uuid.dart';
 import 'package:property_app/models/communication_models.dart';
 
-const Color _landlordPrimary = Color(0xFF059669);
+// ─── Landlord Design System Constants ─────────────────────────────────────────
+const Color _bg = Color(0xFFFAFAFA);
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF9CA3AF);
+const Color _surface = Colors.white;
+const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 
 // ─── Main Widget ──────────────────────────────────────────────────────────────
 
@@ -91,7 +96,6 @@ class _LandlordChatViewState extends State<LandlordChatView>
     });
 
     _seenSubscription = SocketService.instance.seen.listen((data) {
-      // Update local message status to seen
       if (!mounted) return;
       setState(() {
         for (int i = 0; i < _messages.length; i++) {
@@ -103,13 +107,11 @@ class _LandlordChatViewState extends State<LandlordChatView>
       });
     });
 
-    // Listen for FCM messages while in the chat to update UI if socket is slow
     _fcmSubscription = FirebaseMessaging.onMessage.listen((message) {
       if (message.data['senderId'] == widget.userId) {
         final text = message.notification?.body ?? '';
         final ts = DateTime.now().millisecondsSinceEpoch;
 
-        // The logic inside _addMessage automatically handles de-duplication via msg.id
         final fcmMsgId = message.messageId ?? 'fcm_$ts';
 
         if (!_messages.any((m) => m.id == fcmMsgId)) {
@@ -123,7 +125,6 @@ class _LandlordChatViewState extends State<LandlordChatView>
       }
     });
 
-    // Only handle messages FROM the other person — our own are added optimistically
     _socketSubscription = SocketService.instance.messages.listen((msg) {
       if (msg.from != widget.userId) return;
 
@@ -216,7 +217,6 @@ class _LandlordChatViewState extends State<LandlordChatView>
       _scrollToBottom();
     } catch (err) {
       if (mounted) setState(() => _isLoading = false);
-      debugPrint('Failed to fetch messages: $err');
     }
   }
 
@@ -226,7 +226,6 @@ class _LandlordChatViewState extends State<LandlordChatView>
     _msgController.clear();
 
     final messageId = const Uuid().v4();
-    // Optimistic local append
     _addMessage(ChatMessage(
       id: messageId,
       sender: ChatSender.me,
@@ -235,8 +234,6 @@ class _LandlordChatViewState extends State<LandlordChatView>
       status: MessageStatus.sending,
     ));
 
-    // We ONLY call REST here to prevent duplicates.
-    // The backend's REST /messages will automatically emit it via socket.
     _performSave(messageId, text);
   }
 
@@ -263,7 +260,6 @@ class _LandlordChatViewState extends State<LandlordChatView>
               _messages[idx].copyWith(status: MessageStatus.failed);
         });
       }
-      debugPrint('Failed to save message: $err');
     }
   }
 
@@ -322,13 +318,13 @@ class _LandlordChatViewState extends State<LandlordChatView>
       child: FadeTransition(
         opacity: _fadeAnim,
         child: Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: _bg, // Unified background color
           body: Column(
             children: [
               _buildHeader(context),
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(child: CircularProgressIndicator(color: _green))
                     : _buildChatArea(),
               ),
               _buildInputArea(context),
@@ -349,16 +345,16 @@ class _LandlordChatViewState extends State<LandlordChatView>
         left: 20,
         right: 24,
       ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6))),
+      decoration: BoxDecoration(
+        color: _surface,
+        border: Border(bottom: BorderSide(color: _grey.withOpacity(0.1))),
       ),
       child: Row(
         children: [
           GestureDetector(
             onTap: widget.onBack,
             behavior: HitTestBehavior.opaque,
-            child: const Icon(Icons.arrow_back, size: 28, color: Colors.black),
+            child: const Icon(PhosphorIconsRegular.caretLeft, size: 28, color: _dark),
           ),
           const SizedBox(width: 16),
           ClipOval(
@@ -372,8 +368,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
                 : Container(
                     width: 48,
                     height: 48,
-                    color: const Color(0xFFF3F4F6),
-                    child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
+                    color: _grey.withOpacity(0.1),
+                    child: const Icon(PhosphorIconsRegular.user, color: _grey),
                   ),
           ),
           const SizedBox(width: 16),
@@ -384,43 +380,32 @@ class _LandlordChatViewState extends State<LandlordChatView>
                 Text(
                   widget.name,
                   style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: _dark,
                     letterSpacing: -0.5,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Row(
                   children: [
                     Container(
-                      width: 10,
-                      height: 10,
+                      width: 8,
+                      height: 8,
                       decoration: BoxDecoration(
-                        color: _isOtherTyping
-                            ? const Color(0xFF3B82F6)
-                            : const Color(0xFF10B981),
+                        color: _isOtherTyping ? _dark : _green,
                         shape: BoxShape.circle,
-                        boxShadow: _isOtherTyping
-                            ? [
-                                BoxShadow(
-                                    color: const Color(0xFF3B82F6)
-                                        .withOpacity(0.4),
-                                    blurRadius: 4,
-                                    spreadRadius: 1)
-                              ]
-                            : null,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       _isOtherTyping ? 'typing...' : 'Online',
                       style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: _isOtherTyping
-                            ? const Color(0xFF3B82F6)
-                            : const Color(0xFF9CA3AF),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: _isOtherTyping ? _dark : _grey,
                       ),
                     ),
                   ],
@@ -430,8 +415,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
           ),
           GestureDetector(
             onTap: widget.onCall,
-            child: Icon(PhosphorIcons.phone(PhosphorIconsStyle.fill),
-                color: Colors.black, size: 26),
+            child: const Icon(PhosphorIconsRegular.phone, color: _dark, size: 26),
           ),
         ],
       ),
@@ -443,14 +427,22 @@ class _LandlordChatViewState extends State<LandlordChatView>
   Widget _buildChatArea() {
     if (_messages.isEmpty) {
       return Center(
-        child: Text(
-          'No messages yet.\nSay hello!',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.poppins(
-            fontSize: 15,
-            color: const Color(0xFF9CA3AF),
-            fontWeight: FontWeight.w500,
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(PhosphorIconsRegular.chatTeardropText, size: 48, color: _grey),
+            const SizedBox(height: 16),
+            Text(
+              'No messages yet',
+              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Send a message to start the conversation.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 14, color: _grey),
+            ),
+          ],
         ),
       );
     }
@@ -462,20 +454,15 @@ class _LandlordChatViewState extends State<LandlordChatView>
       itemCount: _messages.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) {
-          return _buildStaggered(
-              index: index, child: _buildDateDivider('Today'));
+          return _buildStaggered(index: index, child: _buildDateDivider('Today'));
         }
         final msg = _messages[index - 1];
         final Widget bubble = msg.sender == ChatSender.me
-            ? _MyBubble(
-                message: msg,
-                onRetry: () => _retryMessage(msg),
-              )
+            ? _MyBubble(message: msg, onRetry: () => _retryMessage(msg))
             : _TheirBubble(message: msg, avatar: widget.avatar);
         return _buildStaggered(
           index: index,
-          child: Padding(
-              padding: const EdgeInsets.only(bottom: 24), child: bubble),
+          child: Padding(padding: const EdgeInsets.only(bottom: 24), child: bubble),
         );
       },
     );
@@ -486,16 +473,19 @@ class _LandlordChatViewState extends State<LandlordChatView>
       padding: const EdgeInsets.only(bottom: 32, top: 8),
       child: Center(
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
-            color: const Color(0xFFF3F4F6),
+            color: _grey.withOpacity(0.1),
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Text(label,
-              style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF9CA3AF))),
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _grey,
+            ),
+          ),
         ),
       ),
     );
@@ -512,24 +502,14 @@ class _LandlordChatViewState extends State<LandlordChatView>
         bottom: MediaQuery.of(context).padding.bottom + 12,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
-          )
-        ],
+        color: _surface,
+        border: Border(top: BorderSide(color: _grey.withOpacity(0.1))),
       ),
       child: Row(
         children: [
           GestureDetector(
             onTap: () {}, // Attachments Action
-            child: Icon(
-              PhosphorIcons.plusCircle(PhosphorIconsStyle.fill),
-              color: const Color(0xFF9CA3AF),
-              size: 32,
-            ),
+            child: const Icon(PhosphorIconsRegular.plusCircle, color: _grey, size: 28),
           ),
           const SizedBox(width: 12),
 
@@ -538,7 +518,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
+                color: _grey.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Row(
@@ -549,22 +529,21 @@ class _LandlordChatViewState extends State<LandlordChatView>
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
-                        color: Colors.black,
+                        color: _dark,
                       ),
                       // Absolutely no native fills or boundaries
                       decoration: InputDecoration(
                         hintText: 'Type a message...',
                         hintStyle: GoogleFonts.poppins(
-                          color: const Color(0xFF9CA3AF),
+                          color: _grey,
                           fontSize: 15,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         isDense: true,
-                        contentPadding:
-                            const EdgeInsets.symmetric(vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onSubmitted: (_) => _sendMessage(),
                     ),
@@ -572,8 +551,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
                   if (!_isTyping)
                     GestureDetector(
                       onTap: () {}, // Camera Action
-                      child: Icon(PhosphorIcons.camera(),
-                          color: const Color(0xFF9CA3AF), size: 22),
+                      child: const Icon(PhosphorIconsRegular.camera, color: _grey, size: 22),
                     ),
                 ],
               ),
@@ -594,11 +572,10 @@ class _LandlordChatViewState extends State<LandlordChatView>
                       width: 44,
                       height: 44,
                       decoration: const BoxDecoration(
-                        color: _landlordPrimary,
+                        color: _green,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.send_rounded,
-                          color: Colors.white, size: 20),
+                      child: const Icon(PhosphorIconsFill.paperPlaneRight, color: Colors.white, size: 20),
                     ),
                   )
                 : GestureDetector(
@@ -607,12 +584,11 @@ class _LandlordChatViewState extends State<LandlordChatView>
                     child: Container(
                       width: 44,
                       height: 44,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFF3F4F6),
+                      decoration: BoxDecoration(
+                        color: _grey.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(PhosphorIcons.microphone(),
-                          color: const Color(0xFF9CA3AF), size: 22),
+                      child: const Icon(PhosphorIconsRegular.microphone, color: _grey, size: 22),
                     ),
                   ),
           ),
@@ -638,60 +614,66 @@ class _TheirBubble extends StatelessWidget {
           child: (avatar != null && avatar!.trim().isNotEmpty)
               ? AppSession.buildAvatar(
                   avatar,
-                  width: 44,
-                  height: 44,
+                  width: 40,
+                  height: 40,
                   fit: BoxFit.cover,
                 )
               : Container(
-                  width: 44,
-                  height: 44,
-                  color: const Color(0xFFF3F4F6),
-                  child: const Icon(Icons.person, color: Color(0xFF9CA3AF)),
+                  width: 40,
+                  height: 40,
+                  color: _grey.withOpacity(0.1),
+                  child: const Icon(PhosphorIconsRegular.user, color: _grey, size: 20),
                 ),
         ),
         const SizedBox(width: 12),
         Flexible(
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _surface,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(8),
                 topRight: Radius.circular(24),
                 bottomRight: Radius.circular(24),
                 bottomLeft: Radius.circular(24),
               ),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
               boxShadow: [
                 BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4))
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                )
               ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(message.text,
-                    style: GoogleFonts.poppins(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black,
-                        height: 1.4)),
+                Text(
+                  message.text,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w400,
+                    color: _dark,
+                    height: 1.4,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: Text(message.time,
-                      style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF9CA3AF))),
+                  child: Text(
+                    message.time,
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: _grey,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
         ),
-        const SizedBox(width: 48),
+        const SizedBox(width: 48), // Spacing to prevent spanning entire screen
       ],
     );
   }
@@ -715,18 +697,19 @@ class _MyBubble extends StatelessWidget {
           ),
         );
       case MessageStatus.sent:
-        // Mock seen state indicator
-        const isSeen = false;
-        return const Icon(Icons.done_all,
-            size: 16, color: isSeen ? Color(0xFF4ADE80) : Colors.white70);
+        const isSeen = false; // Add actual seen logic if applicable
+        return Icon(
+          isSeen ? PhosphorIconsRegular.checks : PhosphorIconsRegular.check,
+          size: 14,
+          color: Colors.white70,
+        );
       case MessageStatus.failed:
         return GestureDetector(
           onTap: onRetry,
           behavior: HitTestBehavior.opaque,
           child: const Padding(
             padding: EdgeInsets.symmetric(horizontal: 2),
-            child:
-                Icon(Icons.error_outline, size: 16, color: Color(0xFFFCA5A5)),
+            child: Icon(PhosphorIconsRegular.warningCircle, size: 16, color: Color(0xFFFCA5A5)),
           ),
         );
     }
@@ -738,12 +721,12 @@ class _MyBubble extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.end,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        const SizedBox(width: 60),
+        const SizedBox(width: 60), // Spacing to prevent spanning entire screen
         Flexible(
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: _landlordPrimary,
+              color: _green,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(24),
                 topRight: Radius.circular(24),
@@ -752,31 +735,38 @@ class _MyBubble extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                    color: _landlordPrimary.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6))
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                )
               ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(message.text,
-                    style: GoogleFonts.poppins(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
-                        height: 1.4)),
+                Text(
+                  message.text,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w400,
+                    color: Colors.white,
+                    height: 1.4,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(message.time,
-                          style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white.withOpacity(0.8))),
+                      Text(
+                        message.time,
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white.withOpacity(0.8),
+                        ),
+                      ),
                       const SizedBox(width: 4),
                       _buildStatusIcon(),
                     ],

@@ -1,15 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:property_app/services/booking_service.dart';
-import 'dart:ui';
+
+// ─── Landlord Design System Constants ─────────────────────────────────────────
+const Color _bg = Color(0xFFFAFAFA);
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF9CA3AF);
+const Color _surface = Colors.white;
+const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 
 class LandlordCalendarPage extends StatefulWidget {
   final String? propertyId;
   final String? propertyTitle;
 
-  const LandlordCalendarPage(
-      {super.key, this.propertyId, this.propertyTitle});
+  const LandlordCalendarPage({
+    super.key, 
+    this.propertyId, 
+    this.propertyTitle
+  });
 
   static Route route({String? propertyId, String? propertyTitle}) {
     return MaterialPageRoute(
@@ -25,7 +36,6 @@ class LandlordCalendarPage extends StatefulWidget {
 }
 
 class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
-  // Logic & State strictly intact
   bool _isLoading = true;
   bool _hasError = false;
   List<dynamic> _bookings = [];
@@ -46,7 +56,7 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
     try {
       final results = await Future.wait([
         BookingService.fetchBookings(isLandlord: true),
-        Future.value(<int>[]), // Placeholder for blocked days fetch
+        Future.value(<int>[]),
       ]);
       if (mounted) {
         setState(() {
@@ -79,14 +89,119 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
     });
   }
 
-  // --- NEW UI MATCHING PDF ---
+  // Helper to format raw date strings into human readable "Aug 30, 2026"
+  String _formatDateString(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      return DateFormat('MMM d, yyyy').format(date);
+    } catch (_) {
+      return dateStr;
+    }
+  }
 
-  Widget _buildDayCell(int day, {bool isCurrentMonth = true, bool isBooked = false, bool isBlue = false}) {
+  // --- UI BUILDERS ---
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            behavior: HitTestBehavior.opaque,
+            child: const Icon(PhosphorIconsRegular.caretLeft, size: 24, color: _dark),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              widget.propertyTitle != null
+                  ? '${widget.propertyTitle} Calendar'
+                  : 'Portfolio Calendar',
+              style: GoogleFonts.poppins(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: _dark,
+                letterSpacing: -0.5,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShimmerLoading() {
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Calendar Nav Shimmer
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Shimmer.fromColors(
+                  baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+                  child: Container(width: 36, height: 36, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+                ),
+                Shimmer.fromColors(
+                  baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+                  child: Container(width: 140, height: 24, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12))),
+                ),
+                Shimmer.fromColors(
+                  baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+                  child: Container(width: 36, height: 36, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Calendar Grid Shimmer
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: GridView.count(
+              crossAxisCount: 7,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: List.generate(42, (index) => Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: Shimmer.fromColors(
+                  baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+                  child: Container(decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+                ),
+              )),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+            child: Divider(color: _grey.withOpacity(0.2), thickness: 1),
+          ),
+          // Booking List Shimmer
+          ...List.generate(3, (index) => Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+            child: Shimmer.fromColors(
+              baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+              child: Container(
+                height: 88, 
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20))
+              ),
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayCell(int day, {bool isCurrentMonth = true, bool isBooked = false, bool isToday = false}) {
     return Container(
       margin: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: isBooked ? const Color(0xFF3B41E1) : Colors.transparent,
+        color: isBooked ? _green : Colors.transparent,
         shape: BoxShape.circle,
+        border: (isToday && !isBooked) ? Border.all(color: _green, width: 1.5) : null,
       ),
       child: Center(
         child: Text(
@@ -95,10 +210,10 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
             color: isBooked
                 ? Colors.white
                 : (isCurrentMonth
-                    ? const Color(0xFF111827)
-                    : (isBlue ? const Color(0xFF3B41E1) : const Color(0xFF9CA3AF))),
-            fontWeight: isBooked ? FontWeight.bold : FontWeight.w600,
-            fontSize: 16,
+                    ? (isToday ? _green : _dark)
+                    : _grey.withOpacity(0.4)), 
+            fontWeight: (isBooked || isToday) ? FontWeight.w700 : FontWeight.w500,
+            fontSize: 15,
           ),
         ),
       ),
@@ -113,6 +228,7 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
 
     DateTime prevMonth = DateTime(_focusedDate.year, _focusedDate.month - 1);
     int daysInPrevMonth = DateUtils.getDaysInMonth(prevMonth.year, prevMonth.month);
+    final now = DateTime.now();
 
     List<Widget> dayWidgets = [];
     const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -123,9 +239,9 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
           child: Text(
             day,
             style: GoogleFonts.poppins(
-              color: const Color(0xFF9CA3AF),
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
+              color: _grey,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
             ),
           ),
         ),
@@ -136,15 +252,15 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
     for (int i = 0; i < totalCells; i++) {
       if (i < offset) {
         int day = daysInPrevMonth - offset + i + 1;
-        dayWidgets.add(_buildDayCell(day, isCurrentMonth: false, isBlue: true));
+        dayWidgets.add(_buildDayCell(day, isCurrentMonth: false));
       } else if (i >= offset + daysInMonth) {
         int day = i - (offset + daysInMonth) + 1;
-        dayWidgets.add(_buildDayCell(day, isCurrentMonth: false, isBlue: false));
+        dayWidgets.add(_buildDayCell(day, isCurrentMonth: false));
       } else {
         int day = i - offset + 1;
         DateTime thisDate = DateTime(_focusedDate.year, _focusedDate.month, day);
+        bool isToday = thisDate.year == now.year && thisDate.month == now.month && thisDate.day == now.day;
         
-        // Logic strictly kept intact
         bool isBooked = _bookings.any((b) {
           try {
             final start = DateTime.parse(b['check_in_date']);
@@ -157,44 +273,60 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
           }
         });
 
-        dayWidgets.add(_buildDayCell(day, isCurrentMonth: true, isBooked: isBooked));
+        dayWidgets.add(_buildDayCell(day, isCurrentMonth: true, isBooked: isBooked, isToday: isToday));
       }
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF9CA3AF), size: 20),
-                onPressed: () => _changeMonth(-1),
+              GestureDetector(
+                onTap: () => _changeMonth(-1),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _surface,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _grey.withOpacity(0.2)),
+                  ),
+                  child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 18),
+                ),
               ),
               Expanded(
                 child: Text(
                   DateFormat('MMMM yyyy').format(_focusedDate),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: _dark,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.arrow_forward_ios, color: Colors.black, size: 20),
-                onPressed: () => _changeMonth(1),
+              GestureDetector(
+                onTap: () => _changeMonth(1),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _surface,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _grey.withOpacity(0.2)),
+                  ),
+                  child: const Icon(PhosphorIconsRegular.caretRight, color: _dark, size: 18),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           GridView.count(
             crossAxisCount: 7,
             shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
+            physics: const NeverScrollableScrollPhysics(), // Handled by outer scroll view
             children: dayWidgets,
           ),
         ],
@@ -202,34 +334,85 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
     );
   }
 
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(PhosphorIconsRegular.calendarBlank, size: 56, color: _grey),
+            const SizedBox(height: 16),
+            Text(
+              "No bookings for this period",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: _dark,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Navigate to another month to view upcoming reservations.",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: _grey,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBookingList() {
     if (_bookings.isEmpty) {
-      return Center(
-        child: Text(
-          "No bookings for this period.",
-          style: GoogleFonts.poppins(color: const Color(0xFF9CA3AF), fontSize: 15),
-        ),
-      );
+      return _buildEmptyState();
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 8,
+        bottom: MediaQuery.of(context).padding.bottom + 24,
+      ),
+      shrinkWrap: true, 
+      physics: const NeverScrollableScrollPhysics(), // Disable inner scroll, outer view handles it
       itemCount: _bookings.length,
       itemBuilder: (context, index) {
         final b = _bookings[index];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: _GlassContainer(
-            padding: const EdgeInsets.all(16),
-            child: Row(
+        final isConfirmed = b['status'] == 'confirmed';
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF0F1FF),
+                decoration: BoxDecoration(
+                  color: isConfirmed ? _green.withOpacity(0.1) : _grey.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.event_available, color: Color(0xFF3B41E1), size: 24),
+                child: Icon(
+                  PhosphorIconsRegular.calendarCheck, 
+                  color: isConfirmed ? _green : _dark, 
+                  size: 24
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -239,40 +422,41 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
                     Text(
                       b['tenant_name'] ?? 'Guest',
                       style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: _dark,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${b['check_in_date']} to ${b['check_out_date']}',
+                      '${_formatDateString(b['check_in_date'])} – ${_formatDateString(b['check_out_date'])}',
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: const Color(0xFF6B7280),
+                        color: _grey,
                       ),
                     ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD1FAE5),
+                  color: isConfirmed ? _green.withOpacity(0.1) : _grey.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                  child: Text(
-                    b['status'].toString().toUpperCase(),
-                    style: GoogleFonts.poppins(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF065F46),
-                    ),
+                child: Text(
+                  b['status'].toString().toUpperCase(),
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: isConfirmed ? _green : _dark,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
@@ -282,101 +466,50 @@ class _LandlordCalendarPageState extends State<LandlordCalendarPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFFFF),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black, size: 28),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.propertyTitle != null
-              ? '${widget.propertyTitle} Calendar'
-              : 'Portfolio Calendar',
-          style: GoogleFonts.poppins(
-            color: Colors.black,
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        centerTitle: false,
-      ),
-      body: Stack(
-        children: [
-          // Soft Mint Gradient Background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFF7FDF9),
-                  Color(0xFFFFFFFF),
-                  Color(0xFFD4EFE1),
-                ],
-                stops: [0.0, 0.5, 1.0],
-              ),
-            ),
-          ),
-          _isLoading
-              ? const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF3B41E1)))
-              : Column(
-                  children: [
-                    _buildCalendarGrid(),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 24.0),
-                      child: Divider(color: Color(0xFFE5E7EB), thickness: 1),
+      backgroundColor: _bg,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: _hasError
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(PhosphorIconsRegular.warningCircle, size: 48, color: Colors.redAccent),
+                        const SizedBox(height: 16),
+                        Text(
+                          "Failed to load calendar",
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: _dark),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _loadData,
+                          child: Text('Retry', style: GoogleFonts.poppins(color: _green, fontWeight: FontWeight.w600)),
+                        )
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Expanded(child: _buildBookingList()),
-                  ],
-                ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GlassContainer extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final double blur = 20.0;
-  final double opacity = 0.55;
-  final double borderWidth = 1.5;
-
-  const _GlassContainer({
-    required this.child,
-    required this.padding,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(24);
-
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: opacity),
-            borderRadius: radius,
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.8),
-              width: borderWidth,
+                  )
+                : _isLoading 
+                    ? _buildShimmerLoading() 
+                    : SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildCalendarGrid(),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+                              child: Divider(color: _grey.withOpacity(0.2), thickness: 1),
+                            ),
+                            _buildBookingList(),
+                          ],
+                        ),
+                      ),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: child,
+          ],
         ),
       ),
     );

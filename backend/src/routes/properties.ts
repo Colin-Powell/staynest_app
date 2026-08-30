@@ -549,6 +549,7 @@ router.delete('/:id', requireAuth, authorize('landlord', 'host'), async (req: Re
       return res.status(404).json({ error: 'Property not found or access denied.' });
     }
     clearCachePattern('properties.');
+      clearCachePattern('/api/properties');
     res.json({ data: { id: result.rows[0].id, deleted: true } });
   } catch (error) {
     next(error);
@@ -865,6 +866,7 @@ async function handleCreateProperty(req: Request, res: Response, next: NextFunct
     // The listing remains pending-review until an admin approves it.
     // Do not surface it to tenants before approval.
     clearCachePattern('properties.');
+      clearCachePattern('/api/properties');
 
     const property = result.rows[0];
 
@@ -912,6 +914,7 @@ router.put('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host'),
     );
     if (result.rowCount === 0) return res.status(404).json({ error: 'Property not found or access denied.' });
     clearCachePattern('properties.');
+      clearCachePattern('/api/properties');
     res.json({ data: normalizePropertyRow(result.rows[0] as Record<string, unknown>) });
   } catch (error) {
     next(error);
