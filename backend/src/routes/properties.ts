@@ -5,6 +5,7 @@ import { cache } from '../services/cache.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../config.js';
+import { sendPushToUser } from '../services/firebase.js';
 
 async function getCache<T>(key: string): Promise<T | null> {
   const raw = await cache.get(`cache:${key}`);
@@ -303,6 +304,7 @@ router.post('/:id/view', requireAuth, async (req: Request, res) => {
       `INSERT INTO recently_viewed (user_id, property_id, viewed_at) VALUES ($1, $2, NOW()) ON CONFLICT (user_id, property_id) DO UPDATE SET viewed_at = NOW()`,
       [userId, propertyId]
     );
+    await query(`INSERT INTO analytics (property_id, event_type, user_id, event_time) VALUES ($1, 'view', $2, NOW())`, [propertyId, userId]);
     return res.json({ data: { success: true } });
   } catch (err) {
     console.error('Error recording view:', err);
@@ -864,7 +866,17 @@ async function handleCreateProperty(req: Request, res: Response, next: NextFunct
     // Do not surface it to tenants before approval.
     clearCachePattern('properties.');
 
-    res.status(201).json({ data: result.rows[0] });
+    const property = result.rows[0];
+
+    // Notify the landlord that their listing was submitted
+    await sendPushToUser(
+      userId,
+      'Listing Submitted ??',
+      `Your property "${property.title}" has been successfully submitted and is pending admin review.`,
+      { type: 'property_submitted', propertyId: property.id }
+    );
+
+    res.status(201).json({ data: property });
   } catch (error) {
     console.error(`${logPrefix} failed userId=${userId} error=`, error);
     next(error);

@@ -4,10 +4,17 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
-import 'package:property_app/screens/theme.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/property_mapper.dart';
 import 'package:property_app/widgets/property_image.dart';
+
+// ─── Design System Constants ──────────────────────────────────────────────────
+const _bg = Color(0xFFFAFAFA);
+const _dark = Color(0xFF111827);
+const _grey = Color(0xFF9CA3AF);
+const _surface = Colors.white;
+const _primaryText = Color(0xFF4F70F8); // Blue CTA
+const _green = Color(0xFF10B981); // Emerald Green for Verified items
 
 class LandlordInfoView extends StatefulWidget {
   final VoidCallback onClose;
@@ -71,8 +78,6 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
         _loading = false;
       });
     } catch (e) {
-      // If JWT auth fails (403/401), we can still show profile but properties will be empty.
-      // This avoids silently keeping the UI in a broken state.
       if (mounted) {
         setState(() {
           _hasAuthIssue = true;
@@ -147,20 +152,7 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
     if (created == null || created.isEmpty) return '—';
     final date = DateTime.tryParse(created);
     if (date == null) return '—';
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${months[date.month - 1]} ${date.year}';
   }
 
@@ -189,47 +181,37 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-          backgroundColor: Colors.white,
-          body: Center(child: CircularProgressIndicator()));
+        backgroundColor: _bg,
+        body: Center(child: CircularProgressIndicator(color: _primaryText)),
+      );
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white,
-                  Color(0xFFF9FAFB),
-                  Color(0xFFF3F4F6),
-                ],
-                stops: [0.0, 0.5, 1.0],
-              ),
+      backgroundColor: _bg,
+      body: SafeArea(
+        bottom: false,
+        child: Stack(
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0.05, 0),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                );
+              },
+              child: _showProperties ? _buildPropertiesView() : _buildInfoView(),
             ),
-          ),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (Widget child, Animation<double> animation) {
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.05, 0),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
-                ),
-              );
-            },
-            child: _showProperties ? _buildPropertiesView() : _buildInfoView(),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -248,7 +230,7 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.only(bottom: 120),
+                padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 120),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -257,13 +239,23 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                       index: 1,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: _GlassContainer(
+                        child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 24),
+                          decoration: BoxDecoration(
+                            color: _surface,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                            ],
+                          ),
                           child: Column(
                             children: [
                               _buildLandlordProfile(),
                               const SizedBox(height: 24),
-                              _buildDivider(),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                child: Divider(color: _grey.withOpacity(0.2), height: 1),
+                              ),
                               const SizedBox(height: 20),
                               _buildStatsRow(),
                             ],
@@ -271,25 +263,41 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
                     _buildStaggered(
-                      index: 5,
+                      index: 2,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: _GlassContainer(
+                        child: Container(
+                          width: double.infinity,
                           padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: _surface,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                            ],
+                          ),
                           child: _buildAboutSectionContent(),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
                     if (_isVerified)
                       _buildStaggered(
-                        index: 6,
+                        index: 3,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: _GlassContainer(
+                          child: Container(
+                            width: double.infinity,
                             padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: _surface,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                              ],
+                            ),
                             child: _buildDocumentsSectionContent(),
                           ),
                         ),
@@ -300,12 +308,13 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
             ),
           ],
         ),
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          child: _buildStaggered(index: 7, child: _buildBottomCta()),
-        ),
+        if (!_showProperties)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _buildStaggered(index: 4, child: _buildBottomCta()),
+          ),
       ],
     );
   }
@@ -319,32 +328,31 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
         'No reviews yet',
         style: GoogleFonts.poppins(
           fontWeight: FontWeight.w500,
-          fontSize: 15,
-          color: StayNestColors.textSecondaryLight,
+          fontSize: 14,
+          color: _grey,
         ),
       );
     }
 
     return Row(
       children: [
-        Icon(PhosphorIcons.star(PhosphorIconsStyle.fill),
-            color: StayNestColors.accent, size: 22),
+        const Icon(PhosphorIconsFill.star, color: Color(0xFFF59E0B), size: 16),
         const SizedBox(width: 6),
         Text(
           rating.toStringAsFixed(1),
           style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w900,
-            fontSize: 17,
-            color: StayNestColors.textPrimaryLight,
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+            color: _dark,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         Text(
           '($reviews ${reviews == 1 ? 'Review' : 'Reviews'})',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w500,
-            fontSize: 15,
-            color: StayNestColors.textSecondaryLight,
+            fontSize: 14,
+            color: _grey,
           ),
         ),
       ],
@@ -357,55 +365,59 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
       children: [
         const SizedBox(width: 24),
         Container(
-          width: 80,
-          height: 80,
+          width: 72,
+          height: 72,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFFE5E7EB),
+            color: _grey.withOpacity(0.1),
             border: Border.all(
-              color: _isVerified
-                  ? const Color(0xFF22C55E)
-                  : const Color(0xFFE5E7EB),
+              color: _isVerified ? _green : Colors.transparent,
               width: 2.5,
             ),
           ),
           clipBehavior: Clip.antiAlias,
-          child: AppSession.buildAvatar(_landlordAvatar, width: 80, height: 80),
+          child: AppSession.buildAvatar(_landlordAvatar, width: 72, height: 72),
         ),
-        const SizedBox(width: 20),
+        const SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                _landlordName,
-                style: GoogleFonts.poppins(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: StayNestColors.textPrimaryLight,
-                  letterSpacing: -0.3,
-                ),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      _landlordName,
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: _dark,
+                        letterSpacing: -0.5,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (_isVerified) ...[
+                    const SizedBox(width: 6),
+                    const Icon(PhosphorIconsFill.sealCheck, color: _green, size: 20),
+                  ]
+                ],
               ),
               if (_businessSubtitle != null) ...[
-                const SizedBox(height: 4),
-                Text(_businessSubtitle!,
-                    style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: StayNestColors.textSecondaryLight)),
+                const SizedBox(height: 2),
+                Text(
+                  _businessSubtitle!,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: _grey,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
               const SizedBox(height: 6),
-              Text(
-                _isVerified ? 'Verified Landlord' : 'Landlord',
-                style: GoogleFonts.poppins(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: _isVerified
-                      ? StayNestColors.success
-                      : StayNestColors.textSecondaryLight,
-                ),
-              ),
-              const SizedBox(height: 8),
               _buildLandlordReviewsSummary(),
             ],
           ),
@@ -416,39 +428,32 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
   }
 
   Widget _buildBottomCta() {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-          24, 24, 24, MediaQuery.of(context).padding.bottom + 24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            StayNestColors.surfaceVariantLight.withValues(alpha: 0.0),
-            StayNestColors.surfaceVariantLight.withValues(alpha: 0.9),
-            StayNestColors.surfaceVariantLight,
-          ],
-          stops: const [0.0, 0.3, 1.0],
-        ),
-      ),
-      child: ElevatedButton(
-        onPressed: (_landlordProperties.isEmpty || _hasAuthIssue)
-            ? null
-            : _toggleProperties,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: StayNestColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).padding.bottom + 20),
+          decoration: BoxDecoration(
+            color: _surface.withOpacity(0.85),
+            border: Border(top: BorderSide(color: _grey.withOpacity(0.1))),
           ),
-        ),
-        child: Text(
-          'View all Properties',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
+          child: SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              onPressed: (_landlordProperties.isEmpty || _hasAuthIssue) ? null : _toggleProperties,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryText,
+                disabledBackgroundColor: _grey.withOpacity(0.2),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+              ),
+              child: Text(
+                'View all Properties',
+                style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
           ),
         ),
       ),
@@ -466,10 +471,10 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
         ),
         Expanded(
           child: _landlordProperties.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
                     'No properties listed yet.',
-                    style: TextStyle(color: Color(0xFF6B7280)),
+                    style: GoogleFonts.poppins(color: _grey, fontSize: 16),
                   ),
                 )
               : ListView.builder(
@@ -497,18 +502,21 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
   Widget _buildPropertyCard(Property prop) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
-      height: 140,
+      height: 120, // Tighter card height
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        color: _surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
       ),
       child: Row(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
             child: buildPropertyImage(
               prop.image,
-              width: 140,
+              width: 120,
               height: double.infinity,
               fit: BoxFit.cover,
             ),
@@ -516,37 +524,31 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
           const SizedBox(width: 16),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 10, 16, 10),
+              padding: const EdgeInsets.fromLTRB(0, 12, 16, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     prop.name,
                     style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: StayNestColors.textPrimaryLight,
-                      height: 1.1,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: _dark,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(
-                        PhosphorIcons.mapPin(PhosphorIconsStyle.fill),
-                        size: 14,
-                        color: StayNestColors.textMutedLight,
-                      ),
+                      const Icon(PhosphorIconsRegular.mapPin, size: 14, color: _grey),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           prop.location,
                           style: GoogleFonts.poppins(
                             fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: StayNestColors.textSecondaryLight,
+                            color: _grey,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -556,65 +558,45 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                   ),
                   const Spacer(),
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        'Ksh. ${prop.price}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: StayNestColors.textPrimaryLight,
-                        ),
-                      ),
-                      Text(
-                        '/month',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: StayNestColors.textSecondaryLight,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              PhosphorIcons.star(PhosphorIconsStyle.fill),
-                              size: 14,
-                              color: StayNestColors.accent,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            'Ksh. ${prop.price}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: _dark,
+                              letterSpacing: -0.5,
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              prop.rating.toStringAsFixed(1),
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: StayNestColors.textPrimaryLight,
-                              ),
+                          ),
+                          Text(
+                            ' /mo',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: _grey,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        '${prop.features.beds} Beds',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: StayNestColors.textSecondaryLight,
-                        ),
+                      Row(
+                        children: [
+                          const Icon(PhosphorIconsFill.star, size: 12, color: Color(0xFFF59E0B)),
+                          const SizedBox(width: 4),
+                          Text(
+                            prop.rating.toStringAsFixed(1),
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: _dark,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -628,29 +610,23 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
   }
 
   Widget _buildHeader(String title, {required VoidCallback onBack}) {
-    return Container(
-      color: Colors.transparent,
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 16,
-        left: 24,
-        right: 24,
-        bottom: 16,
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
       child: Row(
         children: [
           GestureDetector(
             onTap: onBack,
             behavior: HitTestBehavior.opaque,
-            child: const Icon(Icons.arrow_back, size: 28, color: Colors.black),
+            child: const Icon(PhosphorIconsRegular.caretLeft, size: 24, color: _dark),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                color: Colors.black,
+              style: GoogleFonts.poppins(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: _dark,
                 letterSpacing: -0.5,
               ),
               overflow: TextOverflow.ellipsis,
@@ -661,26 +637,17 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
     );
   }
 
-  Widget _buildDivider() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 24),
-      child: Divider(
-        color: Color(0xFFE5E7EB),
-        thickness: 1.5,
-        height: 1,
-      ),
-    );
-  }
-
   Widget _buildStatsRow() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          const _StatItem(label: 'Response Rate', value: '—'),
+          const _StatItem(label: 'Response', value: '—'),
+          Container(width: 1, height: 32, color: _grey.withOpacity(0.2)),
           _StatItem(label: 'Properties', value: '$_propertyCount'),
-          _StatItem(label: 'Member Since', value: _memberSince),
+          Container(width: 1, height: 32, color: _grey.withOpacity(0.2)),
+          _StatItem(label: 'Joined', value: _memberSince),
         ],
       ),
     );
@@ -690,19 +657,22 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'About',
-          style: TextStyle(
-              fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black),
+          style: GoogleFonts.poppins(
+            fontSize: 18, 
+            fontWeight: FontWeight.w700, 
+            color: _dark
+          ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Text(
           _aboutText,
-          style: const TextStyle(
-              fontSize: 15.5,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF4B5563),
-              height: 1.6),
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            color: _grey,
+            height: 1.6,
+          ),
         ),
       ],
     );
@@ -712,74 +682,35 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Verified Documents',
-          style: TextStyle(
-              fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black),
+          style: GoogleFonts.poppins(
+            fontSize: 18, 
+            fontWeight: FontWeight.w700, 
+            color: _dark
+          ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         ...List.generate(_documents.length, (i) {
           return Padding(
-            padding: const EdgeInsets.only(bottom: 20),
+            padding: const EdgeInsets.only(bottom: 16),
             child: Row(
               children: [
-                const Icon(Icons.verified_outlined,
-                    color: Color(0xFF22C55E), size: 28),
-                const SizedBox(width: 16),
-                Text(_documents[i],
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                        color: Colors.black)),
+                const Icon(PhosphorIconsFill.checkCircle, color: _green, size: 22),
+                const SizedBox(width: 12),
+                Text(
+                  _documents[i],
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                    color: _dark,
+                  ),
+                ),
               ],
             ),
           );
         }),
       ],
-    );
-  }
-}
-
-class _GlassContainer extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final double blur = 20.0;
-  final double opacity = 0.55;
-  final double borderWidth = 1.5;
-
-  const _GlassContainer({
-    required this.child,
-    required this.padding,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(24);
-
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: opacity),
-            borderRadius: radius,
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.8),
-              width: borderWidth,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: child,
-        ),
-      ),
     );
   }
 }
@@ -797,19 +728,19 @@ class _StatItem extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF9CA3AF),
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: _grey,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 22,
-            color: Colors.black,
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+            color: _dark,
           ),
         ),
       ],

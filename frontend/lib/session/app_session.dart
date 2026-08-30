@@ -1,3 +1,4 @@
+import 'package:property_app/repository/remote_database_repository.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -97,12 +98,26 @@ class AppSession {
       ..addAll(ids);
   }
 
-  static void toggleSaved(String id) {
+  static Future<void> toggleSaved(String id) async {
+    final userId = currentUserId;
     if (savedPropertyIds.contains(id)) {
       savedPropertyIds.remove(id);
+      if (userId != null) {
+        try {
+          await RemoteDatabaseRepository().removeFavoriteForUser(userId: userId, propertyId: id);
+        } catch (e) {
+          debugPrint('Failed to remove favorite: $e');
+        }
+      }
     } else {
       savedPropertyIds.add(id);
-      AnalyticsService.logListingInteraction(AnalyticsEvents.listingSave, listingId: id);
+      if (userId != null) {
+        try {
+          await RemoteDatabaseRepository().savePropertyForUser(userId: userId, propertyId: id);
+        } catch (e) {
+          debugPrint('Failed to add favorite: $e');
+        }
+      }
     }
   }
 
@@ -265,6 +280,15 @@ class AppSession {
       if (tokens is Map) {
         apiToken = tokens['apiToken']?.toString();
         refreshToken = tokens['refreshToken']?.toString();
+      }
+      
+      if (currentUserId != null) {
+        try {
+          final favorites = await RemoteDatabaseRepository().loadFavoritesForUser(currentUserId!);
+          setSavedPropertyIds(favorites.map((f) => f['property_id'].toString()));
+        } catch (e) {
+          debugPrint('Failed to load favorites on restore: $e');
+        }
       }
     } catch (_) {
       await _storage.delete(key: _prefsKey);

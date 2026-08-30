@@ -177,6 +177,12 @@ class RemoteDatabaseRepository {
       Uri.parse('${AppSession.apiBaseUrl}/users/$userId/favorites'),
       body: {'propertyId': propertyId},
     );
+    try {
+      await apiClient.post(
+        Uri.parse('${AppSession.apiBaseUrl}/analytics/track'),
+        body: {'eventType': 'property_save', 'propertyId': propertyId},
+      );
+    } catch (_) {}
     AnalyticsService.logListingInteraction(AnalyticsEvents.listingSave, listingId: propertyId);
   }
 

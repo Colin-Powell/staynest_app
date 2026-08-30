@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:property_app/models/property_taxonomy.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 // Note: Keep your specific project imports here
@@ -27,7 +28,7 @@ class _FilterViewState extends State<FilterView> {
 
   String _selectedType = 'Apartment';
   RangeValues _priceRange = const RangeValues(10000, 200000);
-  final Set<String> _selectedAmenities = {'WiFi', 'Furnished'};
+  final Set<String> _selectedAmenities = {};
   int _selectedBeds = 0;
   int _selectedBaths = 0;
   String _landlordAvailability = 'Any';
@@ -47,15 +48,7 @@ class _FilterViewState extends State<FilterView> {
     {'name': 'One Bedroom', 'image': 'assets/images/onebedroom.webp'},
   ];
 
-  static const _amenities = [
-    'WiFi',
-    'Water included',
-    'Electricity included',
-    'Furnished',
-    'Parking',
-    'Security',
-    'CCTV',
-  ];
+  // Replaced static array with dynamic PropertyTaxonomy call.
 
   void _reset() {
     setState(() {
@@ -66,7 +59,7 @@ class _FilterViewState extends State<FilterView> {
       _selectedBaths = 0;
       _landlordAvailability = 'Any';
       _mostReviews = false;
-      _selectedAmenities.addAll(['WiFi', 'Furnished']);
+      _selectedAmenities.clear();
     });
   }
 
@@ -440,18 +433,19 @@ class _FilterViewState extends State<FilterView> {
   }
 
   Widget _buildAmenities() {
-    final displayCount = _showAllAmenities ? _amenities.length : 3;
-    final displayedAmenities = _amenities.take(displayCount).toList();
+    final allAmenities = PropertyTaxonomy.attributes.where((a) => a.isFilterable).toList();
+    final displayCount = _showAllAmenities ? allAmenities.length : 4;
+    final displayedAmenities = allAmenities.take(displayCount).toList();
 
     return Column(
       children: [
         ...displayedAmenities.asMap().entries.map((entry) {
           final int index = entry.key;
-          final String amenity = entry.value;
-          final isSelected = _selectedAmenities.contains(amenity);
+          final PropertyAttribute attr = entry.value;
+          final isSelected = _selectedAmenities.contains(attr.id);
 
           return GestureDetector(
-            onTap: () => _toggleAmenity(amenity),
+            onTap: () => _toggleAmenity(attr.id),
             behavior: HitTestBehavior.opaque,
             child: Padding(
               padding: EdgeInsets.only(
@@ -467,21 +461,20 @@ class _FilterViewState extends State<FilterView> {
                           color: Colors.white.withValues(alpha: 0.8),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(_getAmenityIcon(amenity),
+                        child: const Icon(Icons.check_circle_outline,
                             size: 20, color: _textDark), 
                       ),
                       const SizedBox(width: 16),
                       Text(
-                        amenity,
+                        attr.label,
                         style: GoogleFonts.poppins(
-                          fontSize: 16, // slightly larger
+                          fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: _textDark,
                         ),
                       ),
                     ],
                   ),
-                  // Modern Circular Checkbox (Grey/Black accent)
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     width: 26,
@@ -505,9 +498,9 @@ class _FilterViewState extends State<FilterView> {
             ),
           );
         }),
-        if (_amenities.length > 3)
+        if (allAmenities.length > 4)
           Padding(
-            padding: const EdgeInsets.only(top: 32), // plenty of whitespace before button
+            padding: const EdgeInsets.only(top: 32),
             child: GestureDetector(
               onTap: () => setState(() => _showAllAmenities = !_showAllAmenities),
               child: Row(

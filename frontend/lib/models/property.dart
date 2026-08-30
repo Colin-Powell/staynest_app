@@ -107,6 +107,7 @@ class Property {
   final List<String> images;
   final PropertyFeatures features;
   final List<String> amenities;
+  final List<String> customFeatures;
   final String description;
   final Agent agent;
   final DateTime? viewedAt;
@@ -124,7 +125,8 @@ class Property {
     required this.image,
     List<String>? images,
     required this.features,
-    required this.amenities,
+    this.amenities = const [],
+    this.customFeatures = const [],
     required this.description,
     required this.agent,
     this.viewedAt,

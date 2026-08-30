@@ -1,27 +1,31 @@
 ﻿import 'dart:async';
-
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
-
-
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-
 import 'package:path/path.dart' as path;
 
 // Your project imports
 import 'package:property_app/repository/http_json_client.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
-import 'package:property_app/theme.dart';
 import 'package:property_app/services/image_upload_service.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/geocoding.dart';
 import 'package:property_app/services/property_service.dart';
 import 'package:property_app/services/uploads.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/models/property_taxonomy.dart';
+
+// ─── Landlord Design System Constants ─────────────────────────────────────────
+const _bg = Color(0xFFFAFAFA);
+const _dark = Color(0xFF111827);
+const _grey = Color(0xFF9CA3AF);
+const _greyLight = Color(0xFFF3F4F6);
+const _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
+const _surface = Colors.white;
 
 class PickedPhoto {
   final File file;
@@ -77,9 +81,6 @@ class _AddListingFlowState extends State<AddListingFlow> {
   String? _selectedCountry = 'Kenya';
   String? _selectedCity = 'Nairobi';
   final _neighborhood = TextEditingController();
-  final _street = TextEditingController();
-  final _building = TextEditingController();
-  final _zip = TextEditingController();
   final _locationSearch = TextEditingController();
   Timer? _locationSearchTimer;
   int _locationSearchRequest = 0;
@@ -88,49 +89,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
   double? _selectedLongitude;
   String? _selectedLocationLabel;
 
-  final List<String> _countries = [
-    'Kenya',
-    'Uganda',
-    'Tanzania',
-    'Rwanda',
-    'South Africa'
-  ];
-  final Map<String, List<String>> _citiesByCountry = {
-    'Kenya': ['Nairobi', 'Mombasa', 'Kilifi', 'Nakuru', 'Kisumu', 'Eldoret'],
-    'Uganda': ['Kampala', 'Entebbe', 'Jinja', 'Mbarara'],
-    'Tanzania': ['Dar es Salaam', 'Dodoma', 'Arusha', 'Zanzibar City'],
-    'Rwanda': ['Kigali', 'Musanze', 'Gisenyi'],
-    'South Africa': ['Cape Town', 'Johannesburg', 'Durban', 'Pretoria'],
-  };
-
   // --- Step 3: Amenities ---
-  final Map<String, bool> _amenities = {};
-
-  final Map<String, IconData> _essentialAmenities = {
-    'Wifi': PhosphorIcons.wifiHigh(),
-    'Water included': PhosphorIcons.drop(),
-    'Electricity included': PhosphorIcons.lightning(),
-    'Heating': PhosphorIcons.thermometer(),
-    'Air Conditioning': PhosphorIcons.wind(),
-    'Hot Water': PhosphorIcons.bathtub(),
-  };
-
-  final Map<String, IconData> _additionalAmenities = {
-    'Parking': PhosphorIcons.carProfile(),
-    'Security': PhosphorIcons.shieldCheck(),
-    'CCTV': PhosphorIcons.securityCamera(),
-    'Furnished': PhosphorIcons.armchair(),
-    'Gym': PhosphorIcons.barbell(),
-    'Swimming Pool': PhosphorIcons.swimmingPool(),
-    'Elevator': PhosphorIcons.elevator(),
-    'Wheelchair Accessible': PhosphorIcons.wheelchair(),
-    'Pet Friendly': PhosphorIcons.pawPrint(),
-    'Balcony / Patio': PhosphorIcons.treePalm(),
-    'Garden': PhosphorIcons.plant(),
-    'Backup Generator': PhosphorIcons.batteryCharging(),
-    'Laundry / Washer': PhosphorIcons.washingMachine(),
-    'Dishwasher': PhosphorIcons.archive(),
-  };
+  final Set<String> _selectedAttributes = {};
+  final List<String> _customFeatures = [];
+  final TextEditingController _customFeatureController = TextEditingController();
 
   // --- Step 4: Photos ---
   final List<PickedPhoto> _pickedPhotos = [];
@@ -144,22 +106,14 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
   String? _draftId;
 
-  // FIX: build a repo with a fresh token every time we need it
-  RemoteDatabaseRepository _buildRepo() {
-    return RemoteDatabaseRepository(
-      apiClient: HttpJsonClient(),
-    );
+RemoteDatabaseRepository _buildRepo() {
+    return RemoteDatabaseRepository(apiClient: HttpJsonClient());
   }
 
   @override
   void initState() {
     super.initState();
-    for (var key in [
-      ..._essentialAmenities.keys,
-      ..._additionalAmenities.keys,
-    ]) {
-      _amenities[key] = false;
-    }
+
     _loadDraft();
   }
 
@@ -169,9 +123,6 @@ class _AddListingFlowState extends State<AddListingFlow> {
     _title.dispose();
     _description.dispose();
     _neighborhood.dispose();
-    _street.dispose();
-    _building.dispose();
-    _zip.dispose();
     _locationSearch.dispose();
     _locationSearchTimer?.cancel();
     _rentPrice.dispose();
@@ -181,7 +132,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   }
 
   // ==========================================
-  // DRAFT & SUBMISSION LOGIC
+  // DRAFT & SUBMISSION LOGIC (Omitted unchanged logic for brevity)
   // ==========================================
   Future<void> _loadDraft() async {
     final existing = widget.property;
@@ -207,14 +158,20 @@ class _AddListingFlowState extends State<AddListingFlow> {
           }
         }
       } else if (existing['image_url'] != null) {
-        _pickedPhotos.add(PickedPhoto(File(''),
-            url: existing['image_url'].toString(), progress: 1.0));
+        _pickedPhotos.add(PickedPhoto(File(''), url: existing['image_url'].toString(), progress: 1.0));
       }
       final existingAmenities = existing['amenities'];
       if (existingAmenities is List) {
         for (final amenity in existingAmenities) {
-          final name = amenity.toString();
-          if (_amenities.containsKey(name)) _amenities[name] = true;
+          final str = amenity.toString();
+          if (str.startsWith('custom:')) {
+            var _customFeatures;
+            _customFeatures.add(str.substring(7));
+          } else {
+            final mapped = PropertyTaxonomy.mapLegacyLabel(str);
+            final attr = PropertyTaxonomy.getAttributeById(mapped);
+            if (attr != null) _selectedAttributes.add(attr.id);
+          }
         }
       }
       if (mounted) setState(() => _loadingDraft = false);
@@ -238,7 +195,14 @@ class _AddListingFlowState extends State<AddListingFlow> {
         _rentPrice.text = data['price']?.toString() ?? '';
         if (data['amenities'] is List) {
           for (final a in (data['amenities'] as List)) {
-            _amenities[a.toString()] = true;
+            final str = a.toString();
+            if (str.startsWith('custom:')) {
+              _customFeatures.add(str.substring(7));
+            } else {
+              final mapped = PropertyTaxonomy.mapLegacyLabel(str);
+              final attr = PropertyTaxonomy.getAttributeById(mapped);
+              if (attr != null) _selectedAttributes.add(attr.id);
+            }
           }
         }
       }
@@ -261,18 +225,15 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'lat': _selectedLatitude,
         'lng': _selectedLongitude,
         'price': _rentPrice.text.trim(),
-        'amenities': _amenities.entries.where((e) => e.value).map((e) => e.key).toList(),
+        'amenities': [..._selectedAttributes, ..._customFeatures.map((c) => 'custom:$c')],
       };
       final data = await PropertyService.instance.saveDraft(payload, draftId: _draftId);
-      if (data['id'] != null) {
-        _draftId = data['id'].toString();
-      }
+      if (data['id'] != null) _draftId = data['id'].toString();
     } catch(e) {
       debugPrint('Failed to save draft $e');
     }
     if (mounted && showConfirmation) {
-      ModalUtils.showSuccess(context, "Draft Saved!",
-          "Your progress has been safely tucked away. You can resume anytime.");
+      ModalUtils.showSuccess(context, "Draft Saved!", "Your progress has been safely tucked away. You can resume anytime.");
     }
   }
 
@@ -289,9 +250,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
     }
 
     _locationSearchTimer = Timer(const Duration(milliseconds: 450), () async {
-      final suggestions = await searchAddressSuggestions(
-        '${value.trim()}, ${_selectedCity ?? ''}, ${_selectedCountry ?? ''}',
-      );
+      final suggestions = await searchAddressSuggestions('${value.trim()}, ${_selectedCity ?? ''}, ${_selectedCountry ?? ''}');
       if (!mounted || request != _locationSearchRequest) return;
       setState(() => _locationSuggestions = suggestions);
     });
@@ -300,9 +259,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   void _selectLocation(GeocodingSuggestion suggestion) {
     setState(() {
       _locationSearch.text = suggestion.displayName;
-      _locationSearch.selection = TextSelection.collapsed(
-        offset: _locationSearch.text.length,
-      );
+      _locationSearch.selection = TextSelection.collapsed(offset: _locationSearch.text.length);
       _selectedLatitude = suggestion.lat;
       _selectedLongitude = suggestion.lng;
       _selectedLocationLabel = suggestion.displayName.trim();
@@ -319,12 +276,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
     try {
       final compressed = await ImageUploadService.compressImageFile(photo.file);
-      final task =
-          UploadsService.uploadFileWithProgress(compressed, (progress) {
+      final task = UploadsService.uploadFileWithProgress(compressed, (progress) {
         if (!mounted) return;
-        setState(() {
-          photo.progress = progress;
-        });
+        setState(() => photo.progress = progress);
       });
       final url = await task.future;
       if (mounted) {
@@ -348,71 +302,17 @@ class _AddListingFlowState extends State<AddListingFlow> {
     if (AppSession.currentUserVerified != true) {
       await _saveDraft(showConfirmation: false);
       if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.white,
-          shape: const RoundedRectangleBorder(
-              borderRadius: AppRadius.dialogBorderRadius),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(PhosphorIcons.lockKey(PhosphorIconsStyle.fill),
-                  color: StayNestColors.warning, size: 64),
-              const SizedBox(height: 16),
-              Text('Verification Required',
-                  style: GoogleFonts.poppins(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.gray900)),
-              const SizedBox(height: 8),
-              Text(
-                  'To keep our community safe, we require all landlords to be verified before their listings go live. We\'ve saved your draft!',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                      color: AppColors.gray500, height: 1.5)),
-              const SizedBox(height: 24),
-            ],
-          ),
-          actionsAlignment: MainAxisAlignment.spaceEvenly,
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text('Edit Draft',
-                    style: GoogleFonts.poppins(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600))),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  shape: const RoundedRectangleBorder(
-                      borderRadius: AppRadius.buttonBorderRadius)),
-              onPressed: () {
-                Navigator.pop(ctx);
-                Navigator.pushNamed(context, '/verification_center');
-              },
-              child: Text('Verify Now',
-                  style: GoogleFonts.poppins(
-                      color: AppColors.white, fontWeight: FontWeight.w600)),
-            ),
-          ],
-        ),
-      );
+      _showVerificationDialog();
       return;
     }
 
     if (_pickedPhotos.isEmpty) {
-      ModalUtils.showError(context, "Photos Required",
-          "Please add at least one photo of your amazing property.");
+      ModalUtils.showError(context, "Photos Required", "Please add at least one photo of your amazing property.");
       return;
     }
 
-    // Guard: must be logged in
-    final token = AppSession.apiToken;
-    if (token == null) {
-      ModalUtils.showError(context, "Session Expired",
-          "Please log out and log back in, then try again.");
+    if (AppSession.apiToken == null) {
+      ModalUtils.showError(context, "Session Expired", "Please log out and log back in, then try again.");
       return;
     }
 
@@ -423,36 +323,21 @@ class _AddListingFlowState extends State<AddListingFlow> {
     });
 
     try {
-      // 1) Verify all photos are uploaded
-      if (_pickedPhotos.any((p) => p.isUploading)) {
-        throw Exception('Please wait for all photos to finish uploading.');
-      }
-      final failedUploads =
-          _pickedPhotos.where((p) => p.error != null).toList();
-      if (failedUploads.isNotEmpty) {
-        throw Exception(
-            'Some photos failed to upload. Please remove them or try again.');
-      }
-
+      if (_pickedPhotos.any((p) => p.isUploading)) throw Exception('Please wait for all photos to finish uploading.');
+      if (_pickedPhotos.any((p) => p.error != null)) throw Exception('Some photos failed to upload. Please remove them or try again.');
       final uploadedUrls = _pickedPhotos.map((p) => p.url!).toList();
       if (uploadedUrls.isEmpty) throw Exception('No photos uploaded');
 
-      // 2) Build address from the explicitly selected location.
       final resolvedAddress = _locationSearch.text.trim();
       final addressParts = resolvedAddress.split(',');
       final derivedCity = addressParts.length > 1 ? addressParts[addressParts.length - 2].trim() : resolvedAddress;
 
-      final selectedLatitude = _selectedLatitude;
-      final selectedLongitude = _selectedLongitude;
-      if (selectedLatitude == null || selectedLongitude == null) {
-        throw Exception(
-            'Select a location from the address suggestions before publishing.');
+      if (_selectedLatitude == null || _selectedLongitude == null) {
+        throw Exception('Select a location from the address suggestions before publishing.');
       }
-      final selectedAmenities =
-          _amenities.entries.where((e) => e.value).map((e) => e.key).toList();
+      final selectedAmenities = [..._selectedAttributes, ..._customFeatures.map((c) => 'custom:$c')];
       final estimatedArea = (_bedrooms * 35).clamp(30, 500);
 
-      // 3) Create property � use fresh repo with current token
       final repo = _buildRepo();
       final Map<String, dynamic> propertyPayload = {
         'title': _title.text.trim(),
@@ -467,117 +352,111 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'image_url': uploadedUrls.first,
         'images': uploadedUrls,
         'amenities': selectedAmenities,
-        'lat': selectedLatitude,
-        'lng': selectedLongitude,
+        'lat': _selectedLatitude,
+        'lng': _selectedLongitude,
       };
+
       final existingPropertyId = widget.property?['id']?.toString();
       if (existingPropertyId != null && existingPropertyId.isNotEmpty) {
-        await repo.updatePropertyFromListing(
-          propertyId: existingPropertyId,
-          listingPayload: propertyPayload,
-        );
+        await repo.updatePropertyFromListing(propertyId: existingPropertyId, listingPayload: propertyPayload);
       } else {
         await repo.createPropertyFromListing(listingPayload: propertyPayload);
       }
 
-      // 4) Clean up Drafts
-
       if (_draftId != null) {
-          try {
-            await PropertyService.instance.deleteDraft(_draftId!);
-            _draftId = null;
-          } catch (e) {
-            debugPrint('Failed to delete draft: $e');
-          }
-        }
+        try {
+          await PropertyService.instance.deleteDraft(_draftId!);
+          _draftId = null;
+        } catch (_) {}
+      }
 
       if (!mounted) return;
       ModalUtils.showSuccess(
         context,
         widget.isEditing ? "Listing Updated" : "Hooray! Listing Published",
-        widget.isEditing
-            ? "Your property details were updated successfully."
-            : "Your property is now live and ready to be discovered by amazing tenants.",
+        widget.isEditing ? "Your property details were updated successfully." : "Your property is now live and ready to be discovered.",
         onOk: () {
           Navigator.pop(context);
           Navigator.pop(context);
         },
       );
-    } catch (e, stackTrace) {
-      debugPrint('Property publish error: $e');
-      debugPrint('Stack trace: $stackTrace');
-      if (mounted) {
-        final message = ApiResult.mapError(e);
-        ModalUtils.showError(
-          context,
-          "Oops! We hit a snag",
-          message,
-        );
-      }
+    } catch (e) {
+      if (mounted) ModalUtils.showError(context, "Oops! We hit a snag", ApiResult.mapError(e));
     } finally {
-      if (mounted) {
-        setState(() {
-          _submitting = false;
-          _isUploadingImages = false;
-          _uploadProgress = 0.0;
-        });
-      }
+      if (mounted) setState(() { _submitting = false; _isUploadingImages = false; _uploadProgress = 0.0; });
     }
+  }
+
+  void _showVerificationDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(PhosphorIconsFill.lockKey, color: Color(0xFFF59E0B), size: 64),
+            const SizedBox(height: 16),
+            Text('Verification Required', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
+            const SizedBox(height: 8),
+            Text('To keep our community safe, we require all landlords to be verified before their listings go live. We\'ve saved your draft!',
+                textAlign: TextAlign.center, style: GoogleFonts.poppins(color: _grey, height: 1.5, fontSize: 14)),
+            const SizedBox(height: 24),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Edit Draft', style: GoogleFonts.poppins(color: _grey, fontWeight: FontWeight.w600))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: _green,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                elevation: 0),
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pushNamed(context, '/verification_center');
+            },
+            child: Text('Verify Now', style: GoogleFonts.poppins(color: _surface, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
   }
 
   // ==========================================
   // NAVIGATION
   // ==========================================
   void _nextStep() {
-    if (_currentStep == 1 && !(_step1Key.currentState?.validate() ?? false)) {
-      return;
-    }
-    if (_currentStep == 2 && !(_step2Key.currentState?.validate() ?? false)) {
-      return;
-    }
+    if (_currentStep == 1 && !(_step1Key.currentState?.validate() ?? false)) return;
+    if (_currentStep == 2 && !(_step2Key.currentState?.validate() ?? false)) return;
     if (_currentStep == 4 && _pickedPhotos.isEmpty) {
-      ModalUtils.showError(context, "Photos Required",
-          "Let's show off your property! Please upload at least one photo to continue.");
+      ModalUtils.showError(context, "Photos Required", "Let's show off your property! Please upload at least one photo.");
       return;
     }
-    if (_currentStep == 5 && !(_step5Key.currentState?.validate() ?? false)) {
-      return;
-    }
+    if (_currentStep == 5 && !(_step5Key.currentState?.validate() ?? false)) return;
 
     if (_currentStep < _totalSteps) {
       setState(() => _currentStep++);
-      _pageController.nextPage(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic);
+      _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
     }
   }
 
   void _previousStep() {
     if (_currentStep > 1) {
       setState(() => _currentStep--);
-      _pageController.previousPage(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic);
+      _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
     } else {
       Navigator.pop(context);
     }
   }
 
   String _formatDate(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
@@ -589,10 +468,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
       lastDate: DateTime(2030),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.light(
-            primary: AppColors.primary,
+          colorScheme: const ColorScheme.light(
+            primary: _green,
             onPrimary: Colors.white,
-            onSurface: AppColors.gray900,
+            onSurface: _dark,
           ),
         ),
         child: child!,
@@ -607,27 +486,24 @@ class _AddListingFlowState extends State<AddListingFlow> {
   @override
   Widget build(BuildContext context) {
     if (_loadingDraft) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(backgroundColor: _bg, body: Center(child: CircularProgressIndicator(color: _green)));
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: _bg,
         elevation: 0,
+        scrolledUnderElevation: 0,
         leading: GestureDetector(
           onTap: _previousStep,
           behavior: HitTestBehavior.opaque,
-          child:
-              const Icon(Icons.arrow_back, size: 28, color: AppColors.gray900),
+          child: const Icon(PhosphorIconsRegular.caretLeft, size: 24, color: _dark),
         ),
         title: _currentStep < _totalSteps
-            ? Text('Add New Listing',
-                style: GoogleFonts.poppins(
-                    color: AppColors.gray900,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 24))
+            ? Text('Add New Listing', style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w700, fontSize: 20))
             : null,
+        centerTitle: true,
       ),
       body: SafeArea(
         child: Column(
@@ -656,28 +532,33 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
   Widget _buildStepIndicator() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.xl, 8, AppSpacing.xl, 24),
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: List.generate(_totalSteps - 1, (index) {
           final stepNum = index + 1;
           final isActive = stepNum == _currentStep;
+          final isPast = stepNum < _currentStep;
+          
           return Container(
-            width: 36,
-            height: 36,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isActive ? AppColors.primary : AppColors.white,
-              border: isActive
-                  ? null
-                  : Border.all(color: StayNestColors.outlineLight),
+              color: isActive || isPast ? _green : _surface,
+              border: isActive || isPast ? null : Border.all(color: _grey.withOpacity(0.3)),
             ),
             child: Center(
-              child: Text(stepNum.toString(),
-                  style: GoogleFonts.poppins(
-                      color: isActive ? AppColors.white : AppColors.gray900,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14)),
+              child: isPast 
+                ? const Icon(PhosphorIconsBold.check, color: _surface, size: 16)
+                : Text(
+                    stepNum.toString(),
+                    style: GoogleFonts.poppins(
+                      color: isActive ? _surface : _grey,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13
+                    )
+                  ),
             ),
           );
         }),
@@ -690,23 +571,16 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // ==========================================
   Widget _buildStep1BasicInfo() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Form(
         key: _step1Key,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Basic Information',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(color: AppColors.gray900)),
+            Text('Basic Information', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
             const SizedBox(height: 24),
-            Text('Property Type',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall
-                    ?.copyWith(color: AppColors.gray900)),
+            _buildLabel('Property Type'),
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
@@ -724,38 +598,20 @@ class _AddListingFlowState extends State<AddListingFlow> {
             const SizedBox(height: 24),
             Row(
               children: [
-                Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      _buildLabel('Bedrooms'),
-                      _buildCounter(
-                          () => setState(() {
-                                if (_bedrooms > 0) _bedrooms--;
-                              }),
-                          () => setState(() => _bedrooms++),
-                          _bedrooms),
-                    ])),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _buildLabel('Bedrooms'),
+                  _buildCounter(() => setState(() { if (_bedrooms > 0) _bedrooms--; }), () => setState(() => _bedrooms++), _bedrooms),
+                ])),
                 const SizedBox(width: 16),
-                Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      _buildLabel('Bathrooms'),
-                      _buildCounter(
-                          () => setState(() {
-                                if (_bathrooms > 0) _bathrooms--;
-                              }),
-                          () => setState(() => _bathrooms++),
-                          _bathrooms),
-                    ])),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _buildLabel('Bathrooms'),
+                  _buildCounter(() => setState(() { if (_bathrooms > 0) _bathrooms--; }), () => setState(() => _bathrooms++), _bathrooms),
+                ])),
               ],
             ),
             const SizedBox(height: 24),
             _buildLabel('Description'),
-            _buildTextField(_description,
-                'A modern and spacious 2-bedroom apartment\nin a secure compound and amenities',
-                maxLines: 5),
+            _buildTextField(_description, 'A modern and spacious 2-bedroom apartment\nin a secure compound and amenities', maxLines: 5),
             const SizedBox(height: 48),
             _buildNextButton('Next: Location', _nextStep),
             const SizedBox(height: 24),
@@ -787,141 +643,104 @@ class _AddListingFlowState extends State<AddListingFlow> {
       ),
     );
   }
+
   Widget _buildStep2Location() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Form(
         key: _step2Key,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Location & Address',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(color: AppColors.gray900)),
+            Text('Location & Address', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
             const SizedBox(height: 32),
             _buildLabel('Search exact location'),
             TextFormField(
               controller: _locationSearch,
               onChanged: _searchLocations,
               textInputAction: TextInputAction.search,
+              style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w500, fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Start typing an address or landmark',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _selectedLatitude != null
-                    ? const Icon(Icons.check_circle, color: Colors.green)
-                    : null,
+                hintStyle: GoogleFonts.poppins(color: _grey, fontWeight: FontWeight.w400, fontSize: 14),
+                prefixIcon: const Icon(PhosphorIconsRegular.magnifyingGlass, color: _grey, size: 20),
+                suffixIcon: _selectedLatitude != null ? const Icon(PhosphorIconsFill.checkCircle, color: _green, size: 20) : null,
                 filled: true,
-                fillColor: AppColors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
+                fillColor: _surface,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _green)),
               ),
             ),
             if (_locationSuggestions.isNotEmpty)
               Container(
-                margin: const EdgeInsets.only(top: 6),
+                margin: const EdgeInsets.only(top: 8),
                 decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black12, blurRadius: 8),
-                  ],
+                  color: _surface,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
                 ),
                 child: Column(
                   children: _locationSuggestions.map((suggestion) {
                     return ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.location_on_outlined),
-                      title: Text(
-                        suggestion.displayName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      leading: const Icon(PhosphorIconsRegular.mapPin, color: _grey, size: 20),
+                      title: Text(suggestion.displayName, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontSize: 14, color: _dark)),
                       onTap: () => _selectLocation(suggestion),
                     );
                   }).toList(),
                 ),
               ),
-            if (_locationSearch.text.isNotEmpty &&
-                _selectedLatitude == null &&
-                _locationSuggestions.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'Choose a suggested location to place the property accurately.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.gray500,
-                      ),
-                ),
-              ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             GestureDetector(
               onTap: _openLocationPickerSheet,
               child: Row(
                 children: [
-                  Icon(Icons.my_location_rounded, color: AppColors.primary, size: 18),
+                  const Icon(PhosphorIconsRegular.crosshair, color: _green, size: 20),
                   const SizedBox(width: 8),
-                  Text('Use my current location', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                  Text('Use my current location', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: _green)),
                 ],
               ),
             ),
-            
             const SizedBox(height: 48),
-
-            Card(
-              elevation: 0,
-              margin: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: Color(0xFFE5E7EB)),
+            Container(
+              decoration: BoxDecoration(
+                color: _surface,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _grey.withOpacity(0.2)),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
               ),
-              clipBehavior: Clip.antiAlias,
-              child: IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(
-                      width: 100,
-                      child: Image.asset(
-                        'assets/images/mapsheet.webp',
-                        fit: BoxFit.cover,
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
+                    child: Image.asset('assets/images/mapsheet.webp', width: 100, height: 120, fit: BoxFit.cover),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(PhosphorIconsRegular.info, color: _green, size: 18),
+                              const SizedBox(width: 8),
+                              Text('Location Setup', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: _dark, fontSize: 14)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text('Search for the exact location or use your current location. The address will auto-fill.',
+                              style: GoogleFonts.poppins(fontSize: 12, color: _grey, height: 1.4)),
+                        ],
                       ),
                     ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.info_outline, color: AppColors.primary, size: 20),
-                                const SizedBox(width: 8),
-                                Text('Location Setup', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.gray900)),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Search for the exact location or use your current location. The address will auto-fill.',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: AppColors.gray500,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 48),
             _buildNextButton('Next: Amenities', _nextStep),
             const SizedBox(height: 48),
           ],
@@ -930,41 +749,121 @@ class _AddListingFlowState extends State<AddListingFlow> {
     );
   }
 
-  // ==========================================  // STEP 3: Amenities
+  // ==========================================
+  // STEP 3: Amenities
   // ==========================================
   Widget _buildStep3Amenities() {
+    final popular = PropertyTaxonomy.getPopularAttributes(propertyType: _propertyType);
+    final allAttrs = PropertyTaxonomy.getAttributesForPropertyType(_propertyType);
+    final categorized = <String, List<PropertyAttribute>>{};
+    
+    for (var attr in allAttrs) {
+      if (!categorized.containsKey(attr.category)) {
+        categorized[attr.category] = [];
+      }
+      categorized[attr.category]!.add(attr);
+    }
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Amenities',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(color: AppColors.gray900)),
+          Text('Property Features',
+              style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
           const SizedBox(height: 4),
-          Text('Select all that applies',
-              style:
-                  GoogleFonts.poppins(fontSize: 14, color: AppColors.gray400)),
+          Text('Select the features, utilities and services available at this property.',
+              style: GoogleFonts.poppins(fontSize: 14, color: _grey)),
           const SizedBox(height: 32),
-          Text('Essential',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(color: AppColors.gray900)),
-          const SizedBox(height: 20),
-          ..._essentialAmenities.entries
-              .map((e) => _buildCheckbox(e.key, e.value)),
-          const SizedBox(height: 24),
-          Text('Additional',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(color: AppColors.gray900)),
-          const SizedBox(height: 20),
-          ..._additionalAmenities.entries
-              .map((e) => _buildCheckbox(e.key, e.value)),
+
+          if (popular.isNotEmpty) ...[
+            Text('Popular for students',
+                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: _dark)),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 12,
+              children: popular.map((p) => _buildFeatureChip(p)).toList(),
+            ),
+            const SizedBox(height: 32),
+            Container(height: 1, color: _grey.withValues(alpha: 0.2)),
+            const SizedBox(height: 24),
+          ],
+
+          ...PropertyTaxonomy.categories.map((cat) {
+            final catAttrs = categorized[cat.id] ?? [];
+            if (catAttrs.isEmpty) return const SizedBox.shrink();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(cat.label,
+                    style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: _dark)),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 12,
+                  children: catAttrs.map((p) => _buildFeatureChip(p)).toList(),
+                ),
+                const SizedBox(height: 32),
+              ],
+            );
+          }),
+          
+          Text('Custom Features',
+              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: _dark)),
+          const SizedBox(height: 16),
+          ..._customFeatures.map((c) => Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle, color: _green, size: 20),
+                const SizedBox(width: 8),
+                Expanded(child: Text(c, style: GoogleFonts.poppins(fontSize: 14))),
+                IconButton(
+                  icon: Icon(Icons.close, size: 20, color: _grey),
+                  onPressed: () => setState(() => _customFeatures.remove(c)),
+                ),
+              ],
+            ),
+          )),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _customFeatureController,
+                  decoration: InputDecoration(
+                    hintText: 'Add another feature...',
+                    hintStyle: GoogleFonts.poppins(color: _grey, fontSize: 14),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _grey.withValues(alpha: 0.3))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _grey.withValues(alpha: 0.3))),
+                  ),
+                  onSubmitted: (v) {
+                    if (v.trim().isNotEmpty) {
+                      setState(() {
+                        _customFeatures.add(v.trim());
+                        _customFeatureController.clear();
+                      });
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: Icon(Icons.add_circle, color: _green, size: 36),
+                onPressed: () {
+                  if (_customFeatureController.text.trim().isNotEmpty) {
+                    setState(() {
+                      _customFeatures.add(_customFeatureController.text.trim());
+                      _customFeatureController.clear();
+                    });
+                  }
+                },
+              )
+            ],
+          ),
+
           const SizedBox(height: 48),
           _buildNextButton('Next: Photos', _nextStep),
           const SizedBox(height: 24),
@@ -973,42 +872,30 @@ class _AddListingFlowState extends State<AddListingFlow> {
     );
   }
 
-  Widget _buildCheckbox(String label, IconData icon) {
-    bool isChecked = _amenities[label] ?? false;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24.0),
-      child: GestureDetector(
-        onTap: () => setState(() => _amenities[label] = !isChecked),
-        child: Row(
-          children: [
-            Icon(icon, size: 24, color: AppColors.gray900),
-            const SizedBox(width: 16),
-            Expanded(
-                child: Text(label,
-                    style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        color: AppColors.gray900,
-                        fontWeight: FontWeight.w500))),
-            Container(
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                color: isChecked ? AppColors.green600 : AppColors.white,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                    color: isChecked
-                        ? AppColors.green600
-                        : StayNestColors.outlineLight,
-                    width: 1.5),
-              ),
-              child: isChecked
-                  ? Icon(PhosphorIcons.check(PhosphorIconsStyle.bold),
-                      size: 14, color: AppColors.white)
-                  : null,
-            )
-          ],
+  Widget _buildFeatureChip(PropertyAttribute attr) {
+    final isSelected = _selectedAttributes.contains(attr.id);
+    return FilterChip(
+      selected: isSelected,
+      label: Text(attr.label),
+      labelStyle: GoogleFonts.poppins(
+        fontSize: 13,
+        color: isSelected ? Colors.white : _dark,
+        fontWeight: isSelected ? FontWeight.w500 : FontWeight.w400,
+      ),
+      selectedColor: _green,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: isSelected ? _green : _grey.withValues(alpha: 0.3),
         ),
       ),
+      onSelected: (val) {
+        setState(() {
+          if (val) _selectedAttributes.add(attr.id);
+          else _selectedAttributes.remove(attr.id);
+        });
+      },
     );
   }
 
@@ -1017,35 +904,25 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // ==========================================
   Widget _buildStep4Photos() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Photos',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(color: AppColors.gray900)),
+          Text('Photos', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
           const SizedBox(height: 4),
-          Text('Upload high-quality photos of your property',
-              style:
-                  GoogleFonts.poppins(fontSize: 14, color: AppColors.gray400)),
+          Text('Upload high-quality photos of your property', style: GoogleFonts.poppins(fontSize: 14, color: _grey)),
           const SizedBox(height: 32),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 16, mainAxisSpacing: 16, childAspectRatio: 1),
             itemCount: _pickedPhotos.length + 1,
             itemBuilder: (context, index) {
               if (index == _pickedPhotos.length) {
                 return GestureDetector(
                   onTap: () async {
-                    final picked =
-                        await ImagePicker().pickMultiImage(imageQuality: 75);
+                    final picked = await ImagePicker().pickMultiImage(imageQuality: 75);
                     if (picked.isNotEmpty) {
                       for (final x in picked) {
                         final photo = PickedPhoto(File(x.path));
@@ -1056,20 +933,16 @@ class _AddListingFlowState extends State<AddListingFlow> {
                   },
                   child: Container(
                     decoration: BoxDecoration(
-                        color: AppColors.gray50,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: StayNestColors.outlineLight)),
+                      color: _surface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: _grey.withOpacity(0.3), style: BorderStyle.solid),
+                    ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(PhosphorIcons.plus(),
-                            size: 36, color: AppColors.primary),
+                        const Icon(PhosphorIconsRegular.plus, size: 32, color: _green),
                         const SizedBox(height: 12),
-                        Text('Add Photo',
-                            style: GoogleFonts.poppins(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16)),
+                        Text('Add Photo', style: GoogleFonts.poppins(color: _green, fontWeight: FontWeight.w600, fontSize: 14)),
                       ],
                     ),
                   ),
@@ -1080,46 +953,33 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 fit: StackFit.expand,
                 children: [
                   ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: photo.url != null
-                          ? buildPropertyImage(photo.url!, fit: BoxFit.cover)
-                          : Image.file(photo.file, fit: BoxFit.cover)),
+                    borderRadius: BorderRadius.circular(20),
+                    child: photo.url != null ? buildPropertyImage(photo.url!, fit: BoxFit.cover) : Image.file(photo.file, fit: BoxFit.cover),
+                  ),
                   if (photo.isUploading)
                     Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black45,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                      decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(20)),
                       child: Center(
                         child: CircularProgressIndicator(
                           value: photo.progress > 0 ? photo.progress : null,
-                          valueColor:
-                              const AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       ),
                     ),
                   if (photo.error != null)
                     Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black45,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.error,
-                            color: Colors.redAccent, size: 32),
-                      ),
+                      decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(20)),
+                      child: const Center(child: Icon(PhosphorIconsRegular.warningCircle, color: Colors.redAccent, size: 32)),
                     ),
                   Positioned(
                     top: 8,
                     right: 8,
                     child: GestureDetector(
-                      onTap: () =>
-                          setState(() => _pickedPhotos.removeAt(index)),
+                      onTap: () => setState(() => _pickedPhotos.removeAt(index)),
                       child: Container(
                         padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(
-                            color: Colors.white, shape: BoxShape.circle),
-                        child: const Icon(Icons.close, size: 16),
+                        decoration: BoxDecoration(color: _surface, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)]),
+                        child: const Icon(PhosphorIconsRegular.x, size: 14, color: _dark),
                       ),
                     ),
                   ),
@@ -1128,16 +988,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
             },
           ),
           const SizedBox(height: 32),
-          Text('Tips',
-              style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                  color: AppColors.gray900)),
-          const SizedBox(height: 16),
-          Text(
-              '• Include a picture of the living room, bedroom, and kitchen.\n• Shoot in landscape mode with good natural lighting.',
-              style: GoogleFonts.poppins(
-                  color: AppColors.gray500, height: 1.6, fontSize: 14)),
+          Text('Tips', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 16, color: _dark)),
+          const SizedBox(height: 12),
+          Text('• Include a picture of the living room, bedroom, and kitchen.\n• Shoot in landscape mode with good natural lighting.',
+              style: GoogleFonts.poppins(color: _grey, height: 1.6, fontSize: 14)),
           const SizedBox(height: 48),
           _buildNextButton('Next: Pricing & Details', _nextStep),
           const SizedBox(height: 24),
@@ -1151,17 +1005,14 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // ==========================================
   Widget _buildStep5Pricing() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Form(
         key: _step5Key,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Pricing and Details',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(color: AppColors.gray900)),
+            Text('Pricing and Details', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
             const SizedBox(height: 24),
             _buildLabel('Rent Price'),
             _buildPricingField(_rentPrice, '12000', '/month'),
@@ -1177,40 +1028,31 @@ class _AddListingFlowState extends State<AddListingFlow> {
               value: _minimumStay,
               items: ['1 Month', '3 Months', '6 Months', '1 Year'],
               hint: 'Select Minimum Stay',
-              onChanged: (val) =>
-                  setState(() => _minimumStay = val ?? '6 Months'),
+              onChanged: (val) => setState(() => _minimumStay = val ?? '6 Months'),
             ),
             const SizedBox(height: 20),
             _buildLabel('Available From'),
             GestureDetector(
               onTap: _selectDate,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 decoration: BoxDecoration(
-                  color: Colors.transparent,
-                  border: Border.all(color: StayNestColors.outlineLight),
+                  color: _surface,
+                  border: Border.all(color: _grey.withOpacity(0.2)),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      _availableFrom != null
-                          ? _formatDate(_availableFrom!)
-                          : 'Select Date',
+                      _availableFrom != null ? _formatDate(_availableFrom!) : 'Select Date',
                       style: GoogleFonts.poppins(
-                        color: _availableFrom != null
-                            ? AppColors.gray900
-                            : AppColors.gray400,
-                        fontWeight: _availableFrom != null
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        fontSize: 15,
+                        color: _availableFrom != null ? _dark : _grey,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
                       ),
                     ),
-                    Icon(PhosphorIcons.calendarBlank(),
-                        color: AppColors.gray400, size: 22),
+                    const Icon(PhosphorIconsRegular.calendarBlank, color: _grey, size: 20),
                   ],
                 ),
               ),
@@ -1224,42 +1066,30 @@ class _AddListingFlowState extends State<AddListingFlow> {
     );
   }
 
-  Widget _buildPricingField(
-      TextEditingController controller, String hint, String suffix) {
+  Widget _buildPricingField(TextEditingController controller, String hint, String suffix) {
     return TextFormField(
       controller: controller,
       keyboardType: TextInputType.number,
-      style: GoogleFonts.poppins(
-          color: AppColors.gray900, fontWeight: FontWeight.w600, fontSize: 16),
-      validator: (value) =>
-          (value == null || value.trim().isEmpty) ? 'Required' : null,
+      style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w500, fontSize: 14),
+      validator: (value) => (value == null || value.trim().isEmpty) ? 'Required' : null,
       decoration: InputDecoration(
         hintText: hint,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        hintStyle: GoogleFonts.poppins(
-            color: AppColors.gray400, fontWeight: FontWeight.w600),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        hintStyle: GoogleFonts.poppins(color: _grey, fontWeight: FontWeight.w400, fontSize: 14),
         suffixIcon: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Padding(
               padding: const EdgeInsets.only(right: 16.0),
-              child: Text(suffix,
-                  style: GoogleFonts.poppins(
-                      color: AppColors.gray400, fontSize: 14)),
+              child: Text(suffix, style: GoogleFonts.poppins(color: _grey, fontSize: 14)),
             ),
           ],
         ),
-        filled: false,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: StayNestColors.outlineLight)),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: StayNestColors.outlineLight)),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: AppColors.primary)),
+        filled: true,
+        fillColor: _surface,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _green)),
       ),
     );
   }
@@ -1268,92 +1098,61 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // STEP 6: Review & Publish
   // ==========================================
   Widget _buildStep6Review() {
-    List<MapEntry<String, bool>> selectedAmenities =
-        _amenities.entries.where((e) => e.value).toList();
+    final selectedAmenities = [
+        ..._selectedAttributes.map((id) => PropertyTaxonomy.getAttributeById(id)?.label ?? id),
+        ..._customFeatures
+    ];
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Review & Publish',
-              style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.gray900)),
+          Text('Review & Publish', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
           const SizedBox(height: 4),
-          Text('Review your listing details',
-              style:
-                  GoogleFonts.poppins(fontSize: 14, color: AppColors.gray400)),
+          Text('Review your listing details', style: GoogleFonts.poppins(fontSize: 14, color: _grey)),
           const SizedBox(height: 32),
 
           // Preview Card
           Container(
             height: 120,
             decoration: BoxDecoration(
-                color: AppColors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: StayNestColors.outlineLight)),
+              color: _surface,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+            ),
             child: Row(
               children: [
                 ClipRRect(
-                  borderRadius:
-                      const BorderRadius.horizontal(left: Radius.circular(24)),
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(24)),
                   child: _pickedPhotos.isNotEmpty
                       ? (_pickedPhotos.first.url != null
-                          ? buildPropertyImage(_pickedPhotos.first.url!,
-                              width: 120, height: 120, fit: BoxFit.cover)
-                          : Image.file(_pickedPhotos.first.file,
-                              width: 120, height: 120, fit: BoxFit.cover))
-                      : Container(
-                          width: 120,
-                          height: 120,
-                          color: StayNestColors.surfaceVariantLight,
-                          child: const Icon(Icons.image)),
+                          ? buildPropertyImage(_pickedPhotos.first.url!, width: 120, height: double.infinity, fit: BoxFit.cover)
+                          : Image.file(_pickedPhotos.first.file, width: 120, height: double.infinity, fit: BoxFit.cover))
+                      : Container(width: 120, color: _greyLight, child: const Icon(PhosphorIconsRegular.image, color: _grey)),
                 ),
-                const SizedBox(width: 16),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 16.0, horizontal: 8.0),
+                    padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(_title.text.isEmpty ? 'Untitled' : _title.text,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                                color: AppColors.gray900)),
+                        Text(_title.text.isEmpty ? 'Untitled' : _title.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 16, color: _dark)),
                         const SizedBox(height: 6),
                         Row(children: [
-                          Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill),
-                              size: 14, color: AppColors.gray400),
+                          const Icon(PhosphorIconsRegular.mapPin, size: 14, color: _grey),
                           const SizedBox(width: 4),
-                          Expanded(
-                              child: Text(
-                                  '${_neighborhood.text.isEmpty ? 'Area' : _neighborhood.text}, ${_selectedCity ?? 'City'}',
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.poppins(
-                                      color: AppColors.gray400, fontSize: 13))),
+                          Expanded(child: Text('${_neighborhood.text.isEmpty ? 'Area' : _neighborhood.text}, ${_selectedCity ?? 'City'}', overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: _grey, fontSize: 13))),
                         ]),
                         const Spacer(),
                         RichText(
-                            text: TextSpan(children: [
-                          TextSpan(
-                              text:
-                                  'Ksh. ${_rentPrice.text.isEmpty ? '0' : _rentPrice.text}',
-                              style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                  color: AppColors.gray900)),
-                          TextSpan(
-                              text: ' /month',
-                              style: GoogleFonts.poppins(
-                                  color: AppColors.gray400, fontSize: 14)),
-                        ]))
+                          text: TextSpan(children: [
+                            TextSpan(text: 'Ksh. ${_rentPrice.text.isEmpty ? '0' : _rentPrice.text}', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 14, color: _dark)),
+                            TextSpan(text: ' /mo', style: GoogleFonts.poppins(color: _grey, fontSize: 13)),
+                          ]),
+                        )
                       ],
                     ),
                   ),
@@ -1367,46 +1166,24 @@ class _AddListingFlowState extends State<AddListingFlow> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _surface,
                 borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 20),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  )
-                ],
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8))],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.cloud_upload_outlined,
-                          color: AppColors.primary, size: 28),
+                      const Icon(PhosphorIconsRegular.cloudArrowUp, color: _green, size: 28),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              _uploadProgress < 1.0
-                                  ? 'Optimizing & Uploading...'
-                                  : 'Upload Complete',
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                                color: AppColors.gray900,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${(_uploadProgress * 100).toStringAsFixed(0)}% • ${_imageUploadStatus.length} photos',
-                              style: GoogleFonts.poppins(
-                                color: AppColors.gray500,
-                                fontSize: 13,
-                              ),
-                            ),
+                            Text(_uploadProgress < 1.0 ? 'Optimizing & Uploading...' : 'Upload Complete', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 14, color: _dark)),
+                            const SizedBox(height: 2),
+                            Text('${(_uploadProgress * 100).toStringAsFixed(0)}% • ${_imageUploadStatus.length} photos', style: GoogleFonts.poppins(color: _grey, fontSize: 12)),
                           ],
                         ),
                       ),
@@ -1418,115 +1195,52 @@ class _AddListingFlowState extends State<AddListingFlow> {
                     child: LinearProgressIndicator(
                       value: _uploadProgress,
                       minHeight: 8,
-                      backgroundColor: const Color(0xFFE5E7EB),
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(AppColors.primary),
+                      backgroundColor: _greyLight,
+                      valueColor: const AlwaysStoppedAnimation<Color>(_green),
                     ),
                   ),
-                  if (_imageUploadStatus.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    ..._imageUploadStatus.map((item) {
-                      final percent = (item.progress * 100)
-                          .clamp(0, 100)
-                          .toStringAsFixed(0);
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                path.basename(item.file.path),
-                                style: GoogleFonts.poppins(
-                                    color: AppColors.gray600, fontSize: 13),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Text('$percent%',
-                                style: GoogleFonts.poppins(
-                                    color: AppColors.primary,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      );
-                    }),
-                  ]
                 ],
               ),
             ),
             const SizedBox(height: 32),
           ],
-          Text('Details',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(color: AppColors.gray900)),
-          const SizedBox(height: 24),
+          
+          Text('Details', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
+          const SizedBox(height: 20),
           _buildReviewRow('Property Type', _propertyType),
           _buildReviewRow('Bedrooms', _bedrooms.toString()),
           _buildReviewRow('Bathrooms', _bathrooms.toString()),
-          _buildReviewRow(
-              'Furnished', _amenities['Furnished'] == true ? 'Yes' : 'No'),
+          _buildReviewRow('Furnished', _selectedAttributes.contains('furnished') ? 'Yes' : 'No'),
 
-          const Divider(color: StayNestColors.outlineLight, height: 40),
+          Divider(color: _grey.withOpacity(0.2), height: 40),
 
-          Text('Pricing',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(color: AppColors.gray900)),
-          const SizedBox(height: 24),
+          Text('Pricing', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
+          const SizedBox(height: 20),
           _buildReviewRow('Rent Price', 'Ksh. ${_rentPrice.text} /month'),
-          _buildReviewRow(
-              'Service Charges', 'Ksh. ${_serviceCharges.text} /month'),
+          _buildReviewRow('Service Charges', 'Ksh. ${_serviceCharges.text} /month'),
           _buildReviewRow('Security Deposit', 'Ksh. ${_securityDeposit.text}'),
           _buildReviewRow('Minimum Stay', _minimumStay),
-          _buildReviewRow(
-              'Available From',
-              _availableFrom != null
-                  ? _formatDate(_availableFrom!)
-                  : 'Immediate'),
+          _buildReviewRow('Available From', _availableFrom != null ? _formatDate(_availableFrom!) : 'Immediate'),
 
-          const Divider(color: StayNestColors.outlineLight, height: 40),
+          Divider(color: _grey.withOpacity(0.2), height: 40),
 
-          Text('Amenities',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(color: AppColors.gray900)),
-          const SizedBox(height: 24),
+          Text('Amenities', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
+          const SizedBox(height: 20),
           Wrap(
             spacing: 10,
             runSpacing: 12,
-            children: selectedAmenities.map((e) {
-              IconData icon = _essentialAmenities[e.key] ??
-                  _additionalAmenities[e.key] ??
-                  PhosphorIcons.check();
-              return _buildAmenityPill(e.key, icon);
-            }).toList()
-              ..addAll([
-                if (selectedAmenities.isEmpty)
-                  Text('No amenities selected.',
-                      style: GoogleFonts.poppins(
-                          color: AppColors.gray400,
-                          fontStyle: FontStyle.italic))
-              ]),
+            children: selectedAmenities.map((label) {
+              return _buildAmenityPill(label, PhosphorIconsRegular.check);
+            }).toList()..addAll([
+              if (selectedAmenities.isEmpty)
+                Text('No features selected.', style: GoogleFonts.poppins(color: _grey, fontStyle: FontStyle.italic, fontSize: 14))
+            ]),
           ),
 
           const SizedBox(height: 32),
-          Text('Description',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(color: AppColors.gray900)),
+          Text('Description', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
           const SizedBox(height: 16),
-          Text(
-              _description.text.isEmpty
-                  ? 'No description provided.'
-                  : _description.text,
-              style: GoogleFonts.poppins(
-                  color: AppColors.gray500, height: 1.6, fontSize: 14)),
+          Text(_description.text.isEmpty ? 'No description provided.' : _description.text, style: GoogleFonts.poppins(color: _grey, height: 1.6, fontSize: 14)),
 
           const SizedBox(height: 48),
           Row(
@@ -1535,15 +1249,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 child: OutlinedButton(
                   onPressed: () => _saveDraft(showConfirmation: true),
                   style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: BorderSide(color: AppColors.primary, width: 1.5),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14))),
-                  child: Text('Save Draft',
-                      style: GoogleFonts.poppins(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16)),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: const BorderSide(color: _green, width: 1.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                  ),
+                  child: Text('Save Draft', style: GoogleFonts.poppins(color: _green, fontWeight: FontWeight.w600, fontSize: 14)),
                 ),
               ),
               const SizedBox(width: 16),
@@ -1551,22 +1261,14 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 child: ElevatedButton(
                   onPressed: _submitting ? null : _publishListing,
                   style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                      elevation: 0),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: _green,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                    elevation: 0,
+                  ),
                   child: _submitting
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                              color: AppColors.white, strokeWidth: 2))
-                      : Text('Publish',
-                          style: GoogleFonts.poppins(
-                              color: AppColors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16)),
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: _surface, strokeWidth: 2))
+                      : Text('Publish', style: GoogleFonts.poppins(color: _surface, fontWeight: FontWeight.w600, fontSize: 14)),
                 ),
               ),
             ],
@@ -1579,20 +1281,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
   Widget _buildReviewRow(String title, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 24.0),
+      padding: const EdgeInsets.only(bottom: 20.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title,
-              style: GoogleFonts.poppins(
-                  color: AppColors.gray500,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14)),
-          Text(value,
-              style: GoogleFonts.poppins(
-                  color: AppColors.gray900,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14)),
+          Text(title, style: GoogleFonts.poppins(color: _grey, fontWeight: FontWeight.w500, fontSize: 14)),
+          Text(value, style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w600, fontSize: 14)),
         ],
       ),
     );
@@ -1600,24 +1294,18 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
   Widget _buildAmenityPill(String label, IconData icon) {
     return Container(
-      padding: const EdgeInsets.only(left: 4, top: 4, bottom: 4, right: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-          border: Border.all(color: StayNestColors.outlineLight),
-          borderRadius: BorderRadius.circular(24),
-          color: AppColors.white),
+        color: _surface,
+        border: Border.all(color: _grey.withOpacity(0.2)),
+        borderRadius: BorderRadius.circular(30),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: Colors.white, border: Border.all(color: const Color(0xFFE5E7EB)), shape: BoxShape.circle),
-              child: Icon(icon, color: AppColors.primary, size: 16)),
+          Icon(icon, color: _dark, size: 16),
           const SizedBox(width: 8),
-          Text(label,
-              style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.gray900)),
+          Text(label, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: _dark)),
         ],
       ),
     );
@@ -1633,12 +1321,13 @@ class _AddListingFlowState extends State<AddListingFlow> {
       child: Container(
         padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
         decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary : AppColors.gray50,
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-                color: isSelected
-                    ? AppColors.primary
-                    : StayNestColors.outlineLight)),
+          color: _surface,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: isSelected ? _green : _grey.withOpacity(0.2),
+            width: isSelected ? 2.0 : 1.5,
+          ),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1647,21 +1336,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
               height: 36,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSelected ? Colors.white.withOpacity(0.5) : Colors.transparent,
-                  width: 2,
-                ),
-                image: DecorationImage(
-                  image: AssetImage(imagePath),
-                  fit: BoxFit.cover,
-                ),
+                image: DecorationImage(image: AssetImage(imagePath), fit: BoxFit.cover),
               ),
             ),
             const SizedBox(width: 8),
-            Text(label,
-                style: GoogleFonts.poppins(
-                    color: isSelected ? AppColors.white : AppColors.gray500,
-                    fontWeight: FontWeight.w500)),
+            Text(label, style: GoogleFonts.poppins(color: isSelected ? _green : _dark, fontSize: 14, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -1670,25 +1349,18 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
   Widget _buildCounter(VoidCallback onDec, VoidCallback onInc, int value) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       decoration: BoxDecoration(
-          color: AppColors.white,
-          border: Border.all(color: StayNestColors.outlineLight),
-          borderRadius: AppRadius.inputBorderRadius),
+        color: _surface,
+        border: Border.all(color: _grey.withOpacity(0.2)),
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          GestureDetector(
-              onTap: onDec,
-              child: Icon(PhosphorIcons.minus(),
-                  color: AppColors.gray500, size: 20)),
-          Text(value.toString(),
-              style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600, fontSize: 16)),
-          GestureDetector(
-              onTap: onInc,
-              child: Icon(PhosphorIcons.plus(),
-                  color: AppColors.gray900, size: 20)),
+          GestureDetector(onTap: onDec, child: const Icon(PhosphorIconsRegular.minus, color: _grey, size: 20)),
+          Text(value.toString(), style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14, color: _dark)),
+          GestureDetector(onTap: onInc, child: const Icon(PhosphorIconsRegular.plus, color: _dark, size: 20)),
         ],
       ),
     );
@@ -1697,79 +1369,45 @@ class _AddListingFlowState extends State<AddListingFlow> {
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0, left: 4.0),
-      child: Text(text,
-          style: Theme.of(context)
-              .textTheme
-              .labelLarge
-              ?.copyWith(color: AppColors.gray900)),
+      child: Text(text, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: _dark)),
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String hint,
-      {int maxLines = 1,
-      TextInputType keyboardType = TextInputType.text,
-      bool required = true}) {
+  Widget _buildTextField(TextEditingController controller, String hint, {int maxLines = 1, TextInputType keyboardType = TextInputType.text, bool required = true}) {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
-      style: GoogleFonts.poppins(
-          color: AppColors.gray900, fontWeight: FontWeight.w500),
-      validator: (value) =>
-          (required && (value == null || value.trim().isEmpty))
-              ? 'Required'
-              : null,
+      style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w500, fontSize: 14),
+      validator: (value) => (required && (value == null || value.trim().isEmpty)) ? 'Required' : null,
       decoration: InputDecoration(
         hintText: hint,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        hintStyle: GoogleFonts.poppins(
-            color: AppColors.gray400, fontWeight: FontWeight.w500),
-        filled: false,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: StayNestColors.outlineLight)),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: StayNestColors.outlineLight)),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: AppColors.primary)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        hintStyle: GoogleFonts.poppins(color: _grey, fontWeight: FontWeight.w400, fontSize: 14),
+        filled: true,
+        fillColor: _surface,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _green)),
       ),
     );
   }
 
-  Widget _buildDropdown(
-      {required String? value,
-      required List<String> items,
-      required String hint,
-      required Function(String?) onChanged}) {
+  Widget _buildDropdown({required String? value, required List<String> items, required String hint, required Function(String?) onChanged}) {
     return DropdownButtonFormField<String>(
       initialValue: value,
-      icon: Icon(PhosphorIcons.caretDown(), color: AppColors.gray900),
-      items: items
-          .map((e) => DropdownMenuItem(
-              value: e,
-              child: Text(e,
-                  style: GoogleFonts.poppins(
-                      color: AppColors.gray900, fontWeight: FontWeight.w500))))
-          .toList(),
+      icon: const Icon(PhosphorIconsRegular.caretDown, color: _grey),
+      items: items.map((e) => DropdownMenuItem(value: e, child: Text(e, style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w500, fontSize: 14)))).toList(),
       onChanged: onChanged,
       validator: (val) => val == null || val.isEmpty ? 'Required' : null,
       decoration: InputDecoration(
         hintText: hint,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        filled: false,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: StayNestColors.outlineLight)),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: StayNestColors.outlineLight)),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: AppColors.primary)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        filled: true,
+        fillColor: _surface,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _green)),
       ),
     );
   }
@@ -1780,16 +1418,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
       height: 56,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            elevation: 0),
+          backgroundColor: _green,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+          elevation: 0,
+        ),
         onPressed: onPressed,
-        child: Text(text,
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall
-                ?.copyWith(color: AppColors.white)),
+        child: Text(text, style: GoogleFonts.poppins(color: _surface, fontWeight: FontWeight.w600, fontSize: 16)),
       ),
     );
   }
@@ -1799,46 +1433,33 @@ class _AddListingFlowState extends State<AddListingFlow> {
 // MODAL UTILITIES
 // ==========================================
 class ModalUtils {
-  static void showSuccess(BuildContext context, String title, String message,
-      {VoidCallback? onOk}) {
+  static void showSuccess(BuildContext context, String title, String message, {VoidCallback? onOk}) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.white,
-        shape: const RoundedRectangleBorder(
-            borderRadius: AppRadius.dialogBorderRadius),
+        backgroundColor: _surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
-                color: AppColors.green600, size: 72),
+            const Icon(PhosphorIconsFill.checkCircle, color: _green, size: 64),
             const SizedBox(height: 16),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.gray900)),
-            const SizedBox(height: 12),
-            Text(message,
-                textAlign: TextAlign.center,
-                style:
-                    GoogleFonts.poppins(color: AppColors.gray500, height: 1.5)),
-            const SizedBox(height: 32),
+            Text(title, textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
+            const SizedBox(height: 8),
+            Text(message, textAlign: TextAlign.center, style: GoogleFonts.poppins(color: _grey, height: 1.5, fontSize: 14)),
+            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    shape: const RoundedRectangleBorder(
-                        borderRadius: AppRadius.buttonBorderRadius),
-                    elevation: 0),
+                  backgroundColor: _green,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                  elevation: 0,
+                ),
                 onPressed: onOk ?? () => Navigator.pop(ctx),
-                child: Text('Awesome!',
-                    style: GoogleFonts.poppins(
-                        color: AppColors.white, fontWeight: FontWeight.w600)),
+                child: Text('Awesome!', style: GoogleFonts.poppins(color: _surface, fontWeight: FontWeight.w600)),
               ),
             )
           ],
@@ -1851,40 +1472,28 @@ class ModalUtils {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.white,
-        shape: const RoundedRectangleBorder(
-            borderRadius: AppRadius.dialogBorderRadius),
+        backgroundColor: _surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(PhosphorIcons.warningCircle(PhosphorIconsStyle.fill),
-                color: StayNestColors.error, size: 72),
+            const Icon(PhosphorIconsFill.warningCircle, color: Colors.redAccent, size: 64),
             const SizedBox(height: 16),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.gray900)),
-            const SizedBox(height: 12),
-            Text(message,
-                textAlign: TextAlign.center,
-                style:
-                    GoogleFonts.poppins(color: AppColors.gray500, height: 1.5)),
-            const SizedBox(height: 32),
+            Text(title, textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
+            const SizedBox(height: 8),
+            Text(message, textAlign: TextAlign.center, style: GoogleFonts.poppins(color: _grey, height: 1.5, fontSize: 14)),
+            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.gray900,
-                    shape: const RoundedRectangleBorder(
-                        borderRadius: AppRadius.buttonBorderRadius),
-                    elevation: 0),
+                  backgroundColor: _dark,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                  elevation: 0,
+                ),
                 onPressed: () => Navigator.pop(ctx),
-                child: Text('Got it',
-                    style: GoogleFonts.poppins(
-                        color: AppColors.white, fontWeight: FontWeight.w600)),
+                child: Text('Got it', style: GoogleFonts.poppins(color: _surface, fontWeight: FontWeight.w600)),
               ),
             )
           ],
@@ -1893,6 +1502,7 @@ class ModalUtils {
     );
   }
 }
+
 class _LocationPickerSheet extends StatefulWidget {
   final void Function(String address, double lat, double lng) onLocationSelected;
   const _LocationPickerSheet({required this.onLocationSelected});
@@ -1919,16 +1529,11 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          throw Exception('Location permissions denied');
-        }
+        if (permission == LocationPermission.denied) throw Exception('Location permissions denied');
       }
-      if (permission == LocationPermission.deniedForever) {
-        throw Exception('Location permissions permanently denied');
-      }
+      if (permission == LocationPermission.deniedForever) throw Exception('Location permissions permanently denied');
 
-      final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       final address = await reverseGeocode(position.latitude, position.longitude);
 
       if (mounted) {
@@ -1940,12 +1545,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString().replaceAll('Exception: ', '');
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() { _error = e.toString().replaceAll('Exception: ', ''); _isLoading = false; });
     }
   }
 
@@ -1953,8 +1553,8 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        color: _surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: SafeArea(
         child: Column(
@@ -1965,66 +1565,40 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                 margin: const EdgeInsets.only(top: 12, bottom: 16),
                 width: 40,
                 height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: Text(
-                'Confirm Property Location',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF111827),
-                ),
+                decoration: BoxDecoration(color: _grey.withOpacity(0.3), borderRadius: BorderRadius.circular(2)),
               ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Text('Confirm Location', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.asset(
-                  'assets/images/mapsheet.webp',
-                  height: 160,
-                  fit: BoxFit.contain,
-                ),
+                borderRadius: BorderRadius.circular(20),
+                child: Image.asset('assets/images/mapsheet.webp', height: 160, fit: BoxFit.cover, width: double.infinity),
               ),
             ),
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: _isLoading
-                  ? const Column(
+                  ? Column(
                       children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Detecting your location...', style: TextStyle(color: Color(0xFF6B7280))),
+                        const CircularProgressIndicator(color: _green),
+                        const SizedBox(height: 16),
+                        Text('Detecting your location...', style: GoogleFonts.poppins(color: _grey, fontSize: 14)),
                       ],
                     )
                   : _error != null
-                      ? Text('Error: $_error', style: const TextStyle(color: Colors.red))
+                      ? Text('Error: $_error', style: GoogleFonts.poppins(color: Colors.redAccent))
                       : Container(
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF3F4F6),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          decoration: BoxDecoration(color: _greyLight, borderRadius: BorderRadius.circular(16)),
                           child: Row(
                             children: [
-                              Icon(Icons.location_on, color: AppColors.primary),
+                              const Icon(PhosphorIconsRegular.mapPin, color: _green, size: 20),
                               const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  _locationName ?? '',
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    color: Color(0xFF374151),
-                                  ),
-                                ),
-                              ),
+                              Expanded(child: Text(_locationName ?? '', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: _dark))),
                             ],
                           ),
                         ),
@@ -2041,18 +1615,12 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                         Navigator.pop(context);
                       },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  disabledBackgroundColor: const Color(0xFFE5E7EB),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(26),
-                  ),
+                  backgroundColor: _green,
+                  disabledBackgroundColor: _grey.withOpacity(0.2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'Use this location',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                ),
+                child: Text('Use this location', style: GoogleFonts.poppins(color: _surface, fontSize: 16, fontWeight: FontWeight.w600)),
               ),
             ),
           ],

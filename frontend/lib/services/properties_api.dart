@@ -8,6 +8,7 @@ class PropertiesApi {
     try {
       final client = _client();
       await client.postJson('/properties/$propertyId/view');
+      await client.postJson('/analytics/track', body: {'eventType': 'property_view', 'propertyId': propertyId});
       // Invalidate the cache so the home screen reflects the new view immediately
       await CacheEngine.instance.invalidate('props_recently_viewed');
     } catch (e) {

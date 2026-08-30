@@ -96,7 +96,7 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading && false) {
+    if (_isLoading) {
       return const Center(
         child: CircularProgressIndicator(color: textGreen),
       );

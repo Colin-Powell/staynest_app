@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/models/property.dart';
+import 'package:property_app/models/property_taxonomy.dart';
 import 'package:property_app/theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:property_app/session/app_session.dart';
@@ -248,6 +249,8 @@ class _PropertyCardState extends State<PropertyCard> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
+            const SizedBox(height: 4),
+            _buildHighlights(property.amenities),
             const SizedBox(height: 6),
             RichText(
               text: TextSpan(
@@ -273,6 +276,38 @@ class _PropertyCardState extends State<PropertyCard> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildHighlights(List<String> amenities) {
+    if (amenities.isEmpty) return const SizedBox.shrink();
+    
+    // Convert to attributes
+    final attrs = amenities
+        .map((id) => PropertyTaxonomy.getAttributeById(id))
+        .where((a) => a != null)
+        .cast<PropertyAttribute>()
+        .toList();
+        
+    // Sort so that popular items are first
+    attrs.sort((a, b) {
+      if (a.isPopular && !b.isPopular) return -1;
+      if (!a.isPopular && b.isPopular) return 1;
+      return 0;
+    });
+    
+    final display = attrs.take(3).map((a) => a.label).join(' • ');
+    if (display.isEmpty) return const SizedBox.shrink();
+    
+    return Text(
+      display,
+      style: GoogleFonts.poppins(
+        fontSize: 13,
+        color: AppColors.gray600,
+        fontWeight: FontWeight.w400,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 

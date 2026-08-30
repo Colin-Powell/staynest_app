@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/models/property.dart';
+import 'package:property_app/models/property_taxonomy.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
@@ -453,25 +454,38 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                     color: textDark),
                               ),
                               const SizedBox(height: 24),
-                              ...widget.property.amenities.take(5).map((amenity) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 16),
-                                  child: Row(
-                                    children: [
-                                      Icon(_getAmenityIcon(amenity), size: 26, color: textDark.withOpacity(0.8)),
-                                      const SizedBox(width: 16),
-                                      Text(
-                                        amenity,
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 16,
-                                          color: textDark,
-                                          fontWeight: FontWeight.w400,
+                              ...[
+                                ...widget.property.amenities.take(5).map((amenityId) {
+                                  final attr = PropertyTaxonomy.getAttributeById(amenityId);
+                                  final label = attr?.label ?? amenityId;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.check_circle, size: 26, color: textDark.withOpacity(0.8)),
+                                        const SizedBox(width: 16),
+                                        Text(label,
+                                          style: GoogleFonts.poppins(fontSize: 16, color: textDark, fontWeight: FontWeight.w400),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                                ...widget.property.customFeatures.take(5 - (widget.property.amenities.length > 5 ? 5 : widget.property.amenities.length)).map((cf) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.check_circle, size: 26, color: textDark.withOpacity(0.8)),
+                                        const SizedBox(width: 16),
+                                        Text(cf,
+                                          style: GoogleFonts.poppins(fontSize: 16, color: textDark, fontWeight: FontWeight.w400),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                })
+                              ],
                               const SizedBox(height: 16),
                               SizedBox(
                                 width: double.infinity,
@@ -924,7 +938,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
     if (lower.contains('ac') || lower.contains('air')) return PhosphorIcons.wind();
     if (lower.contains('pool')) return PhosphorIcons.swimmingPool();
     if (lower.contains('gym') || lower.contains('fitness')) return PhosphorIcons.barbell();
-    return PhosphorIcons.checkCircle();
+    return Icons.check_circle;
   }
 
   Widget _buildMinimalTag(IconData icon, String label) {

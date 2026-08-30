@@ -628,21 +628,16 @@ class _PropertyCardState extends State<_PropertyCard>
             _viewsCount = _formatCount(viewsRaw);
             _savesCount = _formatCount(savesRaw);
           } else {
-            final fallbackViews =
-                120 + (widget.property.id.hashCode % 800).abs();
-            final fallbackSaves = 5 + (widget.property.id.hashCode % 50).abs();
-            _viewsCount = _formatCount(fallbackViews);
-            _savesCount = _formatCount(fallbackSaves);
+            _viewsCount = '0';
+            _savesCount = '0';
           }
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          final fallbackViews = 120 + (widget.property.id.hashCode % 800).abs();
-          final fallbackSaves = 5 + (widget.property.id.hashCode % 50).abs();
-          _viewsCount = _formatCount(fallbackViews);
-          _savesCount = _formatCount(fallbackSaves);
+          _viewsCount = '0';
+          _savesCount = '0';
         });
       }
     }
