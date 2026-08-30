@@ -4,6 +4,14 @@ import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/session/app_session.dart';
 
 class AnalyticsEvents {
+  static const String otpScreenViewed = 'otp_screen_viewed';
+  static const String otpVerificationStarted = 'otp_verification_started';
+  static const String otpVerificationSuccess = 'otp_verification_success';
+  static const String otpVerificationFailed = 'otp_verification_failed';
+  static const String otpResendRequested = 'otp_resend_requested';
+  static const String otpAutofillUsed = 'otp_autofill_used';
+  static const String otpManualEntryUsed = 'otp_manual_entry_used';
+
   static const String signUp = 'sign_up';
   static const String login = 'login';
   static const String logout = 'logout';
