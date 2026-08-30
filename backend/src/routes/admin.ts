@@ -1,6 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { query } from '../db.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
+import { cache } from '../services/cache.js';
+import { sendPushToUser } from '../services/firebase.js';
+
 const router = Router();
 
 // GET /admin/users - List all users with metadata
@@ -311,7 +314,7 @@ router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (r
     const property = updateRes.rows[0];
 
     // Clear property cache since visibility changed
-    await clearCachePattern('properties');
+    await cache.del('cache:properties*');
 
     // Notify the landlord
     if (status === 'approved') {
