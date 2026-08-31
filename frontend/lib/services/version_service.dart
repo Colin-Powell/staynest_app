@@ -1,13 +1,30 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class VersionService {
+  static const String _lastPromptKey = 'last_update_prompt_time';
+
   static Future<void> checkVersion(BuildContext context) async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastPromptStr = prefs.getString(_lastPromptKey);
+      
+      if (lastPromptStr != null) {
+        final lastPromptTime = DateTime.tryParse(lastPromptStr);
+        if (lastPromptTime != null) {
+          final diff = DateTime.now().difference(lastPromptTime);
+          if (diff.inHours < 24) {
+            // Silenced for 24 hours
+            return;
+          }
+        }
+      }
+
       final response = await http.get(Uri.parse('${AppSession.apiBaseUrl}/version'));
       
       if (response.statusCode == 200) {
@@ -18,7 +35,11 @@ class VersionService {
 
         // Simple string comparison for versions (assumes semantic versioning like 1.0.1)
         if (_isUpdateAvailable(AppSession.currentAppVersion, latestVersion)) {
-          _showUpgradePrompt(context, updateUrl, forceUpdate);
+          // Save the current time so we don't prompt again for 24 hours
+          await prefs.setString(_lastPromptKey, DateTime.now().toIso8601String());
+          if (context.mounted) {
+            _showUpgradePrompt(context, updateUrl, forceUpdate);
+          }
         }
       }
     } catch (e) {

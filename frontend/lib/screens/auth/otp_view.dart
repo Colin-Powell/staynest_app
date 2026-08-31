@@ -217,7 +217,7 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
            AppSession.updateCurrentUser(result['user']);
         }
         await AppSession.persistSession();
-        AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationSuccess);
+        AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationSuccess, method: _wasAutofilled ? 'autofill' : 'manual');
       } else {
         throw Exception('Verification was not successful.');
       }
@@ -235,7 +235,7 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
       setState(() => _hasError = true);
       _shakeController.forward(from: 0);
       
-      AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationFailed);
+      AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationFailed, method: _wasAutofilled ? 'autofill' : 'manual');
 
       if (mounted) {
         final message = _getFriendlyErrorMessage(error);
@@ -282,7 +282,7 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
     _otpInputKey.currentState?.clear();
     setState(() => _hasError = false);
     
-    AnalyticsService.logAuthEvent(AnalyticsEvents.otpResendRequested);
+    AnalyticsService.logAuthEvent(AnalyticsEvents.otpResendRequested, method: 'email');
     
     _startResendTimer();
     await _requestOtpCode();

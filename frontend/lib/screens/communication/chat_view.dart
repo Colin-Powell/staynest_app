@@ -1,6 +1,6 @@
-// START OF FILE
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // For Clipboard
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/session/app_session.dart';
@@ -9,6 +9,11 @@ import 'package:property_app/services/message_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:property_app/models/communication_models.dart';
 
+// ─── Tenant Design System Constants ───────────────────────────────────────────
+const Color _bg = Color(0xFFFAFAFA);
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF9CA3AF);
+const Color _surface = Colors.white;
 const Color _primary = Color(0xFF3F37C9); // Tenant Blue Theme
 
 // ─── Main Widget ──────────────────────────────────────────────────────────────
@@ -45,11 +50,16 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   StreamSubscription? _socketSubscription;
   StreamSubscription? _typingSubscription;
   StreamSubscription? _seenSubscription;
+  
   bool _isTyping = false;
   bool _isOtherTyping = false;
   Timer? _typingDebounce;
 
   final List<ChatMessage> _messages = [];
+  
+  // Selection Mode State
+  bool _isSelectionMode = false;
+  final Set<String> _selectedMessageIds = {};
 
   @override
   void initState() {
@@ -60,8 +70,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 350),
     );
     _slideAnim = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-        .animate(CurvedAnimation(
-            parent: _pageController, curve: Curves.easeOutCubic));
+        .animate(CurvedAnimation(parent: _pageController, curve: Curves.easeOutCubic));
     _fadeAnim = CurvedAnimation(parent: _pageController, curve: Curves.easeIn);
 
     // List Staggered Animation
@@ -79,16 +88,13 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
     _pageController.forward().then((_) => _listController.forward());
 
-    // Fetch messages from backend
     _fetchMessages();
 
     // State action: mark messages from this conversation partner as read
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         await MessageService.instance.markAsRead([widget.userId]);
-      } catch (_) {
-        // Ignore read-tracking failures to avoid breaking chat UI.
-      }
+      } catch (_) {}
     });
 
     // Listen to socket messages
@@ -99,8 +105,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       final socketText = msg.text.trim();
       final socketTime = msg.ts;
 
-      final alreadyById =
-          socketId.isNotEmpty && _messages.any((m) => m.id == socketId);
+      final alreadyById = socketId.isNotEmpty && _messages.any((m) => m.id == socketId);
       if (alreadyById) return;
 
       final alreadyByFingerprint = _messages.any((m) =>
@@ -109,9 +114,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       if (alreadyByFingerprint) return;
 
       _addMessage(ChatMessage(
-        id: socketId.isNotEmpty
-            ? socketId
-            : 'socket_${socketTime}_${socketText.hashCode}',
+        id: socketId.isNotEmpty ? socketId : 'socket_${socketTime}_${socketText.hashCode}',
         sender: ChatSender.them,
         text: msg.text,
         time: _formatTime(socketTime),
@@ -120,18 +123,15 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
     _typingSubscription = SocketService.instance.typing.listen((data) {
       if (data['userId'] == widget.userId) {
-        if (mounted) if (mounted)
-          setState(() => _isOtherTyping = data['isTyping'] == true);
+        if (mounted) setState(() => _isOtherTyping = data['isTyping'] == true);
       }
     });
 
     _seenSubscription = SocketService.instance.seen.listen((data) {
-      // Logic to update local message status to seen
       if (!mounted) return;
       setState(() {
         for (int i = 0; i < _messages.length; i++) {
-          if (_messages[i].sender == ChatSender.me &&
-              _messages[i].status != MessageStatus.sent) {
+          if (_messages[i].sender == ChatSender.me && _messages[i].status != MessageStatus.sent) {
             _messages[i] = _messages[i].copyWith(status: MessageStatus.sent);
           }
         }
@@ -177,7 +177,6 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     _msgController.clear();
 
     final messageId = const Uuid().v4();
-    // Append message locally immediately for UX
     _addMessage(ChatMessage(
       id: messageId,
       sender: ChatSender.me,
@@ -186,23 +185,17 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       status: MessageStatus.sending,
     ));
 
-    // We ONLY call REST here to prevent duplicates.
-    // The backend's REST /messages will automatically emit it via socket.
     _performSave(messageId, text);
   }
 
   Future<void> _performSave(String messageId, String text) async {
     try {
-      final realId = await MessageService.instance
-          .saveMessage(toUserId: widget.userId, text: text);
+      final realId = await MessageService.instance.saveMessage(toUserId: widget.userId, text: text);
       if (!mounted) return;
       final idx = _messages.indexWhere((m) => m.id == messageId);
       if (idx != -1) {
         setState(() {
-          _messages[idx] = _messages[idx].copyWith(
-            id: realId,
-            status: MessageStatus.sent,
-          );
+          _messages[idx] = _messages[idx].copyWith(id: realId, status: MessageStatus.sent);
         });
       }
     } catch (err) {
@@ -210,8 +203,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       final idx = _messages.indexWhere((m) => m.id == messageId);
       if (idx != -1) {
         setState(() {
-          _messages[idx] =
-              _messages[idx].copyWith(status: MessageStatus.failed);
+          _messages[idx] = _messages[idx].copyWith(status: MessageStatus.failed);
         });
       }
     }
@@ -230,8 +222,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
   Future<void> _fetchMessages() async {
     try {
-      final messages =
-          await MessageService.instance.fetchConversation(widget.userId);
+      final messages = await MessageService.instance.fetchConversation(widget.userId);
       if (!mounted) return;
 
       messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
@@ -240,9 +231,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
         for (final msg in messages) {
           final chatMsg = ChatMessage(
             id: msg.id,
-            sender: msg.fromUserId == widget.userId
-                ? ChatSender.them
-                : ChatSender.me,
+            sender: msg.fromUserId == widget.userId ? ChatSender.them : ChatSender.me,
             text: msg.text,
             time: _formatTime(msg.createdAt.millisecondsSinceEpoch),
           );
@@ -255,7 +244,6 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       _scrollToBottom();
     } catch (err) {
       setState(() {});
-      debugPrint('Failed to fetch messages: $err');
     }
   }
 
@@ -273,11 +261,60 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
   String _formatTime(int ms) {
     final dt = DateTime.fromMillisecondsSinceEpoch(ms);
-    return '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+    final hour = dt.hour;
+    final minute = dt.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    return '$displayHour:$minute $period';
+  }
+
+  // ─── Actions ────────────────────────────────────────────────────────────────
+
+  void _toggleSelectionMode(String id) {
+    setState(() {
+      _isSelectionMode = true;
+      _selectedMessageIds.add(id);
+    });
+  }
+
+  void _toggleItemSelection(String id) {
+    setState(() {
+      if (_selectedMessageIds.contains(id)) {
+        _selectedMessageIds.remove(id);
+        if (_selectedMessageIds.isEmpty) _isSelectionMode = false;
+      } else {
+        _selectedMessageIds.add(id);
+      }
+    });
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _isSelectionMode = false;
+      _selectedMessageIds.clear();
+    });
+  }
+
+  void _copySelected() {
+    final selectedMsgs = _messages.where((m) => _selectedMessageIds.contains(m.id)).map((m) => m.text).join('\n');
+    if (selectedMsgs.isNotEmpty) {
+      Clipboard.setData(ClipboardData(text: selectedMsgs));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Copied to clipboard', style: GoogleFonts.poppins())));
+    }
+    _exitSelectionMode();
+  }
+
+  void _deleteSelected() {
+    setState(() {
+      _messages.removeWhere((m) => _selectedMessageIds.contains(m.id));
+      _selectedMessageIds.clear();
+      _isSelectionMode = false;
+    });
+    // Optional: Call MessageService to delete remotely if supported by your API
   }
 
   Widget _buildStaggered({required Widget child, required int index}) {
-    final double start = (index * 0.15).clamp(0.0, 1.0);
+    final double start = (index * 0.05).clamp(0.0, 1.0);
     final double end = (start + 0.4).clamp(0.0, 1.0);
 
     final animation = CurvedAnimation(
@@ -288,10 +325,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     return FadeTransition(
       opacity: animation,
       child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 0.2),
-          end: Offset.zero,
-        ).animate(animation),
+        position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(animation),
         child: child,
       ),
     );
@@ -304,43 +338,54 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       child: FadeTransition(
         opacity: _fadeAnim,
         child: Scaffold(
-          backgroundColor: Colors.white,
-          body: Column(
-            children: [
-              _buildHeader(context),
-              Expanded(child: _buildChatArea()),
-              _buildInputArea(context),
-            ],
+          backgroundColor: _bg,
+          body: SafeArea(
+            bottom: false,
+            child: Stack(
+              children: [
+                Column(
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: _isSelectionMode ? _buildSelectionHeader() : _buildNormalHeader(),
+                    ),
+                    Expanded(child: _buildChatArea()),
+                    // If not selecting, show normal input area. We use a transparent box to keep scroll positioning identical when hidden
+                    AnimatedCrossFade(
+                      duration: const Duration(milliseconds: 300),
+                      crossFadeState: _isSelectionMode ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                      firstChild: _buildInputArea(context),
+                      secondChild: SizedBox(height: MediaQuery.of(context).padding.bottom + 80),
+                    ),
+                  ],
+                ),
+                _buildBottomSelectionBar(),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // ─── Header ─────────────────────────────────────────────────────────────────
+  // ─── Headers ────────────────────────────────────────────────────────────────
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildNormalHeader() {
     return Container(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 16,
-        bottom: 16,
-        left: 20,
-        right: 24,
-      ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6))),
+      key: const ValueKey('normal_header'),
+      padding: const EdgeInsets.fromLTRB(20, 16, 24, 16),
+      decoration: BoxDecoration(
+        color: _surface,
+        border: Border(bottom: BorderSide(color: _grey.withOpacity(0.1))),
       ),
       child: Row(
         children: [
-          // Back
           GestureDetector(
             onTap: widget.onBack,
             behavior: HitTestBehavior.opaque,
-            child: const Icon(Icons.arrow_back, size: 28, color: Colors.black),
+            child: const Icon(PhosphorIconsRegular.caretLeft, size: 28, color: _dark),
           ),
           const SizedBox(width: 16),
-          // Avatar
           ClipOval(
             child: AppSession.buildAvatar(
               widget.avatar,
@@ -350,7 +395,6 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
             ),
           ),
           const SizedBox(width: 16),
-          // Name + status
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -358,43 +402,32 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                 Text(
                   widget.name,
                   style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: _dark,
                     letterSpacing: -0.5,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Row(
                   children: [
                     Container(
-                      width: 10,
-                      height: 10,
+                      width: 8,
+                      height: 8,
                       decoration: BoxDecoration(
-                        color: _isOtherTyping
-                            ? const Color(0xFF3B82F6) // Blue typing indicator
-                            : const Color(0xFF22C55E), // Green online indicator
+                        color: _isOtherTyping ? _primary : const Color(0xFF10B981),
                         shape: BoxShape.circle,
-                        boxShadow: _isOtherTyping
-                            ? [
-                                BoxShadow(
-                                    color: const Color(0xFF3B82F6)
-                                        .withOpacity(0.4),
-                                    blurRadius: 4,
-                                    spreadRadius: 1)
-                              ]
-                            : null,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       _isOtherTyping ? 'typing...' : 'Online',
                       style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: _isOtherTyping
-                            ? const Color(0xFF3B82F6)
-                            : const Color(0xFF9CA3AF),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: _isOtherTyping ? _primary : _grey,
                       ),
                     ),
                   ],
@@ -402,11 +435,41 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
               ],
             ),
           ),
-          // Call button
           GestureDetector(
             onTap: widget.onCall,
-            child: Icon(PhosphorIcons.phone(PhosphorIconsStyle.fill),
-                color: Colors.black, size: 26),
+            child: const Icon(PhosphorIconsRegular.phone, color: _dark, size: 26),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectionHeader() {
+    return Container(
+      key: const ValueKey('selection_header'),
+      padding: const EdgeInsets.fromLTRB(20, 24, 24, 24),
+      decoration: BoxDecoration(
+        color: _surface,
+        border: Border(bottom: BorderSide(color: _grey.withOpacity(0.1))),
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: _exitSelectionMode,
+            behavior: HitTestBehavior.opaque,
+            child: const Icon(PhosphorIconsRegular.x, size: 28, color: _dark),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              '${_selectedMessageIds.length} Selected',
+              style: GoogleFonts.poppins(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: _dark,
+                letterSpacing: -0.5,
+              ),
+            ),
           ),
         ],
       ),
@@ -418,14 +481,22 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   Widget _buildChatArea() {
     if (_messages.isEmpty) {
       return Center(
-        child: Text(
-          'No messages yet.\nSay hello!',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.poppins(
-            fontSize: 15,
-            color: const Color(0xFF9CA3AF),
-            fontWeight: FontWeight.w500,
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(PhosphorIconsRegular.chatCircleText, size: 56, color: _grey),
+            const SizedBox(height: 16),
+            Text(
+              'No messages yet',
+              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Say hello and start the conversation!',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 14, color: _grey),
+            ),
+          ],
         ),
       );
     }
@@ -434,28 +505,52 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       controller: _scrollController,
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      itemCount: _messages.length + 1, // +1 for date divider
+      itemCount: _messages.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) {
-          return _buildStaggered(
-            index: index,
-            child: _buildDateDivider('Today'),
-          );
+          return _buildStaggered(index: index, child: _buildDateDivider('Today'));
         }
 
         final msg = _messages[index - 1];
+        final isSelected = _selectedMessageIds.contains(msg.id);
+
         final Widget bubble = msg.sender == ChatSender.me
-            ? _MyBubble(
-                message: msg,
-                onRetry: () => _retryMessage(msg),
-              )
+            ? _MyBubble(message: msg, onRetry: () => _retryMessage(msg))
             : _TheirBubble(message: msg, avatar: widget.avatar);
 
         return _buildStaggered(
           index: index,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 24),
-            child: bubble,
+          child: GestureDetector(
+            onTap: () {
+              if (_isSelectionMode) _toggleItemSelection(msg.id);
+            },
+            onLongPress: () {
+              if (!_isSelectionMode) _toggleSelectionMode(msg.id);
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 24),
+              // Slight tint when selected
+              decoration: BoxDecoration(
+                color: isSelected ? _primary.withOpacity(0.05) : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (_isSelectionMode)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 16, bottom: 8),
+                      child: Icon(
+                        isSelected ? PhosphorIconsFill.checkCircle : PhosphorIconsRegular.circle,
+                        color: isSelected ? _primary : _grey,
+                        size: 24,
+                      ),
+                    ),
+                  Expanded(child: bubble),
+                ],
+              ),
+            ),
           ),
         );
       },
@@ -467,9 +562,9 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       padding: const EdgeInsets.only(bottom: 32, top: 8),
       child: Center(
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
-            color: const Color(0xFFF3F4F6),
+            color: _grey.withOpacity(0.1),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
@@ -477,7 +572,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
             style: GoogleFonts.poppins(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF9CA3AF),
+              color: _grey,
             ),
           ),
         ),
@@ -485,35 +580,23 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     );
   }
 
-  // ─── Clean Minimal Input Area ─────────────────────────────────────────────
+  // ─── Input Area ─────────────────────────────────────────────────────────────
 
   Widget _buildInputArea(BuildContext context) {
     return Container(
       padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 12,
-        bottom: MediaQuery.of(context).padding.bottom + 12,
+        left: 20, right: 20, top: 16,
+        bottom: MediaQuery.of(context).padding.bottom + 16,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
-          )
-        ],
+        color: _surface,
+        border: Border(top: BorderSide(color: _grey.withOpacity(0.1))),
       ),
       child: Row(
         children: [
           GestureDetector(
             onTap: () {}, // Attachments Action
-            child: Icon(
-              PhosphorIcons.plusCircle(PhosphorIconsStyle.fill),
-              color: const Color(0xFF9CA3AF),
-              size: 32,
-            ),
+            child: const Icon(PhosphorIconsRegular.plusCircle, color: _grey, size: 28),
           ),
           const SizedBox(width: 12),
 
@@ -522,7 +605,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
+                color: _grey.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Row(
@@ -533,22 +616,21 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
-                        color: Colors.black,
+                        color: _dark,
                       ),
                       // Absolutely no native fills or boundaries
                       decoration: InputDecoration(
                         hintText: 'Type a message...',
                         hintStyle: GoogleFonts.poppins(
-                          color: const Color(0xFF9CA3AF),
+                          color: _grey,
                           fontSize: 15,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         isDense: true,
-                        contentPadding:
-                            const EdgeInsets.symmetric(vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       onSubmitted: (_) => _sendMessage(),
                     ),
@@ -556,8 +638,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                   if (!_isTyping)
                     GestureDetector(
                       onTap: () {}, // Camera Action
-                      child: Icon(PhosphorIcons.camera(),
-                          color: const Color(0xFF9CA3AF), size: 22),
+                      child: const Icon(PhosphorIconsRegular.camera, color: _grey, size: 22),
                     ),
                 ],
               ),
@@ -568,8 +649,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
           // Send / Mic Button Switcher
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            transitionBuilder: (child, animation) =>
-                ScaleTransition(scale: animation, child: child),
+            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
             child: _isTyping
                 ? GestureDetector(
                     key: const ValueKey('send'),
@@ -577,12 +657,8 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                     child: Container(
                       width: 44,
                       height: 44,
-                      decoration: const BoxDecoration(
-                        color: _primary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.send_rounded,
-                          color: Colors.white, size: 20),
+                      decoration: const BoxDecoration(color: _primary, shape: BoxShape.circle),
+                      child: const Icon(PhosphorIconsFill.paperPlaneRight, color: Colors.white, size: 20),
                     ),
                   )
                 : GestureDetector(
@@ -591,16 +667,64 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                     child: Container(
                       width: 44,
                       height: 44,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFF3F4F6),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(PhosphorIcons.microphone(),
-                          color: const Color(0xFF9CA3AF), size: 22),
+                      decoration: BoxDecoration(color: _grey.withOpacity(0.1), shape: BoxShape.circle),
+                      child: const Icon(PhosphorIconsRegular.microphone, color: _grey, size: 22),
                     ),
                   ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ─── Selection Action Bar ───────────────────────────────────────────────────
+  
+  Widget _buildBottomSelectionBar() {
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      bottom: _isSelectionMode ? MediaQuery.of(context).padding.bottom + 16 : -100,
+      left: 24,
+      right: 24,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        decoration: BoxDecoration(
+          color: _dark,
+          borderRadius: BorderRadius.circular(32), // Pill shape
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 10))
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            GestureDetector(
+              onTap: _selectedMessageIds.isEmpty ? null : _copySelected,
+              behavior: HitTestBehavior.opaque,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(PhosphorIconsRegular.copy, color: _selectedMessageIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white),
+                  const SizedBox(height: 4),
+                  Text('Copy', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: _selectedMessageIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white)),
+                ],
+              ),
+            ),
+            Container(width: 1, height: 30, color: _grey.withOpacity(0.3)),
+            GestureDetector(
+              onTap: _selectedMessageIds.isEmpty ? null : _deleteSelected,
+              behavior: HitTestBehavior.opaque,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(PhosphorIconsRegular.trash, color: _selectedMessageIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444)),
+                  const SizedBox(height: 4),
+                  Text('Delete', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: _selectedMessageIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444))),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -622,27 +746,27 @@ class _TheirBubble extends StatelessWidget {
         ClipOval(
           child: AppSession.buildAvatar(
             avatar,
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             fit: BoxFit.cover,
           ),
         ),
         const SizedBox(width: 12),
         Flexible(
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _surface,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(8),
                 topRight: Radius.circular(24),
                 bottomRight: Radius.circular(24),
                 bottomLeft: Radius.circular(24),
               ),
-              border: Border.all(color: const Color(0xFFF3F4F6)),
+              border: Border.all(color: _grey.withOpacity(0.1)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withOpacity(0.03),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 )
@@ -655,20 +779,20 @@ class _TheirBubble extends StatelessWidget {
                   message.text,
                   style: GoogleFonts.poppins(
                     fontSize: 14.5,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black,
+                    fontWeight: FontWeight.w400,
+                    color: _dark,
                     height: 1.4,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Align(
                   alignment: Alignment.centerRight,
                   child: Text(
                     message.time,
                     style: GoogleFonts.poppins(
                       fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF9CA3AF),
+                      fontWeight: FontWeight.w500,
+                      color: _grey,
                     ),
                   ),
                 ),
@@ -700,17 +824,19 @@ class _MyBubble extends StatelessWidget {
           ),
         );
       case MessageStatus.sent:
-        // The double-tick color logic
         const isSeen = false; // Mock seen state
-        return const Icon(Icons.done_all,
-            size: 16, color: isSeen ? Color(0xFF4ADE80) : Colors.white70);
+        return Icon(
+          isSeen ? PhosphorIconsRegular.checks : PhosphorIconsRegular.check,
+          size: 14,
+          color: Colors.white70,
+        );
       case MessageStatus.failed:
         return GestureDetector(
           onTap: onRetry,
           behavior: HitTestBehavior.opaque,
           child: const Padding(
             padding: EdgeInsets.symmetric(horizontal: 2),
-            child: Icon(Icons.error_outline, size: 16, color: Colors.redAccent),
+            child: Icon(PhosphorIconsRegular.warningCircle, size: 16, color: Color(0xFFFCA5A5)),
           ),
         );
     }
@@ -725,7 +851,7 @@ class _MyBubble extends StatelessWidget {
         const SizedBox(width: 60), // Padding on left to constrain width
         Flexible(
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: _primary,
               borderRadius: const BorderRadius.only(
@@ -736,9 +862,9 @@ class _MyBubble extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: _primary.withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
@@ -749,12 +875,12 @@ class _MyBubble extends StatelessWidget {
                   message.text,
                   style: GoogleFonts.poppins(
                     fontSize: 14.5,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                     color: Colors.white,
                     height: 1.4,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Align(
                   alignment: Alignment.centerRight,
                   child: Row(
