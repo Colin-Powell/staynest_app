@@ -1,11 +1,10 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:path/path.dart' as path;
 
 // Your project imports
 import 'package:property_app/repository/http_json_client.dart';
@@ -59,7 +58,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   bool _submitting = false;
   bool _isUploadingImages = false;
   double _uploadProgress = 0.0;
-  List<UploadProgress> _imageUploadStatus = [];
+  final List<UploadProgress> _imageUploadStatus = [];
 
   final PageController _pageController = PageController();
   int _currentStep = 1;
@@ -78,7 +77,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   int _bathrooms = 1;
 
   // --- Step 2: Location ---
-  String? _selectedCountry = 'Kenya';
+  final String _selectedCountry = 'Kenya';
   String? _selectedCity = 'Nairobi';
   final _neighborhood = TextEditingController();
   final _locationSearch = TextEditingController();
@@ -165,8 +164,8 @@ RemoteDatabaseRepository _buildRepo() {
         for (final amenity in existingAmenities) {
           final str = amenity.toString();
           if (str.startsWith('custom:')) {
-            var _customFeatures;
-            _customFeatures.add(str.substring(7));
+            var customFeatures;
+            customFeatures.add(str.substring(7));
           } else {
             final mapped = PropertyTaxonomy.mapLegacyLabel(str);
             final attr = PropertyTaxonomy.getAttributeById(mapped);
@@ -817,11 +816,11 @@ RemoteDatabaseRepository _buildRepo() {
             padding: const EdgeInsets.only(bottom: 8.0),
             child: Row(
               children: [
-                Icon(Icons.check_circle, color: _green, size: 20),
+                const Icon(Icons.check_circle, color: _green, size: 20),
                 const SizedBox(width: 8),
                 Expanded(child: Text(c, style: GoogleFonts.poppins(fontSize: 14))),
                 IconButton(
-                  icon: Icon(Icons.close, size: 20, color: _grey),
+                  icon: const Icon(Icons.close, size: 20, color: _grey),
                   onPressed: () => setState(() => _customFeatures.remove(c)),
                 ),
               ],
@@ -851,7 +850,7 @@ RemoteDatabaseRepository _buildRepo() {
               ),
               const SizedBox(width: 8),
               IconButton(
-                icon: Icon(Icons.add_circle, color: _green, size: 36),
+                icon: const Icon(Icons.add_circle, color: _green, size: 36),
                 onPressed: () {
                   if (_customFeatureController.text.trim().isNotEmpty) {
                     setState(() {
@@ -892,8 +891,11 @@ RemoteDatabaseRepository _buildRepo() {
       ),
       onSelected: (val) {
         setState(() {
-          if (val) _selectedAttributes.add(attr.id);
-          else _selectedAttributes.remove(attr.id);
+          if (val) {
+            _selectedAttributes.add(attr.id);
+          } else {
+            _selectedAttributes.remove(attr.id);
+          }
         });
       },
     );

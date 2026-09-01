@@ -303,7 +303,7 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.cloud_off_rounded, size: 48, color: dividerColor),
+          const Icon(Icons.cloud_off_rounded, size: 48, color: dividerColor),
           const SizedBox(height: 24),
           Text(
             'Something went wrong',

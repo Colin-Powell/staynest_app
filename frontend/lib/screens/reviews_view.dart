@@ -3,10 +3,8 @@ import 'package:flutter/material.dart';
 import 'dart:ui' as ui;
 import 'package:property_app/models/review.dart';
 import 'package:property_app/session/app_session.dart';
-import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:intl/intl.dart';
-import 'package:property_app/widgets/property_image.dart';
 import 'property/write_review_view.dart';
 
 // NOTE: This file also defines ReviewsView/AllReviewsView/WriteReviewView.
@@ -1070,7 +1068,6 @@ class _StarRating extends StatelessWidget {
     this.color = const Color(0xFFFBBF24),
     this.backgroundColor = const Color(0xFFE5E7EB),
   });
-
 
   @override
   Widget build(BuildContext context) {

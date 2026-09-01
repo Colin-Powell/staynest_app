@@ -10,7 +10,6 @@ import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/property_service.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/utils/property_mapper.dart';
-import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
 import 'map_view.dart';
 

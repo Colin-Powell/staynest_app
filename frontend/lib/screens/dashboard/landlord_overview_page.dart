@@ -8,7 +8,6 @@ import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/property_mapper.dart';
 import 'package:property_app/session/app_session.dart';
-import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
 import 'package:property_app/session/onboarding_prefs.dart';
 import 'landlord_dashboard_service.dart';

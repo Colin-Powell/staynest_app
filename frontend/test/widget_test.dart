@@ -12,7 +12,6 @@ import 'package:property_app/main.dart' as app;
 import 'package:property_app/screens/home/home_view.dart';
 import 'package:property_app/screens/home/profile_view.dart';
 import 'package:property_app/session/app_session.dart';
-import 'package:property_app/widgets/shared.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 

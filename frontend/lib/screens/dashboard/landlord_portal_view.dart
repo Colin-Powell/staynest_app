@@ -1,6 +1,5 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/widgets/skeleton_property_card.dart';
@@ -86,7 +85,7 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
       final repo = RemoteDatabaseRepository();
       final userData = await repo.loadCurrentUser();
       AppSession.updateCurrentUser(userData);
-        } catch (_) {
+    } catch (_) {
       // Silently fail, user data is already loaded
     }
   }
@@ -263,7 +262,7 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
 
   Widget _getLegacyPage() {
     switch (_selectedNav) {
-case 'Bookings':
+      case 'Bookings':
         return const LandlordBookingsPage();
       case 'Messages':
         return LandlordMessagesPage(
@@ -273,7 +272,9 @@ case 'Bookings':
       case 'Settings':
         return const LandlordSettingsPage();
       default:
-        return LandlordOverviewPage(onViewAllProperties: () => setState(() => _selectedNav = 'Properties'));
+        return LandlordOverviewPage(
+            onViewAllProperties: () =>
+                setState(() => _selectedNav = 'Properties'));
     }
   }
 
@@ -285,7 +286,8 @@ case 'Bookings':
         itemBuilder: (context, index) {
           return const Padding(
             padding: EdgeInsets.only(bottom: 20),
-            child: SkeletonPropertyCard(width: double.infinity, margin: EdgeInsets.zero),
+            child: SkeletonPropertyCard(
+                width: double.infinity, margin: EdgeInsets.zero),
           );
         },
       );
@@ -295,13 +297,13 @@ case 'Bookings':
       return _buildUnauthorizedView();
     }
 
-    if (!AppSession.currentUserVerified) {
+    final isKycApproved = _verificationStatus != null &&
+        _verificationStatus!['status']?.toString().toLowerCase() == 'approved';
+    if (!isKycApproved) {
       if (_isVerificationRejected) {
         return _buildVerificationRequiredView();
       }
-      if (_verificationStatus == null || !_isVerificationApproved) {
-        return _buildVerificationRequiredView();
-      }
+      return _buildVerificationRequiredView();
     }
 
     if (_selectedNav == 'Properties') {
@@ -559,10 +561,10 @@ case 'Bookings':
                 PhosphorIcons.house(PhosphorIconsStyle.fill), 'Dashboard'),
             _buildNavItem(
                 PhosphorIcons.buildings(PhosphorIconsStyle.fill), 'Properties'),
-            _buildNavItem(
-                PhosphorIcons.calendarCheck(PhosphorIconsStyle.fill), 'Bookings'),
-            _buildNavItem(
-                PhosphorIcons.chatTeardrop(PhosphorIconsStyle.fill), 'Messages'),
+            _buildNavItem(PhosphorIcons.calendarCheck(PhosphorIconsStyle.fill),
+                'Bookings'),
+            _buildNavItem(PhosphorIcons.chatTeardrop(PhosphorIconsStyle.fill),
+                'Messages'),
             _buildNavItem(
                 PhosphorIcons.userCircle(PhosphorIconsStyle.fill), 'Settings',
                 displayLabel: 'Profile'),
@@ -588,8 +590,8 @@ case 'Bookings':
           vertical: 8,
         ),
         decoration: BoxDecoration(
-          color: isActive 
-              ? const Color(0xFF059669).withValues(alpha: 0.12) 
+          color: isActive
+              ? const Color(0xFF059669).withValues(alpha: 0.12)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
@@ -599,7 +601,8 @@ case 'Bookings':
             Icon(
               icon,
               size: 26,
-              color: isActive ? const Color(0xFF059669) : const Color(0xFF9CA3AF),
+              color:
+                  isActive ? const Color(0xFF059669) : const Color(0xFF9CA3AF),
             ),
             // Only reveal the text when the tab is active
             if (isActive) ...[

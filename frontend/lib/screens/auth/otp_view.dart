@@ -18,7 +18,8 @@ class OtpView extends StatefulWidget {
   State<OtpView> createState() => _OtpViewState();
 }
 
-class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+class _OtpViewState extends State<OtpView>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const _primary = Color(0xFF3D36E8);
   static const _border = Color(0xFFE4E6EF);
   static const _text = Color(0xFF14162C);
@@ -29,12 +30,12 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
   bool _hasError = false;
   bool _isVerifying = false;
   bool _isSendingCode = false;
-  
+
   int _resendSeconds = 30;
   int _expireSeconds = 600; // 10 minutes
   Timer? _resendTimer;
   Timer? _expireTimer;
-  
+
   String _emailAddress = '';
   String _currentCode = '';
   bool _wasAutofilled = false;
@@ -46,7 +47,7 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    
+
     _shakeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 260),
@@ -57,17 +58,22 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
       TweenSequenceItem(tween: Tween(begin: 10, end: -8), weight: 2),
       TweenSequenceItem(tween: Tween(begin: -8, end: 8), weight: 2),
       TweenSequenceItem(tween: Tween(begin: 8, end: 0), weight: 1),
-    ]).animate(CurvedAnimation(parent: _shakeController, curve: Curves.easeInOut));
+    ]).animate(
+        CurvedAnimation(parent: _shakeController, curve: Curves.easeInOut));
 
     _emailAddress = AppSession.currentUserEmail?.trim() ?? '';
-    
-    AnalyticsService.logAuthEvent(AnalyticsEvents.otpScreenViewed, method: 'email');
-    
+
+    AnalyticsService.logAuthEvent(AnalyticsEvents.otpScreenViewed,
+        method: 'email');
+
     // START WITH RESEND ACTIVE SO USER CONTROLS THE SEND IF NEEDED
     _resendSeconds = 0;
     _expireSeconds = 600;
     _expireTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) { timer.cancel(); return; }
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       if (_expireSeconds > 0) {
         setState(() => _expireSeconds--);
       } else {
@@ -119,7 +125,8 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
             onPressed: () {
               ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
               _wasAutofilled = true;
-              AnalyticsService.logAuthEvent(AnalyticsEvents.otpAutofillUsed, method: 'clipboard');
+              AnalyticsService.logAuthEvent(AnalyticsEvents.otpAutofillUsed,
+                  method: 'clipboard');
               _otpInputKey.currentState?.setCode(otp);
             },
             child: const Text('USE CODE', style: TextStyle(color: _primary)),
@@ -133,7 +140,10 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
     _resendTimer?.cancel();
     _resendSeconds = 30;
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) { timer.cancel(); return; }
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       if (_resendSeconds > 0) {
         setState(() => _resendSeconds--);
       } else {
@@ -141,7 +151,7 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
       }
     });
   }
-  
+
   void _handleExpiration() {
     setState(() => _hasError = true);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -182,7 +192,8 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('We could not send the verification code. Please try again.'),
+            content: Text(
+                'We could not send the verification code. Please try again.'),
             behavior: SnackBarBehavior.floating,
             backgroundColor: Color(0xFFE53935),
           ),
@@ -200,13 +211,15 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
       _hasError = false;
       _isVerifying = true;
     });
-    
-    AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationStarted, method: _wasAutofilled ? 'autofill' : 'manual');
+
+    AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationStarted,
+        method: _wasAutofilled ? 'autofill' : 'manual');
 
     try {
       final repository = RemoteDatabaseRepository();
-      final result = await repository.verifyPhoneCode(code); // actually verifying email code but backend API uses same endpoint or name
-      
+      final result = await repository.verifyPhoneCode(
+          code); // actually verifying email code but backend API uses same endpoint or name
+
       if (result == null || result['error'] != null) {
         throw Exception(result?['error']?.toString() ?? 'Verification failed.');
       }
@@ -214,19 +227,20 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
       if (result['verified'] == true || result['user']?['verified'] == true) {
         AppSession.currentUserVerified = true;
         if (result['user'] != null) {
-           AppSession.updateCurrentUser(result['user']);
+          AppSession.updateCurrentUser(result['user']);
         }
         await AppSession.persistSession();
-        AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationSuccess, method: _wasAutofilled ? 'autofill' : 'manual');
+        AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationSuccess,
+            method: _wasAutofilled ? 'autofill' : 'manual');
       } else {
         throw Exception('Verification was not successful.');
       }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
-      
+
       if (AppSession.isLandlord) {
-        Navigator.pushReplacementNamed(context, '/verification_center');
+        Navigator.pushNamed(context, '/verification_center');
       } else {
         Navigator.pushReplacementNamed(context, '/home');
       }
@@ -234,8 +248,9 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
       if (!mounted) return;
       setState(() => _hasError = true);
       _shakeController.forward(from: 0);
-      
-      AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationFailed, method: _wasAutofilled ? 'autofill' : 'manual');
+
+      AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationFailed,
+          method: _wasAutofilled ? 'autofill' : 'manual');
 
       if (mounted) {
         final message = _getFriendlyErrorMessage(error);
@@ -258,16 +273,23 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
   }
 
   String _getFriendlyErrorMessage(Object error) {
-    if (error is TimeoutException) return 'The connection is taking too long. Please try again.';
-    if (error is SocketException || error.toString().contains('SocketException') || error.toString().contains('Connection refused')) {
+    if (error is TimeoutException)
+      return 'The connection is taking too long. Please try again.';
+    if (error is SocketException ||
+        error.toString().contains('SocketException') ||
+        error.toString().contains('Connection refused')) {
       return 'We can\'t reach our servers. Please check your internet connection.';
     }
     if (error is ApiException) {
       switch (error.statusCode) {
-        case 400: return 'That code isn\'t correct. Please check the code and try again.';
-        case 401: return 'Your session has expired. Please log in again.';
-        case 403: return 'This code has expired. Request a new code to continue.';
-        case 429: return 'Too many attempts. Please wait before trying again.';
+        case 400:
+          return 'That code isn\'t correct. Please check the code and try again.';
+        case 401:
+          return 'Your session has expired. Please log in again.';
+        case 403:
+          return 'This code has expired. Request a new code to continue.';
+        case 429:
+          return 'Too many attempts. Please wait before trying again.';
         default:
           if (error.statusCode >= 500) {
             return 'We couldn\'t verify your code. Check your connection and try again.';
@@ -281,9 +303,10 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
     if (_resendSeconds > 0) return;
     _otpInputKey.currentState?.clear();
     setState(() => _hasError = false);
-    
-    AnalyticsService.logAuthEvent(AnalyticsEvents.otpResendRequested, method: 'email');
-    
+
+    AnalyticsService.logAuthEvent(AnalyticsEvents.otpResendRequested,
+        method: 'email');
+
     _startResendTimer();
     await _requestOtpCode();
   }
@@ -384,7 +407,9 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
                       ),
                     ),
                     TextButton(
-                      onPressed: (_resendSeconds == 0 && !_isSendingCode) ? _onResend : null,
+                      onPressed: (_resendSeconds == 0 && !_isSendingCode)
+                          ? _onResend
+                          : null,
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         minimumSize: const Size(1, 1),
@@ -424,7 +449,8 @@ class _OtpViewState extends State<OtpView> with SingleTickerProviderStateMixin, 
                           height: 24,
                           child: CircularProgressIndicator(
                             strokeWidth: 2.5,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
                       : Text(

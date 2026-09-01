@@ -1,4 +1,4 @@
-﻿import 'package:property_app/services/api_client.dart';
+import 'package:property_app/services/api_client.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/screens/home/cache_engine.dart';
 
@@ -101,7 +101,7 @@ class PropertiesApi {
     if (lng != null) params['lng'] = lng.toString();
     if (proximity != null) params['proximity'] = proximity.toString();
 
-    final cacheKey = 'props_all_' + params.toString();
+    final cacheKey = 'props_all_$params';
 
     return CacheEngine.instance.getOrFetch<List<Map<String, dynamic>>>(
       key: cacheKey,

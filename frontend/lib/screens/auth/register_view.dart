@@ -20,11 +20,10 @@ class RegisterView extends StatefulWidget {
 
 class _RegisterViewState extends State<RegisterView>
     with TickerProviderStateMixin {
-  
   // ─── Theme Constants (Minimalist Style) ──────────────────────────────────────
-  static const Color _primary = Color(0xFF3F37C9);      // Tenant Blue
-  static const Color _textDark = Color(0xFF222222);     // Dark Grey/Black
-  static const Color _textLight = Color(0xFF717171);    // Light Grey
+  static const Color _primary = Color(0xFF3F37C9); // Tenant Blue
+  static const Color _textDark = Color(0xFF222222); // Dark Grey/Black
+  static const Color _textLight = Color(0xFF717171); // Light Grey
   static const Color _dividerColor = Color(0xFFEBEBEB); // Soft Border Color
   static const Color _errorColor = Color(0xFFE53935);
 
@@ -61,7 +60,8 @@ class _RegisterViewState extends State<RegisterView>
     );
 
     _fadeAnim = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
+    _slideAnim =
+        Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
       CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic),
     );
 
@@ -84,7 +84,7 @@ class _RegisterViewState extends State<RegisterView>
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() => _isLoading = true);
-    
+
     try {
       final repo = RemoteDatabaseRepository();
       final name = _nameController.text.trim();
@@ -116,7 +116,8 @@ class _RegisterViewState extends State<RegisterView>
           setState(() => _isLoading = false);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Registration failed. Please check your information and try again.'),
+              content: Text(
+                  'Registration failed. Please check your information and try again.'),
               backgroundColor: _errorColor,
               behavior: SnackBarBehavior.floating,
             ),
@@ -134,7 +135,7 @@ class _RegisterViewState extends State<RegisterView>
       if (mounted) {
         setState(() => _isLoading = false);
         if (AppSession.isLandlord) {
-          Navigator.pushReplacementNamed(context, '/portal');
+          Navigator.pushReplacementNamed(context, '/verification_center');
         } else {
           Navigator.pushReplacementNamed(context, '/survey');
         }
@@ -247,19 +248,19 @@ class _RegisterViewState extends State<RegisterView>
                               : null,
                         ),
                         const SizedBox(height: 16),
-                        
                         _InputField(
                           controller: _emailController,
                           label: 'Email Address',
                           keyboardType: TextInputType.emailAddress,
                           validator: (v) {
-                            if (v == null || v.trim().isEmpty) return 'Enter your email';
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Enter your email';
+                            }
                             if (!v.contains('@')) return 'Enter a valid email';
                             return null;
                           },
                         ),
                         const SizedBox(height: 16),
-
                         _InputField(
                           controller: _phoneController,
                           label: 'Phone Number',
@@ -269,7 +270,6 @@ class _RegisterViewState extends State<RegisterView>
                               : null,
                         ),
                         const SizedBox(height: 16),
-                        
                         _InputField(
                           controller: _passwordController,
                           label: 'Password',
@@ -277,9 +277,12 @@ class _RegisterViewState extends State<RegisterView>
                           textInputAction: TextInputAction.done,
                           onSubmitted: (_) => _onSignUp(),
                           suffixIcon: GestureDetector(
-                            onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+                            onTap: () => setState(
+                                () => _obscurePassword = !_obscurePassword),
                             child: Icon(
-                              _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              _obscurePassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
                               size: 22,
                               color: _textLight,
                             ),
@@ -314,7 +317,8 @@ class _RegisterViewState extends State<RegisterView>
                               height: 24,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2.5,
-                                valueColor: AlwaysStoppedAnimation(Colors.white),
+                                valueColor:
+                                    AlwaysStoppedAnimation(Colors.white),
                               ),
                             )
                           : Text(
@@ -332,7 +336,8 @@ class _RegisterViewState extends State<RegisterView>
                   // --- Divider ---
                   Row(
                     children: [
-                      const Expanded(child: Divider(color: _dividerColor, thickness: 1.2)),
+                      const Expanded(
+                          child: Divider(color: _dividerColor, thickness: 1.2)),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
@@ -343,7 +348,8 @@ class _RegisterViewState extends State<RegisterView>
                           ),
                         ),
                       ),
-                      const Expanded(child: Divider(color: _dividerColor, thickness: 1.2)),
+                      const Expanded(
+                          child: Divider(color: _dividerColor, thickness: 1.2)),
                     ],
                   ),
                   const SizedBox(height: 32),
@@ -353,7 +359,8 @@ class _RegisterViewState extends State<RegisterView>
                     width: double.infinity,
                     height: 56,
                     child: OutlinedButton(
-                      onPressed: _isGoogleSigningIn ? null : _handleGoogleSignIn,
+                      onPressed:
+                          _isGoogleSigningIn ? null : _handleGoogleSignIn,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: _textDark,
                         side: const BorderSide(color: _textDark, width: 1.2),
@@ -399,10 +406,12 @@ class _RegisterViewState extends State<RegisterView>
                     children: [
                       Text(
                         'Already have an account? ',
-                        style: GoogleFonts.poppins(fontSize: 15, color: _textLight),
+                        style: GoogleFonts.poppins(
+                            fontSize: 15, color: _textLight),
                       ),
                       GestureDetector(
-                        onTap: () => Navigator.pushReplacementNamed(context, '/login'),
+                        onTap: () =>
+                            Navigator.pushReplacementNamed(context, '/login'),
                         child: Text(
                           'Log in',
                           style: GoogleFonts.poppins(
@@ -489,7 +498,9 @@ class _InputFieldState extends State<_InputField> {
       decoration: InputDecoration(
         labelText: widget.label,
         labelStyle: GoogleFonts.poppins(
-          color: _isFocused ? _RegisterViewState._textDark : _RegisterViewState._textLight,
+          color: _isFocused
+              ? _RegisterViewState._textDark
+              : _RegisterViewState._textLight,
           fontSize: 15,
         ),
         floatingLabelStyle: GoogleFonts.poppins(
@@ -535,7 +546,8 @@ class _InputFieldState extends State<_InputField> {
             width: 1.5,
           ),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
         errorStyle: GoogleFonts.poppins(
           color: _RegisterViewState._errorColor,
           fontSize: 12,

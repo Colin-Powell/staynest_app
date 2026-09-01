@@ -238,10 +238,10 @@ class _TenantBookingsViewState extends State<TenantBookingsView> {
                           ),
                         )
                       : _filteredBookings.isEmpty
-                          ? Center(
+                          ? const Center(
                               child: Text(
                                 'No  bookings',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Color(0xFF9CA3AF),
                                   fontSize: 16,
                                 ),

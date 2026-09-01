@@ -2,18 +2,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'theme.dart';
 import 'data.dart';
 import 'models/property.dart';
-import 'screens/screens.dart' hide LandlordVerificationEntry, VerificationCenter;
+import 'screens/screens.dart'
+    hide LandlordVerificationEntry, VerificationCenter;
 import 'services/google_auth_service.dart';
 import 'screens/dashboard/landlord_property_management_page.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
-import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
 import 'screens/dashboard/landlord_tenants_page.dart';
 import 'screens/landlord/verification_flow.dart' show VerificationCenter;
 import 'app_theme.dart';
@@ -92,7 +91,7 @@ Future<void> main() async {
   }
 
   await AppSession.restoreSession();
-  
+
   if (AppSession.currentUserId != null) {
     AuthService.instance.syncFCMToken();
   }
@@ -202,9 +201,10 @@ class _PropertyAppState extends State<PropertyApp> {
                   return;
                 }
 
-                // Landlords bypass tenant preferences
+                // Landlords must complete KYC before the portal becomes available.
                 if (AppSession.isLandlord) {
-                  Navigator.pushReplacementNamed(context, '/portal');
+                  Navigator.pushReplacementNamed(
+                      context, '/verification_center');
                   return;
                 }
 
@@ -217,7 +217,8 @@ class _PropertyAppState extends State<PropertyApp> {
               },
               onRegister: () => Navigator.pushNamed(context, '/register'),
               onGoogleSignIn: () async {
-                final success = await GoogleAuthService.instance.signInWithGoogle();
+                final success =
+                    await GoogleAuthService.instance.signInWithGoogle();
                 if (!success) throw Exception("Sign in failed");
                 if (success) {
                   if (!AppSession.currentUserVerified) {
@@ -230,7 +231,8 @@ class _PropertyAppState extends State<PropertyApp> {
                     return;
                   }
                   if (AppSession.isLandlord) {
-                    Navigator.pushReplacementNamed(context, '/portal');
+                    Navigator.pushReplacementNamed(
+                        context, '/verification_center');
                     return;
                   }
                   await _enforceTenantPreferencesIfMissing(context);
@@ -248,7 +250,8 @@ class _PropertyAppState extends State<PropertyApp> {
             }),
         '/register_form': (context) => RegisterView(
               onGoogleSignIn: () async {
-                final success = await GoogleAuthService.instance.signInWithGoogle();
+                final success =
+                    await GoogleAuthService.instance.signInWithGoogle();
                 if (!success) throw Exception("Sign in failed");
                 if (success) {
                   if (!AppSession.currentUserVerified) {
@@ -261,7 +264,8 @@ class _PropertyAppState extends State<PropertyApp> {
                     return;
                   }
                   if (AppSession.isLandlord) {
-                    Navigator.pushReplacementNamed(context, '/portal');
+                    Navigator.pushReplacementNamed(
+                        context, '/verification_center');
                     return;
                   }
                   await _enforceTenantPreferencesIfMissing(context);
@@ -519,7 +523,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   _AppScreen _screen = _AppScreen.home;
-  int _savedTab = 0;
+  final int _savedTab = 0;
 
   @override
   void initState() {
@@ -591,12 +595,16 @@ class _AppShellState extends State<AppShell> {
       _loadingPropertyDetails = false; // No spinner
     });
 
-    AnalyticsService.logListingInteraction(AnalyticsEvents.listingClick, listingId: initialProperty.id);
-    AnalyticsService.logListingInteraction(AnalyticsEvents.listingView, listingId: initialProperty.id);
-    AnalyticsService.logListingInteraction(AnalyticsEvents.listingView, listingId: initialProperty.id);
-    
+    AnalyticsService.logListingInteraction(AnalyticsEvents.listingClick,
+        listingId: initialProperty.id);
+    AnalyticsService.logListingInteraction(AnalyticsEvents.listingView,
+        listingId: initialProperty.id);
+    AnalyticsService.logListingInteraction(AnalyticsEvents.listingView,
+        listingId: initialProperty.id);
+
     try {
-      final property = await _propertyService.fetchPropertyById(initialProperty.id);
+      final property =
+          await _propertyService.fetchPropertyById(initialProperty.id);
       if (!mounted) return;
 
       if (property != null) {
@@ -620,7 +628,8 @@ class _AppShellState extends State<AppShell> {
   // FIX: avatar is now String? to match MessagesViewScreen.onSelectChat
   void _openChat(String userId, String name, String? avatar) {
     if (_selectedPropertyId != null) {
-      AnalyticsService.logListingInteraction(AnalyticsEvents.landlordContacted, listingId: _selectedPropertyId!);
+      AnalyticsService.logListingInteraction(AnalyticsEvents.landlordContacted,
+          listingId: _selectedPropertyId!);
     }
     setState(() {
       _selectedChatId = userId;
@@ -717,7 +726,8 @@ class _AppShellState extends State<AppShell> {
                 child: AnimatedOpacity(
                   duration: const Duration(milliseconds: 200),
                   opacity: hideBottomNav ? 0.0 : 1.0,
-                  child: Center(child: _BottomNav(current: _screen, onTap: _goTo)),
+                  child:
+                      Center(child: _BottomNav(current: _screen, onTap: _goTo)),
                 ),
               ),
             ),
@@ -743,7 +753,8 @@ class _AppShellState extends State<AppShell> {
           onNotifications: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const NotificationsView()),
+              MaterialPageRoute(
+                  builder: (context) => const NotificationsView()),
             );
           },
         );
@@ -811,8 +822,6 @@ class _AppShellState extends State<AppShell> {
         );
     }
   }
-
-
 
   Widget _buildPropertyDetailsOverlay() {
     if (_loadingPropertyDetails) {

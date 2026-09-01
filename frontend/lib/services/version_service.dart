@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -31,7 +31,7 @@ class VersionService {
         final data = jsonDecode(response.body);
         final String latestVersion = data['latestVersion'] ?? '1.0.0';
         final String updateUrl = data['updateUrl'] ?? 'https://staynest.top/update.html';
-        final bool forceUpdate = false; // Overridden to always allow skipping
+        const bool forceUpdate = false; // Overridden to always allow skipping
 
         // Simple string comparison for versions (assumes semantic versioning like 1.0.1)
         if (_isUpdateAvailable(AppSession.currentAppVersion, latestVersion)) {

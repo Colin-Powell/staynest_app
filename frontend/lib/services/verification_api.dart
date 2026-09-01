@@ -17,8 +17,11 @@ class VerificationApi {
       headers: headers,
       body: payload,
     );
-    final data = jsonDecode(response.body);
-    return data['data'] as Map<String, dynamic>;
+    final decoded = jsonDecode(response.body);
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return decoded as Map<String, dynamic>;
   }
 
   /// Fetch the current user's latest verification status.

@@ -329,7 +329,7 @@ class AboutView extends StatelessWidget {
             const SizedBox(height: 32),
 
             // Version Info
-            Text(
+            const Text(
               'Version ${AppSession.currentAppVersion}',
               style: TextStyle(
                 fontSize: 16,

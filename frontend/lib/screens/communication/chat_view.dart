@@ -825,7 +825,7 @@ class _MyBubble extends StatelessWidget {
         );
       case MessageStatus.sent:
         const isSeen = false; // Mock seen state
-        return Icon(
+        return const Icon(
           isSeen ? PhosphorIconsRegular.checks : PhosphorIconsRegular.check,
           size: 14,
           color: Colors.white70,

@@ -384,7 +384,7 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
                               : () => _handleDecision(id, 'rejected'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.gray900,
-                            side: BorderSide(color: AppColors.gray400),
+                            side: const BorderSide(color: AppColors.gray400),
                             shape: const RoundedRectangleBorder(
                                 borderRadius: BorderRadius.zero),
                             padding: const EdgeInsets.symmetric(

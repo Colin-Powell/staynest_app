@@ -11,14 +11,14 @@ class OnboardingBottomSheet extends StatelessWidget {
   final VoidCallback onDismiss;
 
   const OnboardingBottomSheet({
-    Key? key,
+    super.key,
     required this.title,
     required this.subtitle,
     this.bulletPoints = const [],
     required this.ctaText,
     this.imagePath,
     required this.onDismiss,
-  }) : super(key: key);
+  });
 
   static Future<void> show({
     required BuildContext context,
@@ -84,7 +84,7 @@ class OnboardingBottomSheet extends StatelessWidget {
                     color: AppColors.gray100,
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  child: Center(
+                  child: const Center(
                     child: Icon(Icons.image_not_supported_outlined, size: 48, color: AppColors.gray400),
                   ),
                 ),
@@ -99,7 +99,7 @@ class OnboardingBottomSheet extends StatelessWidget {
                 color: AppColors.gray100,
                 borderRadius: BorderRadius.circular(24),
               ),
-              child: Center(
+              child: const Center(
                 child: Icon(Icons.image_outlined, size: 48, color: AppColors.gray400),
               ),
             ),

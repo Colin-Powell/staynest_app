@@ -9,9 +9,7 @@ import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/user_service.dart';
 import 'package:property_app/services/avatar_service.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
-import 'package:property_app/screens/home/how_it_works_view.dart';
 import 'package:property_app/screens/help_support_view.dart';
-import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'landlord_analytics_page.dart';
 
@@ -884,7 +882,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           ),
           CupertinoSwitch(
             value: value,
-            activeColor: _green,
+            activeTrackColor: _green,
             onChanged: onChanged,
           ),
         ],
@@ -1213,7 +1211,7 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
                             ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: _green))
                             : CupertinoSwitch(
                                 value: is2faEnabled,
-                                activeColor: _green,
+                                activeTrackColor: _green,
                                 onChanged: _handleToggle,
                               ),
                       ],

@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:property_app/models/property.dart';
 import 'package:property_app/models/user.dart';
-import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/property_mapper.dart';
@@ -546,8 +545,9 @@ class RemoteDatabaseRepository {
   }
 
   Future<Map<String, dynamic>> loadCurrentUser() async {
-    if (AppSession.apiToken == null)
+    if (AppSession.apiToken == null) {
       throw Exception('No authenticated session');
+    }
     final response = await apiClient.get(
       Uri.parse('${AppSession.apiBaseUrl}/users/me'),
     );

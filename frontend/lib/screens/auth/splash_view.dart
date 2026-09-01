@@ -63,10 +63,10 @@ class _SplashViewState extends State<SplashView> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (AppSession.apiToken != null && AppSession.apiToken!.isNotEmpty) {
-        if (!AppSession.currentUserVerified) {
+        if (AppSession.isLandlord) {
+          Navigator.pushReplacementNamed(context, '/verification_center');
+        } else if (!AppSession.currentUserVerified) {
           Navigator.pushReplacementNamed(context, '/otp');
-        } else if (AppSession.isLandlord) {
-          Navigator.pushReplacementNamed(context, '/portal');
         } else {
           Navigator.pushReplacementNamed(context, '/home');
         }

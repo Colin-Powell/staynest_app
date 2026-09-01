@@ -445,12 +445,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           child: _buildEmptyChartState(
               'No activity recorded in the last 7 days.'));
     }
-    if (maxY == 0)
+    if (maxY == 0) {
       return _ChartCardBase(
           title: title,
           height: height,
           child: _buildEmptyChartState(
               'No activity recorded in the last 7 days.'));
+    }
 
     maxY = maxY + (maxY * 0.2);
 
@@ -463,7 +464,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             touchTooltipData: LineTouchTooltipData(
               getTooltipColor: (spot) => Colors.white,
               tooltipPadding: const EdgeInsets.all(12),
-              tooltipBorder: BorderSide(
+              tooltipBorder: const BorderSide(
                   color: AppColors.gray400, width: 1), // Soft GA tooltip border
               getTooltipItems: (List<LineBarSpot> touchedSpots) {
                 return touchedSpots.map((spot) {
@@ -504,7 +505,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               show: true,
               drawVerticalLine: false,
               getDrawingHorizontalLine: (value) =>
-                  FlLine(color: AppColors.gray100, strokeWidth: 1)),
+                  const FlLine(color: AppColors.gray100, strokeWidth: 1)),
           titlesData: FlTitlesData(
             rightTitles: AxisTitles(
                 sideTitles: SideTitles(
@@ -528,8 +529,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       if (chartData.isNotEmpty &&
                           index >= 0 &&
                           index < chartData.length) {
-                        if (chartData.length > 5 && index % 2 != 0)
+                        if (chartData.length > 5 && index % 2 != 0) {
                           return const SizedBox.shrink();
+                        }
                         return Text(chartData[index]['label'] ?? '',
                             style: GoogleFonts.inter(
                                 fontSize: 10, color: AppColors.gray500));
@@ -590,7 +592,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 gridData: const FlGridData(show: false),
                 borderData: FlBorderData(
                     show: true,
-                    border: Border(
+                    border: const Border(
                         bottom: BorderSide(
                             color: AppColors.gray400,
                             width: 1))), // Soft bottom border
@@ -629,11 +631,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   Widget _buildSingleLineChartCard(String title, {required double height}) {
     final List<dynamic> data = _overview['verificationData'] ?? [];
-    if (data.isEmpty)
+    if (data.isEmpty) {
       return _ChartCardBase(
           title: title,
           height: height,
           child: _buildEmptyChartState('No verification trends.'));
+    }
 
     bool allZero = true;
     List<FlSpot> spots = [];
@@ -643,11 +646,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       spots.add(FlSpot(i.toDouble(), val));
     }
 
-    if (allZero)
+    if (allZero) {
       return _ChartCardBase(
           title: title,
           height: height,
           child: _buildEmptyChartState('No activity recorded.'));
+    }
 
     return _ChartCardBase(
       title: title,
@@ -658,7 +662,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             touchTooltipData: LineTouchTooltipData(
               getTooltipColor: (spot) => Colors.white,
               tooltipPadding: const EdgeInsets.all(12),
-              tooltipBorder: BorderSide(
+              tooltipBorder: const BorderSide(
                   color: AppColors.gray400, width: 1), // Soft GA tooltip border
               getTooltipItems: (List<LineBarSpot> touchedSpots) {
                 return touchedSpots.map((spot) {
@@ -689,7 +693,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               show: true,
               drawVerticalLine: false,
               getDrawingHorizontalLine: (value) =>
-                  FlLine(color: AppColors.gray100, strokeWidth: 1)),
+                  const FlLine(color: AppColors.gray100, strokeWidth: 1)),
           titlesData: FlTitlesData(
             rightTitles: AxisTitles(
                 sideTitles: SideTitles(
@@ -707,10 +711,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     showTitles: true,
                     getTitlesWidget: (val, meta) {
                       final index = val.toInt();
-                      if (index >= 0 && index < data.length)
+                      if (index >= 0 && index < data.length) {
                         return Text(data[index]['label'] ?? '',
                             style: GoogleFonts.inter(
                                 fontSize: 10, color: AppColors.gray500));
+                      }
                       return const SizedBox.shrink();
                     })),
           ),
@@ -736,11 +741,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   Widget _buildRetentionChartCard({required double height}) {
     final List<dynamic> data = _overview['retentionData'] ?? [];
-    if (data.isEmpty)
+    if (data.isEmpty) {
       return _ChartCardBase(
           title: 'User retention',
           height: height,
           child: _buildEmptyChartState('Insufficient data for retention.'));
+    }
 
     bool allZero = true;
     List<FlSpot> spots = [];
@@ -749,11 +755,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       if (val > 0) allZero = false;
       spots.add(FlSpot(i.toDouble(), val));
     }
-    if (allZero)
+    if (allZero) {
       return _ChartCardBase(
           title: 'User retention',
           height: height,
           child: _buildEmptyChartState('Not enough returning users yet.'));
+    }
 
     return _ChartCardBase(
       title: 'User retention',
@@ -767,7 +774,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   touchTooltipData: LineTouchTooltipData(
                     getTooltipColor: (spot) => Colors.white,
                     tooltipPadding: const EdgeInsets.all(12),
-                    tooltipBorder: BorderSide(
+                    tooltipBorder: const BorderSide(
                         color: AppColors.gray400,
                         width: 1), // Soft GA tooltip border
                     getTooltipItems: (List<LineBarSpot> touchedSpots) {
@@ -799,7 +806,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     show: true,
                     drawVerticalLine: false,
                     getDrawingHorizontalLine: (value) =>
-                        FlLine(color: AppColors.gray100, strokeWidth: 1)),
+                        const FlLine(color: AppColors.gray100, strokeWidth: 1)),
                 titlesData: FlTitlesData(
                   rightTitles: AxisTitles(
                       sideTitles: SideTitles(
@@ -818,7 +825,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           showTitles: true,
                           getTitlesWidget: (val, meta) {
                             final index = val.toInt();
-                            if (index >= 0 && index < data.length)
+                            if (index >= 0 && index < data.length) {
                               return Padding(
                                   padding: const EdgeInsets.only(top: 8.0),
                                   child: Text(
@@ -827,6 +834,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                                       style: GoogleFonts.inter(
                                           fontSize: 9,
                                           color: AppColors.gray500)));
+                            }
                             return const SizedBox.shrink();
                           })),
                 ),

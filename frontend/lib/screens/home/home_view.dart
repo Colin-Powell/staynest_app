@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -13,9 +12,6 @@ import 'package:property_app/services/version_service.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/utils/property_mapper.dart';
-import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
-import 'package:property_app/services/analytics/analytics_service.dart';
-import 'package:property_app/screens/communication/notifications_view.dart';
 
 const _bg = Color(0xFFFAFAFA);
 const _dark = Color(0xFF111827);

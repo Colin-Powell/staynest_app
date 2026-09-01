@@ -225,14 +225,14 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                         radius: 14,
                         backgroundColor: AppColors.gray100,
                         child: Text(
-                          (AppSession.currentUser != null ? AppSession.currentUser!['name'] : 'Admin').substring(0, 1).toUpperCase(),
+                          (AppSession.currentUser!['name']).substring(0, 1).toUpperCase(),
                           style: GoogleFonts.inter(color: AppColors.gray700, fontWeight: FontWeight.w500, fontSize: 12),
                         ),
                       ),
                       if (isDesktop) ...[
                         const SizedBox(width: 8),
                         Text(
-                          (AppSession.currentUser != null ? AppSession.currentUser!['name'] : 'Admin') ?? 'Admin',
+                          (AppSession.currentUser!['name']) ?? 'Admin',
                           style: GoogleFonts.inter(fontWeight: FontWeight.w400, fontSize: 13, color: AppColors.gray700),
                         ),
                         const SizedBox(width: 4),

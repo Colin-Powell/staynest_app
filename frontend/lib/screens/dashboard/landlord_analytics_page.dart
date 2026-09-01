@@ -6,7 +6,6 @@ import 'package:shimmer/shimmer.dart';
 import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
 import 'package:property_app/session/onboarding_prefs.dart';
 import 'package:property_app/widgets/property_image.dart';
-import 'package:property_app/services/analytics/analytics_service.dart';
 import 'landlord_dashboard_service.dart';
 
 // ─── Landlord Design System Constants ─────────────────────────────────────────
@@ -664,7 +663,7 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
             child: LinearProgressIndicator(
               value: percentage,
               backgroundColor: _grey.withOpacity(0.1),
-              valueColor: AlwaysStoppedAnimation<Color>(_green),
+              valueColor: const AlwaysStoppedAnimation<Color>(_green),
               minHeight: 8,
             ),
           ),
@@ -785,8 +784,8 @@ class _InteractiveLineChartPainter extends CustomPainter {
     final double minData = data.reduce((a, b) => a < b ? a : b);
 
     // Padding for axes
-    final double yAxisWidth = 32.0; 
-    final double xAxisHeight = 24.0;
+    const double yAxisWidth = 32.0; 
+    const double xAxisHeight = 24.0;
     
     final double chartWidth = size.width - yAxisWidth;
     final double chartHeight = size.height - xAxisHeight;

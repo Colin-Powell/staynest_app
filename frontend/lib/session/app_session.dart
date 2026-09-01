@@ -7,7 +7,6 @@ import 'package:flutter/foundation.dart'
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:uuid/uuid.dart';
-import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/screens/home/cache_engine.dart';
 import 'package:property_app/services/socket_service.dart';

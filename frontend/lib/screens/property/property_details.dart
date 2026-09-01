@@ -3,14 +3,12 @@
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/models/property_taxonomy.dart';
 import 'package:property_app/widgets/property_image.dart';
-import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/models/review.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
@@ -680,9 +678,9 @@ class _PropertyDetailsState extends State<PropertyDetails> {
             alignment: Alignment.bottomCenter,
             child: Container(
               padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white,
-                border: const Border(top: BorderSide(color: dividerColor, width: 1.2)),
+                border: Border(top: BorderSide(color: dividerColor, width: 1.2)),
               ),
               child: Row(
                 children: [

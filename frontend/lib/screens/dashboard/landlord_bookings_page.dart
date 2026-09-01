@@ -189,7 +189,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                       highlightColor: Colors.grey.shade100,
                       child: Container(
                         width: 120,
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.horizontal(left: Radius.circular(20)),
                         ),

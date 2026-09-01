@@ -737,7 +737,7 @@ class _SkeletonCardState extends State<_SkeletonCard> with SingleTickerProviderS
 
   @override
   Widget build(BuildContext context) {
-    final skeletonColor = const Color(0xFFF3F4F6);
+    const skeletonColor = Color(0xFFF3F4F6);
     return FadeTransition(
       opacity: Tween<double>(begin: 0.4, end: 1.0).animate(_controller),
       child: Column(

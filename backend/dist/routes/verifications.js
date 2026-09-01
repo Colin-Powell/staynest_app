@@ -8,14 +8,31 @@ export const REQUIRED_VERIFICATION_DOCUMENTS = [
     'id_photo_front',
     'id_photo_back',
     'selfie',
-    'proof_of_address',
-    'utility_bill',
-    'property_photos',
 ];
+const DOCUMENT_ALIASES = {
+    id_photo_front: ['id_photo_front', 'idPhotoFront'],
+    id_photo_back: ['id_photo_back', 'idPhotoBack'],
+    selfie: ['selfie', 'selfieUrl'],
+};
+const normalizeVerificationDocuments = (documents) => {
+    const normalized = {};
+    if (!documents || typeof documents !== 'object') {
+        return normalized;
+    }
+    const raw = documents;
+    for (const [canonicalKey, aliases] of Object.entries(DOCUMENT_ALIASES)) {
+        const value = aliases
+            .map((key) => raw[key])
+            .find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0);
+        if (typeof value === 'string' && value.trim().length > 0) {
+            normalized[canonicalKey] = value.trim();
+        }
+    }
+    return normalized;
+};
 export const hasRequiredVerificationDocuments = (documents) => {
-    if (!documents || typeof documents !== 'object')
-        return false;
-    return REQUIRED_VERIFICATION_DOCUMENTS.every((key) => typeof documents[key] === 'string' && documents[key].trim().length > 0);
+    const normalizedDocuments = normalizeVerificationDocuments(documents);
+    return REQUIRED_VERIFICATION_DOCUMENTS.every((key) => typeof normalizedDocuments[key] === 'string' && normalizedDocuments[key].trim().length > 0);
 };
 export async function finalizeVerificationDecision({ verificationId, userId, status, adminNotes, }) {
     const verificationResult = await query(`UPDATE verifications
@@ -47,9 +64,12 @@ export async function finalizeVerificationDecision({ verificationId, userId, sta
 }
 export const createVerificationHandler = async (req, res, next) => {
     try {
-        const { documents, property } = req.body;
-        if (!documents || !property) {
-            return res.status(400).json({ error: 'Documents and property data are required.' });
+        const body = (req.body ?? {});
+        const documentsInput = body.documents ?? body.property_data?.documents ?? {};
+        const propertyInput = body.property ?? body.property_data ?? {};
+        const documents = normalizeVerificationDocuments(documentsInput);
+        if (!documents || Object.keys(documents).length === 0) {
+            return res.status(400).json({ error: 'Verification documents are required.' });
         }
         const missingDocuments = REQUIRED_VERIFICATION_DOCUMENTS.filter((key) => typeof documents[key] !== 'string' || documents[key].trim().length === 0);
         if (missingDocuments.length > 0) {
@@ -61,7 +81,7 @@ export const createVerificationHandler = async (req, res, next) => {
         const initialStatus = 'submitted';
         const result = await query(`INSERT INTO verifications (user_id, status, documents, property_data)
        VALUES ($1, $2, $3::jsonb, $4::jsonb)
-       RETURNING id, user_id, status, documents, property_data, admin_notes, created_at, updated_at`, [req.auth.id, initialStatus, JSON.stringify(documents), JSON.stringify(property)]);
+       RETURNING id, user_id, status, documents, property_data, admin_notes, created_at, updated_at`, [req.auth.id, initialStatus, JSON.stringify(documents), JSON.stringify(propertyInput)]);
         return res.status(201).json({ data: result.rows[0] });
     }
     catch (error) {

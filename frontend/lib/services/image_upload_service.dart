@@ -7,7 +7,6 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import 'package:property_app/services/uploads.dart';
-import 'package:property_app/session/app_session.dart';
 
 class UploadProgress {
   final File file;

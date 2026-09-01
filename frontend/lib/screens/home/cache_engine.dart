@@ -184,7 +184,7 @@ class CacheEngine {
           } else if (decoded is Map) {
             map = Map<String, dynamic>.from(decoded);
           } else {
-            throw FormatException('Unexpected cache payload');
+            throw const FormatException('Unexpected cache payload');
           }
           final loadedEntry = CacheEntry.fromJson(map);
           if (loadedEntry.version == _currentVersion) {

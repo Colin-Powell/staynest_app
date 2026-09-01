@@ -220,11 +220,11 @@ class _AddPropertyViewState extends State<AddPropertyView>
         const SizedBox(height: 12),
         GestureDetector(
           onTap: _openLocationPickerSheet,
-          child: Row(
+          child: const Row(
             children: [
-              const Icon(Icons.my_location_rounded, color: _primary, size: 18),
-              const SizedBox(width: 8),
-              const Text(
+              Icon(Icons.my_location_rounded, color: _primary, size: 18),
+              SizedBox(width: 8),
+              Text(
                 'Use my current location',
                 style: TextStyle(
                   fontSize: 14,

@@ -15,13 +15,13 @@ class PropertyCard extends StatefulWidget {
   final bool isGrid;
 
   const PropertyCard({
-    Key? key,
+    super.key,
     required this.property,
     required this.onTap,
     this.isHorizontal = true,
     this.width = 300,
     this.isGrid = false,
-  }) : super(key: key);
+  });
 
   @override
   State<PropertyCard> createState() => _PropertyCardState();

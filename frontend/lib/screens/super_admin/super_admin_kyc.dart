@@ -356,9 +356,10 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
 
   // LIST VIEW COMPONENT
   Widget _buildList(List<Map<String, dynamic>> filteredItems) {
-    if (_loading)
+    if (_loading) {
       return const Center(
           child: CircularProgressIndicator(color: AppColors.gray900));
+    }
     if (filteredItems.isEmpty) {
       return Center(
         child: Column(

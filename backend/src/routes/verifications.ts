@@ -10,16 +10,39 @@ export const REQUIRED_VERIFICATION_DOCUMENTS = [
   'id_photo_front',
   'id_photo_back',
   'selfie',
-  'proof_of_address',
-  'utility_bill',
-  'property_photos',
 ] as const;
 
-export const hasRequiredVerificationDocuments = (documents: Record<string, any> | undefined) => {
-  if (!documents || typeof documents !== 'object') return false;
+const DOCUMENT_ALIASES: Record<string, string[]> = {
+  id_photo_front: ['id_photo_front', 'idPhotoFront'],
+  id_photo_back: ['id_photo_back', 'idPhotoBack'],
+  selfie: ['selfie', 'selfieUrl'],
+};
 
+const normalizeVerificationDocuments = (documents: unknown): Record<string, string> => {
+  const normalized: Record<string, string> = {};
+  if (!documents || typeof documents !== 'object') {
+    return normalized;
+  }
+
+  const raw = documents as Record<string, any>;
+
+  for (const [canonicalKey, aliases] of Object.entries(DOCUMENT_ALIASES)) {
+    const value = aliases
+      .map((key) => raw[key])
+      .find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0);
+
+    if (typeof value === 'string' && value.trim().length > 0) {
+      normalized[canonicalKey] = value.trim();
+    }
+  }
+
+  return normalized;
+};
+
+export const hasRequiredVerificationDocuments = (documents: Record<string, any> | undefined) => {
+  const normalizedDocuments = normalizeVerificationDocuments(documents);
   return REQUIRED_VERIFICATION_DOCUMENTS.every(
-    (key) => typeof documents[key] === 'string' && documents[key].trim().length > 0,
+    (key) => typeof normalizedDocuments[key] === 'string' && normalizedDocuments[key].trim().length > 0,
   );
 };
 
@@ -78,9 +101,13 @@ export async function finalizeVerificationDecision({
 
 export const createVerificationHandler = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { documents, property } = req.body as { documents?: Record<string, any>; property?: Record<string, any> };
-    if (!documents || !property) {
-      return res.status(400).json({ error: 'Documents and property data are required.' });
+    const body = (req.body ?? {}) as Record<string, any>;
+    const documentsInput = body.documents ?? body.property_data?.documents ?? {};
+    const propertyInput = body.property ?? body.property_data ?? {};
+    const documents = normalizeVerificationDocuments(documentsInput);
+
+    if (!documents || Object.keys(documents).length === 0) {
+      return res.status(400).json({ error: 'Verification documents are required.' });
     }
 
     const missingDocuments = REQUIRED_VERIFICATION_DOCUMENTS.filter(
@@ -100,7 +127,7 @@ export const createVerificationHandler = async (req: Request, res: Response, nex
       `INSERT INTO verifications (user_id, status, documents, property_data)
        VALUES ($1, $2, $3::jsonb, $4::jsonb)
        RETURNING id, user_id, status, documents, property_data, admin_notes, created_at, updated_at`,
-      [req.auth!.id, initialStatus, JSON.stringify(documents), JSON.stringify(property)],
+      [req.auth!.id, initialStatus, JSON.stringify(documents), JSON.stringify(propertyInput)],
     );
 
     return res.status(201).json({ data: result.rows[0] });
