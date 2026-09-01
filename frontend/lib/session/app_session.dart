@@ -45,6 +45,7 @@ class AppSession {
   static String? currentUserPhone;
   static String? currentUserAvatar;
   static bool currentUserVerified = false;
+  static bool emailVerified = false;
   static String? referralCode;
   static double walletBalance = 0.0;
 
@@ -103,7 +104,8 @@ class AppSession {
       savedPropertyIds.remove(id);
       if (userId != null) {
         try {
-          await RemoteDatabaseRepository().removeFavoriteForUser(userId: userId, propertyId: id);
+          await RemoteDatabaseRepository()
+              .removeFavoriteForUser(userId: userId, propertyId: id);
         } catch (e) {
           debugPrint('Failed to remove favorite: $e');
         }
@@ -112,7 +114,8 @@ class AppSession {
       savedPropertyIds.add(id);
       if (userId != null) {
         try {
-          await RemoteDatabaseRepository().savePropertyForUser(userId: userId, propertyId: id);
+          await RemoteDatabaseRepository()
+              .savePropertyForUser(userId: userId, propertyId: id);
         } catch (e) {
           debugPrint('Failed to add favorite: $e');
         }
@@ -280,11 +283,13 @@ class AppSession {
         apiToken = tokens['apiToken']?.toString();
         refreshToken = tokens['refreshToken']?.toString();
       }
-      
+
       if (currentUserId != null) {
         try {
-          final favorites = await RemoteDatabaseRepository().loadFavoritesForUser(currentUserId!);
-          setSavedPropertyIds(favorites.map((f) => f['property_id'].toString()));
+          final favorites = await RemoteDatabaseRepository()
+              .loadFavoritesForUser(currentUserId!);
+          setSavedPropertyIds(
+              favorites.map((f) => f['property_id'].toString()));
         } catch (e) {
           debugPrint('Failed to load favorites on restore: $e');
         }
@@ -318,10 +323,17 @@ class AppSession {
     currentUserAvatar = user['avatar']?.toString();
     currentRole = user['role']?.toString() ?? currentRole;
     currentUserVerified = user['verified'] == true;
+    emailVerified = user['email_verified'] == true ||
+        user['otp_verified'] == true ||
+        user['verified'] == true ||
+        emailVerified;
     referralCode = user['referral_code']?.toString();
-    walletBalance = double.tryParse(user['wallet_balance']?.toString() ?? '0') ?? 0.0;
+    walletBalance =
+        double.tryParse(user['wallet_balance']?.toString() ?? '0') ?? 0.0;
     AnalyticsService.setUserId(currentUserId);
   }
+
+  static bool get isEmailVerified => emailVerified;
 
   static bool get isLandlord =>
       currentRole == 'landlord' || currentRole == 'host';
@@ -341,6 +353,7 @@ class AppSession {
     currentUserPhone = null;
     currentUserAvatar = null;
     currentUserVerified = false;
+    emailVerified = false;
     referralCode = null;
     walletBalance = 0.0;
     await AnalyticsService.setUserId(null);

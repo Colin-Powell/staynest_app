@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
 import { queueUserPush } from '../services/queue.js';
-import { sendLandlordVerificationDecisionEmail } from '../services/email.js';
+import { sendAlertEmail, sendLandlordVerificationDecisionEmail } from '../services/email.js';
 const router = Router();
 export const REQUIRED_VERIFICATION_DOCUMENTS = [
     'id_photo_front',
@@ -95,6 +95,16 @@ export const createVerificationHandler = async (req, res, next) => {
         const result = await query(`INSERT INTO verifications (user_id, status, documents, property_data)
        VALUES ($1, $2, $3::jsonb, $4::jsonb)
        RETURNING id, user_id, status, documents, property_data, admin_notes, created_at, updated_at`, [req.auth.id, initialStatus, JSON.stringify(documents), JSON.stringify(propertyInput)]);
+        const userResult = await query(`SELECT id, name, email FROM users WHERE id = $1 LIMIT 1`, [req.auth.id]);
+        const user = userResult.rows[0];
+        if (user?.email) {
+            try {
+                await sendAlertEmail(user.email, 'StayNest landlord verification submitted', `Hi ${user.name || 'Landlord'},\n\nYour landlord verification documents have been submitted successfully. Our team will review them shortly and notify you once a decision is made.\n\nWarm regards,\nThe StayNest Team`, `<p>Hi ${user.name || 'Landlord'},</p><p>Your landlord verification documents have been submitted successfully.</p><p>Our team will review them shortly and notify you once a decision is made.</p><p>Warm regards,<br>The StayNest Team</p>`);
+            }
+            catch (emailError) {
+                console.error('Failed to send landlord verification submission email:', emailError);
+            }
+        }
         return res.status(201).json({ data: result.rows[0] });
     }
     catch (error) {

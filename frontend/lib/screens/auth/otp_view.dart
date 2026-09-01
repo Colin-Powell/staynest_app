@@ -224,8 +224,12 @@ class _OtpViewState extends State<OtpView>
         throw Exception(result?['error']?.toString() ?? 'Verification failed.');
       }
 
-      if (result['verified'] == true || result['user']?['verified'] == true) {
-        AppSession.currentUserVerified = true;
+      if (result['verified'] == true ||
+          result['user']?['verified'] == true ||
+          result['user'] != null) {
+        AppSession.emailVerified = true;
+        AppSession.currentUserVerified =
+            result['user']?['verified'] == true || result['verified'] == true;
         if (result['user'] != null) {
           AppSession.updateCurrentUser(result['user']);
         }
@@ -240,7 +244,10 @@ class _OtpViewState extends State<OtpView>
       ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
 
       if (AppSession.isLandlord) {
-        Navigator.pushNamed(context, '/verification_center');
+        final target = AppSession.currentUserVerified
+            ? '/landlord_dashboard'
+            : '/verification_center';
+        Navigator.pushReplacementNamed(context, target);
       } else {
         Navigator.pushReplacementNamed(context, '/home');
       }
