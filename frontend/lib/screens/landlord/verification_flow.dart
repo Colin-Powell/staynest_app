@@ -1,20 +1,23 @@
-// lib/screens/verification_center.dart
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:camera/camera.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:iconify_flutter/iconify_flutter.dart';
-import 'package:iconify_flutter/icons/mdi.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:property_app/session/app_session.dart';
-import 'package:property_app/theme.dart';
 import 'package:property_app/services/uploads.dart';
-import 'package:uuid/uuid.dart';
+import 'package:property_app/services/image_upload_service.dart';
 import 'package:property_app/services/verification_api.dart';
+
+// ─── Landlord Design System Constants ─────────────────────────────────────────
+const Color _bg = Color(0xFFFAFAFA);
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF9CA3AF);
+const Color _surface = Colors.white;
+const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 
 // ==========================================
 // 1. CORE DATA
@@ -45,9 +48,8 @@ class VerificationSession {
     if (selfie != null) completed++;
     if (proofOfAddress != null) completed++;
     if (utilityBill != null) completed++;
-    if (leaseAgreement != null) completed++;
     if (propertyPhotos != null) completed++;
-    return completed / 7;
+    return completed / 6; // 6 critical documents required before approval
   }
 
   Map<String, dynamic> toDocumentsMap() => {
@@ -83,37 +85,31 @@ class _VerificationCenterState extends State<VerificationCenter> {
   Widget build(BuildContext context) {
     if (!AppSession.isLandlord) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: _bg,
         appBar: AppBar(
-          backgroundColor: AppColors.background,
+          backgroundColor: _bg,
           elevation: 0,
-          iconTheme: const IconThemeData(color: AppColors.gray900),
-          title: Text('Access Denied',
-              style: GoogleFonts.poppins(
-                  color: AppColors.gray900,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20)),
+          leading: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 24),
+          ),
+          title: Text('Access Denied', style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
         ),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                const Icon(PhosphorIconsRegular.shieldSlash, size: 64, color: _grey),
+                const SizedBox(height: 16),
                 Text(
                   'Verification center is available for landlords only.',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    color: AppColors.gray700,
-                  ),
+                  style: GoogleFonts.poppins(fontSize: 16, color: _grey),
                 ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Go Back'),
-                ),
+                const SizedBox(height: 24),
+                PrimaryButton(text: 'Go Back', onPressed: () => Navigator.pop(context)),
               ],
             ),
           ),
@@ -122,87 +118,62 @@ class _VerificationCenterState extends State<VerificationCenter> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: _bg,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.gray900),
-        title: Text('Verification Center',
-            style: GoogleFonts.poppins(
-                color: AppColors.gray900,
-                fontWeight: FontWeight.bold,
-                fontSize: 20)),
+        scrolledUnderElevation: 0,
+        leading: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 28),
+        ),
+        title: Text('Verification Center', style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w700, fontSize: 22, letterSpacing: -0.5)),
       ),
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.xl),
+                padding: const EdgeInsets.all(24),
+                physics: const BouncingScrollPhysics(),
                 child: Column(
                   children: [
-                    const SizedBox(height: 20),
-                    Iconify(Mdi.shield_check,
-                        size: 120, color: AppColors.primary),
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(color: _green.withOpacity(0.1), shape: BoxShape.circle),
+                      child: const Icon(PhosphorIconsFill.shieldCheck, size: 80, color: _green),
+                    ),
                     const SizedBox(height: 24),
                     Text(
-                        'Complete verification to build trust with\ntenants and get higher visibility',
+                        'Complete verification to build trust with\ntenants and unlock premium features.',
                         textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(
-                            fontSize: 15,
-                            color: AppColors.gray500,
-                            height: 1.4)),
+                        style: GoogleFonts.poppins(fontSize: 15, color: _grey, height: 1.5)),
                     const SizedBox(height: 48),
-                    _buildFeature(
-                        PhosphorIcons.sealCheck(PhosphorIconsStyle.fill),
-                        'Verified Badge',
-                        'Show tenants you are trustworthy'),
-                    _buildFeature(PhosphorIcons.eye(PhosphorIconsStyle.fill),
-                        'Higher Visibility', 'Get featured in more searches'),
-                    _buildFeature(
-                        PhosphorIcons.lightning(PhosphorIconsStyle.fill),
-                        'Faster Bookings',
-                        'Verified landlords get more bookings'),
-                    _buildFeature(
-                        PhosphorIcons.lockKey(PhosphorIconsStyle.fill),
-                        'Secure Platform',
-                        'We protect you and your tenants'),
+                    _buildFeature(PhosphorIconsFill.sealCheck, 'Verified Badge', 'Show tenants you are trustworthy'),
+                    _buildFeature(PhosphorIconsFill.eye, 'Higher Visibility', 'Get featured in more searches'),
+                    _buildFeature(PhosphorIconsFill.lightning, 'Faster Bookings', 'Verified landlords get more bookings'),
+                    _buildFeature(PhosphorIconsFill.lockKey, 'Secure Platform', 'We protect you and your tenants'),
                   ],
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.xl),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: _surface,
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, -4))],
+                border: Border(top: BorderSide(color: _grey.withOpacity(0.1))),
+              ),
               child: Column(
                 children: [
                   PrimaryButton(
-                      text: 'Start Verification',
-                      onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => VerificationRequirementHub(
-                                  session: _session)))),
+                    text: 'Start Verification',
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VerificationRequirementHub(session: _session)))
+                  ),
                   const SizedBox(height: 16),
                   TextButton(
-                    onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const VerificationStatusView(
-                                statusData: {'status': 'submitted'}))),
-                    child: Text('View Verification Status',
-                        style: GoogleFonts.poppins(
-                            color: AppColors.primary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                  TextButton(
-                    onPressed: () =>
-                        Navigator.pushReplacementNamed(context, '/portal'),
-                    child: Text('Skip for now (Admin Approval Required)',
-                        style: GoogleFonts.poppins(
-                            color: AppColors.primary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600)),
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VerificationStatusView(statusData: {'status': 'submitted'}))),
+                    child: Text('Check Existing Status', style: GoogleFonts.poppins(color: _green, fontSize: 15, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -215,25 +186,25 @@ class _VerificationCenterState extends State<VerificationCenter> {
 
   Widget _buildFeature(IconData icon, String title, String subtitle) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+      padding: const EdgeInsets.only(bottom: 24),
       child: Row(
         children: [
-          Icon(icon, size: 36, color: AppColors.primary),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: _green.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+            child: Icon(icon, size: 28, color: _green),
+          ),
           const SizedBox(width: 16),
           Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Text(title,
-                    style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.gray900)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: _dark)),
                 const SizedBox(height: 2),
-                Text(subtitle,
-                    style: GoogleFonts.poppins(
-                        fontSize: 14, color: AppColors.gray500)),
-              ]))
+                Text(subtitle, style: GoogleFonts.poppins(fontSize: 14, color: _grey)),
+              ]
+            )
+          )
         ],
       ),
     );
@@ -247,136 +218,112 @@ class VerificationRequirementHub extends StatefulWidget {
   final VerificationSession session;
   const VerificationRequirementHub({super.key, required this.session});
   @override
-  State<VerificationRequirementHub> createState() =>
-      _VerificationRequirementHubState();
+  State<VerificationRequirementHub> createState() => _VerificationRequirementHubState();
 }
 
-class _VerificationRequirementHubState
-    extends State<VerificationRequirementHub> {
+class _VerificationRequirementHubState extends State<VerificationRequirementHub> {
   @override
   Widget build(BuildContext context) {
-    int idDocs = (widget.session.idPhotoFront != null ? 1 : 0) +
-        (widget.session.idPhotoBack != null ? 1 : 0) +
-        (widget.session.selfie != null ? 1 : 0);
-    int propDocs = widget.session.utilityBill != null ? 1 : 0;
+    int idDocs = (widget.session.idPhotoFront != null ? 1 : 0) + (widget.session.idPhotoBack != null ? 1 : 0) + (widget.session.selfie != null ? 1 : 0);
+    int propDocs = (widget.session.proofOfAddress != null ? 1 : 0) + (widget.session.utilityBill != null ? 1 : 0) + (widget.session.propertyPhotos != null ? 1 : 0);
     String progressStr = '${(widget.session.progress * 100).toInt()}%';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: _bg,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.gray900),
-        toolbarHeight: 100,
-        title: Text('Verification\nRequirement',
-            style: GoogleFonts.poppins(
-                color: AppColors.gray900,
-                fontWeight: FontWeight.bold,
-                fontSize: 24,
-                height: 1.2)),
+        scrolledUnderElevation: 0,
+        leading: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 28),
+        ),
+        toolbarHeight: 80,
+        title: Text('Requirements', style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w700, fontSize: 24, letterSpacing: -0.5)),
       ),
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.xl),
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Complete all steps to get verified',
-                        style: GoogleFonts.poppins(
-                            color: AppColors.gray500, fontSize: 16)),
+                    Text('Complete all mandatory steps below to get your profile verified.', style: GoogleFonts.poppins(color: _grey, fontSize: 15)),
                     const SizedBox(height: 32),
                     VerificationCard(
-                      icon: PhosphorIcons.identificationCard(),
-                      iconColor:
-                          idDocs == 3 ? AppColors.green600 : AppColors.primary,
+                      icon: PhosphorIconsRegular.identificationCard,
                       title: 'Identity Verification',
                       subtitle: 'Verify your identity you\'re human',
                       statusText: '$idDocs/3',
-                      statusColor: idDocs == 3
-                          ? AppColors.green600
-                          : StayNestColors.warning,
-                      hasError: widget.session.adminRejections
-                          .containsKey('identity'),
+                      isComplete: idDocs == 3,
+                      hasError: widget.session.adminRejections.containsKey('identity'),
                       errorMessage: widget.session.adminRejections['identity'],
                       onTap: () async {
-                        await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => VerificationStepFlow(
-                                    session: widget.session, initialPage: 0)));
+                        await Navigator.push(context, MaterialPageRoute(builder: (_) => VerificationStepFlow(session: widget.session, initialPage: 0)));
                         setState(() {});
                       },
                     ),
                     VerificationCard(
-                      icon: PhosphorIcons.buildings(),
-                      iconColor: propDocs >= 1
-                          ? AppColors.green600
-                          : StayNestColors.warning,
+                      icon: PhosphorIconsRegular.buildings,
                       title: 'Property Verification',
                       subtitle: 'Prove property ownership',
                       statusText: '$propDocs/3',
-                      statusColor: propDocs >= 1
-                          ? AppColors.green600
-                          : StayNestColors.warning,
-                      hasError: widget.session.adminRejections
-                          .containsKey('property'),
+                      isComplete: propDocs == 3,
+                      hasError: widget.session.adminRejections.containsKey('property'),
                       errorMessage: widget.session.adminRejections['property'],
                       onTap: () async {
-                        await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => VerificationStepFlow(
-                                    session: widget.session, initialPage: 1)));
+                        await Navigator.push(context, MaterialPageRoute(builder: (_) => VerificationStepFlow(session: widget.session, initialPage: 1)));
                         setState(() {});
                       },
                     ),
-                    VerificationCard(
-                      icon: PhosphorIcons.storefront(),
-                      iconColor: AppColors.gray400,
-                      title: 'Business Verification',
-                      subtitle: 'Verify your business details',
-                      statusText: '0/2',
-                      statusColor: AppColors.gray400,
+                    const VerificationCard(
+                      icon: PhosphorIconsRegular.storefront,
+                      title: 'Business Details',
+                      subtitle: 'Completed via settings',
+                      statusText: 'Done',
+                      isComplete: true,
+                      onTap: null,
                     ),
                     const SizedBox(height: 32),
-                    Text('Overall Progress',
-                        style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                            color: AppColors.gray900)),
+                    Text('Overall Progress', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 16, color: _dark)),
                     const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
                             child: LinearProgressIndicator(
                                 value: widget.session.progress,
-                                backgroundColor: StayNestColors.outlineLight,
-                                color: AppColors.primary,
-                                minHeight: 8,
-                                borderRadius: BorderRadius.circular(4))),
+                                backgroundColor: _grey.withOpacity(0.2),
+                                valueColor: const AlwaysStoppedAnimation<Color>(_green),
+                                minHeight: 8),
+                          ),
+                        ),
                         const SizedBox(width: 16),
-                        Text(progressStr,
-                            style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.gray900)),
+                        Text(progressStr, style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: _dark)),
                       ],
                     ),
-                    const SizedBox(height: 40),
-                    PrimaryButton(
-                        text: 'Start Verification',
-                        onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => VerificationStepFlow(
-                                    session: widget.session)))),
                   ],
                 ),
               ),
             ),
             const SecureWatermark(),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: _surface,
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, -4))],
+                border: Border(top: BorderSide(color: _grey.withOpacity(0.1))),
+              ),
+              child: PrimaryButton(
+                text: 'Continue',
+                enabled: widget.session.progress == 1.0,
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VerificationStepFlow(session: widget.session)))
+              ),
+            ),
           ],
         ),
       ),
@@ -390,16 +337,16 @@ class _VerificationRequirementHubState
 class VerificationStepFlow extends StatefulWidget {
   final VerificationSession session;
   final int initialPage;
-  const VerificationStepFlow(
-      {super.key, required this.session, this.initialPage = 0});
+  const VerificationStepFlow({super.key, required this.session, this.initialPage = 0});
   @override
   State<VerificationStepFlow> createState() => _VerificationStepFlowState();
 }
 
 class _VerificationStepFlowState extends State<VerificationStepFlow> {
-  late final PageController _pageController =
-      PageController(initialPage: widget.initialPage);
+  late final PageController _pageController = PageController(initialPage: widget.initialPage);
   late int _currentPage;
+  bool _isSubmitting = false;
+  final String _idempotencyKey = const Uuid().v4();
 
   @override
   void initState() {
@@ -413,96 +360,67 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
     super.dispose();
   }
 
-  bool get _identityComplete =>
-      widget.session.idPhotoFront != null &&
-      widget.session.idPhotoBack != null &&
-      widget.session.selfie != null &&
-      widget.session.proofOfAddress != null;
-  bool get _propertyComplete =>
-      widget.session.utilityBill != null &&
-      widget.session.propertyPhotos != null;
+  bool get _identityComplete => widget.session.idPhotoFront != null && widget.session.idPhotoBack != null && widget.session.selfie != null;
+  bool get _propertyComplete => widget.session.proofOfAddress != null && widget.session.utilityBill != null && widget.session.propertyPhotos != null;
   bool get _allPagesComplete => _identityComplete && _propertyComplete;
-
-  bool _isSubmitting = false;
-  final String _idempotencyKey = const Uuid().v4();
 
   Future<void> _goNext() async {
     if (_isSubmitting) return;
 
     if (_currentPage == 0) {
       if (!_identityComplete) {
-        ModalUtils.showError(context, 'Incomplete Step',
-            'Please upload all required identity documents before continuing.');
+        ModalUtils.showError(context, 'Incomplete Step', 'Please upload all required identity documents before continuing.');
         return;
       }
-      _pageController.nextPage(
-          duration: const Duration(milliseconds: 300), curve: Curves.ease);
+      _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
       return;
     }
 
     if (!_allPagesComplete) {
-      ModalUtils.showError(context, 'Complete All Pages',
-          'Finish the required property verification steps before review.');
+      ModalUtils.showError(context, 'Complete All Pages', 'Finish the required property verification steps before review.');
       return;
     }
 
     setState(() => _isSubmitting = true);
     try {
-      final payload = {
-        'documents': widget.session.toDocumentsMap(),
-        'property': {}
-      };
+      final payload = {'documents': widget.session.toDocumentsMap(), 'property': {}};
       final resp = await VerificationApi.submitVerification(payload, idempotencyKey: _idempotencyKey);
       final data = resp['data'] ?? resp;
       if (mounted) {
         setState(() => _isSubmitting = false);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) => VerificationStatusView(
-                  statusData: data ?? {'status': 'submitted'})));
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => VerificationStatusView(statusData: data ?? {'status': 'submitted'})));
       }
     } catch (e) {
       if (mounted) setState(() => _isSubmitting = false);
-      ModalUtils.showError(context, 'Submission Failed',
-          'Something went wrong while submitting your documents. Please try again later.');
+      ModalUtils.showError(context, 'Submission Failed', 'Something went wrong while submitting your documents. Please try again later.');
     }
   }
 
   void _goBack() {
     if (_currentPage > 0) {
-      _pageController.previousPage(
-          duration: const Duration(milliseconds: 300), curve: Curves.ease);
+      _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
       return;
     }
     Navigator.pop(context);
   }
 
-  // Network Upload Wrapper Function
-  Future<void> _handleUpload(
-      File file, String type, Function(String url) onSuccess) async {
+  Future<void> _handleUpload(File file, String type, Function(String url) onSuccess) async {
     final progress = ValueNotifier<double>(0.0);
-    final task = UploadsService.uploadFileWithProgress(
-      file,
-      (p) => progress.value = p,
-      idempotencyKey: '${_idempotencyKey}_$type',
-    );
-    ModalUtils.showProgress(context, progress,
-        message: 'Uploading document...', onCancel: () => task.cancel());
+    final task = UploadsService.uploadFileWithProgress(file, (p) => progress.value = p, idempotencyKey: '${_idempotencyKey}_$type');
+    
+    ModalUtils.showProgress(context, progress, message: 'Uploading securely...', onCancel: () => task.cancel());
+    
     try {
       final url = await task.future;
       onSuccess(url);
-      if (mounted) Navigator.pop(context); // close progress dialog
-      ModalUtils.showSuccess(context, 'Document uploaded successfully!',
-          onOk: () => Navigator.pop(context),
-          autoClose: const Duration(milliseconds: 1200));
+      if (mounted) Navigator.pop(context); 
+      ModalUtils.showSuccess(context, 'Document uploaded successfully!', autoClose: const Duration(milliseconds: 1200));
     } catch (e) {
-      if (mounted) Navigator.pop(context); // close progress dialog
+      if (mounted) Navigator.pop(context);
       if (e is UploadCancelledException) {
-        ModalUtils.showCancelled(context);
+        ModalUtils.showError(context, 'Cancelled', 'The upload was cancelled.');
       } else {
-        ModalUtils.showError(context, 'Upload Failed',
-            'We couldn\'t upload your document. Please check your connection and try again.');
+        ModalUtils.showError(context, 'Upload Failed', 'We couldn\'t upload your document. Please check your connection.');
       }
     }
   }
@@ -510,35 +428,24 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: _bg,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.gray900),
-        title: Text(
-            _currentPage == 0
-                ? 'Identity Verification'
-                : 'Property Verification',
-            style: GoogleFonts.poppins(
-                color: AppColors.gray900,
-                fontWeight: FontWeight.bold,
-                fontSize: 20)),
+        scrolledUnderElevation: 0,
+        leading: GestureDetector(onTap: _goBack, child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 28)),
+        title: Text(_currentPage == 0 ? 'Identity Verification' : 'Property Verification', style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
       ),
       body: SafeArea(
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xl, vertical: AppSpacing.md),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Step ${_currentPage + 1} of 2',
-                      style: GoogleFonts.poppins(
-                          color: AppColors.gray500, fontSize: 14)),
-                  Text('${(widget.session.progress * 100).toInt()}% complete',
-                      style: GoogleFonts.poppins(
-                          color: AppColors.gray500, fontSize: 14)),
+                  Text('Step ${_currentPage + 1} of 2', style: GoogleFonts.poppins(color: _grey, fontSize: 14, fontWeight: FontWeight.w600)),
+                  Text('${(widget.session.progress * 100).toInt()}% complete', style: GoogleFonts.poppins(color: _green, fontSize: 14, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
@@ -546,45 +453,37 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
               child: PageView(
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (index) => setState(() {
-                  _currentPage = index;
-                }),
+                onPageChanged: (index) => setState(() => _currentPage = index),
                 children: [_buildIdentityPage(), _buildPropertyPage()],
               ),
             ),
             const SecureWatermark(),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xl, vertical: AppSpacing.md),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(color: _surface, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, -4))], border: Border(top: BorderSide(color: _grey.withOpacity(0.1)))),
               child: Row(
                 children: [
                   if (_currentPage > 0)
                     Expanded(
-                        child: OutlinedButton(
-                            onPressed: _goBack,
-                            style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: AppColors.primary),
-                                shape: const RoundedRectangleBorder(
-                                    borderRadius: AppRadius.buttonBorderRadius),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16)),
-                            child: Text('Back',
-                                style: GoogleFonts.poppins(
-                                    color: AppColors.primary,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600)))),
-                  if (_currentPage > 0) const SizedBox(width: 12),
+                      child: OutlinedButton(
+                        onPressed: _goBack,
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: _green, width: 1.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                          padding: const EdgeInsets.symmetric(vertical: 16)
+                        ),
+                        child: Text('Back', style: GoogleFonts.poppins(color: _green, fontSize: 16, fontWeight: FontWeight.w600))
+                      )
+                    ),
+                  if (_currentPage > 0) const SizedBox(width: 16),
                   Expanded(
-                      child: PrimaryButton(
-                          text: _isSubmitting
-                              ? 'Submitting...'
-                              : (_currentPage == 0
-                                  ? 'Next'
-                                  : 'Review Verification'),
-                          enabled: !_isSubmitting && (_currentPage == 0
-                              ? _identityComplete
-                              : _allPagesComplete),
-                          onPressed: _goNext)),
+                    flex: 2,
+                    child: PrimaryButton(
+                      text: _isSubmitting ? 'Submitting...' : (_currentPage == 0 ? 'Continue' : 'Submit Verification'),
+                      enabled: !_isSubmitting,
+                      onPressed: _goNext
+                    )
+                  ),
                 ],
               ),
             )
@@ -596,144 +495,72 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
 
   Widget _buildIdentityPage() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Upload Your Identity documents',
-              style:
-                  GoogleFonts.poppins(color: AppColors.gray500, fontSize: 16)),
+          Text('Upload Your Identity documents', style: GoogleFonts.poppins(color: _grey, fontSize: 15)),
           const SizedBox(height: 32),
           VerificationCard(
-            icon: PhosphorIcons.identificationCard(),
-            iconColor: widget.session.idPhotoFront != null
-                ? AppColors.green600
-                : AppColors.gray400,
+            icon: PhosphorIconsRegular.identificationCard,
             title: 'National ID (Front)',
             subtitle: 'Clear photo of the front',
-            statusText:
-                widget.session.idPhotoFront != null ? 'Approved' : 'Upload',
-            statusColor: widget.session.idPhotoFront != null
-                ? AppColors.green600
-                : AppColors.primary,
-            hasError:
-                widget.session.adminRejections.containsKey('idPhotoFront'),
+            isComplete: widget.session.idPhotoFront != null,
+            statusText: widget.session.idPhotoFront != null ? 'Approved' : 'Upload',
+            hasError: widget.session.adminRejections.containsKey('idPhotoFront'),
             errorMessage: widget.session.adminRejections['idPhotoFront'],
             onTap: () async {
-              await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => DocumentCapture(
-                            title: 'National ID (Front)',
-                            subtitle: 'Ensure all edges are visible',
-                            onFileCaptured: (file) async {
-                              widget.session.idPhotoFront = file;
-                              widget.session.adminRejections
-                                  .remove('idPhotoFront');
-                              setState(() {});
-                              await _handleUpload(
-                                  file,
-                                  'idPhotoFront',
-                                  (url) =>
-                                      widget.session.idPhotoFrontUrl = url);
-                            },
-                          )));
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentCapture(
+                title: 'National ID (Front)',
+                subtitle: 'Ensure all edges are visible',
+                onFileCaptured: (file) async {
+                  widget.session.idPhotoFront = file;
+                  widget.session.adminRejections.remove('idPhotoFront');
+                  setState(() {});
+                  await _handleUpload(file, 'idPhotoFront', (url) => widget.session.idPhotoFrontUrl = url);
+                },
+              )));
             },
           ),
           VerificationCard(
-            icon: PhosphorIcons.identificationCard(),
-            iconColor: widget.session.idPhotoBack != null
-                ? AppColors.green600
-                : AppColors.gray400,
+            icon: PhosphorIconsRegular.identificationCard,
             title: 'National ID (Back)',
             subtitle: 'Clear photo of the back',
-            statusText:
-                widget.session.idPhotoBack != null ? 'Approved' : 'Upload',
-            statusColor: widget.session.idPhotoBack != null
-                ? AppColors.green600
-                : AppColors.primary,
+            isComplete: widget.session.idPhotoBack != null,
+            statusText: widget.session.idPhotoBack != null ? 'Approved' : 'Upload',
             hasError: widget.session.adminRejections.containsKey('idPhotoBack'),
             errorMessage: widget.session.adminRejections['idPhotoBack'],
             onTap: () async {
-              await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => DocumentCapture(
-                            title: 'National ID (Back)',
-                            subtitle: 'Ensure barcode/MRZ is readable',
-                            onFileCaptured: (file) async {
-                              widget.session.idPhotoBack = file;
-                              widget.session.adminRejections
-                                  .remove('idPhotoBack');
-                              setState(() {});
-                              await _handleUpload(file, 'idPhotoBack',
-                                  (url) => widget.session.idPhotoBackUrl = url);
-                            },
-                          )));
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentCapture(
+                title: 'National ID (Back)',
+                subtitle: 'Ensure barcode/MRZ is readable',
+                onFileCaptured: (file) async {
+                  widget.session.idPhotoBack = file;
+                  widget.session.adminRejections.remove('idPhotoBack');
+                  setState(() {});
+                  await _handleUpload(file, 'idPhotoBack', (url) => widget.session.idPhotoBackUrl = url);
+                },
+              )));
             },
           ),
           VerificationCard(
-            icon: PhosphorIcons.userFocus(),
-            iconColor: widget.session.selfie != null
-                ? AppColors.green600
-                : AppColors.gray400,
+            icon: PhosphorIconsRegular.userFocus,
             title: 'Selfie with ID',
             subtitle: 'Live face verification',
-            statusText: widget.session.selfie != null ? 'Approved' : 'Pending',
-            statusColor: widget.session.selfie != null
-                ? AppColors.green600
-                : StayNestColors.warning,
+            isComplete: widget.session.selfie != null,
+            statusText: widget.session.selfie != null ? 'Approved' : 'Capture',
             hasError: widget.session.adminRejections.containsKey('selfie'),
             errorMessage: widget.session.adminRejections['selfie'],
             onTap: () async {
-              await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => SelfieCaptureScreen(
-                            onFileCaptured: (file) async {
-                              widget.session.selfie = file;
-                              widget.session.adminRejections.remove('selfie');
-                              setState(() {});
-                              await _handleUpload(file, 'selfie',
-                                  (url) => widget.session.selfieUrl = url);
-                            },
-                          )));
-            },
-          ),
-          VerificationCard(
-            icon: PhosphorIcons.mapPin(),
-            iconColor: widget.session.proofOfAddress != null
-                ? AppColors.green600
-                : AppColors.gray400,
-            title: 'Proof of address',
-            subtitle: 'Utility bill or bank statement',
-            statusText:
-                widget.session.proofOfAddress != null ? 'Approved' : 'Upload',
-            statusColor: widget.session.proofOfAddress != null
-                ? AppColors.green600
-                : AppColors.primary,
-            hasError:
-                widget.session.adminRejections.containsKey('proofOfAddress'),
-            errorMessage: widget.session.adminRejections['proofOfAddress'],
-            onTap: () async {
-              await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => DocumentCapture(
-                            title: 'Proof of address',
-                            subtitle: 'Must be dated within last 3 months',
-                            onFileCaptured: (file) async {
-                              widget.session.proofOfAddress = file;
-                              widget.session.adminRejections
-                                  .remove('proofOfAddress');
-                              setState(() {});
-                              await _handleUpload(
-                                  file,
-                                  'proofOfAddress',
-                                  (url) =>
-                                      widget.session.proofOfAddressUrl = url);
-                            },
-                          )));
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => SelfieCaptureScreen(
+                onFileCaptured: (file) async {
+                  widget.session.selfie = file;
+                  widget.session.adminRejections.remove('selfie');
+                  setState(() {});
+                  await _handleUpload(file, 'selfie', (url) => widget.session.selfieUrl = url);
+                },
+              )));
             },
           ),
         ],
@@ -743,122 +570,91 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
 
   Widget _buildPropertyPage() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Upload property documents',
-              style:
-                  GoogleFonts.poppins(color: AppColors.gray500, fontSize: 16)),
+          Text('Upload property documents', style: GoogleFonts.poppins(color: _grey, fontSize: 15)),
           const SizedBox(height: 32),
           VerificationCard(
-            icon: PhosphorIcons.fileText(),
-            iconColor: AppColors.green600,
-            title: 'Title Deed / Ownership',
-            subtitle: 'Verified automatically',
-            statusText: 'Approved',
-            statusColor: AppColors.green600,
-            onTap: () {},
+            icon: PhosphorIconsRegular.receipt,
+            title: 'Proof of Address',
+            subtitle: 'Government or utility address proof',
+            isComplete: widget.session.proofOfAddress != null,
+            statusText: widget.session.proofOfAddress != null ? 'Approved' : 'Upload',
+            hasError: widget.session.adminRejections.containsKey('proofOfAddress'),
+            errorMessage: widget.session.adminRejections['proofOfAddress'],
+            onTap: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentCapture(
+                title: 'Proof of Address',
+                subtitle: 'Upload a recent bill or official address document',
+                onFileCaptured: (f) async {
+                  widget.session.proofOfAddress = f;
+                  widget.session.adminRejections.remove('proofOfAddress');
+                  setState(() {});
+                  await _handleUpload(f, 'proofOfAddress', (url) => widget.session.proofOfAddressUrl = url);
+                })));
+            },
           ),
           VerificationCard(
-            icon: PhosphorIcons.receipt(),
-            iconColor: widget.session.utilityBill != null
-                ? AppColors.green600
-                : StayNestColors.warning,
+            icon: PhosphorIconsRegular.receipt,
             title: 'Utility Bill',
             subtitle: 'Recent utility bill (2 months)',
-            statusText:
-                widget.session.utilityBill != null ? 'Approved' : 'Pending',
-            statusColor: widget.session.utilityBill != null
-                ? AppColors.green600
-                : StayNestColors.warning,
+            isComplete: widget.session.utilityBill != null,
+            statusText: widget.session.utilityBill != null ? 'Approved' : 'Upload',
             hasError: widget.session.adminRejections.containsKey('utilityBill'),
             errorMessage: widget.session.adminRejections['utilityBill'],
             onTap: () async {
-              await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => DocumentCapture(
-                          title: 'Utility Bill',
-                          subtitle: 'Upload clear photo',
-                          onFileCaptured: (f) async {
-                            widget.session.utilityBill = f;
-                            widget.session.adminRejections
-                                .remove('utilityBill');
-                            setState(() {});
-                            await _handleUpload(f, 'utilityBill',
-                                (url) => widget.session.utilityBillUrl = url);
-                          })));
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentCapture(
+                title: 'Utility Bill',
+                subtitle: 'Upload clear photo',
+                onFileCaptured: (f) async {
+                  widget.session.utilityBill = f;
+                  widget.session.adminRejections.remove('utilityBill');
+                  setState(() {});
+                  await _handleUpload(f, 'utilityBill', (url) => widget.session.utilityBillUrl = url);
+                })));
             },
           ),
           VerificationCard(
-            icon: PhosphorIcons.signature(),
-            iconColor: widget.session.leaseAgreement != null
-                ? AppColors.green600
-                : AppColors.gray400,
-            title: 'Lease Agreement',
-            subtitle: 'If applicable',
-            statusText:
-                widget.session.leaseAgreement != null ? 'Approved' : 'Upload',
-            statusColor: widget.session.leaseAgreement != null
-                ? AppColors.green600
-                : AppColors.primary,
-            hasError:
-                widget.session.adminRejections.containsKey('leaseAgreement'),
-            errorMessage: widget.session.adminRejections['leaseAgreement'],
-            onTap: () async {
-              await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => DocumentCapture(
-                          title: 'Lease Agreement',
-                          subtitle: 'Signed copy required',
-                          onFileCaptured: (f) async {
-                            widget.session.leaseAgreement = f;
-                            widget.session.adminRejections
-                                .remove('leaseAgreement');
-                            setState(() {});
-                            await _handleUpload(
-                                f,
-                                'leaseAgreement',
-                                (url) =>
-                                    widget.session.leaseAgreementUrl = url);
-                          })));
-            },
-          ),
-          VerificationCard(
-            icon: PhosphorIcons.houseLine(),
-            iconColor: widget.session.propertyPhotos != null
-                ? AppColors.green600
-                : AppColors.gray400,
+            icon: PhosphorIconsRegular.houseLine,
             title: 'Property Photos',
             subtitle: 'Exterior photo of property',
-            statusText:
-                widget.session.propertyPhotos != null ? 'Approved' : 'Upload',
-            statusColor: widget.session.propertyPhotos != null
-                ? AppColors.green600
-                : AppColors.primary,
-            hasError:
-                widget.session.adminRejections.containsKey('propertyPhotos'),
+            isComplete: widget.session.propertyPhotos != null,
+            statusText: widget.session.propertyPhotos != null ? 'Approved' : 'Upload',
+            hasError: widget.session.adminRejections.containsKey('propertyPhotos'),
             errorMessage: widget.session.adminRejections['propertyPhotos'],
             onTap: () async {
-              await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => DocumentCapture(
-                          title: 'Property Photos',
-                          subtitle: 'Show full facade',
-                          onFileCaptured: (f) async {
-                            widget.session.propertyPhotos = f;
-                            widget.session.adminRejections
-                                .remove('propertyPhotos');
-                            setState(() {});
-                            await _handleUpload(
-                                f,
-                                'propertyPhotos',
-                                (url) =>
-                                    widget.session.propertyPhotosUrl = url);
-                          })));
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentCapture(
+                title: 'Property Photos',
+                subtitle: 'Show full facade',
+                onFileCaptured: (f) async {
+                  widget.session.propertyPhotos = f;
+                  widget.session.adminRejections.remove('propertyPhotos');
+                  setState(() {});
+                  await _handleUpload(f, 'propertyPhotos', (url) => widget.session.propertyPhotosUrl = url);
+                })));
+            },
+          ),
+          VerificationCard(
+            icon: PhosphorIconsRegular.signature,
+            title: 'Lease Agreement',
+            subtitle: 'Optional depending on property type',
+            isComplete: widget.session.leaseAgreement != null,
+            statusText: widget.session.leaseAgreement != null ? 'Approved' : 'Optional',
+            hasError: widget.session.adminRejections.containsKey('leaseAgreement'),
+            errorMessage: widget.session.adminRejections['leaseAgreement'],
+            onTap: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentCapture(
+                title: 'Lease Agreement',
+                subtitle: 'Signed copy required',
+                onFileCaptured: (f) async {
+                  widget.session.leaseAgreement = f;
+                  widget.session.adminRejections.remove('leaseAgreement');
+                  setState(() {});
+                  await _handleUpload(f, 'leaseAgreement', (url) => widget.session.leaseAgreementUrl = url);
+                })));
             },
           ),
         ],
@@ -875,147 +671,83 @@ class DocumentCapture extends StatelessWidget {
   final String subtitle;
   final ValueChanged<File> onFileCaptured;
 
-  const DocumentCapture(
-      {super.key,
-      required this.title,
-      required this.subtitle,
-      required this.onFileCaptured});
+  const DocumentCapture({super.key, required this.title, required this.subtitle, required this.onFileCaptured});
 
   Future<void> _pickAndCropImage(BuildContext context) async {
-    const int maxBytes = 5 * 1024 * 1024;
     try {
-      final picked = await ImagePicker()
-          .pickImage(source: ImageSource.gallery, imageQuality: 80);
+      final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 100);
       if (picked == null) return;
 
-      final fileSize = await picked.length();
-      if (fileSize > maxBytes) {
-        ModalUtils.showError(
-            context, 'File Too Large', 'Selected file exceeds the 5MB limit.');
-        return;
-      }
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Adjust Document',
+            toolbarColor: _dark,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.original,
+            lockAspectRatio: false,
+          ),
+          IOSUiSettings(title: 'Adjust Document'),
+        ],
+      );
+      
+      File finalFile = croppedFile != null ? File(croppedFile.path) : File(picked.path);
+      
+      // Strict production compression BEFORE returning to state/upload
+      final compressedFile = await ImageUploadService.compressImageFile(finalFile);
 
-      File? finalFile;
-      try {
-        final croppedFile = await ImageCropper().cropImage(
-          sourcePath: picked.path,
-          uiSettings: [
-            AndroidUiSettings(
-              toolbarTitle: 'Adjust Document',
-              toolbarColor: AppColors.primary,
-              toolbarWidgetColor: Colors.white,
-              initAspectRatio: CropAspectRatioPreset.original,
-              lockAspectRatio: false,
-              aspectRatioPresets: [
-                CropAspectRatioPreset.original,
-                CropAspectRatioPreset.square,
-                CropAspectRatioPreset.ratio3x2,
-                CropAspectRatioPreset.ratio4x3,
-                CropAspectRatioPreset.ratio16x9
-              ],
-            ),
-            IOSUiSettings(
-              title: 'Adjust Document',
-              aspectRatioPresets: [
-                CropAspectRatioPreset.original,
-                CropAspectRatioPreset.square,
-                CropAspectRatioPreset.ratio3x2,
-                CropAspectRatioPreset.ratio4x3,
-                CropAspectRatioPreset.ratio16x9
-              ],
-            ),
-          ],
-        );
-        if (croppedFile != null) {
-          finalFile = File(croppedFile.path);
-        } else {
-          return;
-        }
-      } catch (_) {
-        finalFile = File(picked.path);
-      }
-
-      onFileCaptured(finalFile);
-      if (!context.mounted) return;
-      Navigator.pop(context);
+      onFileCaptured(compressedFile);
+      if (context.mounted) Navigator.pop(context);
     } catch (e) {
-      ModalUtils.showError(context, 'Process Error',
-          "We couldn't prepare your photo. Please try again or select a different image.");
+      if (context.mounted) ModalUtils.showError(context, 'Process Error', "We couldn't prepare your photo. Please try again.");
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: _bg,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.gray900),
-        title: Text('Upload Document',
-            style: GoogleFonts.poppins(
-                color: AppColors.gray900,
-                fontWeight: FontWeight.bold,
-                fontSize: 22)),
+        leading: GestureDetector(onTap: () => Navigator.pop(context), child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 28)),
+        title: Text('Upload Document', style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
       ),
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.xl),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title,
-                        style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.gray900)),
-                    const SizedBox(height: 4),
-                    Text(subtitle,
-                        style: GoogleFonts.poppins(
-                            color: AppColors.gray500, fontSize: 16)),
-                    const SizedBox(height: 40),
-                    CustomPaint(
-                      painter:
-                          DashedRectPainter(color: StayNestColors.outlineLight),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 48),
-                        decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.02)),
-                        child: Column(
-                          children: [
-                            Icon(PhosphorIcons.cloudArrowUp(),
-                                size: 64, color: AppColors.gray400),
-                            const SizedBox(height: 16),
-                            Text('Drag and drop or',
-                                style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.gray900)),
-                            const SizedBox(height: 16),
-                            OutlinedButton(
-                              onPressed: () => _pickAndCropImage(context),
-                              style: OutlinedButton.styleFrom(
-                                  side: BorderSide(color: AppColors.primary),
-                                  shape: const RoundedRectangleBorder(
-                                      borderRadius:
-                                          AppRadius.buttonBorderRadius),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 32, vertical: 12)),
-                              child: Text('Choose File',
-                                  style: GoogleFonts.poppins(
-                                      color: AppColors.primary,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600)),
-                            ),
-                            const SizedBox(height: 16),
-                            Text('JPG or PNG. Max size 5MB',
-                                style: GoogleFonts.poppins(
-                                    color: AppColors.gray400, fontSize: 14)),
-                          ],
+                    Text(title, style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
+                    const SizedBox(height: 8),
+                    Text(subtitle, style: GoogleFonts.poppins(color: _grey, fontSize: 15)),
+                    const SizedBox(height: 48),
+                    GestureDetector(
+                      onTap: () => _pickAndCropImage(context),
+                      child: CustomPaint(
+                        painter: DashedRectPainter(color: _grey.withOpacity(0.5)),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 64),
+                          decoration: BoxDecoration(color: _green.withOpacity(0.02), borderRadius: BorderRadius.circular(20)),
+                          child: Column(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(color: _green.withOpacity(0.1), shape: BoxShape.circle),
+                                child: const Icon(PhosphorIconsRegular.cloudArrowUp, size: 48, color: _green),
+                              ),
+                              const SizedBox(height: 24),
+                              Text('Tap to browse files', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: _dark)),
+                              const SizedBox(height: 8),
+                              Text('JPG or PNG (Auto-compressed securely)', style: GoogleFonts.poppins(color: _grey, fontSize: 13)),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -1045,44 +777,27 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
   bool _initializingCamera = false;
 
   Future<void> _takeSelfie() async {
-    const int maxBytes = 5 * 1024 * 1024;
     try {
       XFile? xfile;
-      if (_cameraReady &&
-          _cameraController != null &&
-          _cameraController!.value.isInitialized) {
+      if (_cameraReady && _cameraController != null && _cameraController!.value.isInitialized) {
         xfile = await _cameraController!.takePicture();
       } else {
-        xfile = await ImagePicker().pickImage(
-            source: ImageSource.camera,
-            imageQuality: 70,
-            preferredCameraDevice: CameraDevice.front);
+        xfile = await ImagePicker().pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.front);
       }
       if (xfile == null) return;
 
-      final fileSize = await xfile.length();
-      if (fileSize > maxBytes) {
-        ModalUtils.showError(context, 'File Too Large',
-            'Selfie exceeds the 5MB limit. Please retake a smaller image.');
-        return;
-      }
-
       final imageFile = File(xfile.path);
-      if (!await imageFile.exists()) {
-        ModalUtils.showError(
-            context, 'Capture Error', 'Unable to access the selfie file.');
-        return;
-      }
+      if (!await imageFile.exists()) throw Exception();
 
-      setState(() {
-        _capturedImage = imageFile;
-      });
+      // Compress selfie before returning
+      final compressedFile = await ImageUploadService.compressImageFile(imageFile);
+
+      setState(() => _capturedImage = compressedFile);
       widget.onFileCaptured(_capturedImage!);
       if (!mounted) return;
-      Navigator.pop(context); // Close the capture screen
+      Navigator.pop(context);
     } catch (e) {
-      ModalUtils.showError(context, 'Capture Error',
-          "Failed to capture selfie. Please try again.");
+      ModalUtils.showError(context, 'Capture Error', "Failed to capture selfie. Please try again.");
     }
   }
 
@@ -1091,22 +806,13 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
     _initializingCamera = true;
     try {
       final cameras = await availableCameras();
-      final front = cameras.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.front,
-          orElse: () => cameras.isNotEmpty
-              ? cameras.first
-              : throw Exception('No cameras available'));
-      _cameraController =
-          CameraController(front, ResolutionPreset.medium, enableAudio: false);
+      final front = cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.front, orElse: () => cameras.isNotEmpty ? cameras.first : throw Exception());
+      _cameraController = CameraController(front, ResolutionPreset.high, enableAudio: false);
       await _cameraController!.initialize();
       if (!mounted) return;
-      setState(() {
-        _cameraReady = true;
-      });
+      setState(() => _cameraReady = true);
     } catch (_) {
-      setState(() {
-        _cameraReady = false;
-      });
+      setState(() => _cameraReady = false);
     } finally {
       _initializingCamera = false;
     }
@@ -1127,64 +833,48 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: _bg,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.gray900),
-        title: Text('Selfie Verification',
-            style: GoogleFonts.poppins(
-                color: AppColors.gray900,
-                fontWeight: FontWeight.bold,
-                fontSize: 22)),
+        leading: GestureDetector(onTap: () => Navigator.pop(context), child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 28)),
+        title: Text('Selfie Verification', style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
       ),
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.xl),
+                padding: const EdgeInsets.all(24),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text('Take a selfie',
-                        style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.gray900)),
-                    const SizedBox(height: 4),
-                    Text('Position your face in the frame',
-                        style: GoogleFonts.poppins(
-                            color: AppColors.gray500, fontSize: 16)),
-                    const SizedBox(height: 40),
-                    Center(
-                      child: Container(
-                        height: 320,
-                        width: 320,
-                        decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.gray400.withValues(alpha: 0.3)),
-                        clipBehavior: Clip.hardEdge,
-                        child: _capturedImage != null
-                            ? Image.file(_capturedImage!, fit: BoxFit.cover)
-                            : (_cameraReady && _cameraController != null
-                                ? CameraPreview(_cameraController!)
-                                : Center(
-                                    child: Icon(
-                                        PhosphorIcons.userFocus(
-                                            PhosphorIconsStyle.light),
-                                        size: 100,
-                                        color: AppColors.gray500))),
+                    Text('Take a clear selfie', style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
+                    const SizedBox(height: 8),
+                    Text('Position your face inside the frame', style: GoogleFonts.poppins(color: _grey, fontSize: 15)),
+                    const SizedBox(height: 48),
+                    Container(
+                      height: 320, width: 320,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: _green, width: 4),
+                        color: _grey.withOpacity(0.1)
                       ),
+                      clipBehavior: Clip.hardEdge,
+                      child: _capturedImage != null
+                          ? Image.file(_capturedImage!, fit: BoxFit.cover)
+                          : (_cameraReady && _cameraController != null
+                              ? CameraPreview(_cameraController!)
+                              : const Center(child: Icon(PhosphorIconsRegular.userFocus, size: 80, color: _grey))),
                     ),
                   ],
                 ),
               ),
             ),
             Padding(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: PrimaryButton(
-                    text: 'Capture Selfie', onPressed: _takeSelfie))
+              padding: const EdgeInsets.all(24),
+              child: PrimaryButton(text: 'Capture Selfie', onPressed: _takeSelfie)
+            )
           ],
         ),
       ),
@@ -1193,7 +883,7 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
 }
 
 // ==========================================
-// 6. STATUS VIEWS & NEW REJECTED SCREEN
+// 6. STATUS VIEWS 
 // ==========================================
 class VerificationStatusView extends StatelessWidget {
   final Map<String, dynamic> statusData;
@@ -1201,8 +891,7 @@ class VerificationStatusView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status =
-        statusData['status']?.toString().toLowerCase() ?? 'submitted';
+    final status = statusData['status']?.toString().toLowerCase() ?? 'submitted';
 
     if (status == 'approved') {
       AppSession.currentRole = 'landlord';
@@ -1225,89 +914,42 @@ class _RejectedScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-          backgroundColor: AppColors.background,
-          elevation: 0,
-          automaticallyImplyLeading: false),
+      backgroundColor: _bg,
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              const Spacer(),
+              Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: const Color(0xFFFEF2F2), shape: BoxShape.circle), child: const Icon(PhosphorIconsFill.warningCircle, size: 80, color: Color(0xFFEF4444))),
+              const SizedBox(height: 32),
+              Text('Action Required', style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
+              const SizedBox(height: 16),
+              Text('We couldn\'t verify your account. Please fix the following issues and resubmit.', textAlign: TextAlign.center, style: GoogleFonts.poppins(color: _grey, fontSize: 15, height: 1.5)),
+              const SizedBox(height: 40),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFFCA5A5).withOpacity(0.5))),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(PhosphorIcons.warningCircle(PhosphorIconsStyle.fill),
-                        size: 120, color: StayNestColors.error),
-                    const SizedBox(height: 24),
-                    Text('Action Required',
-                        style: GoogleFonts.poppins(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.gray900)),
+                    Text('Admin Notes:', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: const Color(0xFF991B1B))),
                     const SizedBox(height: 16),
-                    Text(
-                        'We couldn\'t verify your account. Please fix the following issues and resubmit.',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(
-                            color: AppColors.gray500,
-                            fontSize: 16,
-                            height: 1.5)),
-                    const SizedBox(height: 40),
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      decoration: BoxDecoration(
-                          color: StayNestColors.errorLight,
-                          borderRadius: AppRadius.cardBorderRadius,
-                          border: Border.all(
-                              color:
-                                  StayNestColors.error.withValues(alpha: 0.3))),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Admin Notes:',
-                              style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.bold,
-                                  color: StayNestColors.error)),
-                          const SizedBox(height: 12),
-                          ...(rejections.isEmpty
-                                  ? [
-                                      'Certain documents were unclear or missing.'
-                                    ]
-                                  : rejections)
-                              .map((msg) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 8.0),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Text('• ',
-                                            style: TextStyle(
-                                                color: StayNestColors.error,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold)),
-                                        Expanded(
-                                            child: Text(msg.toString(),
-                                                style: GoogleFonts.poppins(
-                                                    color: StayNestColors.error,
-                                                    fontSize: 14))),
-                                      ],
-                                    ),
-                                  )),
-                        ],
-                      ),
-                    ),
+                    ...(rejections.isEmpty ? ['Certain documents were unclear or missing.'] : rejections).map((msg) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('• ', style: TextStyle(color: Color(0xFFEF4444), fontSize: 16, fontWeight: FontWeight.bold)),
+                        Expanded(child: Text(msg.toString(), style: GoogleFonts.poppins(color: const Color(0xFF991B1B), fontSize: 14))),
+                      ]),
+                    )),
                   ],
                 ),
               ),
-            ),
-            Padding(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: PrimaryButton(
-                    text: 'Fix & Resubmit',
-                    onPressed: () => Navigator.pop(context)))
-          ],
+              const Spacer(),
+              PrimaryButton(text: 'Fix & Resubmit', onPressed: () => Navigator.pop(context)),
+            ],
+          ),
         ),
       ),
     );
@@ -1319,116 +961,77 @@ class _ReviewScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: _bg,
         elevation: 0,
         automaticallyImplyLeading: false,
-        title: Text('Verification Review',
-            style: GoogleFonts.poppins(
-                color: AppColors.gray900,
-                fontWeight: FontWeight.bold,
-                fontSize: 20)),
+        title: Text('Verification Review', style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
       ),
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.xl),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Review your information',
-                        style: GoogleFonts.poppins(
-                            color: AppColors.gray500, fontSize: 16)),
-                    const SizedBox(height: 32),
-                    _buildTimelineStep('Submitted', 'May 17, 2026 10:30AM',
-                        true, false, AppColors.green600),
-                    _buildTimelineStep('Under Review', 'May 17, 2026 11:45 AM',
-                        false, true, AppColors.primary),
-                    _buildTimelineStep('Manual Review', 'Pending', false, false,
-                        AppColors.gray400),
-                    _buildTimelineStep(
-                        'Approved', 'Pending', false, false, AppColors.gray400,
-                        isLast: true),
-                    const SizedBox(height: 40),
-                    Text('Estimated Completion',
-                        style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.gray900)),
-                    const SizedBox(height: 8),
-                    Text('1-2 business days',
-                        style: GoogleFonts.poppins(
-                            color: AppColors.gray500, fontSize: 16)),
-                    const SizedBox(height: 40),
-                    Center(
-                        child: Text(
-                            'You\'ll receive a notification once your verification is\ncomplete',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.poppins(
-                                color: AppColors.gray500,
-                                fontSize: 14,
-                                height: 1.5))),
+                    Text('Reviewing your information', style: GoogleFonts.poppins(color: _grey, fontSize: 16)),
+                    const SizedBox(height: 48),
+                    _buildTimelineStep('Submitted', 'Information received', true, false),
+                    _buildTimelineStep('Under Review', 'Currently reviewing documents', false, true),
+                    _buildTimelineStep('Approved', 'Pending final sign-off', false, false, isLast: true),
+                    const SizedBox(height: 64),
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: _grey.withOpacity(0.1)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+                      child: Column(
+                        children: [
+                          const Icon(PhosphorIconsRegular.clock, size: 32, color: _green),
+                          const SizedBox(height: 16),
+                          Text('Estimated Completion', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: _dark)),
+                          const SizedBox(height: 8),
+                          Text('1-2 business days. We will notify you via email and push notification.', textAlign: TextAlign.center, style: GoogleFonts.poppins(color: _grey, fontSize: 14)),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
             Padding(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: PrimaryButton(
-                    text: 'Continue to Portal',
-                    onPressed: () => Navigator.pushNamedAndRemoveUntil(
-                        context, '/portal', (route) => false))),
+              padding: const EdgeInsets.all(24),
+              child: PrimaryButton(text: 'Continue to Dashboard', onPressed: () => Navigator.pushNamedAndRemoveUntil(context, '/portal', (route) => false))
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTimelineStep(String title, String subtitle, bool isCompleted,
-      bool isCurrent, Color color,
-      {bool isLast = false}) {
+  Widget _buildTimelineStep(String title, String subtitle, bool isCompleted, bool isCurrent, {bool isLast = false}) {
+    final Color color = isCompleted || isCurrent ? _green : _grey.withOpacity(0.3);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Column(
           children: [
             Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isCompleted || isCurrent ? color : Colors.transparent,
-                  border: Border.all(color: color, width: 2)),
-              child: isCompleted || isCurrent
-                  ? Icon(PhosphorIcons.check(),
-                      size: 14, color: AppColors.white)
-                  : null,
+              width: 24, height: 24,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: isCompleted || isCurrent ? color : Colors.transparent, border: Border.all(color: color, width: 2)),
+              child: isCompleted || isCurrent ? const Icon(PhosphorIconsBold.check, size: 14, color: Colors.white) : null,
             ),
-            if (!isLast)
-              Container(
-                  width: 2,
-                  height: 60,
-                  color: isCompleted && !isCurrent
-                      ? color
-                      : StayNestColors.outlineLight),
+            if (!isLast) Container(width: 2, height: 50, color: isCompleted && !isCurrent ? color : _grey.withOpacity(0.2)),
           ],
         ),
         const SizedBox(width: 16),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title,
-                style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.gray900)),
+            Text(title, style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: isCurrent ? _dark : (isCompleted ? _dark : _grey))),
             const SizedBox(height: 4),
-            Text(subtitle,
-                style: GoogleFonts.poppins(
-                    fontSize: 14, color: AppColors.gray500)),
+            Text(subtitle, style: GoogleFonts.poppins(fontSize: 13, color: _grey)),
           ],
         )
       ],
@@ -1441,95 +1044,23 @@ class _SuccessScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-          backgroundColor: AppColors.background,
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          title: Text('Verification Status',
-              style: GoogleFonts.poppins(
-                  color: AppColors.gray900,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20))),
+      backgroundColor: _bg,
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: Column(
-                  children: [
-                    Icon(PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill),
-                        size: 120, color: AppColors.green600),
-                    const SizedBox(height: 24),
-                    Text('You\'re Verified!',
-                        style: GoogleFonts.poppins(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.gray900)),
-                    const SizedBox(height: 16),
-                    Text(
-                        'Congratulations! Your account has been\nsuccessfully verified',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(
-                            color: AppColors.gray500,
-                            fontSize: 16,
-                            height: 1.5)),
-                    const SizedBox(height: 48),
-                    _buildFeature(
-                        PhosphorIcons.sealCheck(PhosphorIconsStyle.fill),
-                        'Verified Badge',
-                        'Your profile is now verified',
-                        AppColors.green600),
-                    _buildFeature(
-                        PhosphorIcons.headset(PhosphorIconsStyle.fill),
-                        'Priority Support',
-                        'Get priority customer support',
-                        AppColors.primary),
-                    _buildFeature(
-                        PhosphorIcons.eye(PhosphorIconsStyle.fill),
-                        'Higher Visibility',
-                        'Verified landlords get more bookings',
-                        AppColors.primary),
-                  ],
-                ),
-              ),
-            ),
-            Padding(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: PrimaryButton(
-                    text: 'Go to Dashboard',
-                    onPressed: () =>
-                        Navigator.popUntil(context, (route) => route.isFirst)))
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              const Spacer(),
+              Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: _green.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(PhosphorIconsFill.shieldCheck, size: 80, color: _green)),
+              const SizedBox(height: 32),
+              Text('You\'re Verified!', style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
+              const SizedBox(height: 16),
+              Text('Congratulations! Your account has been\nsuccessfully verified and upgraded.', textAlign: TextAlign.center, style: GoogleFonts.poppins(color: _grey, fontSize: 15, height: 1.5)),
+              const Spacer(),
+              PrimaryButton(text: 'Go to Dashboard', onPressed: () => Navigator.popUntil(context, (route) => route.isFirst))
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildFeature(
-      IconData icon, String title, String subtitle, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xl),
-      child: Row(
-        children: [
-          Icon(icon, size: 36, color: color),
-          const SizedBox(width: 16),
-          Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Text(title,
-                    style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.gray900)),
-                const SizedBox(height: 2),
-                Text(subtitle,
-                    style: GoogleFonts.poppins(
-                        fontSize: 14, color: AppColors.gray500)),
-              ]))
-        ],
       ),
     );
   }
@@ -1542,11 +1073,7 @@ class PrimaryButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
   final bool enabled;
-  const PrimaryButton(
-      {super.key,
-      required this.text,
-      required this.onPressed,
-      this.enabled = true});
+  const PrimaryButton({super.key, required this.text, required this.onPressed, this.enabled = true});
 
   @override
   Widget build(BuildContext context) {
@@ -1556,16 +1083,12 @@ class PrimaryButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: enabled ? onPressed : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: enabled ? AppColors.primary : AppColors.gray400,
-          shape: const RoundedRectangleBorder(
-              borderRadius: AppRadius.buttonBorderRadius),
+          backgroundColor: _green,
+          disabledBackgroundColor: _grey.withOpacity(0.2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)), // Modern pill shape
           elevation: 0,
         ),
-        child: Text(text,
-            style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: AppColors.white)),
+        child: Text(text, style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: enabled ? Colors.white : _grey)),
       ),
     );
   }
@@ -1573,11 +1096,10 @@ class PrimaryButton extends StatelessWidget {
 
 class VerificationCard extends StatelessWidget {
   final IconData icon;
-  final Color iconColor;
   final String title;
   final String subtitle;
   final String statusText;
-  final Color statusColor;
+  final bool isComplete;
   final VoidCallback? onTap;
   final bool hasError;
   final String? errorMessage;
@@ -1585,11 +1107,10 @@ class VerificationCard extends StatelessWidget {
   const VerificationCard({
     super.key,
     required this.icon,
-    required this.iconColor,
     required this.title,
     required this.subtitle,
     required this.statusText,
-    required this.statusColor,
+    required this.isComplete,
     this.onTap,
     this.hasError = false,
     this.errorMessage,
@@ -1597,80 +1118,62 @@ class VerificationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeIconColor = hasError ? StayNestColors.error : iconColor;
-    final activeBorderColor =
-        hasError ? StayNestColors.error : StayNestColors.outlineLight;
-    final activeBgColor =
-        hasError ? StayNestColors.errorLight : AppColors.white;
+    final statusColor = hasError ? const Color(0xFFEF4444) : (isComplete ? _green : _dark);
+    final borderColor = hasError ? const Color(0xFFFCA5A5) : (isComplete ? _green.withOpacity(0.5) : _grey.withOpacity(0.1));
+    final bgColor = hasError ? const Color(0xFFFEF2F2) : _surface;
 
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.base),
-        padding: const EdgeInsets.all(AppSpacing.base),
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-            color: activeBgColor,
-            borderRadius: AppRadius.cardBorderRadius,
-            border: Border.all(color: activeBorderColor)),
+          color: bgColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: borderColor),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                        color: activeIconColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Icon(icon, color: activeIconColor, size: 32)),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: statusColor.withOpacity(0.1), shape: BoxShape.circle),
+                  child: Icon(icon, color: statusColor, size: 24)
+                ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title,
-                          style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: hasError
-                                  ? StayNestColors.error
-                                  : AppColors.gray900)),
-                      const SizedBox(height: 4),
-                      Text(subtitle,
-                          style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              color: hasError
-                                  ? StayNestColors.error
-                                  : AppColors.gray500)),
+                      Text(title, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: hasError ? const Color(0xFF991B1B) : _dark)),
+                      const SizedBox(height: 2),
+                      Text(subtitle, style: GoogleFonts.poppins(fontSize: 13, color: hasError ? const Color(0xFFEF4444) : _grey)),
                     ],
                   ),
                 ),
-                Text(hasError ? 'Retry' : statusText,
-                    style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: hasError ? StayNestColors.error : statusColor)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                  child: Text(hasError ? 'Retry' : statusText, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w700, color: statusColor)),
+                ),
               ],
             ),
             if (hasError && errorMessage != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                    color: AppColors.white.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(6)),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.5), borderRadius: BorderRadius.circular(12)),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(PhosphorIcons.warning(),
-                        size: 16, color: StayNestColors.error),
+                    const Icon(PhosphorIconsRegular.warningCircle, size: 16, color: Color(0xFFEF4444)),
                     const SizedBox(width: 8),
-                    Expanded(
-                        child: Text(errorMessage!,
-                            style: GoogleFonts.poppins(
-                                color: StayNestColors.error,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500))),
+                    Expanded(child: Text(errorMessage!, style: GoogleFonts.poppins(color: const Color(0xFF991B1B), fontSize: 12, fontWeight: FontWeight.w500))),
                   ],
                 ),
               )
@@ -1687,16 +1190,13 @@ class SecureWatermark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+      padding: const EdgeInsets.symmetric(vertical: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(PhosphorIcons.squaresFour(),
-              size: 16, color: AppColors.gray500.withValues(alpha: 0.5)),
+          const Icon(PhosphorIconsRegular.lockKey, size: 16, color: _grey),
           const SizedBox(width: 8),
-          Text('All information is secure and encrypted',
-              style:
-                  GoogleFonts.poppins(color: AppColors.gray500, fontSize: 13)),
+          Text('All information is secure and encrypted', style: GoogleFonts.poppins(color: _grey, fontSize: 12, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -1704,36 +1204,22 @@ class SecureWatermark extends StatelessWidget {
 }
 
 class ModalUtils {
-  static void showSuccess(BuildContext context, String message,
-      {required VoidCallback onOk, Duration? autoClose}) {
+  static void showSuccess(BuildContext context, String message, {VoidCallback? onOk, Duration? autoClose}) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.white,
-        shape: const RoundedRectangleBorder(
-            borderRadius: AppRadius.dialogBorderRadius),
+        backgroundColor: _surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
-                color: AppColors.green600, size: 64),
+            const Icon(PhosphorIconsFill.checkCircle, color: _green, size: 64),
             const SizedBox(height: 16),
-            Text('Success',
-                style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.gray900)),
+            Text('Success', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
             const SizedBox(height: 8),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(color: AppColors.gray500)),
+            Text(message, textAlign: TextAlign.center, style: GoogleFonts.poppins(color: _grey)),
             const SizedBox(height: 24),
-            PrimaryButton(
-                text: 'OK',
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  onOk();
-                }),
+            PrimaryButton(text: 'OK', onPressed: () { Navigator.pop(ctx); if (onOk != null) onOk(); }),
           ],
         ),
       ),
@@ -1741,69 +1227,27 @@ class ModalUtils {
     if (autoClose != null) {
       Future.delayed(autoClose, () {
         if (Navigator.canPop(context)) {
-          try {
-            Navigator.pop(context);
-          } catch (_) {}
-          try {
-            onOk();
-          } catch (_) {}
+          try { Navigator.pop(context); } catch (_) {}
+          if (onOk != null) try { onOk(); } catch (_) {}
         }
       });
     }
-  }
-
-  static void showCancelled(BuildContext context, {String? message}) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.white,
-        shape: const RoundedRectangleBorder(
-            borderRadius: AppRadius.dialogBorderRadius),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(PhosphorIcons.warningCircle(PhosphorIconsStyle.fill),
-                color: AppColors.gray400, size: 64),
-            const SizedBox(height: 16),
-            Text('Upload Cancelled',
-                style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.gray900)),
-            const SizedBox(height: 8),
-            Text(message ?? 'The upload was cancelled.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(color: AppColors.gray500)),
-            const SizedBox(height: 24),
-            PrimaryButton(text: 'OK', onPressed: () => Navigator.pop(ctx)),
-          ],
-        ),
-      ),
-    );
   }
 
   static void showError(BuildContext context, String title, String message) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.white,
-        shape: const RoundedRectangleBorder(
-            borderRadius: AppRadius.dialogBorderRadius),
+        backgroundColor: _surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(PhosphorIcons.warningCircle(PhosphorIconsStyle.fill),
-                color: StayNestColors.error, size: 64),
+            const Icon(PhosphorIconsFill.warningCircle, color: Color(0xFFEF4444), size: 64),
             const SizedBox(height: 16),
-            Text(title,
-                style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.gray900)),
+            Text(title, textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
             const SizedBox(height: 8),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(color: AppColors.gray500)),
+            Text(message, textAlign: TextAlign.center, style: GoogleFonts.poppins(color: _grey)),
             const SizedBox(height: 24),
             PrimaryButton(text: 'Dismiss', onPressed: () => Navigator.pop(ctx)),
           ],
@@ -1812,43 +1256,36 @@ class ModalUtils {
     );
   }
 
-  static void showProgress(BuildContext context, ValueNotifier<double> progress,
-      {String? message, VoidCallback? onCancel}) {
+  static void showProgress(BuildContext context, ValueNotifier<double> progress, {String? message, VoidCallback? onCancel}) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.white,
-        shape: const RoundedRectangleBorder(
-            borderRadius: AppRadius.dialogBorderRadius),
+        backgroundColor: _surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ValueListenableBuilder<double>(
-                valueListenable: progress,
-                builder: (c, val, _) =>
-                    CircularProgressIndicator(value: val.clamp(0.0, 1.0))),
             const SizedBox(height: 16),
             ValueListenableBuilder<double>(
                 valueListenable: progress,
-                builder: (c, val, _) => Text('${(val * 100).toInt()}%')),
+                builder: (c, val, _) => CircularProgressIndicator(value: val.clamp(0.0, 1.0), color: _green)),
+            const SizedBox(height: 24),
+            ValueListenableBuilder<double>(
+                valueListenable: progress,
+                builder: (c, val, _) => Text('${(val * 100).toInt()}%', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 18))),
             if (message != null) ...[
               const SizedBox(height: 8),
-              Text(message,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(color: AppColors.gray500))
+              Text(message, textAlign: TextAlign.center, style: GoogleFonts.poppins(color: _grey))
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: 24),
             if (onCancel != null)
               TextButton(
                   onPressed: () {
-                    try {
-                      onCancel();
-                    } catch (_) {}
+                    try { onCancel(); } catch (_) {}
                     Navigator.pop(ctx);
                   },
-                  child: Text('Cancel',
-                      style: GoogleFonts.poppins(color: AppColors.primary)))
+                  child: Text('Cancel', style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w600)))
           ],
         ),
       ),
@@ -1862,23 +1299,20 @@ class DashedRectPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     double dashWidth = 8, dashSpace = 6, startX = 0;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-    while (startX < size.width) {
-      canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
-      canvas.drawLine(Offset(startX, size.height),
-          Offset(startX + dashWidth, size.height), paint);
-      startX += dashWidth + dashSpace;
+    final paint = Paint()..color = color..strokeWidth = 2..style = PaintingStyle.stroke;
+    final rrect = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, size.width, size.height), const Radius.circular(20));
+    
+    // Simplistic dash implementation for rectangle bounds
+    Path path = Path()..addRRect(rrect);
+    Path dashPath = Path();
+    for (final measurePath in path.computeMetrics()) {
+      double distance = 0;
+      while (distance < measurePath.length) {
+        dashPath.addPath(measurePath.extractPath(distance, distance + dashWidth), Offset.zero);
+        distance += dashWidth + dashSpace;
+      }
     }
-    double startY = 0;
-    while (startY < size.height) {
-      canvas.drawLine(Offset(0, startY), Offset(0, startY + dashWidth), paint);
-      canvas.drawLine(Offset(size.width, startY),
-          Offset(size.width, startY + dashWidth), paint);
-      startY += dashWidth + dashSpace;
-    }
+    canvas.drawPath(dashPath, paint);
   }
 
   @override

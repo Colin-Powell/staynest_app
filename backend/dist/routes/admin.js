@@ -3,6 +3,7 @@ import { query } from '../db.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
 import { cache } from '../services/cache.js';
 import { sendPushToUser } from '../services/firebase.js';
+import { finalizeVerificationDecision } from './verifications.js';
 const router = Router();
 // GET /admin/users - List all users with metadata
 router.get('/users', requireAuth, authorize('admin'), async (req, res, next) => {
@@ -238,18 +239,33 @@ router.patch('/kyc/:id', requireAuth, authorize('admin'), async (req, res, next)
                 error: 'Invalid status. Must be approved, rejected, under_review, or submitted'
             });
         }
+        const verificationRecord = await query(`
+      SELECT id, user_id FROM verifications WHERE id = $1 LIMIT 1
+    `, [id]);
+        if (verificationRecord.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'KYC record not found'
+            });
+        }
+        if (status === 'approved' || status === 'rejected') {
+            const payload = await finalizeVerificationDecision({
+                verificationId: verificationRecord.rows[0].id,
+                userId: verificationRecord.rows[0].user_id,
+                status: status,
+                adminNotes: admin_notes ?? null,
+            });
+            return res.json({
+                success: true,
+                data: payload,
+            });
+        }
         const updateRes = await query(`
       UPDATE verifications
       SET status = $1, admin_notes = $2, updated_at = CURRENT_TIMESTAMP
       WHERE id = $3
       RETURNING *
     `, [status, admin_notes || null, id]);
-        if (updateRes.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'KYC record not found'
-            });
-        }
         res.json({
             success: true,
             data: updateRes.rows[0]

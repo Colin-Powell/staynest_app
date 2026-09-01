@@ -2,23 +2,91 @@
 import { query } from '../db.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
 import { queueUserPush } from '../services/queue.js';
+import { sendLandlordVerificationDecisionEmail } from '../services/email.js';
 
 const router = Router();
 
+export const REQUIRED_VERIFICATION_DOCUMENTS = [
+  'id_photo_front',
+  'id_photo_back',
+  'selfie',
+  'proof_of_address',
+  'utility_bill',
+  'property_photos',
+] as const;
+
+export const hasRequiredVerificationDocuments = (documents: Record<string, any> | undefined) => {
+  if (!documents || typeof documents !== 'object') return false;
+
+  return REQUIRED_VERIFICATION_DOCUMENTS.every(
+    (key) => typeof documents[key] === 'string' && documents[key].trim().length > 0,
+  );
+};
+
+export async function finalizeVerificationDecision({
+  verificationId,
+  userId,
+  status,
+  adminNotes,
+}: {
+  verificationId: string;
+  userId: string;
+  status: 'approved' | 'rejected';
+  adminNotes?: string | null;
+}) {
+  const verificationResult = await query(
+    `UPDATE verifications
+     SET status = $1, admin_notes = $2, updated_at = now()
+     WHERE id = $3
+     RETURNING id, user_id, status, documents, property_data, admin_notes, created_at, updated_at`,
+    [status, adminNotes ?? null, verificationId],
+  );
+
+  if (verificationResult.rowCount === 0) {
+    throw new Error('Verification record not found');
+  }
+
+  const userResult = await query(
+    `SELECT id, name, email, role, verified FROM users WHERE id = $1 LIMIT 1`,
+    [userId],
+  );
+
+  const user = userResult.rows[0];
+  const isApproved = status === 'approved';
+
+  await query(
+    `UPDATE users SET verified = $1 WHERE id = $2`,
+    [isApproved, userId],
+  );
+
+  if (user?.email) {
+    try {
+      await sendLandlordVerificationDecisionEmail(user.email, status, user.name, adminNotes ?? undefined);
+    } catch (emailError) {
+      console.error('Failed to send landlord verification email:', emailError);
+    }
+  }
+
+  if (isApproved) {
+    await queueUserPush(userId, '✅ Verification Approved', 'Your landlord verification was approved! You can now list properties.', { type: 'verification_approved' });
+  } else {
+    await queueUserPush(userId, '⚠️ Verification Update', 'Your landlord verification was processed. Please review the notes and resubmit if needed.', { type: 'verification_rejected' });
+  }
+
+  return verificationResult.rows[0];
+}
+
 export const createVerificationHandler = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { documents, property } = req.body as { documents?: any; property?: any };
+    const { documents, property } = req.body as { documents?: Record<string, any>; property?: Record<string, any> };
     if (!documents || !property) {
       return res.status(400).json({ error: 'Documents and property data are required.' });
     }
 
-    const requiredDocuments = [
-      'id_photo_front', 'id_photo_back', 'selfie',
-      'proof_of_address', 'utility_bill', 'property_photos',
-    ];
-    const missingDocuments = requiredDocuments.filter(
+    const missingDocuments = REQUIRED_VERIFICATION_DOCUMENTS.filter(
       (key) => typeof documents[key] !== 'string' || documents[key].trim().length === 0,
     );
+
     if (missingDocuments.length > 0) {
       return res.status(400).json({
         error: 'All required verification documents must be uploaded before submission.',
@@ -26,7 +94,6 @@ export const createVerificationHandler = async (req: Request, res: Response, nex
       });
     }
 
-    // Every submission remains pending until an authorized admin reviews it.
     const initialStatus = 'submitted';
 
     const result = await query(
@@ -100,25 +167,28 @@ router.put('/:id', requireAuth, authorize('admin'), async (req: Request, res: Re
     if (!status || !['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ error: 'Status must be "approved" or "rejected".' });
     }
-    const result = await query(
-      `UPDATE verifications SET status = $1, admin_notes = $2, updated_at = now() WHERE id = $3
-       RETURNING id, user_id, status, documents, property_data, admin_notes, created_at, updated_at`,
-      [status, admin_notes || null, req.params.id],
+
+    const verificationRecord = await query(
+      `SELECT id, user_id FROM verifications WHERE id = $1 LIMIT 1`,
+      [req.params.id],
     );
-    if (status === 'approved') {
-      await query(`UPDATE users SET verified = true WHERE id = $1`, [result.rows[0].user_id]);
-      await queueUserPush(result.rows[0].user_id, '? Verification Approved', 'Your landlord verification was approved! You can now list properties.', { type: 'verification_approved' });
-    } else if (status === 'rejected') {
-      await query(`UPDATE users SET verified = false WHERE id = $1`, [result.rows[0].user_id]);
-      await queueUserPush(result.rows[0].user_id, '? Verification Rejected', 'Your landlord verification was rejected. Please check the notes.', { type: 'verification_rejected' });
+
+    if (verificationRecord.rowCount === 0) {
+      return res.status(404).json({ error: 'Verification record not found.' });
     }
-    return res.json({ data: result.rows[0] });
+
+    const payload = await finalizeVerificationDecision({
+      verificationId: verificationRecord.rows[0].id,
+      userId: verificationRecord.rows[0].user_id,
+      status: status as 'approved' | 'rejected',
+      adminNotes: admin_notes,
+    });
+
+    return res.json({ data: payload });
   } catch (error) {
     next(error);
   }
 });
 
 export default router;
-
-
 
