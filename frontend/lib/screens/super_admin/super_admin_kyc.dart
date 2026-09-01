@@ -443,6 +443,20 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
     );
   }
 
+  String _resolveDocumentUrl(dynamic value) {
+    if (value == null) return '';
+    final raw = value.toString().trim();
+    if (raw.isEmpty) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+
+    final normalized = raw.startsWith('/') ? raw : '/$raw';
+    final base = AppSession.apiBaseUrl.trim();
+    if (base.isEmpty) return normalized;
+    return base.endsWith('/')
+        ? '${base.substring(0, base.length - 1)}$normalized'
+        : '$base$normalized';
+  }
+
   // DETAIL PANE COMPONENT
   Widget _buildDetailPane({required bool isMobile}) {
     if (_selectedItem == null) {
@@ -557,7 +571,7 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
                             ),
                             const SizedBox(height: 16),
                             Image.network(
-                              '${AppSession.apiBaseUrl}${entry.value}',
+                              _resolveDocumentUrl(entry.value),
                               headers: AppSession.apiToken != null
                                   ? {
                                       'Authorization':

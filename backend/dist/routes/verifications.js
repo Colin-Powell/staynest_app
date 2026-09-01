@@ -78,6 +78,19 @@ export const createVerificationHandler = async (req, res, next) => {
                 missing_documents: missingDocuments,
             });
         }
+        const activeVerification = await query(`SELECT id, status
+       FROM verifications
+       WHERE user_id = $1
+         AND status IN ('submitted', 'under_review', 'pending_review')
+       ORDER BY created_at DESC
+       LIMIT 1`, [req.auth.id]);
+        if (activeVerification.rowCount && activeVerification.rows[0]) {
+            return res.status(409).json({
+                error: 'You already have an active KYC verification in progress.',
+                current_status: activeVerification.rows[0].status,
+                verification_id: activeVerification.rows[0].id,
+            });
+        }
         const initialStatus = 'submitted';
         const result = await query(`INSERT INTO verifications (user_id, status, documents, property_data)
        VALUES ($1, $2, $3::jsonb, $4::jsonb)

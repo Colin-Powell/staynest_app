@@ -11,6 +11,7 @@ import 'package:property_app/repository/http_json_client.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/image_upload_service.dart';
+import 'package:property_app/services/verification_api.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/geocoding.dart';
 import 'package:property_app/services/property_service.dart';
@@ -298,7 +299,11 @@ RemoteDatabaseRepository _buildRepo() {
   }
 
   Future<void> _publishListing() async {
-    if (AppSession.currentUserVerified != true) {
+    final verificationStatus = await VerificationApi.getVerificationStatus();
+    final normalizedStatus = verificationStatus?['status']?.toString().toLowerCase() ?? 'not_started';
+    final isApproved = normalizedStatus == 'approved';
+
+    if (!isApproved || AppSession.currentUserVerified != true) {
       await _saveDraft(showConfirmation: false);
       if (!mounted) return;
       _showVerificationDialog();
