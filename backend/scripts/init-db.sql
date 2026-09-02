@@ -388,10 +388,12 @@ CREATE TABLE IF NOT EXISTS property_drafts (
   lat numeric,
   lng numeric,
   photos jsonb DEFAULT '[]'::jsonb,
+  video_url text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_property_drafts_landlord ON property_drafts(landlord_id, updated_at DESC);
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS video_url text;
 
 
 
