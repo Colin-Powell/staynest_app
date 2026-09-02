@@ -160,5 +160,32 @@ router.get('/conversations', requireAuth, async (req, res, next) => {
         next(error);
     }
 });
+router.delete('/conversation/:userId', requireAuth, async (req, res, next) => {
+    try {
+        const currentUserId = req.auth.id;
+        const { userId } = req.params;
+        if (!userId) {
+            return res.status(400).json({ error: 'userId is required.' });
+        }
+        await query(`DELETE FROM message_reads
+       WHERE user_id = $1
+         AND message_id IN (
+           SELECT id FROM messages
+           WHERE (from_user_id = $1 AND to_user_id = $2)
+              OR (from_user_id = $2 AND to_user_id = $1)
+         )`, [currentUserId, userId]);
+        const result = await query(`DELETE FROM messages
+       WHERE (from_user_id = $1 AND to_user_id = $2)
+          OR (from_user_id = $2 AND to_user_id = $1)`, [currentUserId, userId]);
+        return res.json({
+            data: {
+                deleted: result.rowCount ?? 0,
+            },
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+});
 export default router;
 //# sourceMappingURL=messages.js.map

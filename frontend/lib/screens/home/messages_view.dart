@@ -45,7 +45,8 @@ enum _MessageFilter { all, unread, landlords, archived }
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 class MessagesViewScreen extends StatefulWidget {
-  final void Function(String userId, String name, String? avatarUrl) onSelectChat;
+  final void Function(String userId, String name, String? avatarUrl)
+      onSelectChat;
   final ValueChanged<bool>? onSelectionModeChanged;
 
   const MessagesViewScreen({
@@ -64,7 +65,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   String _searchQuery = '';
-  
+
   bool _isSelectionMode = false;
   _MessageFilter _currentFilter = _MessageFilter.all;
   Set<String> _selectedIds = {};
@@ -93,7 +94,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text.toLowerCase());
     });
-    
+
     _loadConversations();
     _loadSuggestions();
     _setupSocketListener();
@@ -195,6 +196,21 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
     }
   }
 
+  Future<void> _markConversationRead(String userId) async {
+    final index = _chats.indexWhere((chat) => chat.id == userId);
+    if (index != -1) {
+      setState(() {
+        _chats[index].unread = 0;
+      });
+    }
+
+    try {
+      await MessageService.instance.markAsRead([userId]);
+    } catch (_) {
+      // Keep the optimistic UI state and refresh on next load.
+    }
+  }
+
   String _formatTime(DateTime? dt) {
     if (dt == null) return '';
     final now = DateTime.now();
@@ -283,7 +299,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
     }
   }
 
@@ -304,20 +321,25 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
           ),
         ),
         PopupMenuButton<_MessageFilter>(
-          icon: const Icon(PhosphorIconsRegular.dotsThreeVertical, color: _dark, size: 28),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          icon: const Icon(PhosphorIconsRegular.dotsThreeVertical,
+              color: _dark, size: 28),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           color: Colors.white,
           elevation: 4,
           onSelected: (filter) => setState(() => _currentFilter = filter),
           itemBuilder: (context) => _MessageFilter.values.map((filter) {
             final isSelected = _currentFilter == filter;
-            final name = filter.name[0].toUpperCase() + filter.name.substring(1);
+            final name =
+                filter.name[0].toUpperCase() + filter.name.substring(1);
             return PopupMenuItem(
               value: filter,
               child: Row(
                 children: [
                   Icon(
-                    isSelected ? PhosphorIconsFill.checkCircle : PhosphorIconsRegular.circle,
+                    isSelected
+                        ? PhosphorIconsFill.checkCircle
+                        : PhosphorIconsRegular.circle,
                     color: isSelected ? _tenantPrimary : _grey,
                     size: 20,
                   ),
@@ -325,7 +347,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                   Text(
                     name,
                     style: GoogleFonts.poppins(
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.w500,
                       color: isSelected ? _tenantPrimary : _dark,
                       fontSize: 14,
                     ),
@@ -340,7 +363,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
   }
 
   Widget _buildSelectionHeader(int totalFiltered) {
-    final allSelected = _selectedIds.length == totalFiltered && totalFiltered > 0;
+    final allSelected =
+        _selectedIds.length == totalFiltered && totalFiltered > 0;
     return Row(
       key: const ValueKey('selectionHeader'),
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -364,7 +388,9 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
           ],
         ),
         GestureDetector(
-          onTap: () => _selectAll(_chats.where((c) => c.name.toLowerCase().contains(_searchQuery)).toList()),
+          onTap: () => _selectAll(_chats
+              .where((c) => c.name.toLowerCase().contains(_searchQuery))
+              .toList()),
           child: Text(
             allSelected ? 'Unselect All' : 'Select All',
             style: GoogleFonts.poppins(
@@ -385,23 +411,29 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
         color: _surface,
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Row(
         children: [
           const Padding(
             padding: EdgeInsets.only(left: 16),
-            child: Icon(PhosphorIconsRegular.magnifyingGlass, color: _dark, size: 22),
+            child: Icon(PhosphorIconsRegular.magnifyingGlass,
+                color: _dark, size: 22),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: _searchController,
-              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: _dark),
+              style: GoogleFonts.poppins(
+                  fontSize: 14, fontWeight: FontWeight.w500, color: _dark),
               decoration: InputDecoration(
                 hintText: 'Search Messages',
-                hintStyle: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w400, color: _grey),
+                hintStyle: GoogleFonts.poppins(
+                    fontSize: 14, fontWeight: FontWeight.w400, color: _grey),
                 filled: false,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
@@ -432,7 +464,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(0, 8, 0, 160),
       itemCount: 8,
-      separatorBuilder: (_, __) => Divider(color: _grey.withOpacity(0.1), height: 1, indent: 96),
+      separatorBuilder: (_, __) =>
+          Divider(color: _grey.withOpacity(0.1), height: 1, indent: 96),
       itemBuilder: (context, index) {
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -445,7 +478,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                 child: Container(
                   width: 56,
                   height: 56,
-                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                  decoration: const BoxDecoration(
+                      color: Colors.white, shape: BoxShape.circle),
                 ),
               ),
               const SizedBox(width: 16),
@@ -454,13 +488,25 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Shimmer.fromColors(
-                      baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                      child: Container(width: 120, height: 16, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                      baseColor: Colors.grey.shade200,
+                      highlightColor: Colors.grey.shade100,
+                      child: Container(
+                          width: 120,
+                          height: 16,
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4))),
                     ),
                     const SizedBox(height: 8),
                     Shimmer.fromColors(
-                      baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                      child: Container(width: double.infinity, height: 14, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                      baseColor: Colors.grey.shade200,
+                      highlightColor: Colors.grey.shade100,
+                      child: Container(
+                          width: double.infinity,
+                          height: 14,
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4))),
                     ),
                   ],
                 ),
@@ -480,7 +526,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
           if (_searchQuery.isEmpty && _suggestedContacts.isNotEmpty) ...[
             Text(
               'Start a conversation',
-              style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: _dark),
+              style: GoogleFonts.poppins(
+                  fontSize: 16, fontWeight: FontWeight.w700, color: _dark),
             ),
             const SizedBox(height: 16),
             SizedBox(
@@ -492,20 +539,30 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                 itemBuilder: (context, i) {
                   final contact = _suggestedContacts[i];
                   return GestureDetector(
-                    onTap: () => widget.onSelectChat(contact.id, contact.name, contact.avatarUrl),
+                    onTap: () => widget.onSelectChat(
+                        contact.id, contact.name, contact.avatarUrl),
                     child: Padding(
                       padding: const EdgeInsets.only(right: 20),
                       child: Column(
                         children: [
                           Container(
-                            width: 60, height: 60,
-                            decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _grey.withOpacity(0.2))),
-                            child: ClipOval(child: AppSession.buildAvatar(contact.avatarUrl, width: 60, height: 60, fit: BoxFit.cover)),
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border:
+                                    Border.all(color: _grey.withOpacity(0.2))),
+                            child: ClipOval(
+                                child: AppSession.buildAvatar(contact.avatarUrl,
+                                    width: 60, height: 60, fit: BoxFit.cover)),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             contact.name.split(' ')[0],
-                            style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: _dark),
+                            style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _dark),
                           ),
                         ],
                       ),
@@ -515,15 +572,19 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
               ),
             ),
           ] else ...[
-            const Icon(PhosphorIconsRegular.chatTeardropSlash, size: 64, color: _grey),
+            const Icon(PhosphorIconsRegular.chatTeardropSlash,
+                size: 64, color: _grey),
             const SizedBox(height: 16),
             Text(
               _searchQuery.isEmpty ? 'No messages yet' : 'No messages found',
-              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
+              style: GoogleFonts.poppins(
+                  fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
             ),
             const SizedBox(height: 8),
             Text(
-              _searchQuery.isEmpty ? 'Your conversations will appear here.' : 'Try adjusting your search query.',
+              _searchQuery.isEmpty
+                  ? 'Your conversations will appear here.'
+                  : 'Try adjusting your search query.',
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(fontSize: 14, color: _grey),
             ),
@@ -537,7 +598,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
-      bottom: _isSelectionMode ? MediaQuery.of(context).padding.bottom + 16 : -100,
+      bottom:
+          _isSelectionMode ? MediaQuery.of(context).padding.bottom + 16 : -100,
       left: 24,
       right: 24,
       child: Container(
@@ -546,7 +608,10 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
           color: _dark,
           borderRadius: BorderRadius.circular(32), // Pill shape
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 10))
+            BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 10))
           ],
         ),
         child: Row(
@@ -558,9 +623,17 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(PhosphorIconsRegular.envelopeOpen, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white),
+                  Icon(PhosphorIconsRegular.envelopeOpen,
+                      color: _selectedIds.isEmpty
+                          ? _grey.withOpacity(0.5)
+                          : Colors.white),
                   const SizedBox(height: 4),
-                  Text('Read', style: GoogleFonts.poppins(fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white)),
+                  Text('Read',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: _selectedIds.isEmpty
+                              ? _grey.withOpacity(0.5)
+                              : Colors.white)),
                 ],
               ),
             ),
@@ -571,9 +644,17 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(PhosphorIconsRegular.trash, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444)),
+                  Icon(PhosphorIconsRegular.trash,
+                      color: _selectedIds.isEmpty
+                          ? _grey.withOpacity(0.5)
+                          : const Color(0xFFEF4444)),
                   const SizedBox(height: 4),
-                  Text('Delete', style: GoogleFonts.poppins(fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444))),
+                  Text('Delete',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: _selectedIds.isEmpty
+                              ? _grey.withOpacity(0.5)
+                              : const Color(0xFFEF4444))),
                 ],
               ),
             ),
@@ -585,7 +666,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    Iterable<_ChatItem> filtered = _chats.where((c) => c.name.toLowerCase().contains(_searchQuery));
+    Iterable<_ChatItem> filtered =
+        _chats.where((c) => c.name.toLowerCase().contains(_searchQuery));
     if (_currentFilter == _MessageFilter.unread) {
       filtered = filtered.where((c) => c.unread > 0);
     } else if (_currentFilter == _MessageFilter.archived) {
@@ -606,11 +688,14 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
-                    child: _isSelectionMode ? _buildSelectionHeader(displayList.length) : _buildNormalHeader(),
+                    child: _isSelectionMode
+                        ? _buildSelectionHeader(displayList.length)
+                        : _buildNormalHeader(),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                   child: _buildSearchBar(),
                 ),
                 const SizedBox(height: 8),
@@ -622,11 +707,20 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(PhosphorIconsRegular.warningCircle, color: Colors.redAccent, size: 48),
+                                  const Icon(PhosphorIconsRegular.warningCircle,
+                                      color: Colors.redAccent, size: 48),
                                   const SizedBox(height: 16),
-                                  Text(_errorMessage!, textAlign: TextAlign.center, style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w600)),
+                                  Text(_errorMessage!,
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.poppins(
+                                          color: _dark,
+                                          fontWeight: FontWeight.w600)),
                                   const SizedBox(height: 16),
-                                  TextButton(onPressed: _loadConversations, child: Text('Retry', style: GoogleFonts.poppins(color: _tenantPrimary))),
+                                  TextButton(
+                                      onPressed: _loadConversations,
+                                      child: Text('Retry',
+                                          style: GoogleFonts.poppins(
+                                              color: _tenantPrimary))),
                                 ],
                               ),
                             )
@@ -637,28 +731,49 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                                   backgroundColor: _surface,
                                   onRefresh: _loadConversations,
                                   child: ListView.separated(
-                                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                                    padding: EdgeInsets.fromLTRB(0, 8, 0, MediaQuery.of(context).padding.bottom + 120),
+                                    physics: const BouncingScrollPhysics(
+                                        parent:
+                                            AlwaysScrollableScrollPhysics()),
+                                    padding: EdgeInsets.fromLTRB(
+                                        0,
+                                        8,
+                                        0,
+                                        MediaQuery.of(context).padding.bottom +
+                                            120),
                                     itemCount: displayList.length,
-                                    separatorBuilder: (_, __) => Divider(color: _grey.withOpacity(0.15), height: 1, indent: 96),
+                                    separatorBuilder: (_, __) => Divider(
+                                        color: _grey.withOpacity(0.15),
+                                        height: 1,
+                                        indent: 96),
                                     itemBuilder: (context, i) {
                                       final chat = displayList[i];
-                                      final isSelected = _selectedIds.contains(chat.id);
+                                      final isSelected =
+                                          _selectedIds.contains(chat.id);
 
                                       return Dismissible(
                                         key: ValueKey(chat.id),
-                                        direction: DismissDirection.endToStart, // Swipe left to delete
+                                        direction: DismissDirection
+                                            .endToStart, // Swipe left to delete
                                         background: Container(
                                           color: const Color(0xFFEF4444),
                                           alignment: Alignment.centerRight,
-                                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                                          child: const Icon(PhosphorIconsRegular.trash, color: Colors.white, size: 28),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 24),
+                                          child: const Icon(
+                                              PhosphorIconsRegular.trash,
+                                              color: Colors.white,
+                                              size: 28),
                                         ),
                                         onDismissed: (_) async {
                                           _selectedIds = {chat.id};
                                           await _deleteSelected();
                                           if (mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${chat.name} deleted'), behavior: SnackBarBehavior.floating));
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(SnackBar(
+                                                    content: Text(
+                                                        '${chat.name} deleted'),
+                                                    behavior: SnackBarBehavior
+                                                        .floating));
                                           }
                                         },
                                         child: _ChatTile(
@@ -669,11 +784,14 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                                             if (_isSelectionMode) {
                                               _toggleChatSelection(chat.id);
                                             } else {
-                                              widget.onSelectChat(chat.id, chat.name, chat.avatarUrl);
+                                              _markConversationRead(chat.id);
+                                              widget.onSelectChat(chat.id,
+                                                  chat.name, chat.avatarUrl);
                                             }
                                           },
                                           onLongPress: () {
-                                            if (!_isSelectionMode) _enterSelectionMode(chat.id);
+                                            if (!_isSelectionMode)
+                                              _enterSelectionMode(chat.id);
                                           },
                                         ),
                                       );
@@ -717,15 +835,20 @@ class _ChatTile extends StatelessWidget {
       onLongPress: onLongPress,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        color: isSelected ? _tenantPrimary.withOpacity(0.05) : Colors.transparent, // Highlight background if selected
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), // Edge-to-Edge feel
+        color: isSelected
+            ? _tenantPrimary.withOpacity(0.05)
+            : Colors.transparent, // Highlight background if selected
+        padding: const EdgeInsets.symmetric(
+            horizontal: 24, vertical: 12), // Edge-to-Edge feel
         child: Row(
           children: [
             if (isSelectionMode)
               Padding(
                 padding: const EdgeInsets.only(right: 16),
                 child: Icon(
-                  isSelected ? PhosphorIconsFill.checkCircle : PhosphorIconsRegular.circle,
+                  isSelected
+                      ? PhosphorIconsFill.checkCircle
+                      : PhosphorIconsRegular.circle,
                   color: isSelected ? _tenantPrimary : _grey,
                   size: 24,
                 ),
@@ -735,7 +858,8 @@ class _ChatTile extends StatelessWidget {
                 margin: const EdgeInsets.only(right: 12),
                 width: 8,
                 height: 8,
-                decoration: const BoxDecoration(color: _tenantPrimary, shape: BoxShape.circle),
+                decoration: const BoxDecoration(
+                    color: _tenantPrimary, shape: BoxShape.circle),
               ),
 
             // Avatar
@@ -743,15 +867,22 @@ class _ChatTile extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 Container(
-                  width: 56, height: 56,
-                  decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _grey.withOpacity(0.1))),
-                  child: ClipOval(child: AppSession.buildAvatar(chat.avatarUrl, width: 56, height: 56, fit: BoxFit.cover)),
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: _grey.withOpacity(0.1))),
+                  child: ClipOval(
+                      child: AppSession.buildAvatar(chat.avatarUrl,
+                          width: 56, height: 56, fit: BoxFit.cover)),
                 ),
                 if (chat.online)
                   Positioned(
-                    right: 0, bottom: 2,
+                    right: 0,
+                    bottom: 2,
                     child: Container(
-                      width: 14, height: 14,
+                      width: 14,
+                      height: 14,
                       decoration: BoxDecoration(
                         color: const Color(0xFF10B981),
                         shape: BoxShape.circle,
@@ -776,7 +907,8 @@ class _ChatTile extends StatelessWidget {
                           chat.name,
                           style: GoogleFonts.poppins(
                             fontSize: 15,
-                            fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
+                            fontWeight:
+                                hasUnread ? FontWeight.w700 : FontWeight.w600,
                             color: _dark,
                           ),
                           maxLines: 1,
@@ -788,7 +920,8 @@ class _ChatTile extends StatelessWidget {
                         chat.time,
                         style: GoogleFonts.poppins(
                           fontSize: 12,
-                          fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500,
+                          fontWeight:
+                              hasUnread ? FontWeight.w600 : FontWeight.w500,
                           color: hasUnread ? _tenantPrimary : _grey,
                         ),
                       ),
@@ -804,7 +937,8 @@ class _ChatTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.poppins(
                             fontSize: 13,
-                            fontWeight: hasUnread ? FontWeight.w500 : FontWeight.w400,
+                            fontWeight:
+                                hasUnread ? FontWeight.w500 : FontWeight.w400,
                             color: hasUnread ? _dark : _grey,
                           ),
                         ),
@@ -812,7 +946,8 @@ class _ChatTile extends StatelessWidget {
                       if (hasUnread) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: const BoxDecoration(
                             color: _tenantPrimary,
                             borderRadius: BorderRadius.all(Radius.circular(10)),

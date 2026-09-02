@@ -33,13 +33,17 @@ class PropertyModel {
         : <String>[];
     final primaryImage = imagesList.isNotEmpty
         ? imagesList.first
-        : (json['image_url'] ?? '').toString();
+        : ((json['image'] ?? json['image_url'] ?? json['property_image']) ?? '')
+            .toString();
 
     return PropertyModel(
       id: (json['id'] ?? '').toString(),
       category: (json['category'] ?? '').toString(),
-      name: (json['title'] ?? json['name'] ?? '').toString(),
-      location: (json['city'] ?? json['location'] ?? '').toString(),
+      name: (json['name'] ?? json['title'] ?? json['property_name'] ?? '')
+          .toString(),
+      location:
+          (json['city'] ?? json['location'] ?? json['property_city'] ?? '')
+              .toString(),
       image: primaryImage,
       images: imagesList,
       videoUrl: json['video_url']?.toString(),
@@ -143,7 +147,8 @@ class Property {
         : <String>[];
     final primaryImage = imagesList.isNotEmpty
         ? imagesList.first
-        : (json['image_url'] ?? '').toString();
+        : ((json['image'] ?? json['image_url'] ?? json['property_image']) ?? '')
+            .toString();
 
     final amenitiesList = json['amenities'] is List
         ? List<String>.from(json['amenities'] as List)
@@ -151,8 +156,11 @@ class Property {
 
     return Property(
       id: (json['id'] ?? '').toString(),
-      name: (json['title'] ?? json['name'] ?? '').toString(),
-      location: (json['city'] ?? json['location'] ?? '').toString(),
+      name: (json['name'] ?? json['title'] ?? json['property_name'] ?? '')
+          .toString(),
+      location:
+          (json['city'] ?? json['location'] ?? json['property_city'] ?? '')
+              .toString(),
       lat: json['lat'] != null ? (json['lat'] as num).toDouble() : 0.0,
       lng: json['lng'] != null ? (json['lng'] as num).toDouble() : 0.0,
       price: json['price'] != null

@@ -64,6 +64,12 @@ class _LandlordChatViewState extends State<LandlordChatView>
   void initState() {
     super.initState();
 
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await MessageService.instance.markAsRead([widget.userId]);
+      } catch (_) {}
+    });
+
     _pageController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
@@ -324,7 +330,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
               _buildHeader(context),
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: _green))
+                    ? const Center(
+                        child: CircularProgressIndicator(color: _green))
                     : _buildChatArea(),
               ),
               _buildInputArea(context),
@@ -354,7 +361,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
           GestureDetector(
             onTap: widget.onBack,
             behavior: HitTestBehavior.opaque,
-            child: const Icon(PhosphorIconsRegular.caretLeft, size: 28, color: _dark),
+            child: const Icon(PhosphorIconsRegular.caretLeft,
+                size: 28, color: _dark),
           ),
           const SizedBox(width: 16),
           ClipOval(
@@ -415,7 +423,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
           ),
           GestureDetector(
             onTap: widget.onCall,
-            child: const Icon(PhosphorIconsRegular.phone, color: _dark, size: 26),
+            child:
+                const Icon(PhosphorIconsRegular.phone, color: _dark, size: 26),
           ),
         ],
       ),
@@ -430,11 +439,13 @@ class _LandlordChatViewState extends State<LandlordChatView>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(PhosphorIconsRegular.chatTeardropText, size: 48, color: _grey),
+            const Icon(PhosphorIconsRegular.chatTeardropText,
+                size: 48, color: _grey),
             const SizedBox(height: 16),
             Text(
               'No messages yet',
-              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
+              style: GoogleFonts.poppins(
+                  fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
             ),
             const SizedBox(height: 8),
             Text(
@@ -454,7 +465,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
       itemCount: _messages.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) {
-          return _buildStaggered(index: index, child: _buildDateDivider('Today'));
+          return _buildStaggered(
+              index: index, child: _buildDateDivider('Today'));
         }
         final msg = _messages[index - 1];
         final Widget bubble = msg.sender == ChatSender.me
@@ -462,7 +474,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
             : _TheirBubble(message: msg, avatar: widget.avatar);
         return _buildStaggered(
           index: index,
-          child: Padding(padding: const EdgeInsets.only(bottom: 24), child: bubble),
+          child: Padding(
+              padding: const EdgeInsets.only(bottom: 24), child: bubble),
         );
       },
     );
@@ -509,7 +522,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
         children: [
           GestureDetector(
             onTap: () {}, // Attachments Action
-            child: const Icon(PhosphorIconsRegular.plusCircle, color: _grey, size: 28),
+            child: const Icon(PhosphorIconsRegular.plusCircle,
+                color: _grey, size: 28),
           ),
           const SizedBox(width: 12),
 
@@ -543,7 +557,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onSubmitted: (_) => _sendMessage(),
                     ),
@@ -551,7 +566,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
                   if (!_isTyping)
                     GestureDetector(
                       onTap: () {}, // Camera Action
-                      child: const Icon(PhosphorIconsRegular.camera, color: _grey, size: 22),
+                      child: const Icon(PhosphorIconsRegular.camera,
+                          color: _grey, size: 22),
                     ),
                 ],
               ),
@@ -575,7 +591,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
                         color: _green,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(PhosphorIconsFill.paperPlaneRight, color: Colors.white, size: 20),
+                      child: const Icon(PhosphorIconsFill.paperPlaneRight,
+                          color: Colors.white, size: 20),
                     ),
                   )
                 : GestureDetector(
@@ -588,7 +605,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
                         color: _grey.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(PhosphorIconsRegular.microphone, color: _grey, size: 22),
+                      child: const Icon(PhosphorIconsRegular.microphone,
+                          color: _grey, size: 22),
                     ),
                   ),
           ),
@@ -622,7 +640,8 @@ class _TheirBubble extends StatelessWidget {
                   width: 40,
                   height: 40,
                   color: _grey.withOpacity(0.1),
-                  child: const Icon(PhosphorIconsRegular.user, color: _grey, size: 20),
+                  child: const Icon(PhosphorIconsRegular.user,
+                      color: _grey, size: 20),
                 ),
         ),
         const SizedBox(width: 12),
@@ -709,7 +728,8 @@ class _MyBubble extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           child: const Padding(
             padding: EdgeInsets.symmetric(horizontal: 2),
-            child: Icon(PhosphorIconsRegular.warningCircle, size: 16, color: Color(0xFFFCA5A5)),
+            child: Icon(PhosphorIconsRegular.warningCircle,
+                size: 16, color: Color(0xFFFCA5A5)),
           ),
         );
     }

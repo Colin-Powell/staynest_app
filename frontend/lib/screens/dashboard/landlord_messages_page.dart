@@ -36,7 +36,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
   ConversationModel? _selectedConversation;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
-  
+
   bool _isLoading = true;
   String? _errorMessage;
   bool _isSelectionMode = false;
@@ -73,7 +73,9 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
             userAvatar: old.userAvatar,
             lastMessage: msg.text,
             lastMessageAt: DateTime.fromMillisecondsSinceEpoch(msg.ts),
-            unreadCount: msg.from != currentUserId ? old.unreadCount + 1 : old.unreadCount,
+            unreadCount: msg.from != currentUserId
+                ? old.unreadCount + 1
+                : old.unreadCount,
           );
           final item = _conversations.removeAt(index);
           _conversations.insert(0, item);
@@ -134,7 +136,8 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
     }
     if (_searchQuery.isEmpty) return filtered.toList();
     return filtered
-        .where((conv) => conv.userName.toLowerCase().contains(_searchQuery.toLowerCase()))
+        .where((conv) =>
+            conv.userName.toLowerCase().contains(_searchQuery.toLowerCase()))
         .toList();
   }
 
@@ -192,7 +195,8 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       _loadConversations();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
     }
   }
 
@@ -209,7 +213,31 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
+    }
+  }
+
+  Future<void> _markConversationRead(String userId) async {
+    final index = _conversations
+        .indexWhere((conversation) => conversation.userId == userId);
+    if (index != -1) {
+      setState(() {
+        _conversations[index] = ConversationModel(
+          userId: _conversations[index].userId,
+          userName: _conversations[index].userName,
+          userAvatar: _conversations[index].userAvatar,
+          lastMessage: _conversations[index].lastMessage,
+          lastMessageAt: _conversations[index].lastMessageAt,
+          unreadCount: 0,
+        );
+      });
+    }
+
+    try {
+      await MessageService.instance.markAsRead([userId]);
+    } catch (_) {
+      // Optimistic state is kept; a later refresh will reconcile.
     }
   }
 
@@ -222,23 +250,32 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       children: [
         Text(
           'Messages',
-          style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -1.0),
+          style: GoogleFonts.poppins(
+              fontSize: 32,
+              fontWeight: FontWeight.w700,
+              color: _dark,
+              letterSpacing: -1.0),
         ),
         PopupMenuButton<_LandlordFilter>(
-          icon: const Icon(PhosphorIconsRegular.dotsThreeVertical, color: _dark, size: 28),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          icon: const Icon(PhosphorIconsRegular.dotsThreeVertical,
+              color: _dark, size: 28),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           color: Colors.white,
           elevation: 4,
           onSelected: (filter) => setState(() => _currentFilter = filter),
           itemBuilder: (context) => _LandlordFilter.values.map((filter) {
             final isSelected = _currentFilter == filter;
-            final name = filter.name[0].toUpperCase() + filter.name.substring(1);
+            final name =
+                filter.name[0].toUpperCase() + filter.name.substring(1);
             return PopupMenuItem(
               value: filter,
               child: Row(
                 children: [
                   Icon(
-                    isSelected ? PhosphorIconsFill.checkCircle : PhosphorIconsRegular.circle,
+                    isSelected
+                        ? PhosphorIconsFill.checkCircle
+                        : PhosphorIconsRegular.circle,
                     color: isSelected ? _green : _grey,
                     size: 20,
                   ),
@@ -246,7 +283,8 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                   Text(
                     name,
                     style: GoogleFonts.poppins(
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.w500,
                       color: isSelected ? _green : _dark,
                       fontSize: 14,
                     ),
@@ -274,13 +312,18 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
             const SizedBox(width: 16),
             Text(
               '${_selectedIds.length} Selected',
-              style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.4),
+              style: GoogleFonts.poppins(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: _dark,
+                  letterSpacing: -0.4),
             ),
           ],
         ),
         GestureDetector(
           onTap: _selectAll,
-          child: const Icon(PhosphorIconsRegular.checkSquareOffset, color: _dark, size: 28),
+          child: const Icon(PhosphorIconsRegular.checkSquareOffset,
+              color: _dark, size: 28),
         ),
       ],
     );
@@ -293,24 +336,30 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
         color: _surface,
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Row(
         children: [
           const Padding(
             padding: EdgeInsets.only(left: 16),
-            child: Icon(PhosphorIconsRegular.magnifyingGlass, color: _dark, size: 22),
+            child: Icon(PhosphorIconsRegular.magnifyingGlass,
+                color: _dark, size: 22),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: _searchController,
               onChanged: (value) => setState(() => _searchQuery = value),
-              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: _dark),
+              style: GoogleFonts.poppins(
+                  fontSize: 14, fontWeight: FontWeight.w500, color: _dark),
               decoration: InputDecoration(
                 hintText: 'Search Messages',
-                hintStyle: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w400, color: _grey),
+                hintStyle: GoogleFonts.poppins(
+                    fontSize: 14, fontWeight: FontWeight.w400, color: _grey),
                 filled: false,
                 fillColor: Colors.transparent,
                 border: InputBorder.none,
@@ -357,7 +406,11 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
               Shimmer.fromColors(
                 baseColor: Colors.grey.shade200,
                 highlightColor: Colors.grey.shade100,
-                child: Container(width: 56, height: 56, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+                child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: const BoxDecoration(
+                        color: Colors.white, shape: BoxShape.circle)),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -365,13 +418,25 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Shimmer.fromColors(
-                      baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                      child: Container(width: 120, height: 16, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                      baseColor: Colors.grey.shade200,
+                      highlightColor: Colors.grey.shade100,
+                      child: Container(
+                          width: 120,
+                          height: 16,
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4))),
                     ),
                     const SizedBox(height: 8),
                     Shimmer.fromColors(
-                      baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                      child: Container(width: double.infinity, height: 14, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                      baseColor: Colors.grey.shade200,
+                      highlightColor: Colors.grey.shade100,
+                      child: Container(
+                          width: double.infinity,
+                          height: 14,
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4))),
                     ),
                   ],
                 ),
@@ -388,11 +453,13 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(PhosphorIconsRegular.chatTeardropSlash, size: 64, color: _grey),
+          const Icon(PhosphorIconsRegular.chatTeardropSlash,
+              size: 64, color: _grey),
           const SizedBox(height: 16),
           Text(
             'No messages yet',
-            style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
+            style: GoogleFonts.poppins(
+                fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
           ),
           const SizedBox(height: 8),
           Text(
@@ -413,17 +480,21 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(PhosphorIconsRegular.warningCircle, color: Colors.redAccent, size: 48),
+            const Icon(PhosphorIconsRegular.warningCircle,
+                color: Colors.redAccent, size: 48),
             const SizedBox(height: 16),
             Text(
               _errorMessage!,
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w600),
+              style: GoogleFonts.poppins(
+                  color: _dark, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 16),
             TextButton(
               onPressed: _loadConversations,
-              child: Text('Retry', style: GoogleFonts.poppins(color: _green, fontWeight: FontWeight.w600)),
+              child: Text('Retry',
+                  style: GoogleFonts.poppins(
+                      color: _green, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -437,9 +508,11 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       onRefresh: _loadConversations,
       child: ListView.separated(
         physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(context).padding.bottom + 160),
+        padding: EdgeInsets.fromLTRB(
+            24, 8, 24, MediaQuery.of(context).padding.bottom + 160),
         itemCount: _filteredConversations.length,
-        separatorBuilder: (_, __) => Divider(color: _grey.withOpacity(0.1), height: 1),
+        separatorBuilder: (_, __) =>
+            Divider(color: _grey.withOpacity(0.1), height: 1),
         itemBuilder: (context, index) {
           final conv = _filteredConversations[index];
           final isSelected = _selectedIds.contains(conv.userId);
@@ -450,13 +523,17 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
             background: Container(
               margin: const EdgeInsets.symmetric(vertical: 4),
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              decoration: BoxDecoration(color: const Color(0xFFEF4444), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444),
+                  borderRadius: BorderRadius.circular(12)),
               alignment: Alignment.centerRight,
-              child: const Icon(PhosphorIconsRegular.trash, color: Colors.white, size: 28),
+              child: const Icon(PhosphorIconsRegular.trash,
+                  color: Colors.white, size: 28),
             ),
             onDismissed: (direction) async {
               final userId = conv.userId;
-              setState(() => _conversations.removeWhere((c) => c.userId == userId));
+              setState(
+                  () => _conversations.removeWhere((c) => c.userId == userId));
               await MessageService.instance.deleteConversation(userId);
             },
             child: _ConversationTile(
@@ -472,6 +549,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                 if (_isSelectionMode) {
                   _toggleSelection(conv.userId);
                 } else {
+                  _markConversationRead(conv.userId);
                   widget.onChatOpen();
                   setState(() => _selectedConversation = conv);
                 }
@@ -496,16 +574,21 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
       // Float it safely above the bottom navigation bar
-      bottom: _isSelectionMode ? MediaQuery.of(context).padding.bottom + 100 : -100,
+      bottom:
+          _isSelectionMode ? MediaQuery.of(context).padding.bottom + 100 : -100,
       left: 24,
       right: 24,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         decoration: BoxDecoration(
           color: _dark,
-          borderRadius: BorderRadius.circular(32), // Elegant floating pill shape
+          borderRadius:
+              BorderRadius.circular(32), // Elegant floating pill shape
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 10))
+            BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 10))
           ],
         ),
         child: Row(
@@ -516,9 +599,17 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(PhosphorIconsRegular.envelopeOpen, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white),
+                  Icon(PhosphorIconsRegular.envelopeOpen,
+                      color: _selectedIds.isEmpty
+                          ? _grey.withOpacity(0.5)
+                          : Colors.white),
                   const SizedBox(height: 4),
-                  Text('Read', style: GoogleFonts.poppins(fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white)),
+                  Text('Read',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: _selectedIds.isEmpty
+                              ? _grey.withOpacity(0.5)
+                              : Colors.white)),
                 ],
               ),
             ),
@@ -528,9 +619,17 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(PhosphorIconsRegular.trash, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444)),
+                  Icon(PhosphorIconsRegular.trash,
+                      color: _selectedIds.isEmpty
+                          ? _grey.withOpacity(0.5)
+                          : const Color(0xFFEF4444)),
                   const SizedBox(height: 4),
-                  Text('Delete', style: GoogleFonts.poppins(fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444))),
+                  Text('Delete',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: _selectedIds.isEmpty
+                              ? _grey.withOpacity(0.5)
+                              : const Color(0xFFEF4444))),
                 ],
               ),
             ),
@@ -568,11 +667,14 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
-                    child: _isSelectionMode ? _buildSelectionHeader() : _buildNormalHeader(),
+                    child: _isSelectionMode
+                        ? _buildSelectionHeader()
+                        : _buildNormalHeader(),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                   child: _buildSearchBar(),
                 ),
                 const SizedBox(height: 8),
@@ -623,15 +725,20 @@ class _ConversationTile extends StatelessWidget {
       onLongPress: onLongPress,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        color: isSelected ? _green.withOpacity(0.05) : Colors.transparent, // Highlight background if selected
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8), // Flat list padding
+        color: isSelected
+            ? _green.withOpacity(0.05)
+            : Colors.transparent, // Highlight background if selected
+        padding: const EdgeInsets.symmetric(
+            vertical: 12, horizontal: 8), // Flat list padding
         child: Row(
           children: [
             if (isSelectionMode)
               Padding(
                 padding: const EdgeInsets.only(right: 16),
                 child: Icon(
-                  isSelected ? PhosphorIconsFill.checkCircle : PhosphorIconsRegular.circle,
+                  isSelected
+                      ? PhosphorIconsFill.checkCircle
+                      : PhosphorIconsRegular.circle,
                   color: isSelected ? _green : _grey,
                   size: 24,
                 ),
@@ -641,9 +748,9 @@ class _ConversationTile extends StatelessWidget {
                 margin: const EdgeInsets.only(right: 12),
                 width: 6,
                 height: 6,
-                decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
+                decoration:
+                    const BoxDecoration(color: _green, shape: BoxShape.circle),
               ),
-
             _buildAvatar(),
             const SizedBox(width: 16),
             Expanded(
@@ -658,7 +765,8 @@ class _ConversationTile extends StatelessWidget {
                           name,
                           style: GoogleFonts.poppins(
                             fontSize: 15,
-                            fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
+                            fontWeight:
+                                hasUnread ? FontWeight.w700 : FontWeight.w600,
                             color: _dark,
                           ),
                           maxLines: 1,
@@ -670,7 +778,8 @@ class _ConversationTile extends StatelessWidget {
                         time,
                         style: GoogleFonts.poppins(
                           fontSize: 12,
-                          fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500,
+                          fontWeight:
+                              hasUnread ? FontWeight.w600 : FontWeight.w500,
                           color: hasUnread ? _green : _grey,
                         ),
                       ),
@@ -686,7 +795,8 @@ class _ConversationTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.poppins(
                             fontSize: 13,
-                            fontWeight: hasUnread ? FontWeight.w500 : FontWeight.w400,
+                            fontWeight:
+                                hasUnread ? FontWeight.w500 : FontWeight.w400,
                             color: hasUnread ? _dark : _grey,
                           ),
                         ),
@@ -694,7 +804,8 @@ class _ConversationTile extends StatelessWidget {
                       if (hasUnread) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: const BoxDecoration(
                             color: _green,
                             borderRadius: BorderRadius.all(Radius.circular(10)),
@@ -721,11 +832,14 @@ class _ConversationTile extends StatelessWidget {
   }
 
   Widget _buildAvatar() {
-    final Widget avatarWidget = avatarUrl != null && avatarUrl!.trim().isNotEmpty
-        ? AppSession.buildAvatar(avatarUrl, width: 56, height: 56, fit: BoxFit.cover)
+    final Widget avatarWidget = avatarUrl != null &&
+            avatarUrl!.trim().isNotEmpty
+        ? AppSession.buildAvatar(avatarUrl,
+            width: 56, height: 56, fit: BoxFit.cover)
         : Container(
             color: _grey.withOpacity(0.1),
-            child: const Icon(PhosphorIconsRegular.user, color: _grey, size: 24),
+            child:
+                const Icon(PhosphorIconsRegular.user, color: _grey, size: 24),
           );
 
     return Stack(

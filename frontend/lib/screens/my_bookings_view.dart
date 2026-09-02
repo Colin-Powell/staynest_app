@@ -36,11 +36,11 @@ class MyBookingsViewScreen extends StatefulWidget {
 
 class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
     with SingleTickerProviderStateMixin {
-      
   static const _tabs = ['Upcoming', 'Completed', 'Cancelled'];
-  
+
   // Airbnb-style Minimalist Color Palette
-  static const Color tenantPrimary = Color(0xFF3F37C9); // Tenant Blue (Used sparingly)
+  static const Color tenantPrimary =
+      Color(0xFF3F37C9); // Tenant Blue (Used sparingly)
   static const Color textDark = Color(0xFF222222); // Dark grey/black
   static const Color textLight = Color(0xFF717171); // Light grey
   static const Color dividerColor = Color(0xFFEBEBEB);
@@ -72,6 +72,19 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
       final rows = await BookingService.fetchBookings();
       final loaded = rows.whereType<Map>().map((raw) {
         final booking = Map<String, dynamic>.from(raw);
+        final propertyPayload = booking['property'] is Map
+            ? Map<String, dynamic>.from(booking['property'] as Map)
+            : booking;
+        final propertyImages = propertyPayload['images'] is List
+            ? List<String>.from(propertyPayload['images'] as List)
+            : <String>[];
+        final propertyImage = propertyImages.isNotEmpty
+            ? propertyImages.first
+            : (propertyPayload['image_url'] ??
+                    propertyPayload['image'] ??
+                    booking['property_image'] ??
+                    '')
+                .toString();
         final status = booking['status']?.toString().toLowerCase() ?? '';
         final uiStatus = status == 'completed'
             ? 'Completed'
@@ -85,10 +98,18 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
         return BookingWrapper(
           property: Property(
             id: booking['property_id']?.toString() ?? '',
-            name: booking['property_name']?.toString() ?? 'Unknown Property',
-            location: booking['property_city']?.toString() ?? 'See details',
-            image: booking['property_image']?.toString() ?? '',
-            images: const [],
+            name: (propertyPayload['title'] ??
+                    propertyPayload['name'] ??
+                    booking['property_name'] ??
+                    'Unknown Property')
+                .toString(),
+            location: (propertyPayload['city'] ??
+                    propertyPayload['location'] ??
+                    booking['property_city'] ??
+                    'See details')
+                .toString(),
+            image: propertyImage,
+            images: propertyImages,
             price: int.tryParse(booking['total_price']?.toString() ?? '') ?? 0,
             lat: 0,
             lng: 0,
@@ -130,8 +151,19 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
 
   String _monthName(int month) {
     const months = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
     return months[month.clamp(1, 12)];
   }
@@ -192,7 +224,7 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                 ],
               ),
             ),
-            
+
             // --- Elegant Underline Tab Bar ---
             Container(
               decoration: const BoxDecoration(
@@ -229,8 +261,9 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                       ? _buildErrorState()
                       : TabBarView(
                           controller: _tabController,
-                          children:
-                              _tabs.map((tab) => _buildTabContent(tab)).toList(),
+                          children: _tabs
+                              .map((tab) => _buildTabContent(tab))
+                              .toList(),
                         ),
             ),
           ],
@@ -249,7 +282,8 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
       color: textDark,
       backgroundColor: Colors.white,
       child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics()),
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
         itemCount: visible.length,
         separatorBuilder: (_, __) => const SizedBox(height: 24),
@@ -289,7 +323,7 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                     ? 'Your past stays will show up here.'
                     : 'Cancelled bookings will appear here.',
             style: GoogleFonts.poppins(
-              fontSize: 15, 
+              fontSize: 15,
               color: textLight,
             ),
           ),
@@ -327,11 +361,11 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
             ),
             child: Text('Try Again',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15)),
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600, fontSize: 15)),
           ),
         ],
       ),
@@ -340,7 +374,7 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
 
   Widget _bookingCard(BookingWrapper booking) {
     final statusColor = _statusColor(booking.status);
-    
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -373,7 +407,7 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                     ),
             ),
           ),
-          
+
           // Card Content
           Padding(
             padding: const EdgeInsets.all(20),
@@ -400,7 +434,8 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                     const SizedBox(width: 12),
                     // Minimalist Status Pill
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         border: Border.all(color: statusColor, width: 1),
@@ -409,7 +444,8 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(_statusIcon(booking.status), size: 12, color: statusColor),
+                          Icon(_statusIcon(booking.status),
+                              size: 12, color: statusColor),
                           const SizedBox(width: 4),
                           Text(
                             booking.status,
@@ -433,7 +469,7 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                
+
                 const SizedBox(height: 16),
                 const Divider(height: 1, color: dividerColor, thickness: 1.2),
                 const SizedBox(height: 16),
@@ -457,9 +493,9 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            booking.checkOut.isNotEmpty 
-                              ? '${booking.dateTime} - ${booking.checkOut}'
-                              : booking.dateTime,
+                            booking.checkOut.isNotEmpty
+                                ? '${booking.dateTime} - ${booking.checkOut}'
+                                : booking.dateTime,
                             style: GoogleFonts.poppins(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
@@ -469,7 +505,7 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                         ],
                       ),
                     ),
-                    
+
                     // Price
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
@@ -495,9 +531,9 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                     ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Booking ID (Subtle)
                 Text(
                   'Booking ID: #${booking.bookingId.substring(0, booking.bookingId.length > 8 ? 8 : booking.bookingId.length).toUpperCase()}',
