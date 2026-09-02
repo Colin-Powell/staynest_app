@@ -114,7 +114,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
           return true;
         }
 
-        return !now.isBefore(start) && now.isBefore(end.add(const Duration(days: 1)));
+        return !now.isBefore(start) &&
+            now.isBefore(end.add(const Duration(days: 1)));
       });
 
       if (mounted) {
@@ -733,12 +734,17 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: tenantPrimary,
                                         foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(vertical: 14),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 14),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
                                         ),
                                       ),
-                                      icon: Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill), size: 18),
+                                      icon: Icon(
+                                          PhosphorIcons.mapPin(
+                                              PhosphorIconsStyle.fill),
+                                          size: 18),
                                       label: Text(
                                         'Open location',
                                         style: GoogleFonts.poppins(
