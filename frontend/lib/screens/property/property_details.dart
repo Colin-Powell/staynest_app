@@ -15,8 +15,6 @@ import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:intl/intl.dart';
 import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/session/app_session.dart';
-import 'package:property_app/utils/property_image_url.dart';
-import 'package:video_player/video_player.dart';
 import 'booking_view.dart';
 import '../reviews_view.dart' hide WriteReviewView;
 
@@ -55,6 +53,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   String? _eligibleBookingId;
   bool _hasReviewed = false;
   bool _hasActiveBooking = false;
+  bool _checkingBooking = true;
 
   // ─── Computed getters — single source of truth for rating & count ──────────
   double get _avgRating => _reviews.isEmpty
@@ -68,7 +67,6 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   final PageController _reviewPageController =
       PageController(viewportFraction: 1.0);
   Timer? _carouselTimer;
-  VideoPlayerController? _videoController;
 
   DateTime? _viewStartTime;
 
@@ -82,68 +80,37 @@ class _PropertyDetailsState extends State<PropertyDetails> {
         location: widget.property.location);
 
     _fetchReviews();
-    _initializePropertyVideo();
     _checkActiveBooking();
   }
 
   Future<void> _checkActiveBooking() async {
     try {
       final bookings = await BookingService.fetchBookings(isLandlord: false);
-      final now = DateTime.now();
 
       final hasActive = bookings.any((booking) {
-        if ((booking['property_id'] ?? '').toString() != widget.property.id) {
+        final propertyId = booking['property_id'] ??
+            (booking['property'] is Map
+                ? (booking['property'] as Map)['id']
+                : null);
+        if (propertyId?.toString() != widget.property.id) {
           return false;
         }
 
         final status = (booking['status'] ?? '').toString().toLowerCase();
-        if (status != 'confirmed') {
-          return false;
-        }
-
-        final checkIn = booking['check_in_date'] ?? booking['checkInDate'];
-        final checkOut = booking['check_out_date'] ?? booking['checkOutDate'];
-
-        if (checkIn == null || checkOut == null) {
-          return true;
-        }
-
-        final start = DateTime.tryParse(checkIn.toString());
-        final end = DateTime.tryParse(checkOut.toString());
-        if (start == null || end == null) {
-          return true;
-        }
-
-        return !now.isBefore(start) &&
-            now.isBefore(end.add(const Duration(days: 1)));
+        return status == 'pending' ||
+            status == 'confirmed' ||
+            status == 'completed';
       });
 
       if (mounted) {
-        setState(() => _hasActiveBooking = hasActive);
+        setState(() {
+          _hasActiveBooking = hasActive;
+          _checkingBooking = false;
+        });
       }
     } catch (e) {
       debugPrint('Error checking active booking: $e');
-    }
-  }
-
-  Future<void> _initializePropertyVideo() async {
-    final rawUrl = widget.property.videoUrl;
-    if (rawUrl == null || rawUrl.trim().isEmpty) return;
-    final controller = VideoPlayerController.networkUrl(
-      Uri.parse(resolvePropertyImageUrl(rawUrl)),
-      httpHeaders: AppSession.apiToken == null
-          ? const {}
-          : {'Authorization': 'Bearer ${AppSession.apiToken}'},
-    );
-    try {
-      await controller.initialize();
-      if (!mounted) {
-        await controller.dispose();
-        return;
-      }
-      setState(() => _videoController = controller);
-    } catch (_) {
-      await controller.dispose();
+      if (mounted) setState(() => _checkingBooking = false);
     }
   }
 
@@ -229,7 +196,6 @@ class _PropertyDetailsState extends State<PropertyDetails> {
     }
 
     _carouselTimer?.cancel();
-    _videoController?.dispose();
     _reviewPageController.dispose();
     super.dispose();
   }
@@ -724,7 +690,12 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              if (_hasActiveBooking)
+                              if (_checkingBooking)
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 12),
+                                  child: LinearProgressIndicator(minHeight: 2),
+                                )
+                              else if (_hasActiveBooking)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8),
                                   child: SizedBox(
@@ -806,55 +777,6 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                         ),
 
                         _buildDivider(),
-
-                        if (_videoController != null &&
-                            _videoController!.value.isInitialized) ...[
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Property Video',
-                                    style: GoogleFonts.poppins(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w600,
-                                        color: textDark)),
-                                const SizedBox(height: 16),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: AspectRatio(
-                                    aspectRatio:
-                                        _videoController!.value.aspectRatio,
-                                    child: Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                        VideoPlayer(_videoController!),
-                                        IconButton(
-                                          tooltip:
-                                              _videoController!.value.isPlaying
-                                                  ? 'Pause video'
-                                                  : 'Play video',
-                                          iconSize: 56,
-                                          color: Colors.white,
-                                          onPressed: () => setState(() {
-                                            _videoController!.value.isPlaying
-                                                ? _videoController!.pause()
-                                                : _videoController!.play();
-                                          }),
-                                          icon: Icon(
-                                              _videoController!.value.isPlaying
-                                                  ? Icons.pause_circle_filled
-                                                  : Icons.play_circle_fill),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          _buildDivider(),
-                        ],
 
                         // --- Reviews Carousel Section ---
                         Padding(

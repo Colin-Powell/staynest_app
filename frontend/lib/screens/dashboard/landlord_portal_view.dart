@@ -1,9 +1,8 @@
-import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:property_app/widgets/skeleton_property_card.dart';
+import 'package:shimmer/shimmer.dart';
 
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/verification_api.dart';
@@ -14,6 +13,13 @@ import 'landlord_messages_page.dart';
 import 'landlord_overview_page.dart';
 import 'landlord_properties_page.dart';
 import 'landlord_settings_page.dart';
+
+// ─── Landlord Design System Constants ─────────────────────────────────────────
+const Color _bg = Color(0xFFFAFAFA);
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF9CA3AF);
+const Color _surface = Colors.white;
+const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 
 class LandlordPortalView extends StatefulWidget {
   final VoidCallback onAddProperty;
@@ -39,22 +45,17 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   }
 
   void _handleChatOpen() {
-    setState(() {
-      _isChatOpen = true;
-    });
+    setState(() => _isChatOpen = true);
   }
 
   void _handleChatClose() {
-    setState(() {
-      _isChatOpen = false;
-    });
+    setState(() => _isChatOpen = false);
   }
 
   Future<void> _loadVerificationStatus() async {
     try {
       final status = await VerificationApi.getVerificationStatus();
-      final isCurrentlyApproved =
-          status?['status']?.toString().toLowerCase() == 'approved';
+      final isCurrentlyApproved = status?['status']?.toString().toLowerCase() == 'approved';
 
       if (mounted) {
         if (isCurrentlyApproved && !_wasVerifiedBefore) {
@@ -105,112 +106,67 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
     }
   }
 
+  // ─── Modal Redesign ──────────────────────────────────────────────────────────
+
   void _showVerificationSuccessModal() {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Color(0xFFD1FAE5),
-                ),
-                child: Icon(
-                  PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
-                  size: 48,
-                  color: const Color(0xFF059669),
-                ),
+      builder: (_) => AlertDialog(
+        backgroundColor: _surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(color: _green.withOpacity(0.1), shape: BoxShape.circle),
+              child: const Icon(PhosphorIconsFill.shieldCheck, size: 64, color: _green),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Congratulations!',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your landlord account has been fully verified and approved.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.5),
+            ),
+            const SizedBox(height: 32),
+            Container(
+              decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(16)),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _buildSuccessFeature(PhosphorIconsFill.buildings, 'Add Properties', 'List properties and manage your portfolio'),
+                  const SizedBox(height: 16),
+                  _buildSuccessFeature(PhosphorIconsFill.usersThree, 'Manage Tenants', 'Screen and communicate with prospects'),
+                  const SizedBox(height: 16),
+                  _buildSuccessFeature(PhosphorIconsFill.eye, 'Higher Visibility', 'Get featured in premium search results'),
+                ],
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Congratulations!',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1F2937),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(_);
+                  setState(() => _selectedNav = 'Dashboard');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _green,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                  elevation: 0,
                 ),
+                child: Text('Get Started', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Your account is now verified',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF059669),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0FDF4),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    _buildSuccessFeature(
-                      PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
-                      'Manage Tenants',
-                      'Screen and communicate with potential tenants',
-                    ),
-                    const SizedBox(height: 12),
-                    _buildSuccessFeature(
-                      PhosphorIcons.buildings(PhosphorIconsStyle.fill),
-                      'Add Properties',
-                      'List your properties and manage listings',
-                    ),
-                    const SizedBox(height: 12),
-                    _buildSuccessFeature(
-                      PhosphorIcons.eye(PhosphorIconsStyle.fill),
-                      'Higher Visibility',
-                      'Verified landlords get featured in more searches',
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth:
-                      (MediaQuery.of(_).size.width - 64).clamp(0.0, 360.0),
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(_);
-                      setState(() => _selectedNav = 'Dashboard');
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF059669),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: Text(
-                      'Get Started',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -218,29 +174,17 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
 
   Widget _buildSuccessFeature(IconData icon, String title, String subtitle) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: const Color(0xFF059669)),
+        Icon(icon, size: 20, color: _green),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF1F2937),
-                ),
-              ),
+              Text(title, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: _dark)),
               const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: const Color(0xFF6B7280),
-                ),
-              ),
+              Text(subtitle, style: GoogleFonts.poppins(fontSize: 12, color: _grey)),
             ],
           ),
         ),
@@ -248,35 +192,26 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
     );
   }
 
+  // ─── State Getters ───────────────────────────────────────────────────────────
+
   bool get _isLandlordRole => AppSession.isLandlord;
+  bool get _isVerificationApproved => _verificationStatus?['status']?.toString().toLowerCase() == 'approved';
+  bool get _hasVerificationSubmitted => _verificationStatus != null && _verificationStatus!['status']?.toString().toLowerCase() == 'submitted';
+  bool get _isVerificationRejected => _verificationStatus != null && _verificationStatus!['status']?.toString().toLowerCase() == 'rejected';
 
-  bool get _isVerificationApproved =>
-      _verificationStatus?['status']?.toString().toLowerCase() == 'approved';
-
-  bool get _hasVerificationSubmitted =>
-      _verificationStatus != null &&
-      _verificationStatus!['status']?.toString().toLowerCase() == 'submitted';
-
-  bool get _isVerificationRejected =>
-      _verificationStatus != null &&
-      _verificationStatus!['status']?.toString().toLowerCase() == 'rejected';
+  // ─── Page Routing ────────────────────────────────────────────────────────────
 
   Widget _getLegacyPage() {
     switch (_selectedNav) {
       case 'Bookings':
         return const LandlordBookingsPage();
       case 'Messages':
-        return LandlordMessagesPage(
-          onChatOpen: _handleChatOpen,
-          onChatClose: _handleChatClose,
-        );
+        return LandlordMessagesPage(onChatOpen: _handleChatOpen, onChatClose: _handleChatClose);
       case 'Settings':
         return const LandlordSettingsPage();
       default:
         return LandlordOverviewPage(
-          onViewAllProperties: () =>
-              setState(() => _selectedNav = 'Properties'),
-          onAddProperty: widget.onAddProperty,
+          onViewAllProperties: () => setState(() => _selectedNav = 'Properties'),
         );
     }
   }
@@ -284,27 +219,24 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   Widget _buildBodyContent() {
     if (_isLoadingStatus) {
       return ListView.builder(
-        padding: const EdgeInsets.all(24),
-        itemCount: 3,
+        padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).padding.bottom + 120),
+        itemCount: 4,
         itemBuilder: (context, index) {
-          return const Padding(
-            padding: EdgeInsets.only(bottom: 20),
-            child: SkeletonPropertyCard(
-                width: double.infinity, margin: EdgeInsets.zero),
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: Shimmer.fromColors(
+              baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+              child: Container(height: 180, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24))),
+            ),
           );
         },
       );
     }
 
-    if (!_isLandlordRole) {
-      return _buildUnauthorizedView();
-    }
+    if (!_isLandlordRole) return _buildUnauthorizedView();
 
-    final isKycApproved = _verificationStatus != null &&
-        _verificationStatus!['status']?.toString().toLowerCase() == 'approved';
-    if (!isKycApproved) {
-      return _buildPendingVerificationDashboard();
-    }
+    final isKycApproved = _verificationStatus != null && _verificationStatus!['status']?.toString().toLowerCase() == 'approved';
+    if (!isKycApproved) return _buildPendingVerificationDashboard();
 
     if (_selectedNav == 'Properties') {
       return LandlordPropertiesPage(onAddProperty: widget.onAddProperty);
@@ -313,33 +245,20 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
     return _getLegacyPage();
   }
 
+  // ─── Pending & Unauthorized Views ────────────────────────────────────────────
+
   Widget _buildUnauthorizedView() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 28),
+        padding: const EdgeInsets.symmetric(horizontal: 32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(PhosphorIcons.warning(PhosphorIconsStyle.fill),
-                size: 72, color: Colors.red),
+            const Icon(PhosphorIconsFill.warningCircle, size: 64, color: Color(0xFFEF4444)),
             const SizedBox(height: 20),
-            Text(
-              'Access restricted',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            Text('Access Restricted', textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
             const SizedBox(height: 12),
-            Text(
-              'This portal is only available to verified landlords and agents.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 15,
-                color: const Color(0xFF6B7280),
-              ),
-            ),
+            Text('This portal is only available to verified landlords and agents.', textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.5)),
           ],
         ),
       ),
@@ -347,25 +266,23 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   }
 
   Widget _buildPendingVerificationDashboard() {
-    final statusLabel =
-        _verificationStatus?['status']?.toString().toLowerCase();
+    final statusLabel = _verificationStatus?['status']?.toString().toLowerCase();
     final isRejected = statusLabel == 'rejected';
-    final title = isRejected
-        ? 'Verification needs attention'
-        : 'Verification in progress';
+    final title = isRejected ? 'Verification needs attention' : 'Verification in progress';
     final message = isRejected
         ? 'Please resubmit your identity documents to restore access to dashboard actions and listing tools.'
         : 'Your landlord KYC has been submitted. Dashboard actions and listing tools will unlock once admin approval is complete.';
 
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).padding.bottom + 120),
       children: [
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFD1D5DB)),
+            color: _surface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: _grey.withOpacity(0.1)),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -373,297 +290,132 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
               Row(
                 children: [
                   Icon(
-                    isRejected
-                        ? PhosphorIcons.warning(PhosphorIconsStyle.fill)
-                        : PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill),
-                    size: 30,
-                    color: isRejected
-                        ? const Color(0xFFDC2626)
-                        : const Color(0xFF059669),
+                    isRejected ? PhosphorIconsFill.warningCircle : PhosphorIconsFill.shieldCheck,
+                    size: 32,
+                    color: isRejected ? const Color(0xFFEF4444) : _green,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      title,
-                      style: GoogleFonts.poppins(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF111827),
-                      ),
-                    ),
+                    child: Text(title, style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Text(
-                message,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: const Color(0xFF4B5563),
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 18),
-              ElevatedButton(
-                onPressed: () =>
-                    Navigator.pushNamed(context, '/verification_center'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF059669),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              const SizedBox(height: 16),
+              Text(message, style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.5)),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pushNamed(context, '/verification_center'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _dark,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    elevation: 0,
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: Text(
-                  isRejected ? 'Resubmit KYC' : 'View Verification',
-                  style: GoogleFonts.poppins(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  child: Text(isRejected ? 'Resubmit KYC' : 'View Verification', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
         Row(
           children: [
-            Expanded(
-              child: _buildMiniStatCard('Properties', '0',
-                  icon: PhosphorIcons.buildings(PhosphorIconsStyle.fill)),
-            ),
+            Expanded(child: _buildMiniStatCard('Properties', '0', icon: PhosphorIconsRegular.buildings)),
             const SizedBox(width: 16),
-            Expanded(
-              child: _buildMiniStatCard('Inquiries', '0',
-                  icon: PhosphorIcons.users(PhosphorIconsStyle.fill)),
-            ),
+            Expanded(child: _buildMiniStatCard('Inquiries', '0', icon: PhosphorIconsRegular.users)),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(
-              child: _buildMiniStatCard('Bookings', '0',
-                  icon: PhosphorIcons.calendarCheck(PhosphorIconsStyle.fill)),
-            ),
+            Expanded(child: _buildMiniStatCard('Bookings', '0', icon: PhosphorIconsRegular.calendarCheck)),
             const SizedBox(width: 16),
-            Expanded(
-              child: _buildMiniStatCard('Messages', '0',
-                  icon:
-                      PhosphorIcons.chatTeardropText(PhosphorIconsStyle.fill)),
-            ),
+            Expanded(child: _buildMiniStatCard('Messages', '0', icon: PhosphorIconsRegular.chatTeardropText)),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildMiniStatCard(String label, String value,
-      {required IconData icon}) {
+  Widget _buildMiniStatCard(String label, String value, {required IconData icon}) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        color: _surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _grey.withOpacity(0.1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: const Color(0xFF059669)),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF111827),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: const Color(0xFF6B7280),
-            ),
-          ),
+          Icon(icon, size: 24, color: _green),
+          const SizedBox(height: 16),
+          Text(value, style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, height: 1.1)),
+          const SizedBox(height: 2),
+          Text(label, style: GoogleFonts.poppins(fontSize: 12, color: _grey, fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 
-  Widget _buildRestrictedPortalView() {
-    final statusLabel = _hasVerificationSubmitted
-        ? 'Pending approval'
-        : 'Verification required';
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 28),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(PhosphorIcons.lockKey(PhosphorIconsStyle.fill),
-                size: 72, color: const Color(0xFF0F766E)),
-            const SizedBox(height: 20),
-            Text(
-              statusLabel,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Your landlord verification has been submitted and is under review. The portal is available, but pages will remain locked until approval.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 15,
-                color: const Color(0xFF6B7280),
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _isRefreshing ? null : refreshAll,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF059669),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: _isRefreshing
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white.withValues(alpha: 0.7),
-                              ),
-                            ),
-                          )
-                        : Text(
-                            'Refresh Status',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.poppins(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () =>
-                        Navigator.pushNamed(context, '/verification_center'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      side: const BorderSide(color: Color(0xFF059669)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: Text(
-                      'View Details',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF059669),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // ─── Main Scaffold ────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: _bg, // Clean solid background
       extendBody: true,
       body: Stack(
         children: [
-          // 1. Global Background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFF7FDF9),
-                  Color(0xFFFFFFFF),
-                  Color(0xFFD4EFE1),
-                ],
-                stops: [0.0, 0.5, 1.0],
-              ),
-            ),
-          ),
-
-          // 2. Active Page Content with Pull-to-Refresh
           Positioned.fill(
             child: RefreshIndicator(
               onRefresh: refreshAll,
-              color: const Color(0xFF059669),
+              color: _green,
+              backgroundColor: _surface,
               child: _buildBodyContent(),
             ),
           ),
-
-          // 3. Clean Floating Glass Bottom Navigation
           if (!_isChatOpen)
             Align(
               alignment: Alignment.bottomCenter,
-              child: _buildGlassBottomNav(),
+              child: _buildSolidBottomNav(),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildGlassBottomNav() {
+  // ─── Navigation Bar ─────────────────────────────────────────────────────────
+
+  Widget _buildSolidBottomNav() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 24, left: 24, right: 24),
-      child: _GlassContainer(
-        blur: 25,
-        opacity: 0.85,
-        borderRadius: BorderRadius.circular(32),
-        borderWidth: 1.5,
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: const EdgeInsets.only(bottom: 32, left: 24, right: 24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(40), // Perfect pill shape
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 10))
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildNavItem(
-                PhosphorIcons.house(PhosphorIconsStyle.fill), 'Dashboard'),
-            _buildNavItem(
-                PhosphorIcons.buildings(PhosphorIconsStyle.fill), 'Properties'),
-            _buildNavItem(PhosphorIcons.calendarCheck(PhosphorIconsStyle.fill),
-                'Bookings'),
-            _buildNavItem(PhosphorIcons.chatTeardrop(PhosphorIconsStyle.fill),
-                'Messages'),
-            _buildNavItem(
-                PhosphorIcons.userCircle(PhosphorIconsStyle.fill), 'Settings',
-                displayLabel: 'Profile'),
+            _buildNavItem(PhosphorIconsRegular.house, 'Dashboard'),
+            _buildNavItem(PhosphorIconsRegular.buildings, 'Properties'),
+            _buildNavItem(PhosphorIconsRegular.calendarCheck, 'Bookings'),
+            _buildNavItem(PhosphorIconsRegular.chatTeardrop, 'Messages'),
+            _buildNavItem(PhosphorIconsRegular.user, 'Settings', displayLabel: 'Profile'),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(IconData icon, String routeLabel,
-      {String? displayLabel}) {
+  Widget _buildNavItem(IconData icon, String routeLabel, {String? displayLabel}) {
     final bool isActive = _selectedNav == routeLabel;
     final String labelToShow = displayLabel ?? routeLabel;
 
@@ -671,89 +423,46 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
       onTap: () => setState(() => _selectedNav = routeLabel),
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
+        duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
         padding: EdgeInsets.symmetric(
-          horizontal: isActive ? 16 : 8,
-          vertical: 8,
+          horizontal: isActive ? 16 : 10,
+          vertical: 10,
         ),
         decoration: BoxDecoration(
-          color: isActive
-              ? const Color(0xFF059669).withValues(alpha: 0.12)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          color: isActive ? _green.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(32),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              size: 26,
-              color:
-                  isActive ? const Color(0xFF059669) : const Color(0xFF9CA3AF),
+              size: 24,
+              color: isActive ? _green : _grey,
             ),
-            // Only reveal the text when the tab is active
-            if (isActive) ...[
-              const SizedBox(width: 8),
-              Text(
-                labelToShow,
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF059669),
+            // Fluid text expansion
+            AnimatedSize(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              child: SizedBox(
+                width: isActive ? null : 0,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(
+                    labelToShow,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _green,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                  ),
                 ),
-              )
-            ]
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Glassmorphism Core Utility (Local to Portal) ────────────────────────
-class _GlassContainer extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final BorderRadius? borderRadius;
-  final double blur;
-  final double opacity;
-  final double borderWidth;
-
-  const _GlassContainer({
-    required this.child,
-    required this.padding,
-    this.borderRadius,
-    this.blur = 15.0,
-    this.opacity = 0.55,
-    this.borderWidth = 1.0,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final radius = borderRadius ?? BorderRadius.circular(24);
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: opacity),
-            borderRadius: radius,
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.8),
-              width: borderWidth,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 10,
-                offset: const Offset(0, -4),
               ),
-            ],
-          ),
-          child: child,
+            ),
+          ],
         ),
       ),
     );

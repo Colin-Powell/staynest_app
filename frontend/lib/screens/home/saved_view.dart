@@ -15,7 +15,7 @@ import 'package:property_app/widgets/property_image.dart';
 const Color _textDark = Color(0xFF222222);
 const Color _textLight = Color(0xFF717171);
 const Color _dividerColor = Color(0xFFEBEBEB);
-const Color _primary = Color(0xFF3F37C9); 
+const Color _primary = Color(0xFF3F37C9);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WISH LIST HUB (Main Page)
@@ -37,7 +37,6 @@ class SavedView extends StatefulWidget {
 
 class _SavedViewState extends State<SavedView>
     with SingleTickerProviderStateMixin {
-      
   final _propertyService = PropertyService.instance;
   List<Property> _all = [];
   List<Property> _recent = [];
@@ -115,7 +114,8 @@ class _SavedViewState extends State<SavedView>
           properties: properties,
           onOpenProperty: widget.onOpenProperty,
           onSelectProperty: widget.onSelectProperty,
-          onListUpdated: () => setState(() {}), // Refresh counts when popping back
+          onListUpdated: () =>
+              setState(() {}), // Refresh counts when popping back
         ),
       ),
     );
@@ -123,7 +123,8 @@ class _SavedViewState extends State<SavedView>
 
   @override
   Widget build(BuildContext context) {
-    final savedProperties = _all.where((p) => AppSession.isSaved(p.id)).toList();
+    final savedProperties =
+        _all.where((p) => AppSession.isSaved(p.id)).toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -158,19 +159,22 @@ class _SavedViewState extends State<SavedView>
                     : FadeTransition(
                         opacity: _animController,
                         child: ListView(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 8),
                           physics: const BouncingScrollPhysics(),
                           children: [
                             _CollageCard(
                               title: 'Saved',
                               properties: savedProperties,
-                              onTap: () => _openWishlistDetail('Saved', savedProperties),
+                              onTap: () =>
+                                  _openWishlistDetail('Saved', savedProperties),
                             ),
                             const SizedBox(height: 32),
                             _CollageCard(
                               title: 'Recently Viewed',
                               properties: _recent,
-                              onTap: () => _openWishlistDetail('Recently Viewed', _recent),
+                              onTap: () => _openWishlistDetail(
+                                  'Recently Viewed', _recent),
                             ),
                             const SizedBox(height: 40),
                           ],
@@ -294,13 +298,15 @@ class _CollageCard extends StatelessWidget {
   }
 
   Widget _buildCollageImages() {
-    final images = properties.map((p) => p.image).where((i) => i.isNotEmpty).toList();
+    final images =
+        properties.map((p) => p.image).where((i) => i.isNotEmpty).toList();
 
     if (images.isEmpty) {
       return Container(
         color: const Color(0xFFF3F4F6),
         child: const Center(
-          child: Icon(Icons.maps_home_work_outlined, color: _textLight, size: 36),
+          child:
+              Icon(Icons.maps_home_work_outlined, color: _textLight, size: 36),
         ),
       );
     }
@@ -409,11 +415,13 @@ class _WishlistDetailScreenState extends State<_WishlistDetailScreen> {
     setState(() {
       _localProperties.removeWhere((p) => p.id == property.id);
     });
-    
+
     widget.onListUpdated();
 
     // If it's the "Saved" wishlist, we also remove it from the backend favorites
-    if (widget.title == 'Saved' && AppSession.currentUserId != null && AppSession.apiToken != null) {
+    if (widget.title == 'Saved' &&
+        AppSession.currentUserId != null &&
+        AppSession.apiToken != null) {
       AppSession.savedPropertyIds.remove(property.id);
       try {
         await RemoteDatabaseRepository().removeFavoriteForUser(
@@ -490,9 +498,11 @@ class _WishlistDetailScreenState extends State<_WishlistDetailScreen> {
                           height: 40,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: _dividerColor, width: 1.2),
+                            border:
+                                Border.all(color: _dividerColor, width: 1.2),
                           ),
-                          child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: _textDark),
+                          child: const Icon(Icons.arrow_back_ios_new_rounded,
+                              size: 18, color: _textDark),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -510,7 +520,8 @@ class _WishlistDetailScreenState extends State<_WishlistDetailScreen> {
                     TextButton(
                       onPressed: () => setState(() => _isEditing = !_isEditing),
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
                         foregroundColor: _textDark,
                       ),
                       child: Text(
@@ -534,22 +545,29 @@ class _WishlistDetailScreenState extends State<_WishlistDetailScreen> {
                 : GridView.builder(
                     physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 24,
-                      childAspectRatio: 0.70, // Optimized for square image + text below
+                      childAspectRatio:
+                          0.70, // Optimized for square image + text below
                     ),
                     itemCount: _localProperties.length,
                     itemBuilder: (context, index) {
                       final property = _localProperties[index];
                       return GestureDetector(
                         onTap: () {
-                          if (_isEditing) return; // Disable tap navigation while editing
-                          if (widget.onOpenProperty != null) {
-                            widget.onOpenProperty!();
+                          if (_isEditing)
+                            return; // Disable tap navigation while editing
+                          if (widget.onSelectProperty != null) {
+                            // Close the saved/recent grid before the shell opens
+                            // the property detail overlay; otherwise the overlay
+                            // is rendered underneath this route.
+                            Navigator.of(context).pop();
+                            widget.onSelectProperty!(property);
                           } else {
-                            widget.onSelectProperty?.call(property);
+                            widget.onOpenProperty?.call();
                           }
                         },
                         child: Column(
@@ -577,16 +595,21 @@ class _WishlistDetailScreenState extends State<_WishlistDetailScreen> {
                                           child: Container(
                                             padding: const EdgeInsets.all(6),
                                             decoration: BoxDecoration(
-                                              color: Colors.white.withOpacity(0.9),
+                                              color:
+                                                  Colors.white.withOpacity(0.9),
                                               shape: BoxShape.circle,
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: Colors.black.withOpacity(0.1),
+                                                  color: Colors.black
+                                                      .withOpacity(0.1),
                                                   blurRadius: 4,
                                                 ),
                                               ],
                                             ),
-                                            child: const Icon(Icons.close_rounded, size: 18, color: _textDark),
+                                            child: const Icon(
+                                                Icons.close_rounded,
+                                                size: 18,
+                                                color: _textDark),
                                           ),
                                         )
                                       : GestureDetector(
@@ -595,14 +618,17 @@ class _WishlistDetailScreenState extends State<_WishlistDetailScreen> {
                                             AppSession.isSaved(property.id)
                                                 ? Icons.favorite
                                                 : Icons.favorite_border,
-                                            color: AppSession.isSaved(property.id)
-                                                ? const Color(0xFFE51D53)
-                                                : Colors.white,
+                                            color:
+                                                AppSession.isSaved(property.id)
+                                                    ? const Color(0xFFE51D53)
+                                                    : Colors.white,
                                             size: 24,
                                             shadows: [
-                                              if (!AppSession.isSaved(property.id))
+                                              if (!AppSession.isSaved(
+                                                  property.id))
                                                 Shadow(
-                                                  color: Colors.black.withOpacity(0.5),
+                                                  color: Colors.black
+                                                      .withOpacity(0.5),
                                                   blurRadius: 4,
                                                 )
                                             ],
@@ -664,7 +690,8 @@ class _WishlistDetailScreenState extends State<_WishlistDetailScreen> {
               'assets/images/save.webp',
               height: 140,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(Icons.favorite_border, size: 64, color: _dividerColor),
+              errorBuilder: (_, __, ___) => const Icon(Icons.favorite_border,
+                  size: 64, color: _dividerColor),
             ),
             const SizedBox(height: 24),
             Text(
@@ -685,7 +712,9 @@ class _WishlistDetailScreenState extends State<_WishlistDetailScreen> {
                 height: 1.5,
               ),
             ),
-            const SizedBox(height: 80), // Offset slightly to account for missing bottom nav
+            const SizedBox(
+                height:
+                    80), // Offset slightly to account for missing bottom nav
           ],
         ),
       ),
@@ -720,13 +749,16 @@ class _SkeletonCard extends StatefulWidget {
   State<_SkeletonCard> createState() => _SkeletonCardState();
 }
 
-class _SkeletonCardState extends State<_SkeletonCard> with SingleTickerProviderStateMixin {
+class _SkeletonCardState extends State<_SkeletonCard>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000))..repeat(reverse: true);
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1000))
+      ..repeat(reverse: true);
   }
 
   @override
@@ -753,9 +785,19 @@ class _SkeletonCardState extends State<_SkeletonCard> with SingleTickerProviderS
             ),
           ),
           const SizedBox(height: 16),
-          Container(height: 16, width: 140, decoration: BoxDecoration(color: skeletonColor, borderRadius: BorderRadius.circular(4))),
+          Container(
+              height: 16,
+              width: 140,
+              decoration: BoxDecoration(
+                  color: skeletonColor,
+                  borderRadius: BorderRadius.circular(4))),
           const SizedBox(height: 8),
-          Container(height: 14, width: 80, decoration: BoxDecoration(color: skeletonColor, borderRadius: BorderRadius.circular(4))),
+          Container(
+              height: 14,
+              width: 80,
+              decoration: BoxDecoration(
+                  color: skeletonColor,
+                  borderRadius: BorderRadius.circular(4))),
         ],
       ),
     );

@@ -21,7 +21,7 @@ class _LandlordNotificationItem {
   final String title;
   final String subtitle;
   final String time;
-  final IconData icon;
+  final String emoji;
   final Color iconColor;
   final Color iconBg;
   bool isRead;
@@ -31,7 +31,7 @@ class _LandlordNotificationItem {
     required this.title,
     required this.subtitle,
     required this.time,
-    required this.icon,
+    required this.emoji,
     required this.iconColor,
     required this.iconBg,
     this.isRead = false,
@@ -42,7 +42,8 @@ class LandlordNotificationsPage extends StatefulWidget {
   const LandlordNotificationsPage({super.key});
 
   @override
-  State<LandlordNotificationsPage> createState() => _LandlordNotificationsPageState();
+  State<LandlordNotificationsPage> createState() =>
+      _LandlordNotificationsPageState();
 }
 
 class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
@@ -59,6 +60,20 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
   final Set<String> _selectedIds = {};
 
   StreamSubscription<RemoteMessage>? _fcmSubscription;
+
+  String _notificationEmoji(Map<dynamic, dynamic> data) {
+    final type = data['type']?.toString().toLowerCase() ?? '';
+    if (type.contains('booking') ||
+        type.contains('checkin') ||
+        type.contains('checkout')) return '📅';
+    if (type.contains('message') || type.contains('unread')) return '💬';
+    if (type.contains('payment') || type.contains('price')) return '💰';
+    if (type.contains('alert') ||
+        type.contains('warning') ||
+        type.contains('stale')) return '⚠️';
+    if (type.contains('approved') || type.contains('success')) return '✅';
+    return '🔔';
+  }
 
   @override
   void initState() {
@@ -81,10 +96,12 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
   }
 
   void _setupFCMStream() {
-    _fcmSubscription = FCMService.instance.notificationsStream.listen((message) {
+    _fcmSubscription =
+        FCMService.instance.notificationsStream.listen((message) {
       if (!mounted) return;
       final title = message.notification?.title ?? 'Notification';
       final subtitle = message.notification?.body ?? '';
+      final emoji = _notificationEmoji(message.data);
       final now = DateTime.now();
 
       setState(() {
@@ -95,7 +112,7 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
             title: title,
             subtitle: subtitle,
             time: _formatTime(now),
-            icon: PhosphorIconsFill.bell,
+            emoji: emoji,
             iconColor: _green,
             iconBg: _green.withOpacity(0.1),
             isRead: false,
@@ -109,30 +126,35 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
     try {
       final res = await NotificationApi.fetchNotifications(limit: 50);
       final List<dynamic> data = res['data'] ?? [];
-      
+
       if (!mounted) return;
       setState(() {
         _items.clear();
         for (var item in data) {
-          final created = DateTime.tryParse(item['created_at'].toString())?.toLocal() ?? DateTime.now();
+          final created =
+              DateTime.tryParse(item['created_at'].toString())?.toLocal() ??
+                  DateTime.now();
           final type = item['data']?['type']?.toString() ?? '';
           final dataMap = item['data'] ?? {};
-          final unreadCount = int.tryParse(dataMap['unreadCount']?.toString() ?? '') ?? 0;
-          
-          IconData icon = PhosphorIconsFill.bell;
+          final unreadCount =
+              int.tryParse(dataMap['unreadCount']?.toString() ?? '') ?? 0;
+
+          String emoji = '🔔';
           Color iconColor = _green;
           Color iconBg = _green.withOpacity(0.1);
-          
-          if (type.contains('booking') || type.contains('checkin') || type.contains('checkout')) {
-            icon = PhosphorIconsFill.calendarCheck;
+
+          if (type.contains('booking') ||
+              type.contains('checkin') ||
+              type.contains('checkout')) {
+            emoji = '📅';
             iconColor = const Color(0xFF3B82F6); // Blue
             iconBg = const Color(0xFF3B82F6).withOpacity(0.1);
           } else if (type.contains('message') || type.contains('unread')) {
-            icon = PhosphorIconsFill.chatTeardropText;
+            emoji = '💬';
             iconColor = const Color(0xFF8B5CF6); // Purple
             iconBg = const Color(0xFF8B5CF6).withOpacity(0.1);
           } else if (type.contains('alert') || type.contains('stale')) {
-            icon = PhosphorIconsFill.warningCircle;
+            emoji = '⚠️';
             iconColor = const Color(0xFFEF4444); // Red
             iconBg = const Color(0xFFEF4444).withOpacity(0.1);
           }
@@ -142,7 +164,7 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
             title: item['title'] ?? 'Notification',
             subtitle: item['body'] ?? '',
             time: _formatTime(created),
-            icon: icon,
+            emoji: emoji,
             iconColor: iconColor,
             iconBg: iconBg,
             isRead: unreadCount == 0,
@@ -242,7 +264,8 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
         GestureDetector(
           onTap: () => Navigator.pop(context),
           behavior: HitTestBehavior.opaque,
-          child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 28),
+          child: const Icon(PhosphorIconsRegular.caretLeft,
+              color: _dark, size: 28),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -257,8 +280,10 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
           ),
         ),
         PopupMenuButton<String>(
-          icon: const Icon(PhosphorIconsRegular.dotsThreeVertical, color: _dark, size: 28),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          icon: const Icon(PhosphorIconsRegular.dotsThreeVertical,
+              color: _dark, size: 28),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           color: _surface,
           elevation: 4,
           onSelected: (value) {
@@ -270,9 +295,12 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
               value: 'read_all',
               child: Row(
                 children: [
-                  const Icon(PhosphorIconsRegular.checkCircle, color: _dark, size: 20),
+                  const Icon(PhosphorIconsRegular.checkCircle,
+                      color: _dark, size: 20),
                   const SizedBox(width: 12),
-                  Text('Mark all as read', style: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 14)),
+                  Text('Mark all as read',
+                      style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w500, fontSize: 14)),
                 ],
               ),
             ),
@@ -280,9 +308,12 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
               value: 'select',
               child: Row(
                 children: [
-                  const Icon(PhosphorIconsRegular.checkSquareOffset, color: _dark, size: 20),
+                  const Icon(PhosphorIconsRegular.checkSquareOffset,
+                      color: _dark, size: 20),
                   const SizedBox(width: 12),
-                  Text('Select messages', style: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 14)),
+                  Text('Select messages',
+                      style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w500, fontSize: 14)),
                 ],
               ),
             ),
@@ -317,7 +348,9 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
           onTap: _selectAll,
           behavior: HitTestBehavior.opaque,
           child: Text(
-            _selectedIds.length == _items.length ? 'Unselect All' : 'Select All',
+            _selectedIds.length == _items.length
+                ? 'Unselect All'
+                : 'Select All',
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -342,7 +375,8 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
             highlightColor: Colors.grey.shade100,
             child: Container(
               height: 88,
-              decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(20)),
+              decoration: BoxDecoration(
+                  color: _surface, borderRadius: BorderRadius.circular(20)),
             ),
           ),
         );
@@ -359,13 +393,16 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
           children: [
             Container(
               padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(color: _grey.withOpacity(0.1), shape: BoxShape.circle),
-              child: const Icon(PhosphorIconsRegular.bellSlash, color: _grey, size: 48),
+              decoration: BoxDecoration(
+                  color: _grey.withOpacity(0.1), shape: BoxShape.circle),
+              child: const Icon(PhosphorIconsRegular.bellSlash,
+                  color: _grey, size: 48),
             ),
             const SizedBox(height: 24),
             Text(
               'No notifications yet',
-              style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark),
+              style: GoogleFonts.poppins(
+                  fontSize: 20, fontWeight: FontWeight.w700, color: _dark),
             ),
             const SizedBox(height: 8),
             Text(
@@ -383,7 +420,8 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
-      bottom: _isSelectionMode ? MediaQuery.of(context).padding.bottom + 24 : -100,
+      bottom:
+          _isSelectionMode ? MediaQuery.of(context).padding.bottom + 24 : -100,
       left: 24,
       right: 24,
       child: Container(
@@ -392,7 +430,10 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
           color: _dark,
           borderRadius: BorderRadius.circular(32), // Pill shape
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 10))
+            BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 10))
           ],
         ),
         child: Row(
@@ -404,9 +445,19 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(PhosphorIconsRegular.envelopeOpen, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white, size: 26),
+                  Icon(PhosphorIconsRegular.envelopeOpen,
+                      color: _selectedIds.isEmpty
+                          ? _grey.withOpacity(0.5)
+                          : Colors.white,
+                      size: 26),
                   const SizedBox(height: 6),
-                  Text('Read', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white)),
+                  Text('Read',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _selectedIds.isEmpty
+                              ? _grey.withOpacity(0.5)
+                              : Colors.white)),
                 ],
               ),
             ),
@@ -417,9 +468,19 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(PhosphorIconsRegular.trash, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444), size: 26),
+                  Icon(PhosphorIconsRegular.trash,
+                      color: _selectedIds.isEmpty
+                          ? _grey.withOpacity(0.5)
+                          : const Color(0xFFEF4444),
+                      size: 26),
                   const SizedBox(height: 6),
-                  Text('Delete', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444))),
+                  Text('Delete',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _selectedIds.isEmpty
+                              ? _grey.withOpacity(0.5)
+                              : const Color(0xFFEF4444))),
                 ],
               ),
             ),
@@ -448,7 +509,9 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
                       padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
-                        child: _isSelectionMode ? _buildSelectionHeader() : _buildNormalHeader(),
+                        child: _isSelectionMode
+                            ? _buildSelectionHeader()
+                            : _buildNormalHeader(),
                       ),
                     ),
                     Expanded(
@@ -461,25 +524,36 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
                                   backgroundColor: _surface,
                                   onRefresh: _loadNotifications,
                                   child: ListView.builder(
-                                    padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(context).padding.bottom + 120),
-                                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                                    padding: EdgeInsets.fromLTRB(
+                                        24,
+                                        8,
+                                        24,
+                                        MediaQuery.of(context).padding.bottom +
+                                            120),
+                                    physics: const BouncingScrollPhysics(
+                                        parent:
+                                            AlwaysScrollableScrollPhysics()),
                                     itemCount: _items.length,
                                     itemBuilder: (context, index) {
                                       return _NotificationTile(
                                         item: _items[index],
                                         isSelectionMode: _isSelectionMode,
-                                        isSelected: _selectedIds.contains(_items[index].id),
+                                        isSelected: _selectedIds
+                                            .contains(_items[index].id),
                                         onTap: () {
                                           if (_isSelectionMode) {
-                                            _toggleItemSelection(_items[index].id);
+                                            _toggleItemSelection(
+                                                _items[index].id);
                                           } else {
-                                            setState(() => _items[index].isRead = true);
+                                            setState(() =>
+                                                _items[index].isRead = true);
                                           }
                                         },
                                         onLongPress: () {
                                           if (!_isSelectionMode) {
                                             _toggleSelectionMode();
-                                            _toggleItemSelection(_items[index].id);
+                                            _toggleItemSelection(
+                                                _items[index].id);
                                           }
                                         },
                                       );
@@ -527,15 +601,26 @@ class _NotificationTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: item.isRead ? _surface : _green.withOpacity(0.04), // Soft green background for unread
+          color: item.isRead
+              ? _surface
+              : _green.withOpacity(0.04), // Soft green background for unread
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? _green : (item.isRead ? _grey.withOpacity(0.15) : _green.withOpacity(0.1)),
+            color: isSelected
+                ? _green
+                : (item.isRead
+                    ? _grey.withOpacity(0.15)
+                    : _green.withOpacity(0.1)),
             width: isSelected ? 2.0 : 1.0,
           ),
           boxShadow: (item.isRead && !isSelected)
               ? []
-              : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+              : [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4))
+                ],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -544,7 +629,9 @@ class _NotificationTile extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(right: 16, top: 12),
                 child: Icon(
-                  isSelected ? PhosphorIconsFill.checkCircle : PhosphorIconsRegular.circle,
+                  isSelected
+                      ? PhosphorIconsFill.checkCircle
+                      : PhosphorIconsRegular.circle,
                   color: isSelected ? _green : _grey,
                   size: 24,
                 ),
@@ -554,7 +641,8 @@ class _NotificationTile extends StatelessWidget {
                 margin: const EdgeInsets.only(right: 12, top: 18),
                 width: 8,
                 height: 8,
-                decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
+                decoration:
+                    const BoxDecoration(color: _green, shape: BoxShape.circle),
               ),
 
             // Icon Container
@@ -564,12 +652,13 @@ class _NotificationTile extends StatelessWidget {
               decoration: BoxDecoration(
                 color: item.isRead ? _bg : item.iconBg,
                 shape: BoxShape.circle,
-                border: item.isRead ? null : Border.all(color: item.iconColor.withOpacity(0.2)),
+                border: item.isRead
+                    ? null
+                    : Border.all(color: item.iconColor.withOpacity(0.2)),
               ),
-              child: Icon(
-                item.icon,
-                color: item.isRead ? _grey : item.iconColor,
-                size: 24,
+              child: Text(
+                item.emoji,
+                style: const TextStyle(fontSize: 22),
               ),
             ),
 
@@ -586,7 +675,8 @@ class _NotificationTile extends StatelessWidget {
                           item.title,
                           style: GoogleFonts.poppins(
                             fontSize: 15,
-                            fontWeight: item.isRead ? FontWeight.w600 : FontWeight.w700,
+                            fontWeight:
+                                item.isRead ? FontWeight.w600 : FontWeight.w700,
                             color: _dark,
                           ),
                           maxLines: 1,
@@ -599,7 +689,8 @@ class _NotificationTile extends StatelessWidget {
                         style: GoogleFonts.poppins(
                           fontSize: 12,
                           color: item.isRead ? _grey : _green,
-                          fontWeight: item.isRead ? FontWeight.w500 : FontWeight.w600,
+                          fontWeight:
+                              item.isRead ? FontWeight.w500 : FontWeight.w600,
                         ),
                       ),
                     ],
@@ -610,7 +701,8 @@ class _NotificationTile extends StatelessWidget {
                     style: GoogleFonts.poppins(
                       fontSize: 13,
                       color: item.isRead ? _grey : _dark.withOpacity(0.8),
-                      fontWeight: item.isRead ? FontWeight.w400 : FontWeight.w500,
+                      fontWeight:
+                          item.isRead ? FontWeight.w400 : FontWeight.w500,
                       height: 1.4,
                     ),
                     maxLines: 2,

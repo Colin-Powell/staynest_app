@@ -142,8 +142,18 @@ class Property {
   }) : images = images ?? const [];
 
   factory Property.fromJson(Map<String, dynamic> json) {
+    double numberValue(dynamic value) {
+      if (value is num) return value.toDouble();
+      return double.tryParse(value?.toString() ?? '') ?? 0.0;
+    }
+
+    int integerValue(dynamic value) => numberValue(value).toInt();
+
     final imagesList = json['images'] is List
-        ? List<String>.from(json['images'] as List)
+        ? (json['images'] as List)
+            .map((image) => image.toString())
+            .where((image) => image.isNotEmpty)
+            .toList()
         : <String>[];
     final primaryImage = imagesList.isNotEmpty
         ? imagesList.first
@@ -161,32 +171,23 @@ class Property {
       location:
           (json['city'] ?? json['location'] ?? json['property_city'] ?? '')
               .toString(),
-      lat: json['lat'] != null ? (json['lat'] as num).toDouble() : 0.0,
-      lng: json['lng'] != null ? (json['lng'] as num).toDouble() : 0.0,
-      price: json['price'] != null
-          ? (json['price'] is num
-              ? (json['price'] as num).toInt()
-              : int.tryParse(json['price'].toString()) ?? 0)
-          : 0,
-      rating: (json['rating'] is num)
-          ? (json['rating'] as num).toDouble()
-          : double.tryParse((json['rating'] ?? '0').toString()) ?? 0.0,
-      reviews: (json['reviews'] is int)
-          ? json['reviews'] as int
-          : int.tryParse((json['reviews'] ?? '0').toString()) ?? 0,
+      lat: numberValue(json['lat']),
+      lng: numberValue(json['lng']),
+      price: integerValue(json['price']),
+      rating: numberValue(json['rating']),
+      reviews: integerValue(json['reviews']),
       category: (json['category'] ?? '').toString(),
       image: primaryImage,
       images: imagesList,
       videoUrl: json['video_url']?.toString(),
       features: PropertyFeatures(
-        beds: json['bedrooms'] != null ? (json['bedrooms'] as num).toInt() : 0,
-        rooms: json['bedrooms'] != null ? (json['bedrooms'] as num).toInt() : 0,
-        baths:
-            json['bathrooms'] != null ? (json['bathrooms'] as num).toInt() : 0,
+        beds: integerValue(json['bedrooms']),
+        rooms: integerValue(json['bedrooms']),
+        baths: integerValue(json['bathrooms']),
         furnished: json['amenities'] is List
             ? (json['amenities'] as List).contains('Furnished')
             : false,
-        area: json['area'] != null ? (json['area'] as num).toInt() : 0,
+        area: integerValue(json['area']),
       ),
       amenities: amenitiesList,
       description: (json['description'] ?? '').toString(),

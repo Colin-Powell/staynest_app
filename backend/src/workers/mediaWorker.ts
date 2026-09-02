@@ -59,6 +59,14 @@ export const mediaWorker = new Worker(
             .fps(30)
             .duration(30)
             .videoCodec('libx264')
+            .audioCodec('aac')
+            .audioBitrate('96k')
+            .videoBitrate('1200k')
+            .outputOptions([
+              '-preset veryfast',
+              '-movflags +faststart',
+              '-pix_fmt yuv420p',
+            ])
             .on('end', resolve)
             .on('error', reject)
             .save(outputPath);

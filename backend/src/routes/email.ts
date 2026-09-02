@@ -23,13 +23,31 @@ router.post('/send-otp', otpRateLimiter, async (req, res, next) => {
     const { email } = req.body as { email?: string };
     if (!email) return res.status(400).json({ error: 'Email is required.' });
 
-    const { code } = createOtp(email);
+    let code: string;
+    let expiresAt: number;
+    try {
+      const otp = createOtp(email);
+      code = otp.code;
+      expiresAt = otp.expiresAt;
+    } catch (error) {
+      const otpError = error as Error & { statusCode?: number; retryAfterSeconds?: number };
+      if (otpError.statusCode === 429) {
+        if (otpError.retryAfterSeconds) {
+          res.setHeader('Retry-After', otpError.retryAfterSeconds);
+        }
+        return res.status(429).json({
+          error: otpError.message,
+          retryAfterSeconds: otpError.retryAfterSeconds,
+        });
+      }
+      throw error;
+    }
     try {
       await sendOtpEmail(email, code);
     } catch (sendErr) {
       console.warn('Failed to send OTP email (SMTP might be blocked):', sendErr);
     }
-    return res.json({ data: { sent: true } });
+    return res.json({ data: { sent: true, expiresAt } });
   } catch (err) {
     next(err);
   }

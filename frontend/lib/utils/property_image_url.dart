@@ -62,6 +62,28 @@ String resolvePropertyImageUrl(String url) {
   return trimmed;
 }
 
+/// Resolves property video URLs without applying image transformations.
+/// Cloudinary media must use HTTPS on Android; image optimizations can also
+/// produce an invalid video source when appended to a video URL.
+String resolvePropertyVideoUrl(String url) {
+  final trimmed = url.trim();
+  if (trimmed.isEmpty) return trimmed;
+
+  final resolved =
+      trimmed.startsWith('http://') || trimmed.startsWith('https://')
+          ? trimmed
+          : resolvePropertyImageUrl(trimmed);
+
+  if (resolved.startsWith('http://') &&
+      !resolved.startsWith('http://localhost') &&
+      !resolved.startsWith('http://127.0.0.1') &&
+      !resolved.startsWith('http://10.0.2.2')) {
+    return resolved.replaceFirst(RegExp(r'^http://'), 'https://');
+  }
+
+  return resolved;
+}
+
 bool isResolvableNetworkImage(String url) {
   final resolved = resolvePropertyImageUrl(url);
   return resolved.startsWith('http://') || resolved.startsWith('https://');

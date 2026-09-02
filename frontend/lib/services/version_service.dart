@@ -11,9 +11,10 @@ class VersionService {
 
   static Future<void> checkVersion(BuildContext context) async {
     try {
+      await AppSession.initializeAppInfo();
       final prefs = await SharedPreferences.getInstance();
       final lastPromptStr = prefs.getString(_lastPromptKey);
-      
+
       if (lastPromptStr != null) {
         final lastPromptTime = DateTime.tryParse(lastPromptStr);
         if (lastPromptTime != null) {
@@ -25,18 +26,21 @@ class VersionService {
         }
       }
 
-      final response = await http.get(Uri.parse('${AppSession.apiBaseUrl}/version'));
-      
+      final response =
+          await http.get(Uri.parse('${AppSession.apiBaseUrl}/version'));
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final String latestVersion = data['latestVersion'] ?? '1.0.0';
-        final String updateUrl = data['updateUrl'] ?? 'https://staynest.top/update.html';
+        final String updateUrl =
+            data['updateUrl'] ?? 'https://staynest.top/update.html';
         const bool forceUpdate = false; // Overridden to always allow skipping
 
         // Simple string comparison for versions (assumes semantic versioning like 1.0.1)
         if (_isUpdateAvailable(AppSession.currentAppVersion, latestVersion)) {
           // Save the current time so we don't prompt again for 24 hours
-          await prefs.setString(_lastPromptKey, DateTime.now().toIso8601String());
+          await prefs.setString(
+              _lastPromptKey, DateTime.now().toIso8601String());
           if (context.mounted) {
             _showUpgradePrompt(context, updateUrl, forceUpdate);
           }
@@ -50,7 +54,7 @@ class VersionService {
   static bool _isUpdateAvailable(String current, String latest) {
     final v1 = current.split('.').map((s) => int.tryParse(s) ?? 0).toList();
     final v2 = latest.split('.').map((s) => int.tryParse(s) ?? 0).toList();
-    
+
     for (int i = 0; i < 3; i++) {
       final c = i < v1.length ? v1[i] : 0;
       final l = i < v2.length ? v2[i] : 0;
@@ -116,7 +120,8 @@ class VersionService {
                     onPressed: () async {
                       final uri = Uri.parse(url);
                       try {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        await launchUrl(uri,
+                            mode: LaunchMode.externalApplication);
                       } catch (e) {
                         debugPrint('Could not launch update URL: $e');
                       }

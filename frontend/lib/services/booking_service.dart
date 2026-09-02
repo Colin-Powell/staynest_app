@@ -70,8 +70,7 @@ class BookingService {
   static Future<bool> toggleDateAvailability(
       String propertyId, DateTime date, bool isAvailable) async {
     final response = await _client.post(
-      Uri.parse(
-          '${AppSession.apiBaseUrl}/properties/$propertyId/availability'),
+      Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId/availability'),
       body: {'date': date.toIso8601String(), 'available': isAvailable},
     );
     return response.statusCode == 200;

@@ -10,4 +10,14 @@ void main() {
     expect(url, contains('f_auto'));
     expect(url, contains('q_auto'));
   });
+
+  test('video cloudinary urls use https without image transformations', () {
+    final url = resolvePropertyVideoUrl(
+      'http://res.cloudinary.com/demo/video/upload/staynest/tour.mp4',
+    );
+
+    expect(
+        url, 'https://res.cloudinary.com/demo/video/upload/staynest/tour.mp4');
+    expect(url, isNot(contains('f_auto')));
+  });
 }

@@ -319,7 +319,6 @@ class AboutView extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            
             Image.asset(
               'assets/images/logo.webp',
               height: 200,
@@ -329,8 +328,8 @@ class AboutView extends StatelessWidget {
             const SizedBox(height: 32),
 
             // Version Info
-            const Text(
-              'Version ${AppSession.currentAppVersion}',
+            Text(
+              'Version ${AppSession.currentAppVersion} (Build ${AppSession.currentAppBuildNumber})',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,

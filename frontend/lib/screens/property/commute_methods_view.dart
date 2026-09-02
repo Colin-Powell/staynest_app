@@ -1,21 +1,27 @@
-// ignore_for_file: deprecated_member_use
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:property_app/models/property.dart';
 import 'package:property_app/services/property_service.dart';
+import 'package:property_app/services/cache_engine.dart';
+import 'package:property_app/widgets/property_image.dart';
+
+// ─── Tenant Design System Constants ───────────────────────────────────────────
+const Color _bg = Color(0xFFFAFAFA);
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF9CA3AF);
+const Color _surface = Colors.white;
+const Color _primary = Color(0xFF3F37C9); // Tenant Blue Theme
 
 // ─── Transport Mode ───────────────────────────────────────────────────────────
 
@@ -25,13 +31,13 @@ class _ModeData {
   final _TransportMode mode;
   final String label;
   final IconData icon;
-  final String osrmProfile; // OSRM routing profile
+  final String routerProfile;
 
   const _ModeData({
     required this.mode,
     required this.label,
     required this.icon,
-    required this.osrmProfile,
+    required this.routerProfile,
   });
 }
 
@@ -40,7 +46,7 @@ class _ModeData {
 class _RouteResult {
   final List<LatLng> points;
   final double distanceKm;
-  final int durationSeconds; // Raw OSRM duration
+  final int durationSeconds;
 
   const _RouteResult({
     required this.points,
@@ -49,23 +55,22 @@ class _RouteResult {
   });
 }
 
-// ─── OSRM Routing Service ─────────────────────────────────────────────────────
+// ─── OSRM Routing Service (100% Free) ─────────────────────────────────────────
 
-Future<_RouteResult?> _fetchOsrmRoute(
-  LatLng origin,
-  LatLng destination,
-  String profile, // 'driving', 'walking', 'cycling'
-) async {
+Future<_RouteResult?> _fetchOsmRoute(
+    LatLng origin, LatLng destination, String routerProfile) async {
   try {
+    // These public OSM-backed routers use distinct road graphs for cars,
+    // pedestrians, and bicycles. The OSRM demo endpoint does not reliably
+    // expose all three profiles.
     final url = Uri.parse(
-      'https://router.project-osrm.org/route/v1/$profile/'
+      'https://routing.openstreetmap.de/routed-$routerProfile/route/v1/driving/'
       '${origin.longitude},${origin.latitude};'
       '${destination.longitude},${destination.latitude}'
       '?overview=full&geometries=geojson&steps=false',
     );
 
     final response = await http.get(url).timeout(const Duration(seconds: 10));
-
     if (response.statusCode != 200) return null;
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -90,13 +95,11 @@ Future<_RouteResult?> _fetchOsrmRoute(
   }
 }
 
-// Matatu: use driving route + wait/transfer overhead
 Future<_RouteResult?> _fetchMatatuRoute(
     LatLng origin, LatLng destination) async {
-  final base = await _fetchOsrmRoute(origin, destination, 'driving');
+  final base = await _fetchOsmRoute(origin, destination, 'car');
   if (base == null) return null;
 
-  // Matatu is slower than private car due to stops; add 35% to duration + 10 min wait
   const waitSeconds = 600; // 10 min average wait
   final adjustedDuration = (base.durationSeconds * 1.35).toInt() + waitSeconds;
 
@@ -104,6 +107,36 @@ Future<_RouteResult?> _fetchMatatuRoute(
     points: base.points,
     distanceKm: base.distanceKm,
     durationSeconds: adjustedDuration,
+  );
+}
+
+Map<String, dynamic> _routeToMap(_RouteResult route) => {
+      'points': route.points
+          .map((point) => {'lat': point.latitude, 'lng': point.longitude})
+          .toList(),
+      'distanceKm': route.distanceKm,
+      'durationSeconds': route.durationSeconds,
+    };
+
+_RouteResult? _routeFromMap(Map<String, dynamic> data) {
+  final points = data['points'];
+  if (points is! List || points.isEmpty) return null;
+  final parsedPoints = <LatLng>[];
+  for (final point in points) {
+    if (point is! Map) return null;
+    final lat = double.tryParse(point['lat']?.toString() ?? '');
+    final lng = double.tryParse(point['lng']?.toString() ?? '');
+    if (lat == null || lng == null) return null;
+    parsedPoints.add(LatLng(lat, lng));
+  }
+  final distanceKm = double.tryParse(data['distanceKm']?.toString() ?? '');
+  final durationSeconds =
+      int.tryParse(data['durationSeconds']?.toString() ?? '');
+  if (distanceKm == null || durationSeconds == null) return null;
+  return _RouteResult(
+    points: parsedPoints,
+    distanceKm: distanceKm,
+    durationSeconds: durationSeconds,
   );
 }
 
@@ -148,13 +181,6 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
   late final Animation<Offset> _slideAnim;
   late final Animation<double> _fadeAnim;
 
-  // Theme
-  static const Color _primaryText = Color(0xFF3F37C9);
-  static const Color _dark = Color(0xFF111827);
-  static const Color _grey = Color(0xFF9CA3AF);
-  static const Color _surface = Color(0xFFF8F8FF);
-
-  // State
   final ValueNotifier<LatLng?> _locationNotifier = ValueNotifier(null);
   final ValueNotifier<double> _headingNotifier = ValueNotifier(0);
 
@@ -166,60 +192,54 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
 
   bool _isRouteLoading = false;
   bool _isNavigating = false;
-  bool _isRecenterPending = false; // User dragged away from GPS dot
+  bool _isRecenterPending = false;
 
-  // Route data per mode (cached)
   final Map<_TransportMode, _RouteResult?> _routeCache = {};
   _RouteResult? get _activeRoute => _routeCache[_selectedMode];
 
-  late LatLng _destination;
+  LatLng? _destination;
   LatLng? _lastRoutedLocation;
 
   Property? _activeProperty;
-  Property? _hoveredProperty; // Tooltip on map
+  Property? _hoveredProperty;
   List<Property> _allProperties = [];
 
   StreamSubscription<Position>? _positionStream;
   List<Map<String, dynamic>> _filteredSuggestions = [];
   Timer? _debounceTimer;
-  Timer? _recenterTimer;
-
   int _cameraFrame = 0;
 
   static List<_ModeData> get _modes => [
-        _ModeData(
+        const _ModeData(
             mode: _TransportMode.drive,
             label: 'Drive',
-            icon: PhosphorIcons.carProfile(PhosphorIconsStyle.fill),
-            osrmProfile: 'driving'),
-        _ModeData(
+            icon: PhosphorIconsFill.carProfile,
+            routerProfile: 'car'),
+        const _ModeData(
             mode: _TransportMode.walk,
             label: 'Walk',
-            icon: PhosphorIcons.sneaker(PhosphorIconsStyle.fill),
-            osrmProfile: 'walking'),
-        _ModeData(
+            icon: PhosphorIconsFill.sneaker,
+            routerProfile: 'foot'),
+        const _ModeData(
             mode: _TransportMode.bike,
             label: 'Bike',
-            icon: PhosphorIcons.bicycle(PhosphorIconsStyle.fill),
-            osrmProfile: 'cycling'),
-        _ModeData(
+            icon: PhosphorIconsFill.bicycle,
+            routerProfile: 'bike'),
+        const _ModeData(
             mode: _TransportMode.matatu,
             label: 'Matatu',
-            icon: PhosphorIcons.van(PhosphorIconsStyle.fill),
-            osrmProfile: 'driving'),
+            icon: PhosphorIconsFill.van,
+            routerProfile: 'car'),
       ];
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    _slideAnim =
-        Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
-    );
+        vsync: this, duration: const Duration(milliseconds: 400));
+    _slideAnim = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+        .animate(CurvedAnimation(
+            parent: _animController, curve: Curves.easeOutCubic));
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
 
     if (widget.targetProperty != null) {
@@ -229,19 +249,10 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
       _toController.text = widget.targetName!;
     }
 
-    final propertyLocation = widget.targetProperty;
-    final hasPropertyCoordinates = propertyLocation != null &&
-        propertyLocation.lat.isFinite &&
-        propertyLocation.lng.isFinite &&
-        propertyLocation.lat >= -90 &&
-        propertyLocation.lat <= 90 &&
-        propertyLocation.lng >= -180 &&
-        propertyLocation.lng <= 180 &&
-        (propertyLocation.lat != 0 || propertyLocation.lng != 0);
+    final prop = widget.targetProperty;
+    final hasPropCoords = prop != null && prop.lat != 0 && prop.lng != 0;
     _destination = widget.targetLocation ??
-        (hasPropertyCoordinates
-            ? LatLng(propertyLocation!.lat, propertyLocation.lng)
-            : const LatLng(double.nan, double.nan));
+        (hasPropCoords ? LatLng(prop!.lat, prop.lng) : null);
 
     _animController.forward();
     _initializeData();
@@ -251,7 +262,6 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
   void dispose() {
     _positionStream?.cancel();
     _debounceTimer?.cancel();
-    _recenterTimer?.cancel();
     _animController.dispose();
     _fromController.dispose();
     _toController.dispose();
@@ -265,12 +275,6 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
   Future<void> _initializeData() async {
     setState(() => _fetchingLocation = true);
 
-    if (!_destination.latitude.isFinite || !_destination.longitude.isFinite) {
-      _finishLoadingLocation('Property location unavailable');
-      return;
-    }
-
-    // Load nearby properties in parallel with location
     try {
       _allProperties = await PropertyService.instance.fetchProperties();
     } catch (_) {}
@@ -285,15 +289,16 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    if (permission == LocationPermission.deniedForever) {
+    if (permission == LocationPermission.deniedForever ||
+        permission == LocationPermission.denied) {
       _finishLoadingLocation('Permission denied');
       return;
     }
 
     try {
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.bestForNavigation,
-      ).timeout(const Duration(seconds: 10));
+              desiredAccuracy: LocationAccuracy.high)
+          .timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
       final loc = LatLng(position.latitude, position.longitude);
@@ -305,7 +310,7 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
       });
 
       _fitMapBounds();
-      _fetchAllRoutes(); // Pre-fetch all mode routes
+      _fetchAllRoutes();
     } catch (e) {
       _finishLoadingLocation('Location error');
     }
@@ -317,56 +322,61 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
         _fetchingLocation = false;
         _fromController.text = fallback;
       });
+      _fitMapBounds();
+      _fetchAllRoutes();
     }
-  }
-
-  // Placeholder for a function to get LatLng from a city name
-  Future<LatLng?> _getLatLngForCity(String city) async {
-    // Implement actual geocoding API call here (e.g., Google Maps Geocoding API)
-    return null; // Return null if not found or error
   }
 
   // ─── Routing ────────────────────────────────────────────────────────────────
 
-  /// Fetch routes for all modes in parallel and cache them
   Future<void> _fetchAllRoutes() async {
     final origin = _locationNotifier.value;
-    if (origin == null) return;
+    final destination = _destination;
+    if (origin == null || destination == null) return;
 
     setState(() => _isRouteLoading = true);
 
     for (final modeData in _modes) {
+      final cacheKey =
+          'route_v3_${origin.latitude.toStringAsFixed(4)}_${origin.longitude.toStringAsFixed(4)}_${destination.latitude.toStringAsFixed(4)}_${destination.longitude.toStringAsFixed(4)}_${modeData.routerProfile}';
       _RouteResult? result;
-      if (modeData.mode == _TransportMode.matatu) {
-        result = await _fetchMatatuRoute(origin, _destination);
-      } else {
-        result =
-            await _fetchOsrmRoute(origin, _destination, modeData.osrmProfile);
-      }
+      try {
+        final cached =
+            await CacheEngine.instance.getOrFetch<Map<String, dynamic>>(
+          key: cacheKey,
+          ttl: const Duration(hours: 6),
+          networkFetcher: () async {
+            final route = modeData.mode == _TransportMode.matatu
+                ? await _fetchMatatuRoute(origin, destination)
+                : await _fetchOsmRoute(
+                    origin, destination, modeData.routerProfile);
+            if (route == null) throw StateError('Route unavailable');
+            return _routeToMap(route);
+          },
+        );
+        result = _routeFromMap(cached);
+      } catch (_) {}
 
-      if (mounted) {
-        setState(() {
-          _routeCache[modeData.mode] = result;
-        });
-      }
+      if (mounted) setState(() => _routeCache[modeData.mode] = result);
     }
-    _lastRoutedLocation = origin;
 
+    _lastRoutedLocation = origin;
     if (mounted) setState(() => _isRouteLoading = false);
+    _fitMapBounds();
   }
 
-  /// Re-route only for active mode (used during navigation rerouting)
   Future<void> _rerouteActive() async {
     final origin = _locationNotifier.value;
-    if (origin == null) return;
+    final destination = _destination;
+    if (origin == null || destination == null) return;
 
     final modeData = _modes.firstWhere((m) => m.mode == _selectedMode);
     _RouteResult? result;
     if (_selectedMode == _TransportMode.matatu) {
-      result = await _fetchMatatuRoute(origin, _destination);
+      result = await _fetchMatatuRoute(origin, destination);
     } else {
       result =
-          await _fetchOsrmRoute(origin, _destination, modeData.osrmProfile);
+          await _fetchOsmRoute(origin, destination, modeData.routerProfile);
     }
 
     if (mounted && result != null) {
@@ -377,19 +387,22 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
 
   void _fitMapBounds() {
     final origin = _locationNotifier.value;
-    if (origin == null) return;
-
-    final points = [origin, _destination];
+    final destination = _destination;
+    if (destination == null) return;
+    final points = <LatLng>[destination];
+    if (origin != null) points.add(origin);
     if (_activeRoute != null) points.addAll(_activeRoute!.points);
 
-    final bounds = LatLngBounds.fromPoints(points);
-    _mapController.fitBounds(
-      bounds,
-      options: const FitBoundsOptions(padding: EdgeInsets.all(80)),
-    );
+    if (points.length > 1) {
+      final bounds = LatLngBounds.fromPoints(points);
+      _mapController.fitBounds(bounds,
+          options: const FitBoundsOptions(padding: EdgeInsets.all(80)));
+    } else if (points.isNotEmpty) {
+      _mapController.move(points.first, 14.5);
+    }
   }
 
-  // ─── Geocoding Autocomplete ─────────────────────────────────────────────────
+  // ─── Autocomplete (Photon API - Free) ───────────────────────────────────────
 
   void _onSearchChanged(String query) {
     _debounceTimer?.cancel();
@@ -398,16 +411,15 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
       return;
     }
 
-    _debounceTimer = Timer(const Duration(milliseconds: 350), () async {
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () async {
       try {
         final url = Uri.parse(
-          'https://photon.komoot.io/api/?q=${Uri.encodeComponent(query)}&limit=5',
-        );
+            'https://photon.komoot.io/api/?q=${Uri.encodeComponent(query)}&limit=5');
         final res = await http.get(url);
         if (res.statusCode == 200 && mounted) {
           final data = json.decode(res.body) as Map<String, dynamic>;
           setState(() => _filteredSuggestions =
-              List<Map<String, dynamic>>.from(data['features'] as List));
+              List<Map<String, dynamic>>.from(data['features']));
         }
       } catch (_) {}
     });
@@ -432,35 +444,25 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
 
     _positionStream = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 2,
-      ),
+          accuracy: LocationAccuracy.bestForNavigation, distanceFilter: 2),
     ).listen((Position pos) {
       if (!mounted || !_isNavigating) return;
 
-      // EMA smoothing
       final old = _locationNotifier.value;
       final smoothed = old != null
-          ? LatLng(
-              old.latitude * 0.75 + pos.latitude * 0.25,
-              old.longitude * 0.75 + pos.longitude * 0.25,
-            )
+          ? LatLng(old.latitude * 0.75 + pos.latitude * 0.25,
+              old.longitude * 0.75 + pos.longitude * 0.25)
           : LatLng(pos.latitude, pos.longitude);
 
       _locationNotifier.value = smoothed;
 
-      // Update heading if available
-      if (pos.heading >= 0) {
-        _headingNotifier.value = pos.heading;
-      }
+      if (pos.heading >= 0) _headingNotifier.value = pos.heading;
 
-      // Throttled camera follow (every 2nd update)
       _cameraFrame++;
       if (_cameraFrame % 2 == 0 && !_isRecenterPending) {
         _mapController.move(smoothed, 18.0);
       }
 
-      // Smart rerouting (> 60m off last routed origin)
       if (_lastRoutedLocation != null) {
         final drift = const Distance()
             .as(LengthUnit.Meter, smoothed, _lastRoutedLocation!);
@@ -486,10 +488,35 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
     _mapController.move(loc, 18.0);
   }
 
+  Future<void> _openDirectionsNative(double destLat, double destLng) async {
+    final url = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&destination=$destLat,$destLng&travelmode=driving');
+    try {
+      final launched =
+          await launchUrl(url, mode: LaunchMode.externalNonBrowserApplication);
+      if (!launched) await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not launch maps.')));
+    }
+  }
+
   // ─── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    if (_destination == null) {
+      return Scaffold(
+        backgroundColor: _bg,
+        body: Center(
+          child: Text(
+            'This property does not have a valid location yet.',
+            style:
+                GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w600),
+          ),
+        ),
+      );
+    }
     return SlideTransition(
       position: _slideAnim,
       child: FadeTransition(
@@ -497,7 +524,7 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
         child: Scaffold(
           extendBodyBehindAppBar: true,
           resizeToAvoidBottomInset: false,
-          backgroundColor: Colors.transparent,
+          backgroundColor: _surface,
           body: Stack(
             children: [
               // 1. Full-bleed map
@@ -509,7 +536,7 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                 curve: Curves.easeInOutCubic,
                 top: _isNavigating
                     ? -320
-                    : MediaQuery.of(context).padding.top + 12,
+                    : MediaQuery.of(context).padding.top + 16,
                 left: 16,
                 right: 16,
                 child: SafeArea(
@@ -518,7 +545,7 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildHeader(),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 16),
                       _buildRouteInputs(),
                     ],
                   ),
@@ -539,30 +566,25 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
 
               // 4. Navigation overlays
               if (_isNavigating) ...[
-                // Close nav button
                 Positioned(
                   top: MediaQuery.of(context).padding.top + 16,
                   left: 20,
-                  child: _GlassCircleButton(
-                    icon: Icons.close_rounded,
+                  child: _SolidCircleButton(
+                    icon: PhosphorIconsRegular.x,
                     color: Colors.redAccent,
                     onTap: _exitNavigation,
-                    isNavigating: true,
                   ),
                 ),
-                // Recenter button (appears when user drags away)
                 if (_isRecenterPending)
                   Positioned(
                     top: MediaQuery.of(context).padding.top + 16,
                     right: 20,
-                    child: _GlassCircleButton(
-                      icon: Icons.my_location_rounded,
-                      color: _primaryText,
+                    child: _SolidCircleButton(
+                      icon: PhosphorIconsRegular.crosshair,
+                      color: _primary,
                       onTap: _recenterOnUser,
-                      isNavigating: true,
                     ),
                   ),
-                // Live nav info panel
                 Positioned(
                   bottom: MediaQuery.of(context).padding.bottom + 24,
                   left: 16,
@@ -571,12 +593,10 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                 ),
               ],
 
-              // 5. Hovered property tooltip (map overlay)
-              if (_hoveredProperty != null)
+              // 5. Hovered property tooltip
+              if (_hoveredProperty != null && !_isNavigating)
                 Positioned(
-                  bottom: _isNavigating
-                      ? 160 + MediaQuery.of(context).padding.bottom
-                      : 200 + MediaQuery.of(context).padding.bottom,
+                  bottom: 220 + MediaQuery.of(context).padding.bottom,
                   left: 16,
                   right: 16,
                   child: _buildPropertyPreviewCard(_hoveredProperty!),
@@ -589,52 +609,45 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
   }
 
   Widget _buildMap() {
+    final destination = _destination;
+    if (destination == null) return const SizedBox.shrink();
     final routePoints = _activeRoute?.points ?? [];
 
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
-        initialCenter:
-            _locationNotifier.value ?? const LatLng(-3.6305, 39.8499),
+        initialCenter: _locationNotifier.value ?? destination,
         initialZoom: 14,
         interactionOptions: const InteractionOptions(
-          flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
-        ),
+            flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag),
+        onPositionChanged: (pos, hasGesture) {
+          if (hasGesture && _isNavigating && !_isRecenterPending) {
+            setState(() => _isRecenterPending = true);
+          }
+        },
       ),
       children: [
-        // Tile layer — CartoDB light (clean, Google-like)
         TileLayer(
-          urlTemplate:
-              'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-          subdomains: const ['a', 'b', 'c', 'd'],
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'property_app',
         ),
-
-        // Route polyline with casing (Google Maps style)
-        if (routePoints.isNotEmpty) ...[
+        if (routePoints.isNotEmpty)
           PolylineLayer(
             polylines: [
-              // White casing underneath
               Polyline(
-                points: routePoints,
-                color: Colors.white,
-                strokeWidth: 10,
-                strokeCap: StrokeCap.round,
-                strokeJoin: StrokeJoin.round,
-              ),
-              // Colored route on top
+                  points: routePoints,
+                  color: Colors.white,
+                  strokeWidth: 10,
+                  strokeCap: StrokeCap.round,
+                  strokeJoin: StrokeJoin.round),
               Polyline(
-                points: routePoints,
-                color: _primaryText.withOpacity(0.9),
-                strokeWidth: 6,
-                strokeCap: StrokeCap.round,
-                strokeJoin: StrokeJoin.round,
-              ),
+                  points: routePoints,
+                  color: _primary,
+                  strokeWidth: 6,
+                  strokeCap: StrokeCap.round,
+                  strokeJoin: StrokeJoin.round),
             ],
           ),
-        ],
-
-        // Nearby property markers (not shown during navigation)
         if (!_isNavigating)
           MarkerLayer(
             markers: _allProperties
@@ -644,63 +657,54 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                     p.id != (_activeProperty?.id ?? ''))
                 .map((prop) => Marker(
                       point: LatLng(prop.lat, prop.lng),
-                      width: 36,
-                      height: 36,
+                      width: 40,
+                      height: 40,
                       child: GestureDetector(
-                        onTap: () => setState(
-                          () => _hoveredProperty =
-                              _hoveredProperty?.id == prop.id ? null : prop,
-                        ),
+                        onTap: () {
+                          setState(() => _hoveredProperty =
+                              _hoveredProperty?.id == prop.id ? null : prop);
+                          _mapController.move(LatLng(prop.lat, prop.lng), 15);
+                        },
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           decoration: BoxDecoration(
                             color: _hoveredProperty?.id == prop.id
-                                ? _primaryText
-                                : Colors.white,
+                                ? _primary
+                                : _surface,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: _primaryText.withOpacity(0.4),
-                              width: 2,
-                            ),
+                                color: _primary.withOpacity(0.4), width: 2),
                             boxShadow: [
                               BoxShadow(
-                                color: _dark.withOpacity(0.12),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4))
                             ],
                           ),
-                          child: Icon(
-                            PhosphorIcons.house(PhosphorIconsStyle.fill),
-                            color: _hoveredProperty?.id == prop.id
-                                ? Colors.white
-                                : _primaryText,
-                            size: 18,
-                          ),
+                          child: Icon(PhosphorIconsFill.house,
+                              color: _hoveredProperty?.id == prop.id
+                                  ? Colors.white
+                                  : _primary,
+                              size: 20),
                         ),
                       ),
                     ))
                 .toList(),
           ),
-
-        // Destination marker with tooltip label
         MarkerLayer(
           markers: [
             Marker(
-              point: _destination,
+              point: destination,
               width: 120,
               height: 72,
               alignment: Alignment.bottomCenter,
               child: _DestinationMarker(
-                label: _toController.text.isNotEmpty
-                    ? _toController.text
-                    : 'Destination',
-              ),
+                  label: _toController.text.isNotEmpty
+                      ? _toController.text
+                      : 'Destination'),
             ),
           ],
         ),
-
-        // GPS dot (ValueListenable — no full rebuild)
         ValueListenableBuilder<LatLng?>(
           valueListenable: _locationNotifier,
           builder: (context, loc, _) {
@@ -710,12 +714,11 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
               builder: (context, heading, _) => MarkerLayer(
                 markers: [
                   Marker(
-                    point: loc,
-                    width: 48,
-                    height: 48,
-                    child:
-                        _GpsDot(heading: heading, isNavigating: _isNavigating),
-                  ),
+                      point: loc,
+                      width: 48,
+                      height: 48,
+                      child: _GpsDot(
+                          heading: heading, isNavigating: _isNavigating))
                 ],
               ),
             );
@@ -726,149 +729,188 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
   }
 
   Widget _buildHeader() {
-    return Row(
-      children: [
-        _GlassCircleButton(
-            icon: Icons.arrow_back_ios_new_rounded, onTap: widget.onClose),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Text(
-            'Route Preview',
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: _dark,
-              letterSpacing: -0.5,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: widget.onClose,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: _bg, shape: BoxShape.circle),
+              child: const Icon(PhosphorIconsRegular.caretLeft,
+                  size: 20, color: _dark),
             ),
           ),
-        ),
-        if (_isRouteLoading)
-          const SizedBox(
-            width: 20,
-            height: 20,
-            child:
-                CircularProgressIndicator(strokeWidth: 2, color: _primaryText),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Route Preview',
+              style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: _dark,
+                  letterSpacing: -0.5),
+            ),
           ),
-      ],
+          if (_isRouteLoading)
+            const SizedBox(
+                width: 20,
+                height: 20,
+                child:
+                    CircularProgressIndicator(strokeWidth: 2, color: _primary)),
+        ],
+      ),
     );
   }
 
   Widget _buildRouteInputs() {
-    return Column(
-      children: [
-        // FROM input
-        _GlassContainer(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          height: 48,
-          opacity: 0.93,
-          blur: 16,
-          borderRadius: BorderRadius.circular(16),
-          child: Row(
-            children: [
-              Icon(PhosphorIcons.navigationArrow(PhosphorIconsStyle.fill),
-                  color: _primaryText, size: 18),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  _fetchingLocation ? 'Fetching GPS…' : _fromController.text,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: _fetchingLocation ? _grey : _dark,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 15,
+              offset: const Offset(0, 8))
+        ],
+      ),
+      child: Column(
+        children: [
+          // FROM
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            height: 48,
+            decoration: BoxDecoration(
+                color: _grey.withOpacity(0.05), // Soft grey background
+                borderRadius: BorderRadius.circular(16)),
+            child: Row(
+              children: [
+                const Icon(PhosphorIconsFill.navigationArrow,
+                    color: _primary, size: 18),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _fetchingLocation ? 'Fetching GPS…' : _fromController.text,
+                    style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: _fetchingLocation ? _grey : _dark),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              if (_fetchingLocation)
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: _primaryText),
-                )
-              else
-                const Icon(Icons.my_location_rounded,
-                    color: _primaryText, size: 18),
-            ],
+                if (_fetchingLocation)
+                  const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: _primary))
+                else
+                  const Icon(PhosphorIconsRegular.crosshair,
+                      color: _primary, size: 18),
+              ],
+            ),
           ),
-        ),
 
-        // Connector dot
-        Padding(
-          padding: const EdgeInsets.only(left: 20),
-          child: Column(
-              children: List.generate(
-                  3,
-                  (_) => Container(
+          // Connectors
+          Padding(
+            padding: const EdgeInsets.only(left: 24, top: 4, bottom: 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Column(
+                children: List.generate(
+                    3,
+                    (_) => Container(
                         margin: const EdgeInsets.symmetric(vertical: 2),
                         width: 3,
                         height: 3,
                         decoration: BoxDecoration(
-                            color: _grey.withOpacity(0.5),
-                            shape: BoxShape.circle),
-                      ))),
-        ),
+                            color: _grey.withOpacity(0.4),
+                            shape: BoxShape.circle))),
+              ),
+            ),
+          ),
 
-        // TO input
-        _GlassContainer(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          height: 48,
-          opacity: 0.93,
-          blur: 16,
-          borderRadius: BorderRadius.circular(16),
-          child: Row(
-            children: [
-              Icon(PhosphorIcons.flagBanner(PhosphorIconsStyle.fill),
-                  color: const Color(0xFFEF4444), size: 18),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _toController,
-                  readOnly: _activeProperty != null,
-                  onChanged: _onSearchChanged,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: _dark,
-                  ),
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    isDense: true,
-                    hintText: 'Where to?',
-                    hintStyle: GoogleFonts.poppins(color: _grey, fontSize: 14),
+          // TO
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            height: 48,
+            decoration: BoxDecoration(
+                color: _surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _grey.withOpacity(0.2))),
+            child: Row(
+              children: [
+                const Icon(PhosphorIconsFill.flagBanner,
+                    color: Color(0xFFEF4444), size: 18),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _toController,
+                    readOnly: _activeProperty != null,
+                    onChanged: _onSearchChanged,
+                    style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: _dark),
+                    decoration: InputDecoration(
+                      hintText: 'Where to?',
+                      hintStyle: GoogleFonts.poppins(
+                          color: _grey,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400),
+                      filled: false,
+                      fillColor: Colors.transparent,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
                   ),
                 ),
-              ),
-              if (_activeProperty != null)
-                GestureDetector(
-                  onTap: () => setState(() {
-                    _activeProperty = null;
-                    _toController.clear();
-                  }),
-                  child:
-                      const Icon(Icons.close_rounded, color: _grey, size: 18),
-                )
-              else
-                const Icon(Icons.search_rounded, color: _grey, size: 18),
-            ],
+                if (_activeProperty != null || _toController.text.isNotEmpty)
+                  GestureDetector(
+                    onTap: () => setState(() {
+                      _activeProperty = null;
+                      _toController.clear();
+                      _filteredSuggestions.clear();
+                    }),
+                    child: const Icon(PhosphorIconsFill.xCircle,
+                        color: _grey, size: 20),
+                  )
+                else
+                  const Icon(PhosphorIconsRegular.magnifyingGlass,
+                      color: _grey, size: 20),
+              ],
+            ),
           ),
-        ),
 
-        // Autocomplete suggestions
-        if (_filteredSuggestions.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: _GlassContainer(
-              padding: EdgeInsets.zero,
-              opacity: 0.97,
-              borderRadius: BorderRadius.circular(16),
+          if (_filteredSuggestions.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: _filteredSuggestions.length,
                 separatorBuilder: (_, __) =>
-                    Divider(height: 1, color: _grey.withOpacity(0.15)),
+                    Divider(height: 1, color: _grey.withOpacity(0.1)),
                 itemBuilder: (context, i) {
                   final props = _filteredSuggestions[i]['properties'] as Map;
                   final name = props['name'] ??
@@ -879,18 +921,23 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                       .where((v) => v != null)
                       .join(', ');
                   return ListTile(
-                    dense: true,
-                    leading: const Icon(Icons.place_outlined,
-                        color: _primaryText, size: 20),
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration:
+                          BoxDecoration(color: _bg, shape: BoxShape.circle),
+                      child: const Icon(PhosphorIconsRegular.mapPin,
+                          color: _dark, size: 18),
+                    ),
                     title: Text(name,
                         style: GoogleFonts.poppins(
-                            fontSize: 13,
+                            fontSize: 14,
                             fontWeight: FontWeight.w600,
                             color: _dark)),
                     subtitle: subtitle.isNotEmpty
                         ? Text(subtitle,
                             style:
-                                GoogleFonts.poppins(fontSize: 11, color: _grey))
+                                GoogleFonts.poppins(fontSize: 12, color: _grey))
                         : null,
                     onTap: () {
                       FocusScope.of(context).unfocus();
@@ -910,47 +957,52 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                 },
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildBottomPanel() {
-    return _GlassContainer(
-      padding: const EdgeInsets.all(20),
-      opacity: 0.92,
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 20,
+              offset: const Offset(0, 10))
+        ],
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Commute Options',
                   style: GoogleFonts.poppins(
-                      fontSize: 15, fontWeight: FontWeight.w800, color: _dark)),
+                      fontSize: 16, fontWeight: FontWeight.w700, color: _dark)),
               if (_activeRoute != null)
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: _primaryText.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                      color: _primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20)),
                   child: Text(
                     '${_activeRoute!.distanceKm.toStringAsFixed(1)} km',
                     style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: _primaryText),
+                        color: _primary),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 14),
-
-          // Mode selector tabs
+          const SizedBox(height: 16),
           Row(
             children: _modes.map((m) {
               final isSelected = m.mode == _selectedMode;
@@ -961,56 +1013,35 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
 
               return Expanded(
                 child: GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedMode = m.mode);
-                  },
+                  onTap: () => setState(() => _selectedMode = m.mode),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
+                    duration: const Duration(milliseconds: 200),
                     margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: isSelected ? _primaryText : Colors.white,
-                      borderRadius: BorderRadius.circular(14),
+                      color: isSelected ? _primary : _surface,
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isSelected
-                            ? Colors.transparent
-                            : _grey.withOpacity(0.2),
-                        width: 1.5,
-                      ),
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: _primaryText.withOpacity(0.3),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              )
-                            ]
-                          : null,
+                          color: isSelected ? _primary : _grey.withOpacity(0.2),
+                          width: 1.5),
                     ),
                     child: Column(
                       children: [
                         Icon(m.icon,
-                            color: isSelected ? Colors.white : _grey, size: 20),
-                        const SizedBox(height: 5),
-                        Text(
-                          eta,
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: isSelected ? Colors.white : _dark,
-                          ),
-                        ),
-                        Text(
-                          m.label,
-                          style: GoogleFonts.poppins(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w500,
-                            color: isSelected
-                                ? Colors.white.withOpacity(0.7)
-                                : _grey,
-                          ),
-                        ),
+                            color: isSelected ? Colors.white : _dark, size: 22),
+                        const SizedBox(height: 6),
+                        Text(eta,
+                            style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isSelected ? Colors.white : _dark)),
+                        Text(m.label,
+                            style: GoogleFonts.poppins(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: isSelected
+                                    ? Colors.white.withOpacity(0.8)
+                                    : _grey)),
                       ],
                     ),
                   ),
@@ -1018,12 +1049,10 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
               );
             }).toList(),
           ),
-          const SizedBox(height: 20),
-
-          // Start Navigation button
+          const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            height: 54,
+            height: 56,
             child: ElevatedButton.icon(
               onPressed: (_isRouteLoading ||
                       _locationNotifier.value == null ||
@@ -1035,21 +1064,21 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                       height: 18,
                       width: 18,
                       child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2),
-                    )
-                  : Icon(PhosphorIcons.navigationArrow(PhosphorIconsStyle.fill),
-                      size: 20),
+                          color: Colors.white, strokeWidth: 2))
+                  : const Icon(PhosphorIconsFill.navigationArrow,
+                      size: 20, color: Colors.white),
               label: Text(
-                _isRouteLoading ? 'Calculating routes…' : 'Start Navigation',
+                _isRouteLoading ? 'Calculating…' : 'Start Navigation',
                 style: GoogleFonts.poppins(
-                    fontSize: 15, fontWeight: FontWeight.w700),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _primaryText,
-                foregroundColor: Colors.white,
+                backgroundColor: _primary,
                 disabledBackgroundColor: _grey.withOpacity(0.2),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(32)),
                 elevation: 0,
               ),
             ),
@@ -1064,9 +1093,18 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
       valueListenable: _locationNotifier,
       builder: (context, _, __) {
         final route = _activeRoute;
-        return _GlassContainer(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          isNavigating: true,
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10))
+            ],
+          ),
           child: Row(
             children: [
               Expanded(
@@ -1079,45 +1117,32 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                           ? _formatDuration(route.durationSeconds)
                           : '--',
                       style: GoogleFonts.poppins(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        color: _primaryText,
-                        height: 1.0,
-                      ),
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                          color: _primary,
+                          height: 1.0),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 4),
                     Text(
                       route != null
                           ? '${route.distanceKm.toStringAsFixed(1)} km · via ${_modes.firstWhere((m) => m.mode == _selectedMode).label}'
                           : 'Calculating…',
                       style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _dark.withOpacity(0.7),
-                      ),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: _grey),
                     ),
                   ],
                 ),
               ),
-              // Mode icon badge
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: _primaryText,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: _primaryText.withOpacity(0.35),
-                      blurRadius: 14,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
+                    color: _primary.withOpacity(0.1), shape: BoxShape.circle),
                 child: Icon(
-                  _modes.firstWhere((m) => m.mode == _selectedMode).icon,
-                  color: Colors.white,
-                  size: 26,
-                ),
+                    _modes.firstWhere((m) => m.mode == _selectedMode).icon,
+                    color: _primary,
+                    size: 28),
               ),
             ],
           ),
@@ -1127,78 +1152,71 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
   }
 
   Widget _buildPropertyPreviewCard(Property property) {
-    return GestureDetector(
-      onTap: () => setState(() => _hoveredProperty = null),
-      child: _GlassContainer(
-        padding: const EdgeInsets.all(14),
-        opacity: 0.96,
-        child: Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: _primaryText.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(PhosphorIcons.house(PhosphorIconsStyle.fill),
-                  color: _primaryText, size: 24),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    property.name,
-                    style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: _dark),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _distanceLabel(property),
-                    style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: _grey),
-                  ),
-                ],
-              ),
-            ),
-            // Route to this property
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  _activeProperty = property;
-                  _toController.text = property.name;
-                  _destination = LatLng(property.lat, property.lng);
-                  _hoveredProperty = null;
-                  _routeCache.clear();
-                });
-                _fetchAllRoutes();
-                _fitMapBounds();
-              },
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _primaryText,
-                  borderRadius: BorderRadius.circular(10),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 10))
+        ],
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: buildPropertyImage(property.image,
+                width: 64, height: 64, fit: BoxFit.cover),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  property.name,
+                  style: GoogleFonts.poppins(
+                      fontSize: 15, fontWeight: FontWeight.w700, color: _dark),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                child: Text('Route',
-                    style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white)),
-              ),
+                const SizedBox(height: 2),
+                Text(
+                  _distanceLabel(property),
+                  style: GoogleFonts.poppins(
+                      fontSize: 13, fontWeight: FontWeight.w500, color: _grey),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _activeProperty = property;
+                _toController.text = property.name;
+                _destination = LatLng(property.lat, property.lng);
+                _hoveredProperty = null;
+                _routeCache.clear();
+              });
+              _fetchAllRoutes();
+              _fitMapBounds();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                  color: _primary, borderRadius: BorderRadius.circular(20)),
+              child: Text('Route',
+                  style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white)),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1213,11 +1231,10 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
   }
 }
 
-// ─── Destination Marker with Tooltip Label ───────────────────────────────────
+// ─── Shared Components ────────────────────────────────────────────────────────
 
 class _DestinationMarker extends StatelessWidget {
   final String label;
-
   const _DestinationMarker({required this.label});
 
   @override
@@ -1225,18 +1242,16 @@ class _DestinationMarker extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Tooltip bubble
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: const Color(0xFF111827),
-            borderRadius: BorderRadius.circular(8),
+            color: _dark,
+            borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4))
             ],
           ),
           child: Text(
@@ -1244,66 +1259,35 @@ class _DestinationMarker extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.poppins(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
+                fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
           ),
         ),
-        // Tooltip tail
-        CustomPaint(
-          size: const Size(10, 6),
-          painter: _TooltipTailPainter(),
-        ),
-        // Flag pin
+        const SizedBox(height: 4),
         Container(
-          width: 28,
-          height: 28,
+          width: 32,
+          height: 32,
           decoration: BoxDecoration(
             color: const Color(0xFFEF4444),
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
+            border: Border.all(color: Colors.white, width: 2.5),
             boxShadow: [
               BoxShadow(
-                color: Colors.redAccent.withOpacity(0.4),
-                blurRadius: 10,
-                spreadRadius: 1,
-              ),
+                  color: Colors.redAccent.withOpacity(0.4),
+                  blurRadius: 10,
+                  spreadRadius: 1)
             ],
           ),
-          child: Icon(
-            PhosphorIcons.flagBanner(PhosphorIconsStyle.fill),
-            color: Colors.white,
-            size: 13,
-          ),
+          child: const Icon(PhosphorIconsFill.flagBanner,
+              color: Colors.white, size: 16),
         ),
       ],
     );
   }
 }
 
-class _TooltipTailPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = ui.Paint()..color = const Color(0xFF111827);
-    final path = ui.Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width / 2, size.height)
-      ..lineTo(size.width, 0)
-      ..close();
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// ─── GPS Dot (Heading Arrow + Pulse) ─────────────────────────────────────────
-
 class _GpsDot extends StatefulWidget {
   final double heading;
   final bool isNavigating;
-
   const _GpsDot({required this.heading, required this.isNavigating});
 
   @override
@@ -1317,9 +1301,8 @@ class _GpsDotState extends State<_GpsDot> with SingleTickerProviderStateMixin {
   void initState() {
     super.initState();
     _pulse = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat();
+        vsync: this, duration: const Duration(milliseconds: 2000))
+      ..repeat();
   }
 
   @override
@@ -1330,65 +1313,36 @@ class _GpsDotState extends State<_GpsDot> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    const dotColor = Color(0xFF3F37C9);
-
     return AnimatedBuilder(
       animation: _pulse,
       builder: (context, _) {
-        final pulseSize = 16.0 + (_pulse.value * 32.0);
-        final pulseOpacity = (1.0 - _pulse.value) * 0.35;
-
         return Transform.rotate(
           angle: widget.isNavigating ? (widget.heading * math.pi / 180) : 0,
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Pulse ring
               Container(
-                width: pulseSize,
-                height: pulseSize,
+                width: 16 + (_pulse.value * 32.0),
+                height: 16 + (_pulse.value * 32.0),
                 decoration: BoxDecoration(
-                  color: dotColor.withOpacity(pulseOpacity),
-                  shape: BoxShape.circle,
-                ),
+                    color: _primary.withOpacity((1.0 - _pulse.value) * 0.4),
+                    shape: BoxShape.circle),
               ),
-              // Accuracy ring
               Container(
-                width: 22,
-                height: 22,
+                width: 16,
+                height: 16,
                 decoration: BoxDecoration(
-                  color: dotColor.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                  border:
-                      Border.all(color: dotColor.withOpacity(0.4), width: 1),
-                ),
-              ),
-              // Core dot
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: dotColor,
+                  color: _primary,
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 2.5),
                   boxShadow: [
                     BoxShadow(
-                      color: dotColor.withOpacity(0.5),
-                      blurRadius: 6,
-                      spreadRadius: 1,
-                    ),
+                        color: _primary.withOpacity(0.5),
+                        blurRadius: 6,
+                        spreadRadius: 1)
                   ],
                 ),
               ),
-              // Heading cone (only during navigation)
-              if (widget.isNavigating)
-                Positioned(
-                  top: 0,
-                  child: CustomPaint(
-                    size: const Size(14, 14),
-                    painter: _HeadingConePainter(),
-                  ),
-                ),
             ],
           ),
         );
@@ -1397,128 +1351,31 @@ class _GpsDotState extends State<_GpsDot> with SingleTickerProviderStateMixin {
   }
 }
 
-class _HeadingConePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = ui.Paint()
-      ..color = const Color(0xFF3F37C9).withOpacity(0.5)
-      ..style = ui.PaintingStyle.fill;
-
-    final path = ui.Path()
-      ..moveTo(size.width / 2, 0)
-      ..lineTo(0, size.height)
-      ..lineTo(size.width, size.height)
-      ..close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// ─── Glass UI Utilities ───────────────────────────────────────────────────────
-
-class _GlassCircleButton extends StatelessWidget {
+class _SolidCircleButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final Color color;
-  final bool isNavigating;
 
-  const _GlassCircleButton({
-    required this.icon,
-    required this.onTap,
-    this.color = const Color(0xFF111827),
-    this.isNavigating = false,
-  });
+  const _SolidCircleButton(
+      {required this.icon, required this.onTap, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(
-              sigmaX: isNavigating ? 0 : 12, sigmaY: isNavigating ? 0 : 12),
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color:
-                  isNavigating ? Colors.white : Colors.white.withOpacity(0.65),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withOpacity(0.85)),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)
-              ],
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassContainer extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final BorderRadius? borderRadius;
-  final double blur;
-  final double opacity;
-  final double? height;
-  final bool isNavigating;
-
-  const _GlassContainer({
-    required this.child,
-    required this.padding,
-    this.borderRadius,
-    this.blur = 20.0,
-    this.opacity = 0.55,
-    this.height,
-    this.isNavigating = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final radius = borderRadius ?? BorderRadius.circular(22);
-
-    if (isNavigating) {
-      return Container(
-        height: height,
-        padding: padding,
+      child: Container(
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: radius,
-          boxShadow: const [
+          color: _surface,
+          shape: BoxShape.circle,
+          boxShadow: [
             BoxShadow(
-                color: Colors.black12, blurRadius: 20, offset: Offset(0, 4))
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4))
           ],
         ),
-        child: child,
-      );
-    }
-
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          height: height,
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(opacity),
-            borderRadius: radius,
-            border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 24,
-                  offset: const Offset(0, 4))
-            ],
-          ),
-          child: child,
-        ),
+        child: Icon(icon, color: color, size: 24),
       ),
     );
   }

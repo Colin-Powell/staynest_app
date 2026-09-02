@@ -10,20 +10,8 @@ import 'package:property_app/services/message_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Background handler cannot access UI state, but we can safely best-effort
-  // call the backend mark-read endpoint to keep unread badges consistent.
-  try {
-    final senderId = message.data['senderId']?.toString();
-    if (senderId != null && senderId.isNotEmpty) {
-      // NOTE: MessageService requires AppSession (token/baseUrl) which may not
-      // always be available in background isolates. We fallback to doing nothing
-      // if it fails to resolve. Any failure here must never crash background delivery.
-      // ignore: unnecessary_statements
-      await MessageService.instance.markAsRead([senderId]);
-    }
-  } catch (_) {
-    // no-op
-  }
+  // Keep this handler lightweight. Android displays notification payloads in
+  // the background; read state changes only when the user opens the chat.
 }
 
 class FCMService {
@@ -91,7 +79,9 @@ class FCMService {
       );
 
       // Create Android Notification Channel
-      final androidImplementation = _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      final androidImplementation =
+          _localNotifications.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
       if (androidImplementation != null) {
         await androidImplementation.createNotificationChannel(_channel);
       }

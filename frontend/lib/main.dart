@@ -94,6 +94,7 @@ Future<void> main() async {
   }
 
   await AppSession.restoreSession();
+  await AppSession.initializeAppInfo();
 
   if (AppSession.currentUserId != null) {
     AuthService.instance.syncFCMToken();
@@ -500,6 +501,10 @@ class _PropertyAppState extends State<PropertyApp> {
           );
         },
         '/commute': (context) => CommuteMethodsView(
+              targetLocation: (ModalRoute.of(context)?.settings.arguments
+                  as Map<String, dynamic>?)?['targetLocation'] as LatLng?,
+              targetProperty: (ModalRoute.of(context)?.settings.arguments
+                  as Map<String, dynamic>?)?['property'] as Property?,
               onClose: () => Navigator.pop(context),
               onStartNavigation: () {
                 Navigator.push(
@@ -509,8 +514,8 @@ class _PropertyAppState extends State<PropertyApp> {
                       onBack: () => Navigator.pop(context),
                       onFilter: () {},
                       isNavigation: true,
-                      navOrigin: const LatLng(-1.2921, 36.8219),
-                      navDestination: const LatLng(-1.2800, 36.8150),
+                      navOrigin: null,
+                      navDestination: null,
                     ),
                   ),
                 );
@@ -951,7 +956,11 @@ class _AppShellState extends State<AppShell> {
         onGetDirections: () {
           _closeLocation();
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            Navigator.pushNamed(context, '/commute');
+            Navigator.pushNamed(
+              context,
+              '/commute',
+              arguments: <String, dynamic>{'property': property},
+            );
           });
         },
       ),

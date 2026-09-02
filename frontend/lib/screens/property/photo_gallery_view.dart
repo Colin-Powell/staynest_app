@@ -1,9 +1,19 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:video_player/video_player.dart';
+
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/property_image_url.dart';
-import 'package:video_player/video_player.dart';
+
+// ─── Design System Constants ──────────────────────────────────────────────────
+const Color _bg = Color(0xFFFAFAFA);
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF9CA3AF);
+const Color _surface = Colors.white;
 
 class PhotoGalleryView extends StatefulWidget {
   final VoidCallback onClose;
@@ -48,36 +58,37 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
     if (_pageIndex == index) return;
     _pageController.animateToPage(
       index,
-      duration: const Duration(milliseconds: 280),
+      duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
     );
   }
 
   void _onPageChanged(int index) {
     setState(() => _pageIndex = index);
-    if (index == 1) {
+    if (_tabs[index] == 'Videos') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _loadVideo();
       });
+    } else {
+      // Pause video when navigating away
+      _videoController?.pause();
     }
   }
 
   Future<void> _loadVideo() async {
-    if (_videoController != null ||
-        _videoLoading ||
-        widget.videoUrl?.trim().isNotEmpty != true) {
+    if (_videoController != null || _videoLoading || widget.videoUrl?.trim().isNotEmpty != true) {
       return;
     }
     setState(() {
       _videoLoading = true;
       _videoError = null;
     });
+
     final controller = VideoPlayerController.networkUrl(
-      Uri.parse(resolvePropertyImageUrl(widget.videoUrl!)),
-      httpHeaders: AppSession.apiToken == null
-          ? const {}
-          : {'Authorization': 'Bearer ${AppSession.apiToken}'},
+      Uri.parse(resolvePropertyVideoUrl(widget.videoUrl!)),
+      httpHeaders: AppSession.apiToken == null ? const {} : {'Authorization': 'Bearer ${AppSession.apiToken}'},
     );
+
     try {
       await controller.initialize();
       if (!mounted) {
@@ -88,6 +99,9 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
         _videoController = controller;
         _videoLoading = false;
       });
+      // Auto-play muted for good UX
+      controller.setVolume(0.0);
+      controller.play();
     } catch (_) {
       await controller.dispose();
       if (mounted) {
@@ -99,12 +113,7 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
     }
   }
 
-  List<String> get _photos {
-    if (widget.photos != null && widget.photos!.isNotEmpty) {
-      return widget.photos!;
-    }
-    return const [];
-  }
+  List<String> get _photos => widget.photos != null && widget.photos!.isNotEmpty ? widget.photos! : const [];
 
   void _openFullscreen(int startIndex) {
     Navigator.of(context).push(
@@ -115,8 +124,7 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
           images: _photos,
           initialIndex: startIndex,
         ),
-        transitionsBuilder: (_, animation, __, child) =>
-            FadeTransition(opacity: animation, child: child),
+        transitionsBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
       ),
     );
   }
@@ -124,54 +132,54 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: _bg,
       body: SafeArea(
         bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
+            // ─── Header ───
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
               child: Row(
                 children: [
                   GestureDetector(
                     onTap: widget.onClose,
                     behavior: HitTestBehavior.opaque,
-                    child: const Icon(Icons.arrow_back,
-                        size: 28, color: Colors.black),
+                    child: const Icon(PhosphorIconsRegular.caretLeft, size: 28, color: _dark),
                   ),
                   const SizedBox(width: 16),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Photo Gallery',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.black,
+                      'Gallery',
+                      style: GoogleFonts.poppins(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: _dark,
                         letterSpacing: -0.5,
                       ),
                     ),
                   ),
-                  if (_photos.isNotEmpty)
-                    Text(
-                      '${_photos.length} photo${_photos.length == 1 ? '' : 's'}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF6B7280),
+                  if (_photos.isNotEmpty && _pageIndex == 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(color: _grey.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+                      child: Text(
+                        '${_photos.length} Photo${_photos.length == 1 ? '' : 's'}',
+                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: _dark),
                       ),
                     ),
                 ],
               ),
             ),
 
-            // Tabs
+            // ─── Pills Navigation ───
             SizedBox(
-              height: 44,
+              height: 48,
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
                 itemCount: _tabs.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, index) {
@@ -182,22 +190,22 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       curve: Curves.easeOutCubic,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: active
-                            ? const Color(0xFF3F37C9)
-                            : const Color(0xFFE5E7EB),
+                        color: active ? _dark : _surface,
                         borderRadius: BorderRadius.circular(30),
+                        border: Border.all(
+                          color: active ? _dark : _grey.withOpacity(0.2),
+                          width: active ? 2.0 : 1.5,
+                        ),
                       ),
                       child: Text(
                         tab,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight:
-                              active ? FontWeight.w800 : FontWeight.w700,
-                          color: active ? Colors.white : Colors.black,
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                          color: active ? Colors.white : _dark,
                         ),
                       ),
                     ),
@@ -206,9 +214,9 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
               ),
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
-            // Pages
+            // ─── Content Pages ───
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
@@ -217,21 +225,12 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
                 physics: const BouncingScrollPhysics(),
                 itemBuilder: (context, index) {
                   final tab = _tabs[index];
-                  if (tab == 'Videos') {
-                    return _buildVideoPage(key: const ValueKey('Videos'));
-                  }
-                  if (_comingSoonTabs.contains(tab)) {
-                    return _buildComingSoon(tab, key: ValueKey('Soon-$tab'));
-                  }
-                  switch (tab) {
-                    case 'Photos':
-                      return _photos.isEmpty
-                          ? _buildEmptyPhotos(
-                              key: const ValueKey('Photos-empty'))
-                          : _buildGrid(_photos, key: ValueKey('Photos-$index'));
-                    default:
-                      return const SizedBox.shrink();
-                  }
+                  if (tab == 'Videos') return _buildVideoPage(key: const ValueKey('Videos'));
+                  if (_comingSoonTabs.contains(tab)) return _buildComingSoon(tab, key: ValueKey('Soon-$tab'));
+                  
+                  return _photos.isEmpty
+                      ? _buildEmptyState(PhosphorIconsRegular.image, 'No photos available.')
+                      : _buildGrid(_photos, key: ValueKey('Photos-$index'));
                 },
               ),
             ),
@@ -241,58 +240,100 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
     );
   }
 
+  // ─── Video Player UI ───
   Widget _buildVideoPage({Key? key}) {
     if (widget.videoUrl?.trim().isNotEmpty != true) {
-      return _buildVideoMessage(
-          key, Icons.videocam_off_outlined, 'No property video available.');
+      return _buildEmptyState(PhosphorIconsRegular.videoCameraSlash, 'No property video available.');
     }
     if (_videoError != null) {
-      return _buildVideoMessage(key, Icons.error_outline, _videoError!);
+      return _buildEmptyState(PhosphorIconsRegular.warningCircle, _videoError!, isError: true);
     }
-    if (_videoLoading ||
-        _videoController == null ||
-        !_videoController!.value.isInitialized) {
-      return const Center(
-          child: CircularProgressIndicator(color: Color(0xFF3F37C9)));
+    if (_videoLoading || _videoController == null || !_videoController!.value.isInitialized) {
+      return const Center(child: CircularProgressIndicator(color: _dark));
     }
 
     final controller = _videoController!;
     return Center(
       key: key,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: AspectRatio(
-            aspectRatio: controller.value.aspectRatio,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                VideoPlayer(controller),
-                IconButton(
-                  tooltip:
-                      controller.value.isPlaying ? 'Pause video' : 'Play video',
-                  iconSize: 64,
-                  color: Colors.white,
-                  onPressed: () => setState(() {
-                    controller.value.isPlaying
-                        ? controller.pause()
-                        : controller.play();
-                  }),
-                  icon: Icon(controller.value.isPlaying
-                      ? Icons.pause_circle_filled
-                      : Icons.play_circle_fill),
-                ),
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  bottom: 8,
-                  child: VideoProgressIndicator(controller,
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+        child: Container(
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 10))],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: AspectRatio(
+              aspectRatio: controller.value.aspectRatio,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  VideoPlayer(controller),
+                  
+                  // Play/Pause Overlay
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        controller.value.isPlaying ? controller.pause() : controller.play();
+                      });
+                    },
+                    behavior: HitTestBehavior.opaque,
+                    child: AnimatedOpacity(
+                      opacity: controller.value.isPlaying ? 0.0 : 1.0,
+                      duration: const Duration(milliseconds: 300),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.4),
+                        ),
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                            child: const Icon(PhosphorIconsFill.play, color: Colors.white, size: 48),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Progress Indicator
+                  Positioned(
+                    left: 0, right: 0, bottom: 0,
+                    child: VideoProgressIndicator(
+                      controller,
                       allowScrubbing: true,
+                      padding: const EdgeInsets.all(16),
                       colors: const VideoProgressColors(
-                          playedColor: Color(0xFF3F37C9))),
-                ),
-              ],
+                        playedColor: Colors.white,
+                        bufferedColor: Colors.white30,
+                        backgroundColor: Colors.white24,
+                      ),
+                    ),
+                  ),
+
+                  // Volume Toggle
+                  Positioned(
+                    top: 16, right: 16,
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          controller.value.volume > 0 ? controller.setVolume(0.0) : controller.setVolume(1.0);
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
+                        child: Icon(
+                          controller.value.volume > 0 ? PhosphorIconsFill.speakerHigh : PhosphorIconsFill.speakerSlash,
+                          color: Colors.white, size: 20
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -300,35 +341,17 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
     );
   }
 
-  Widget _buildVideoMessage(Key? key, IconData icon, String message) {
-    return Center(
-      key: key,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 64, color: const Color(0xFF9CA3AF)),
-          const SizedBox(height: 16),
-          Text(message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF6B7280))),
-        ],
-      ),
-    );
-  }
-
+  // ─── Photo Grid UI ───
   Widget _buildGrid(List<String> images, {Key? key}) {
     return GridView.builder(
       key: key,
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
       physics: const BouncingScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
-        childAspectRatio: 1,
+        childAspectRatio: 1, // Perfect squares
       ),
       itemCount: images.length,
       itemBuilder: (context, index) {
@@ -336,12 +359,18 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
           onTap: () => _openFullscreen(index),
           child: Hero(
             tag: 'gallery_image_$index',
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: buildPropertyImage(
-                images[index],
-                width: double.infinity,
-                fit: BoxFit.cover,
+            child: Container(
+              decoration: BoxDecoration(
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: buildPropertyImage(
+                  images[index],
+                  width: double.infinity,
+                  height: double.infinity,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ),
@@ -350,26 +379,27 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
     );
   }
 
+  // ─── Empty & Coming Soon States ───
   Widget _buildComingSoon(String tab, {Key? key}) {
     IconData icon;
     String message;
     switch (tab) {
-      case 'Videos':
-        icon = Icons.play_circle_outline;
-        message = 'Property video tours are coming soon.';
-        break;
       case '360º':
-        icon = Icons.threed_rotation;
-        message = '360° virtual tours are coming soon.';
+        icon = PhosphorIconsRegular.cube;
+        message = 'Interactive 360° virtual tours are launching soon.';
         break;
       case 'Floor Plan':
-        icon = Icons.architecture;
-        message = 'Interactive floor plans are coming soon.';
+        icon = PhosphorIconsRegular.blueprint;
+        message = 'Detailed floor plans will be available shortly.';
         break;
       default:
-        icon = Icons.hourglass_empty;
+        icon = PhosphorIconsRegular.hourglass;
         message = 'Coming soon.';
     }
+    return _buildEmptyState(icon, message, key: key);
+  }
+
+  Widget _buildEmptyState(IconData icon, String message, {Key? key, bool isError = false}) {
     return Center(
       key: key,
       child: Padding(
@@ -378,39 +408,21 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 100,
-              height: 100,
-              decoration: const BoxDecoration(
-                color: Color(0xFFE5E7EB),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 48, color: const Color(0xFF9CA3AF)),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(color: isError ? const Color(0xFFFEF2F2) : _grey.withOpacity(0.1), shape: BoxShape.circle),
+              child: Icon(icon, size: 48, color: isError ? const Color(0xFFEF4444) : _grey),
             ),
             const SizedBox(height: 24),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF6B7280),
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: isError ? const Color(0xFFEF4444) : _grey,
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyPhotos({Key? key}) {
-    return Center(
-      key: key,
-      child: const Text(
-        'No photos available for this property.',
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF6B7280),
         ),
       ),
     );
@@ -432,8 +444,7 @@ class _FullscreenImageViewer extends StatefulWidget {
   State<_FullscreenImageViewer> createState() => _FullscreenImageViewerState();
 }
 
-class _FullscreenImageViewerState extends State<_FullscreenImageViewer>
-    with SingleTickerProviderStateMixin {
+class _FullscreenImageViewerState extends State<_FullscreenImageViewer> with SingleTickerProviderStateMixin {
   late final PageController _controller;
   late int _current;
   bool _showUI = true;
@@ -476,7 +487,7 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer>
     final screenW = MediaQuery.of(context).size.width;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.black, // Immersive dark mode
       body: Stack(
         children: [
           // ── Swipeable images ──
@@ -498,25 +509,25 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer>
           FadeTransition(
             opacity: _uiAnim,
             child: Positioned(
-              top: safeTop + 12,
-              left: 16,
-              right: 16,
+              top: safeTop + 16,
+              left: 24,
+              right: 24,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _CircleButton(icon: Icons.close, onTap: _close),
+                  _GlassCircleButton(icon: PhosphorIconsRegular.x, onTap: _close),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.black54,
+                      color: Colors.black.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withOpacity(0.2)),
                     ),
                     child: Text(
                       '${_current + 1} / ${widget.images.length}',
-                      style: const TextStyle(
+                      style: GoogleFonts.poppins(
                         color: Colors.white,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
                     ),
@@ -534,36 +545,27 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer>
                 child: Align(
                   alignment: Alignment.center,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         AnimatedOpacity(
                           opacity: _current > 0 ? 1.0 : 0.0,
                           duration: const Duration(milliseconds: 200),
-                          child: _CircleButton(
-                            icon: Icons.chevron_left,
+                          child: _GlassCircleButton(
+                            icon: PhosphorIconsRegular.caretLeft,
                             onTap: _current > 0
-                                ? () => _controller.previousPage(
-                                      duration:
-                                          const Duration(milliseconds: 300),
-                                      curve: Curves.easeOutCubic,
-                                    )
+                                ? () => _controller.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic)
                                 : () {},
                           ),
                         ),
                         AnimatedOpacity(
-                          opacity:
-                              _current < widget.images.length - 1 ? 1.0 : 0.0,
+                          opacity: _current < widget.images.length - 1 ? 1.0 : 0.0,
                           duration: const Duration(milliseconds: 200),
-                          child: _CircleButton(
-                            icon: Icons.chevron_right,
+                          child: _GlassCircleButton(
+                            icon: PhosphorIconsRegular.caretRight,
                             onTap: _current < widget.images.length - 1
-                                ? () => _controller.nextPage(
-                                      duration:
-                                          const Duration(milliseconds: 300),
-                                      curve: Curves.easeOutCubic,
-                                    )
+                                ? () => _controller.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic)
                                 : () {},
                           ),
                         ),
@@ -579,7 +581,7 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer>
             FadeTransition(
               opacity: _uiAnim,
               child: Positioned(
-                bottom: safeBottom + 24,
+                bottom: safeBottom + 32,
                 left: 0,
                 right: 0,
                 child: Center(
@@ -593,13 +595,11 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer>
                           final active = i == _current;
                           return AnimatedContainer(
                             duration: const Duration(milliseconds: 250),
-                            margin: const EdgeInsets.symmetric(horizontal: 3),
-                            width: active ? 20 : 7,
-                            height: 7,
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: active ? 24 : 8,
+                            height: 8,
                             decoration: BoxDecoration(
-                              color: active
-                                  ? Colors.white
-                                  : Colors.white.withOpacity(0.4),
+                              color: active ? Colors.white : Colors.white.withOpacity(0.3),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           );
@@ -659,7 +659,7 @@ class _ZoomableImageState extends State<_ZoomableImage> {
           child: buildPropertyImage(
             widget.url,
             width: double.infinity,
-            fit: BoxFit.contain,
+            fit: BoxFit.contain, // Maintain image ratio in fullscreen
           ),
         ),
       ),
@@ -667,27 +667,33 @@ class _ZoomableImageState extends State<_ZoomableImage> {
   }
 }
 
-// ─── CIRCLE BUTTON ────────────────────────────────────────────────────────────
+// ─── GLASS CIRCLE BUTTON ──────────────────────────────────────────────────────
 
-class _CircleButton extends StatelessWidget {
+class _GlassCircleButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _CircleButton({required this.icon, required this.onTap});
+  const _GlassCircleButton({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: Colors.black54,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white24),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
+            ),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
         ),
-        child: Icon(icon, color: Colors.white, size: 22),
       ),
     );
   }

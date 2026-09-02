@@ -21,6 +21,7 @@ class NotificationItem {
   final String title;
   final String subtitle;
   final String time;
+  final String emoji;
   bool isRead;
 
   NotificationItem({
@@ -28,6 +29,7 @@ class NotificationItem {
     required this.title,
     required this.subtitle,
     required this.time,
+    this.emoji = '🔔',
     this.isRead = false,
   });
 }
@@ -81,12 +83,27 @@ class _NotificationsViewState extends State<NotificationsView>
     _setupFCMStream();
   }
 
+  String _notificationEmoji(Map<dynamic, dynamic> data) {
+    final type = data['type']?.toString().toLowerCase() ?? '';
+    if (type.contains('booking') ||
+        type.contains('checkin') ||
+        type.contains('checkout')) return '📅';
+    if (type.contains('message') || type.contains('unread')) return '💬';
+    if (type.contains('payment') || type.contains('price')) return '💰';
+    if (type.contains('alert') ||
+        type.contains('warning') ||
+        type.contains('stale')) return '⚠️';
+    if (type.contains('approved') || type.contains('success')) return '✅';
+    return '🔔';
+  }
+
   void _setupFCMStream() {
     _stream = FCMService.instance.notificationsStream;
     _stream!.listen((message) {
       if (!mounted) return;
       final title = message.notification?.title ?? 'Notification';
       final subtitle = message.notification?.body ?? '';
+      final emoji = _notificationEmoji(message.data);
       final now = DateTime.now();
 
       setState(() {
@@ -97,6 +114,7 @@ class _NotificationsViewState extends State<NotificationsView>
             title: title,
             subtitle: subtitle,
             time: _formatTime(now),
+            emoji: emoji,
             isRead: false,
           ),
         );
@@ -113,15 +131,19 @@ class _NotificationsViewState extends State<NotificationsView>
       setState(() {
         _items.clear();
         for (var item in data) {
-          final created = DateTime.tryParse(item['created_at'].toString())?.toLocal() ?? DateTime.now();
+          final created =
+              DateTime.tryParse(item['created_at'].toString())?.toLocal() ??
+                  DateTime.now();
           final dataMap = item['data'] ?? {};
-          final unreadCount = int.tryParse(dataMap['unreadCount']?.toString() ?? '') ?? 0;
-          
+          final unreadCount =
+              int.tryParse(dataMap['unreadCount']?.toString() ?? '') ?? 0;
+
           _items.add(NotificationItem(
             id: item['id']?.toString() ?? UniqueKey().toString(),
             title: item['title'] ?? 'Notification',
             subtitle: item['body'] ?? '',
             time: _formatTime(created),
+            emoji: _notificationEmoji(dataMap),
             isRead: unreadCount == 0,
           ));
         }
@@ -222,7 +244,8 @@ class _NotificationsViewState extends State<NotificationsView>
                 children: [
                   GestureDetector(
                     onTap: _toggleSelectionMode,
-                    child: const Icon(PhosphorIconsRegular.x, color: _dark, size: 24),
+                    child: const Icon(PhosphorIconsRegular.x,
+                        color: _dark, size: 24),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -238,7 +261,8 @@ class _NotificationsViewState extends State<NotificationsView>
                   ),
                   GestureDetector(
                     onTap: _selectAll,
-                    child: const Icon(PhosphorIconsRegular.checkSquareOffset, color: _dark, size: 28),
+                    child: const Icon(PhosphorIconsRegular.checkSquareOffset,
+                        color: _dark, size: 28),
                   ),
                 ],
               )
@@ -260,7 +284,8 @@ class _NotificationsViewState extends State<NotificationsView>
                           )
                         ],
                       ),
-                      child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 20),
+                      child: const Icon(PhosphorIconsRegular.caretLeft,
+                          color: _dark, size: 20),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -276,8 +301,10 @@ class _NotificationsViewState extends State<NotificationsView>
                     ),
                   ),
                   PopupMenuButton<String>(
-                    icon: const Icon(PhosphorIconsRegular.dotsThreeVertical, color: _dark, size: 28),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    icon: const Icon(PhosphorIconsRegular.dotsThreeVertical,
+                        color: _dark, size: 28),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
                     color: Colors.white,
                     elevation: 4,
                     onSelected: (value) {
@@ -287,11 +314,15 @@ class _NotificationsViewState extends State<NotificationsView>
                     itemBuilder: (BuildContext context) => [
                       PopupMenuItem(
                         value: 'read_all',
-                        child: Text('Mark all as read', style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                        child: Text('Mark all as read',
+                            style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w500)),
                       ),
                       PopupMenuItem(
                         value: 'select',
-                        child: Text('Select messages', style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                        child: Text('Select messages',
+                            style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w500)),
                       ),
                     ],
                   ),
@@ -360,7 +391,8 @@ class _NotificationsViewState extends State<NotificationsView>
     return FadeTransition(
       opacity: animation,
       child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(animation),
+        position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
+            .animate(animation),
         child: GestureDetector(
           onLongPress: () {
             if (!_isSelectionMode) {
@@ -380,14 +412,24 @@ class _NotificationsViewState extends State<NotificationsView>
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: item.isRead ? Colors.white : _primaryText.withOpacity(0.04),
+              color:
+                  item.isRead ? Colors.white : _primaryText.withOpacity(0.04),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isSelected ? _primaryText : (item.isRead ? Colors.transparent : _primaryText.withOpacity(0.1)),
+                color: isSelected
+                    ? _primaryText
+                    : (item.isRead
+                        ? Colors.transparent
+                        : _primaryText.withOpacity(0.1)),
                 width: isSelected ? 2.0 : 1.0,
               ),
               boxShadow: item.isRead
-                  ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]
+                  ? [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4))
+                    ]
                   : [],
             ),
             child: Row(
@@ -397,7 +439,9 @@ class _NotificationsViewState extends State<NotificationsView>
                   Padding(
                     padding: const EdgeInsets.only(right: 16, top: 4),
                     child: Icon(
-                      isSelected ? PhosphorIconsRegular.checkCircle : PhosphorIconsRegular.circle,
+                      isSelected
+                          ? PhosphorIconsRegular.checkCircle
+                          : PhosphorIconsRegular.circle,
                       color: isSelected ? _primaryText : _grey,
                       size: 24,
                     ),
@@ -410,11 +454,8 @@ class _NotificationsViewState extends State<NotificationsView>
                       color: item.isRead ? _bg : _primaryText.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(
-                      PhosphorIconsRegular.bellRinging,
-                      color: item.isRead ? _grey : _primaryText,
-                      size: 20,
-                    ),
+                    child:
+                        Text(item.emoji, style: const TextStyle(fontSize: 20)),
                   ),
                 Expanded(
                   child: Column(
@@ -428,7 +469,9 @@ class _NotificationsViewState extends State<NotificationsView>
                               item.title,
                               style: GoogleFonts.poppins(
                                 fontSize: 14,
-                                fontWeight: item.isRead ? FontWeight.w600 : FontWeight.w700,
+                                fontWeight: item.isRead
+                                    ? FontWeight.w600
+                                    : FontWeight.w700,
                                 color: _dark,
                               ),
                               maxLines: 1,
@@ -441,7 +484,9 @@ class _NotificationsViewState extends State<NotificationsView>
                             style: GoogleFonts.poppins(
                               fontSize: 12,
                               color: item.isRead ? _grey : _primaryText,
-                              fontWeight: item.isRead ? FontWeight.w400 : FontWeight.w600,
+                              fontWeight: item.isRead
+                                  ? FontWeight.w400
+                                  : FontWeight.w600,
                             ),
                           ),
                         ],
@@ -497,11 +542,16 @@ class _NotificationsViewState extends State<NotificationsView>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(PhosphorIconsRegular.envelopeOpen,
-                      color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white),
+                      color: _selectedIds.isEmpty
+                          ? _grey.withOpacity(0.5)
+                          : Colors.white),
                   const SizedBox(height: 4),
                   Text('Read',
                       style: GoogleFonts.poppins(
-                          fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white)),
+                          fontSize: 12,
+                          color: _selectedIds.isEmpty
+                              ? _grey.withOpacity(0.5)
+                              : Colors.white)),
                 ],
               ),
             ),
@@ -512,11 +562,16 @@ class _NotificationsViewState extends State<NotificationsView>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(PhosphorIconsRegular.trash,
-                      color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444)), // Red
+                      color: _selectedIds.isEmpty
+                          ? _grey.withOpacity(0.5)
+                          : const Color(0xFFEF4444)), // Red
                   const SizedBox(height: 4),
                   Text('Delete',
                       style: GoogleFonts.poppins(
-                          fontSize: 12, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444))),
+                          fontSize: 12,
+                          color: _selectedIds.isEmpty
+                              ? _grey.withOpacity(0.5)
+                              : const Color(0xFFEF4444))),
                 ],
               ),
             ),
@@ -548,11 +603,17 @@ class _NotificationsViewState extends State<NotificationsView>
                           : _items.isEmpty
                               ? _buildEmptyState()
                               : ListView.builder(
-                                  padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(context).padding.bottom + 100),
+                                  padding: EdgeInsets.fromLTRB(
+                                      24,
+                                      8,
+                                      24,
+                                      MediaQuery.of(context).padding.bottom +
+                                          100),
                                   physics: const BouncingScrollPhysics(),
                                   itemCount: _items.length,
                                   itemBuilder: (context, index) {
-                                    return _buildNotificationItem(index, _items[index]);
+                                    return _buildNotificationItem(
+                                        index, _items[index]);
                                   },
                                 ),
                     ),

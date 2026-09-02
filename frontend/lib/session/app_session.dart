@@ -11,9 +11,11 @@ import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/screens/home/cache_engine.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class AppSession {
-  static const String currentAppVersion = "1.0.0";
+  static String currentAppVersion = '1.0.0';
+  static String currentAppBuildNumber = '0';
   static const String _prefsKey = 'staynest.session';
 
   static String currentRole = 'tenant';
@@ -89,6 +91,16 @@ class AppSession {
   static String? get authToken => apiToken;
 
   static final Set<String> savedPropertyIds = {};
+
+  static Future<void> initializeAppInfo() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      currentAppVersion = packageInfo.version;
+      currentAppBuildNumber = packageInfo.buildNumber;
+    } catch (_) {
+      // Keep conservative defaults when package metadata is unavailable.
+    }
+  }
 
   static bool isSaved(String id) => savedPropertyIds.contains(id);
 

@@ -599,19 +599,27 @@ class _BookingViewState extends State<BookingView> {
 
     setState(() => _isSubmitting = true);
 
-    final nights = _selectedRange!.end.difference(_selectedRange!.start).inDays;
-    final totalPrice = (nights > 0 ? nights : 1) * _property!.price.toDouble();
+    bool success = false;
+    String? errorMessage;
+    try {
+      final nights =
+          _selectedRange!.end.difference(_selectedRange!.start).inDays;
+      final totalPrice =
+          (nights > 0 ? nights : 1) * _property!.price.toDouble();
 
-    final success = await BookingService.createBooking(
-      propertyId: widget.propertyId,
-      checkIn: _selectedRange!.start,
-      checkOut: _selectedRange!.end,
-      totalPrice: totalPrice,
-      idempotencyKey: _idempotencyKey,
-      notes: _notesController.text.trim().isEmpty
-          ? null
-          : _notesController.text.trim(),
-    );
+      success = await BookingService.createBooking(
+        propertyId: widget.propertyId,
+        checkIn: _selectedRange!.start,
+        checkOut: _selectedRange!.end,
+        totalPrice: totalPrice,
+        idempotencyKey: _idempotencyKey,
+        notes: _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
+      );
+    } catch (error) {
+      errorMessage = _bookingErrorMessage(error);
+    }
 
     if (mounted) {
       setState(() => _isSubmitting = false);
@@ -629,13 +637,36 @@ class _BookingViewState extends State<BookingView> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to submit booking. Please try again.',
+            content: Text(
+                errorMessage ??
+                    'We could not submit your booking. Please try again.',
                 style: GoogleFonts.poppins()),
             backgroundColor: const Color(0xFFEF4444),
           ),
         );
       }
     }
+  }
+
+  String _bookingErrorMessage(Object error) {
+    final message = error.toString().toLowerCase();
+    if (message.contains('already booked') ||
+        message.contains('not available') ||
+        message.contains('overlap')) {
+      return 'These dates are no longer available. Please choose different dates.';
+    }
+    if (message.contains('already have an active booking') ||
+        message.contains('already registered') ||
+        message.contains('duplicate')) {
+      return 'You already have an active booking request for this property.';
+    }
+    if (message.contains('property not found')) {
+      return 'This property is no longer available.';
+    }
+    if (message.contains('no landlord')) {
+      return 'This property cannot accept bookings right now.';
+    }
+    return 'We could not submit your booking. Please try again.';
   }
 
   Widget _buildDayCell(int day,

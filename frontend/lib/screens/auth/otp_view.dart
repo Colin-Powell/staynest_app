@@ -32,7 +32,7 @@ class _OtpViewState extends State<OtpView>
   bool _isVerifying = false;
   bool _isSendingCode = false;
 
-  int _resendSeconds = 30;
+  int _resendSeconds = 600;
   int _expireSeconds = 600; // 10 minutes
   Timer? _resendTimer;
   Timer? _expireTimer;
@@ -67,8 +67,7 @@ class _OtpViewState extends State<OtpView>
     AnalyticsService.logAuthEvent(AnalyticsEvents.otpScreenViewed,
         method: 'email');
 
-    // START WITH RESEND ACTIVE SO USER CONTROLS THE SEND IF NEEDED
-    _resendSeconds = 0;
+    _resendSeconds = 600;
     _expireSeconds = 600;
     _expireTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -139,7 +138,7 @@ class _OtpViewState extends State<OtpView>
 
   void _startResendTimer() {
     _resendTimer?.cancel();
-    _resendSeconds = 30;
+    _resendSeconds = 600;
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
@@ -173,8 +172,8 @@ class _OtpViewState extends State<OtpView>
     super.dispose();
   }
 
-  Future<void> _requestOtpCode() async {
-    if (_emailAddress.isEmpty) return;
+  Future<bool> _requestOtpCode() async {
+    if (_emailAddress.isEmpty) return false;
 
     setState(() => _isSendingCode = true);
     try {
@@ -189,17 +188,19 @@ class _OtpViewState extends State<OtpView>
           ),
         );
       }
+      return true;
     } catch (error) {
       if (mounted) {
+        final message = _getFriendlyErrorMessage(error);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'We could not send the verification code. Please try again.'),
+          SnackBar(
+            content: Text(message),
             behavior: SnackBarBehavior.floating,
             backgroundColor: Color(0xFFE53935),
           ),
         );
       }
+      return false;
     } finally {
       if (mounted) setState(() => _isSendingCode = false);
     }
@@ -309,7 +310,15 @@ class _OtpViewState extends State<OtpView>
         case 403:
           return 'This code has expired. Request a new code to continue.';
         case 429:
-          return 'Too many attempts. Please wait before trying again.';
+          final retryAfter = error.responseBody is Map
+              ? error.responseBody['retryAfterSeconds']
+              : null;
+          final seconds = int.tryParse(retryAfter?.toString() ?? '');
+          if (seconds != null && seconds > 0) {
+            final minutes = (seconds / 60).ceil();
+            return 'A code is already active. Please wait about $minutes minute${minutes == 1 ? '' : 's'} before requesting another.';
+          }
+          return 'A verification code is already active. Please wait before requesting another.';
         default:
           if (error.statusCode >= 500) {
             return 'We couldn\'t verify your code. Check your connection and try again.';
@@ -327,8 +336,27 @@ class _OtpViewState extends State<OtpView>
     AnalyticsService.logAuthEvent(AnalyticsEvents.otpResendRequested,
         method: 'email');
 
-    _startResendTimer();
-    await _requestOtpCode();
+    final sent = await _requestOtpCode();
+    if (sent && mounted) {
+      setState(() {
+        _expireSeconds = 600;
+        _hasError = false;
+      });
+      _startResendTimer();
+      _expireTimer?.cancel();
+      _expireTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        if (_expireSeconds > 0) {
+          setState(() => _expireSeconds--);
+        } else {
+          timer.cancel();
+          _handleExpiration();
+        }
+      });
+    }
   }
 
   String _formatTime(int seconds) {

@@ -11,6 +11,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:property_app/models/property.dart';
 import 'package:property_app/services/property_service.dart';
+import 'package:property_app/services/cache_engine.dart';
 import 'package:property_app/widgets/property_image.dart';
 
 // ─── Tenant Design System Constants ───────────────────────────────────────────
@@ -44,7 +45,7 @@ class _LocationViewState extends State<LocationView> {
   LatLng? _currentLocation;
   LatLng? _activePropertyLocation;
   String? _currentAddress;
-  
+
   bool _loadingPlaces = false;
   bool _fetchingLocation = true;
   bool _mapReady = false;
@@ -92,34 +93,36 @@ class _LocationViewState extends State<LocationView> {
 
       // Resolve Property Location (Geocode if lat/lng is missing)
       if (_activeProperty != null) {
-        if (_activeProperty!.lat == 0.0 && _activeProperty!.lng == 0.0) {
-          _activePropertyLocation = await _geocodeAddress(_activeProperty!.location);
+        if (_activeProperty!.lat == 0.0 || _activeProperty!.lng == 0.0) {
+          _activePropertyLocation =
+              await _geocodeAddress(_activeProperty!.location);
         } else {
-          _activePropertyLocation = LatLng(_activeProperty!.lat, _activeProperty!.lng);
+          _activePropertyLocation =
+              LatLng(_activeProperty!.lat, _activeProperty!.lng);
         }
       }
 
-      final targetLocation = _activePropertyLocation ?? _currentLocation ?? const LatLng(-1.2921, 36.8219); // Fallback to Nairobi
+      final targetLocation = _activePropertyLocation ?? _currentLocation;
 
       if (mounted) {
-        setState(() => _mapReady = true);
-        
+        setState(() => _mapReady = targetLocation != null);
+
         // Wait for map widget to be built before moving
         Future.delayed(const Duration(milliseconds: 100), () {
           if (_currentLocation != null && _activePropertyLocation != null) {
-            final bounds = LatLngBounds.fromPoints([_currentLocation!, _activePropertyLocation!]);
+            final bounds = LatLngBounds.fromPoints(
+                [_currentLocation!, _activePropertyLocation!]);
             _mapController.fitBounds(
               bounds,
               options: const FitBoundsOptions(padding: EdgeInsets.all(80)),
             );
-          } else {
+          } else if (targetLocation != null) {
             _mapController.move(targetLocation, 14.5);
           }
         });
       }
 
-      await fetchNearbyPlaces(targetLocation);
-      
+      if (targetLocation != null) await fetchNearbyPlaces(targetLocation);
     } catch (e) {
       debugPrint('Location init error: $e');
     } finally {
@@ -128,23 +131,37 @@ class _LocationViewState extends State<LocationView> {
   }
 
   Future<LatLng?> _geocodeAddress(String address) async {
+    if (address.trim().isEmpty) return null;
     if (!_hasGoogleApiKeyConfigured) {
-      // OpenStreetMap Fallback
-      final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(address)}&format=json&limit=1');
       try {
-        final res = await http.get(url, headers: {'User-Agent': 'PropertyApp/1.0'});
-        if (res.statusCode == 200) {
-          final data = json.decode(res.body);
-          if (data.isNotEmpty) {
-            return LatLng(double.parse(data[0]['lat']), double.parse(data[0]['lon']));
-          }
-        }
+        final cacheKey =
+            'property_geocode_${Uri.encodeComponent(address.trim().toLowerCase())}';
+        final cached =
+            await CacheEngine.instance.getOrFetch<Map<String, dynamic>>(
+          key: cacheKey,
+          ttl: const Duration(days: 30),
+          networkFetcher: () async {
+            final url = Uri.parse(
+                'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(address)}&format=json&limit=1');
+            final res =
+                await http.get(url, headers: {'User-Agent': 'PropertyApp/1.0'});
+            if (res.statusCode != 200) throw StateError('Geocoding failed');
+            final data = json.decode(res.body);
+            if (data is! List || data.isEmpty)
+              throw StateError('Location not found');
+            return {'lat': data[0]['lat'], 'lng': data[0]['lon']};
+          },
+        );
+        final lat = double.tryParse(cached['lat']?.toString() ?? '');
+        final lng = double.tryParse(cached['lng']?.toString() ?? '');
+        if (lat != null && lng != null) return LatLng(lat, lng);
       } catch (_) {}
       return null;
     }
 
     // Google Maps Geocoding
-    final url = Uri.parse('https://maps.googleapis.com/maps/api/geocode/json?address=${Uri.encodeComponent(address)}&key=$googleApiKey');
+    final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/geocode/json?address=${Uri.encodeComponent(address)}&key=$googleApiKey');
     try {
       final res = await http.get(url);
       if (res.statusCode == 200) {
@@ -187,7 +204,9 @@ class _LocationViewState extends State<LocationView> {
     }
 
     try {
-      final Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high).timeout(const Duration(seconds: 10));
+      final Position position = await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.high)
+          .timeout(const Duration(seconds: 10));
 
       if (mounted) {
         setState(() {
@@ -205,10 +224,13 @@ class _LocationViewState extends State<LocationView> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message, style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
+          content: Text(message,
+              style: GoogleFonts.poppins(
+                  color: Colors.white, fontWeight: FontWeight.w600)),
           backgroundColor: _dark,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     }
@@ -220,8 +242,11 @@ class _LocationViewState extends State<LocationView> {
 
     if (!_hasGoogleApiKeyConfigured) {
       try {
-        final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}');
-        final response = await http.get(url, headers: {'User-Agent': 'PropertyApp/1.0'}).timeout(const Duration(seconds: 10));
+        final url = Uri.parse(
+            'https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}');
+        final response = await http.get(url, headers: {
+          'User-Agent': 'PropertyApp/1.0'
+        }).timeout(const Duration(seconds: 10));
 
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
@@ -234,11 +259,14 @@ class _LocationViewState extends State<LocationView> {
         }
       } catch (_) {}
 
-      if (mounted) setState(() => _currentAddress = '${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}');
+      if (mounted)
+        setState(() => _currentAddress =
+            '${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}');
       return;
     }
 
-    final url = Uri.parse('https://maps.googleapis.com/maps/api/geocode/json?latlng=${location.latitude},${location.longitude}&key=$googleApiKey');
+    final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/geocode/json?latlng=${location.latitude},${location.longitude}&key=$googleApiKey');
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 10));
@@ -246,7 +274,10 @@ class _LocationViewState extends State<LocationView> {
         final data = json.decode(response.body);
         final results = data['results'] as List<dynamic>?;
         if (results != null && results.isNotEmpty) {
-          if (mounted) setState(() => _currentAddress = results.first['formatted_address'] as String? ?? 'Unknown address');
+          if (mounted)
+            setState(() => _currentAddress =
+                results.first['formatted_address'] as String? ??
+                    'Unknown address');
           return;
         }
       }
@@ -280,7 +311,8 @@ class _LocationViewState extends State<LocationView> {
       return;
     }
 
-    final url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location.latitude},${location.longitude}&radius=2000&key=$googleApiKey';
+    final url =
+        'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location.latitude},${location.longitude}&radius=2000&key=$googleApiKey';
 
     try {
       final response = await http.get(Uri.parse(url));
@@ -288,7 +320,9 @@ class _LocationViewState extends State<LocationView> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
-        if (mounted && data['results'] != null && (data['results'] as List).isNotEmpty) {
+        if (mounted &&
+            data['results'] != null &&
+            (data['results'] as List).isNotEmpty) {
           setState(() => nearbyPlaces = data['results']);
         } else if (mounted) {
           setState(() => nearbyPlaces = _localNearbyPlaces(location));
@@ -305,12 +339,20 @@ class _LocationViewState extends State<LocationView> {
 
   List<Map<String, dynamic>> _localNearbyPlaces(LatLng origin) {
     final results = _allProperties
-        .where((prop) => prop.lat != 0 || prop.lng != 0 || prop.id == _activeProperty?.id)
+        .where((prop) =>
+            prop.lat != 0 || prop.lng != 0 || prop.id == _activeProperty?.id)
         .map((prop) {
-      final pLat = (prop.id == _activeProperty?.id && _activePropertyLocation != null) ? _activePropertyLocation!.latitude : prop.lat;
-      final pLng = (prop.id == _activeProperty?.id && _activePropertyLocation != null) ? _activePropertyLocation!.longitude : prop.lng;
+      final pLat =
+          (prop.id == _activeProperty?.id && _activePropertyLocation != null)
+              ? _activePropertyLocation!.latitude
+              : prop.lat;
+      final pLng =
+          (prop.id == _activeProperty?.id && _activePropertyLocation != null)
+              ? _activePropertyLocation!.longitude
+              : prop.lng;
 
-      final dist = Geolocator.distanceBetween(origin.latitude, origin.longitude, pLat, pLng);
+      final dist = Geolocator.distanceBetween(
+          origin.latitude, origin.longitude, pLat, pLng);
       return {
         'name': prop.name,
         'property_id': prop.id,
@@ -324,8 +366,10 @@ class _LocationViewState extends State<LocationView> {
     }).toList();
 
     results.sort((a, b) {
-      final aDist = double.tryParse(a['dist'].toString().replaceAll(' km', '')) ?? 0;
-      final bDist = double.tryParse(b['dist'].toString().replaceAll(' km', '')) ?? 0;
+      final aDist =
+          double.tryParse(a['dist'].toString().replaceAll(' km', '')) ?? 0;
+      final bDist =
+          double.tryParse(b['dist'].toString().replaceAll(' km', '')) ?? 0;
       return aDist.compareTo(bDist);
     });
 
@@ -337,9 +381,11 @@ class _LocationViewState extends State<LocationView> {
   // ─────────────────────────────────────────────
 
   Future<void> _openDirections(double destLat, double destLng) async {
-    final url = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$destLat,$destLng&travelmode=driving');
+    final url = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&destination=$destLat,$destLng&travelmode=driving');
     try {
-      final launched = await launchUrl(url, mode: LaunchMode.externalNonBrowserApplication);
+      final launched =
+          await launchUrl(url, mode: LaunchMode.externalNonBrowserApplication);
       if (!launched) await launchUrl(url, mode: LaunchMode.externalApplication);
     } catch (e) {
       _showErrorSnackBar('Could not launch maps application.');
@@ -354,8 +400,10 @@ class _LocationViewState extends State<LocationView> {
     final types = place['types'];
     if (types is List && types.contains('property')) return _primary;
     final name = (place['name'] ?? '').toString().toLowerCase();
-    if (name.contains('school') || name.contains('university')) return const Color(0xFFF59E0B);
-    if (name.contains('hospital') || name.contains('clinic')) return const Color(0xFFEF4444);
+    if (name.contains('school') || name.contains('university'))
+      return const Color(0xFFF59E0B);
+    if (name.contains('hospital') || name.contains('clinic'))
+      return const Color(0xFFEF4444);
     if (name.contains('police') || name.contains('security')) return _primary;
     return const Color(0xFF6B7280);
   }
@@ -365,7 +413,8 @@ class _LocationViewState extends State<LocationView> {
     if (place['geometry'] != null && _currentLocation != null) {
       final pLat = place['geometry']['location']['lat'];
       final pLng = place['geometry']['location']['lng'];
-      double dist = Geolocator.distanceBetween(_currentLocation!.latitude, _currentLocation!.longitude, pLat, pLng);
+      double dist = Geolocator.distanceBetween(
+          _currentLocation!.latitude, _currentLocation!.longitude, pLat, pLng);
       return '${(dist / 1000).toStringAsFixed(1)} km';
     }
     return 'N/A';
@@ -387,23 +436,31 @@ class _LocationViewState extends State<LocationView> {
             FlutterMap(
               mapController: _mapController,
               options: MapOptions(
-                initialCenter: _activePropertyLocation ?? _currentLocation ?? const LatLng(-1.2921, 36.8219),
+                initialCenter: _activePropertyLocation ??
+                    _currentLocation ??
+                    const LatLng(0, 0),
                 initialZoom: 14.5,
-                interactionOptions: const InteractionOptions(flags: InteractiveFlag.drag | InteractiveFlag.pinchZoom),
+                interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.drag | InteractiveFlag.pinchZoom),
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-                  subdomains: const ['a', 'b', 'c', 'd'],
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.rashoti.staynest',
                 ),
                 MarkerLayer(
                   markers: [
                     ..._allProperties
-                        .where((prop) => (prop.lat != 0 && prop.lng != 0) || (prop.id == _activeProperty?.id && _activePropertyLocation != null))
+                        .where((prop) =>
+                            (prop.lat != 0 && prop.lng != 0) ||
+                            (prop.id == _activeProperty?.id &&
+                                _activePropertyLocation != null))
                         .map((prop) {
                       final isActive = _activeProperty?.id == prop.id;
-                      final point = (isActive && _activePropertyLocation != null) ? _activePropertyLocation! : LatLng(prop.lat, prop.lng);
+                      final point =
+                          (isActive && _activePropertyLocation != null)
+                              ? _activePropertyLocation!
+                              : LatLng(prop.lat, prop.lng);
 
                       return Marker(
                         point: point,
@@ -414,10 +471,12 @@ class _LocationViewState extends State<LocationView> {
                           onTap: () {
                             setState(() => _activeProperty = prop);
                             _activePropertyLocation = point;
-                            _mapController.move(point, _mapController.camera.zoom);
+                            _mapController.move(
+                                point, _mapController.camera.zoom);
                             _showPropertyDrawer(context, prop);
                           },
-                          child: _PropertyMarker(property: prop, isActive: isActive),
+                          child: _PropertyMarker(
+                              property: prop, isActive: isActive),
                         ),
                       );
                     }),
@@ -432,8 +491,22 @@ class _LocationViewState extends State<LocationView> {
                 ),
               ],
             )
+          else if (_fetchingLocation)
+            const Center(child: CircularProgressIndicator(color: _primary))
           else
-            const Center(child: CircularProgressIndicator(color: _primary)),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Text(
+                  'A precise location is not available for this property yet.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    color: _dark,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
 
           // 2. CLEAN FLOATING HEADER
           Positioned(
@@ -446,7 +519,10 @@ class _LocationViewState extends State<LocationView> {
                 color: _surface,
                 borderRadius: BorderRadius.circular(32), // Pill shape
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 4))
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 20,
+                      offset: const Offset(0, 4))
                 ],
               ),
               child: Row(
@@ -456,8 +532,10 @@ class _LocationViewState extends State<LocationView> {
                     behavior: HitTestBehavior.opaque,
                     child: Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(color: _bg, shape: BoxShape.circle),
-                      child: const Icon(PhosphorIconsRegular.caretLeft, size: 20, color: _dark),
+                      decoration: const BoxDecoration(
+                          color: _bg, shape: BoxShape.circle),
+                      child: const Icon(PhosphorIconsRegular.caretLeft,
+                          size: 20, color: _dark),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -486,7 +564,10 @@ class _LocationViewState extends State<LocationView> {
                 color: _surface,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 30, offset: const Offset(0, 10))
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 30,
+                      offset: const Offset(0, 10))
                 ],
               ),
               padding: const EdgeInsets.all(24),
@@ -530,7 +611,8 @@ class _LocationViewState extends State<LocationView> {
                       ),
                       GestureDetector(
                         onTap: () => fetchNearbyPlaces(),
-                        child: const Icon(PhosphorIconsRegular.arrowsClockwise, color: _primary, size: 20),
+                        child: const Icon(PhosphorIconsRegular.arrowsClockwise,
+                            color: _primary, size: 20),
                       ),
                     ],
                   ),
@@ -542,13 +624,16 @@ class _LocationViewState extends State<LocationView> {
                     child: _fetchingLocation || _loadingPlaces
                         ? const Padding(
                             padding: EdgeInsets.all(20),
-                            child: Center(child: CircularProgressIndicator(color: _primary)),
+                            child: Center(
+                                child:
+                                    CircularProgressIndicator(color: _primary)),
                           )
                         : nearbyPlaces.isEmpty
                             ? Padding(
                                 padding: const EdgeInsets.all(20),
                                 child: Center(
-                                  child: Text('No nearby places found.', style: GoogleFonts.poppins(color: _grey)),
+                                  child: Text('No nearby places found.',
+                                      style: GoogleFonts.poppins(color: _grey)),
                                 ),
                               )
                             : SizedBox(
@@ -559,37 +644,50 @@ class _LocationViewState extends State<LocationView> {
                                   itemCount: nearbyPlaces.length,
                                   itemBuilder: (context, index) {
                                     final place = nearbyPlaces[index];
-                                    final Color iconColor = getPlaceColor(place);
-                                    
+                                    final Color iconColor =
+                                        getPlaceColor(place);
+
                                     return GestureDetector(
                                       onTap: () {
                                         final propertyId = place['property_id'];
-                                        final pLat = place['geometry']['location']['lat'];
-                                        final pLng = place['geometry']['location']['lng'];
+                                        final pLat = place['geometry']
+                                            ['location']['lat'];
+                                        final pLng = place['geometry']
+                                            ['location']['lng'];
 
-                                        _mapController.move(LatLng(pLat, pLng), 15.5);
+                                        _mapController.move(
+                                            LatLng(pLat, pLng), 15.5);
 
                                         if (propertyId != null) {
                                           try {
-                                            final prop = _allProperties.firstWhere((p) => p.id == propertyId.toString());
-                                            setState(() => _activeProperty = prop);
+                                            final prop =
+                                                _allProperties.firstWhere((p) =>
+                                                    p.id ==
+                                                    propertyId.toString());
+                                            setState(
+                                                () => _activeProperty = prop);
                                             _showPropertyDrawer(context, prop);
                                           } catch (_) {}
                                         }
                                       },
                                       behavior: HitTestBehavior.opaque,
                                       child: Padding(
-                                        padding: const EdgeInsets.only(bottom: 16),
+                                        padding:
+                                            const EdgeInsets.only(bottom: 16),
                                         child: Row(
                                           children: [
                                             Container(
                                               width: 36,
                                               height: 36,
                                               decoration: BoxDecoration(
-                                                color: iconColor.withOpacity(0.1),
+                                                color:
+                                                    iconColor.withOpacity(0.1),
                                                 shape: BoxShape.circle,
                                               ),
-                                              child: Icon(PhosphorIconsFill.mapPin, color: iconColor, size: 16),
+                                              child: Icon(
+                                                  PhosphorIconsFill.mapPin,
+                                                  color: iconColor,
+                                                  size: 16),
                                             ),
                                             const SizedBox(width: 12),
                                             Expanded(
@@ -632,22 +730,31 @@ class _LocationViewState extends State<LocationView> {
                           () {
                             final targetLoc = _activePropertyLocation ??
                                 (nearbyPlaces.isNotEmpty
-                                    ? LatLng(nearbyPlaces.first['geometry']['location']['lat'], nearbyPlaces.first['geometry']['location']['lng'])
+                                    ? LatLng(
+                                        nearbyPlaces.first['geometry']
+                                            ['location']['lat'],
+                                        nearbyPlaces.first['geometry']
+                                            ['location']['lng'])
                                     : null);
                             if (targetLoc != null) {
-                              _openDirections(targetLoc.latitude, targetLoc.longitude);
+                              _openDirections(
+                                  targetLoc.latitude, targetLoc.longitude);
                             } else {
                               _showErrorSnackBar('No destination available.');
                             }
                           },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _primary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(32)),
                         elevation: 0,
                       ),
                       child: Text(
                         'Get Directions',
-                        style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+                        style: GoogleFonts.poppins(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white),
                       ),
                     ),
                   ),
@@ -669,7 +776,16 @@ class _LocationViewState extends State<LocationView> {
         property: prop,
         onGetDirections: () {
           Navigator.pop(context);
-          _openDirections(prop.lat, prop.lng);
+          final destination = prop.id == _activeProperty?.id
+              ? _activePropertyLocation
+              : (prop.lat != 0 && prop.lng != 0
+                  ? LatLng(prop.lat, prop.lng)
+                  : null);
+          if (destination == null) {
+            _showErrorSnackBar('A precise property location is unavailable.');
+            return;
+          }
+          _openDirections(destination.latitude, destination.longitude);
         },
       ),
     );
@@ -684,7 +800,8 @@ class _PropertyDrawer extends StatefulWidget {
   final Property property;
   final VoidCallback onGetDirections;
 
-  const _PropertyDrawer({required this.property, required this.onGetDirections});
+  const _PropertyDrawer(
+      {required this.property, required this.onGetDirections});
 
   @override
   State<_PropertyDrawer> createState() => _PropertyDrawerState();
@@ -715,22 +832,33 @@ class _PropertyDrawerState extends State<_PropertyDrawer> {
               child: Stack(
                 children: [
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(32)),
                     child: PageView.builder(
                       itemCount: images.length,
-                      onPageChanged: (idx) => setState(() => _currentImageIndex = idx),
+                      onPageChanged: (idx) =>
+                          setState(() => _currentImageIndex = idx),
                       itemBuilder: (context, index) {
-                        return buildPropertyImage(images[index], width: double.infinity, height: 260, fit: BoxFit.cover);
+                        return buildPropertyImage(images[index],
+                            width: double.infinity,
+                            height: 260,
+                            fit: BoxFit.cover);
                       },
                     ),
                   ),
                   // Dark gradient at bottom of image for pagination dots visibility
                   Positioned(
-                    bottom: 0, left: 0, right: 0, height: 80,
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 80,
                     child: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [Colors.transparent, Colors.black.withOpacity(0.6)],
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.6)
+                          ],
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                         ),
@@ -739,18 +867,25 @@ class _PropertyDrawerState extends State<_PropertyDrawer> {
                   ),
                   // Bottom sheet handle
                   Positioned(
-                    top: 12, left: 0, right: 0,
+                    top: 12,
+                    left: 0,
+                    right: 0,
                     child: Center(
                       child: Container(
-                        width: 48, height: 5,
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), borderRadius: BorderRadius.circular(10)),
+                        width: 48,
+                        height: 5,
+                        decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
                   ),
                   // Pagination dots
                   if (images.length > 1)
                     Positioned(
-                      bottom: 16, left: 0, right: 0,
+                      bottom: 16,
+                      left: 0,
+                      right: 0,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: List.generate(
@@ -761,7 +896,9 @@ class _PropertyDrawerState extends State<_PropertyDrawer> {
                             width: _currentImageIndex == index ? 16 : 6,
                             height: 6,
                             decoration: BoxDecoration(
-                              color: _currentImageIndex == index ? Colors.white : Colors.white.withOpacity(0.5),
+                              color: _currentImageIndex == index
+                                  ? Colors.white
+                                  : Colors.white.withOpacity(0.5),
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
@@ -785,15 +922,24 @@ class _PropertyDrawerState extends State<_PropertyDrawer> {
                       Expanded(
                         child: Text(
                           prop.name,
-                          style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5),
+                          style: GoogleFonts.poppins(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: _dark,
+                              letterSpacing: -0.5),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Row(
                         children: [
-                          const Icon(PhosphorIconsFill.star, color: Color(0xFFF59E0B), size: 16),
+                          const Icon(PhosphorIconsFill.star,
+                              color: Color(0xFFF59E0B), size: 16),
                           const SizedBox(width: 4),
-                          Text('${prop.rating}', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700, color: _dark)),
+                          Text('${prop.rating}',
+                              style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: _dark)),
                         ],
                       )
                     ],
@@ -801,7 +947,10 @@ class _PropertyDrawerState extends State<_PropertyDrawer> {
                   const SizedBox(height: 4),
                   Text(
                     prop.location,
-                    style: GoogleFonts.poppins(fontSize: 14, color: _grey, fontWeight: FontWeight.w400),
+                    style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: _grey,
+                        fontWeight: FontWeight.w400),
                   ),
                   const SizedBox(height: 24),
 
@@ -814,26 +963,40 @@ class _PropertyDrawerState extends State<_PropertyDrawer> {
                         children: [
                           Text(
                             'Ksh. ${prop.price}',
-                            style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w800, color: _dark),
+                            style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: _dark),
                           ),
-                          Text('/month', style: GoogleFonts.poppins(fontSize: 12, color: _grey, fontWeight: FontWeight.w500)),
+                          Text('/month',
+                              style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: _grey,
+                                  fontWeight: FontWeight.w500)),
                         ],
                       ),
                       const SizedBox(width: 24),
-                      ElevatedButton(
-                        onPressed: widget.onGetDirections,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-                          elevation: 0,
+                      Flexible(
+                        child: ElevatedButton(
+                          onPressed: widget.onGetDirections,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 14, horizontal: 24),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(32)),
+                            elevation: 0,
+                          ),
+                          child: Text('Directions',
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.poppins(
+                                  fontSize: 14, fontWeight: FontWeight.w600)),
                         ),
-                        child: Text('Directions', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24), 
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -871,9 +1034,13 @@ class _PropertyMarker extends StatelessWidget {
           decoration: BoxDecoration(
             color: isActive ? _dark : _surface,
             borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: isActive ? _dark : _grey.withOpacity(0.2), width: 1.5),
+            border: Border.all(
+                color: isActive ? _dark : _grey.withOpacity(0.2), width: 1.5),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4)),
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4)),
             ],
           ),
           child: Text(
@@ -963,7 +1130,10 @@ class _MapPinState extends State<_MapPin> with SingleTickerProviderStateMixin {
             shape: BoxShape.circle,
             border: Border.all(color: Colors.white, width: 2.5),
             boxShadow: [
-              BoxShadow(color: _primary.withOpacity(0.4), blurRadius: 4, spreadRadius: 1),
+              BoxShadow(
+                  color: _primary.withOpacity(0.4),
+                  blurRadius: 4,
+                  spreadRadius: 1),
             ],
           ),
         ),

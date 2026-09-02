@@ -15,6 +15,7 @@ const transporter = smtpConfigured
     })
   : null;
 
+const OTP_TTL_MS = 10 * 60 * 1000;
 const otpStore = new Map<string, { code: string; expiresAt: number }>();
 
 function ensureTransporter() {
@@ -26,9 +27,18 @@ function ensureTransporter() {
 }
 
 export function createOtp(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const existing = otpStore.get(normalizedEmail);
+  if (existing && Date.now() < existing.expiresAt) {
+    const error = new Error('A verification code is already active. Please wait until it expires before requesting another code.') as Error & { statusCode?: number; retryAfterSeconds?: number };
+    error.statusCode = 429;
+    error.retryAfterSeconds = Math.ceil((existing.expiresAt - Date.now()) / 1000);
+    throw error;
+  }
+
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = Date.now() + 10 * 60 * 1000;
-  otpStore.set(email.trim().toLowerCase(), { code, expiresAt });
+  const expiresAt = Date.now() + OTP_TTL_MS;
+  otpStore.set(normalizedEmail, { code, expiresAt });
   return { code, expiresAt };
 }
 
