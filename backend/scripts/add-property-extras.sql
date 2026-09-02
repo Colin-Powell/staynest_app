@@ -1,6 +1,7 @@
 -- Extended property fields for images, amenities, and full address
 
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS images jsonb DEFAULT '[]'::jsonb;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS video_url text;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS amenities jsonb DEFAULT '[]'::jsonb;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS address text;
 

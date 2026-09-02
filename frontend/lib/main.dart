@@ -201,10 +201,14 @@ class _PropertyAppState extends State<PropertyApp> {
                   return;
                 }
 
-                // Landlords must complete KYC before the portal becomes available.
+                // Verified landlords go directly to the portal.
+                // Only unverified landlords must complete KYC first.
                 if (AppSession.isLandlord) {
-                  Navigator.pushReplacementNamed(
-                      context, '/verification_center');
+                  if (AppSession.currentUserVerified) {
+                    Navigator.pushReplacementNamed(context, '/portal');
+                  } else {
+                    Navigator.pushReplacementNamed(context, '/verification_center');
+                  }
                   return;
                 }
 
@@ -231,8 +235,11 @@ class _PropertyAppState extends State<PropertyApp> {
                     return;
                   }
                   if (AppSession.isLandlord) {
-                    Navigator.pushReplacementNamed(
-                        context, '/verification_center');
+                    if (AppSession.currentUserVerified) {
+                      Navigator.pushReplacementNamed(context, '/portal');
+                    } else {
+                      Navigator.pushReplacementNamed(context, '/verification_center');
+                    }
                     return;
                   }
                   await _enforceTenantPreferencesIfMissing(context);
@@ -264,8 +271,11 @@ class _PropertyAppState extends State<PropertyApp> {
                     return;
                   }
                   if (AppSession.isLandlord) {
-                    Navigator.pushReplacementNamed(
-                        context, '/verification_center');
+                    if (AppSession.currentUserVerified) {
+                      Navigator.pushReplacementNamed(context, '/portal');
+                    } else {
+                      Navigator.pushReplacementNamed(context, '/verification_center');
+                    }
                     return;
                   }
                   await _enforceTenantPreferencesIfMissing(context);

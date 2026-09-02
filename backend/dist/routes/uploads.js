@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware/auth.js';
 import { uploadToCloudinary, isCloudinaryConfigured, buildFileUrl, storageDestination, ensureStorageDirectory } from '../services/storage.js';
@@ -119,5 +119,7 @@ router.get('/job/:id', requireAuth, async (req, res, next) => {
         next(error);
     }
 });
+// Serve uploaded files statically (Requires Auth)
+router.use('/', requireAuth, express.static(storageDestination()));
 export default router;
 //# sourceMappingURL=uploads.js.map

@@ -62,20 +62,44 @@ class _SplashViewState extends State<SplashView> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (AppSession.apiToken != null && AppSession.apiToken!.isNotEmpty) {
-        if (!AppSession.isEmailVerified) {
-          Navigator.pushReplacementNamed(context, '/otp');
-        } else if (AppSession.isLandlord) {
-          final target = AppSession.currentUserVerified
-              ? '/landlord_dashboard'
-              : '/verification_center';
-          Navigator.pushReplacementNamed(context, target);
-        } else {
-          Navigator.pushReplacementNamed(context, '/home');
-        }
-      }
+      _navigateBasedOnSession();
     });
   }
+
+  void _navigateBasedOnSession() {
+    if (!mounted) return;
+
+    // No stored token — show the splash landing page (do nothing, buttons are shown)
+    if (AppSession.apiToken == null || AppSession.apiToken!.isEmpty) {
+      return;
+    }
+
+    // Token exists but OTP/email not verified yet — go to OTP
+    if (!AppSession.isEmailVerified) {
+      Navigator.pushReplacementNamed(context, '/otp');
+      return;
+    }
+
+    // Admin users go to admin dashboard
+    if (AppSession.isAdmin) {
+      Navigator.pushReplacementNamed(context, '/super_admin');
+      return;
+    }
+
+    // Landlords: verified → portal, unverified → verification center
+    if (AppSession.isLandlord) {
+      if (AppSession.currentUserVerified) {
+        Navigator.pushReplacementNamed(context, '/portal');
+      } else {
+        Navigator.pushReplacementNamed(context, '/verification_center');
+      }
+      return;
+    }
+
+    // Tenants go home
+    Navigator.pushReplacementNamed(context, '/home');
+  }
+
 
   // ─── Navigation helpers ─────────────────────
   void _onGetStarted(BuildContext context) =>

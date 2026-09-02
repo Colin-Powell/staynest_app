@@ -87,6 +87,7 @@ Property mapApiProperty(Map<String, dynamic> json) {
     category: json['category']?.toString() ?? 'Apartment',
     image: image,
     images: images.isNotEmpty ? images : (image.isNotEmpty ? [image] : null),
+    videoUrl: json['video_url']?.toString(),
     features: PropertyFeatures(
       beds: beds,
       rooms: rooms,
@@ -95,10 +96,15 @@ Property mapApiProperty(Map<String, dynamic> json) {
       area: _toInt(json['area']),
     ),
     amenities: amenities.where((a) => !a.startsWith('custom:')).toList(),
-    customFeatures: amenities.where((a) => a.startsWith('custom:')).map((a) => a.substring(7)).toList(),
+    customFeatures: amenities
+        .where((a) => a.startsWith('custom:'))
+        .map((a) => a.substring(7))
+        .toList(),
     description: json['description']?.toString() ?? '',
     agent: agent,
-    viewedAt: json['viewed_at'] != null ? DateTime.tryParse(json['viewed_at'].toString()) : null,
+    viewedAt: json['viewed_at'] != null
+        ? DateTime.tryParse(json['viewed_at'].toString())
+        : null,
   );
 }
 

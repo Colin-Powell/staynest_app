@@ -85,6 +85,7 @@ const PROPERTY_SELECT = `p.id,
               p.image_url,
 
               p.images,
+              p.video_url,
               p.amenities,
               p.lat,
               p.lng,
@@ -765,6 +766,7 @@ function createPropertyInsertArgs(body: Record<string, unknown>) {
     area,
     image_url,
     images,
+    video_url,
     amenities,
     lat,
     lng,
@@ -785,6 +787,7 @@ function createPropertyInsertArgs(body: Record<string, unknown>) {
     Number(area),
     image_url,
     JSON.stringify(imageList),
+    typeof video_url === 'string' && video_url.trim() ? video_url.trim() : null,
     JSON.stringify(amenityList),
     lat != null ? Number(lat) : null,
     lng != null ? Number(lng) : null,
@@ -855,9 +858,9 @@ async function handleCreateProperty(req: Request, res: Response, next: NextFunct
     );
 
     const result = await query(
-      `INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, landlord_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, $15, $16)
-       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, status`,
+      `INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, landlord_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13::jsonb, $14, $15, $16, $17)
+       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, status`,
       insertArgs,
     );
 
@@ -897,7 +900,7 @@ router.post('/from-listing', requireAuth, authorize('landlord', 'host'), async (
 
 router.put('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const fields = ['title', 'description', 'category', 'city', 'address', 'price', 'bedrooms', 'bathrooms', 'area', 'image_url', 'images', 'amenities', 'lat', 'lng'];
+    const fields = ['title', 'description', 'category', 'city', 'address', 'price', 'bedrooms', 'bathrooms', 'area', 'image_url', 'images', 'video_url', 'amenities', 'lat', 'lng'];
     const updates: string[] = [];
     const values: unknown[] = [];
     for (const field of fields) {

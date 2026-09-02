@@ -15,6 +15,8 @@ import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:intl/intl.dart';
 import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/utils/property_image_url.dart';
+import 'package:video_player/video_player.dart';
 import 'booking_view.dart';
 import '../reviews_view.dart' hide WriteReviewView;
 
@@ -65,7 +67,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   final PageController _reviewPageController =
       PageController(viewportFraction: 1.0);
   Timer? _carouselTimer;
-
+  VideoPlayerController? _videoController;
 
   DateTime? _viewStartTime;
 
@@ -73,9 +75,34 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   void initState() {
     super.initState();
     _viewStartTime = DateTime.now();
-    AnalyticsService.logListingInteraction(AnalyticsEvents.listingView, listingId: widget.property.id, propertyType: widget.property.category, location: widget.property.location);
+    AnalyticsService.logListingInteraction(AnalyticsEvents.listingView,
+        listingId: widget.property.id,
+        propertyType: widget.property.category,
+        location: widget.property.location);
 
     _fetchReviews();
+    _initializePropertyVideo();
+  }
+
+  Future<void> _initializePropertyVideo() async {
+    final rawUrl = widget.property.videoUrl;
+    if (rawUrl == null || rawUrl.trim().isEmpty) return;
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(resolvePropertyImageUrl(rawUrl)),
+      httpHeaders: AppSession.apiToken == null
+          ? const {}
+          : {'Authorization': 'Bearer ${AppSession.apiToken}'},
+    );
+    try {
+      await controller.initialize();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      setState(() => _videoController = controller);
+    } catch (_) {
+      await controller.dispose();
+    }
   }
 
   Future<void> _checkReviewEligibility() async {
@@ -141,21 +168,26 @@ class _PropertyDetailsState extends State<PropertyDetails> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AnalyticsService.trackPropertyView(widget.property.id,
           source: 'property_details');
-      AnalyticsService.logListingInteraction(AnalyticsEvents.listingView, listingId: widget.property.id);
+      AnalyticsService.logListingInteraction(AnalyticsEvents.listingView,
+          listingId: widget.property.id);
     });
   }
-
 
   @override
   void dispose() {
     if (_viewStartTime != null) {
       final duration = DateTime.now().difference(_viewStartTime!).inSeconds;
       if (duration > 2) {
-        AnalyticsService.logListingInteraction(AnalyticsEvents.listingEngagement, listingId: widget.property.id, propertyType: widget.property.category, durationSeconds: duration);
+        AnalyticsService.logListingInteraction(
+            AnalyticsEvents.listingEngagement,
+            listingId: widget.property.id,
+            propertyType: widget.property.category,
+            durationSeconds: duration);
       }
     }
 
     _carouselTimer?.cancel();
+    _videoController?.dispose();
     _reviewPageController.dispose();
     super.dispose();
   }
@@ -209,7 +241,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(32)),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.1),
@@ -219,7 +252,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                     ],
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.only(bottom: 120), // Bottom padding for fixed buttons
+                    padding: const EdgeInsets.only(
+                        bottom: 120), // Bottom padding for fixed buttons
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -285,10 +319,13 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(Icons.star_rounded, color: textDark, size: 18),
+                                    const Icon(Icons.star_rounded,
+                                        color: textDark, size: 18),
                                     const SizedBox(width: 4),
                                     Text(
-                                      _reviewCount > 0 ? _avgRating.toStringAsFixed(1) : 'New',
+                                      _reviewCount > 0
+                                          ? _avgRating.toStringAsFixed(1)
+                                          : 'New',
                                       style: GoogleFonts.poppins(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w600,
@@ -299,7 +336,9 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                       const SizedBox(width: 4),
                                       const Text(
                                         '·',
-                                        style: TextStyle(fontWeight: FontWeight.bold, color: textDark),
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: textDark),
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
@@ -330,11 +369,15 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                               spacing: 8,
                               runSpacing: 8,
                               children: [
-                                _buildMinimalTag(Icons.apartment_rounded, widget.property.category),
-                                _buildMinimalTag(Icons.door_front_door_rounded, '${widget.property.features.rooms} Room'),
-                                _buildMinimalTag(Icons.bed_rounded, '${widget.property.features.beds} beds'),
+                                _buildMinimalTag(Icons.apartment_rounded,
+                                    widget.property.category),
+                                _buildMinimalTag(Icons.door_front_door_rounded,
+                                    '${widget.property.features.rooms} Room'),
+                                _buildMinimalTag(Icons.bed_rounded,
+                                    '${widget.property.features.beds} beds'),
                                 if (widget.property.features.furnished)
-                                  _buildMinimalTag(Icons.weekend_rounded, 'Furnished'),
+                                  _buildMinimalTag(
+                                      Icons.weekend_rounded, 'Furnished'),
                               ],
                             ),
                           ),
@@ -355,19 +398,26 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                     width: 56,
                                     height: 56,
                                     color: Colors.grey.shade200,
-                                    child: widget.property.agent.avatar.isNotEmpty
+                                    child: widget
+                                            .property.agent.avatar.isNotEmpty
                                         ? Image.network(
                                             widget.property.agent.avatar,
                                             fit: BoxFit.cover,
-                                            errorBuilder: (context, error, stackTrace) => Icon(PhosphorIcons.user(), color: textLight, size: 28),
+                                            errorBuilder:
+                                                (context, error, stackTrace) =>
+                                                    Icon(PhosphorIcons.user(),
+                                                        color: textLight,
+                                                        size: 28),
                                           )
-                                        : Icon(PhosphorIcons.user(), color: textLight, size: 28),
+                                        : Icon(PhosphorIcons.user(),
+                                            color: textLight, size: 28),
                                   ),
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
@@ -383,15 +433,19 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
-                                          if (widget.property.agent.verified) ...[
+                                          if (widget
+                                              .property.agent.verified) ...[
                                             const SizedBox(width: 4),
-                                            const Icon(Icons.verified, color: Colors.blue, size: 18),
+                                            const Icon(Icons.verified,
+                                                color: Colors.blue, size: 18),
                                           ],
                                         ],
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        widget.property.agent.verified ? 'Verified Landlord' : 'Landlord',
+                                        widget.property.agent.verified
+                                            ? 'Verified Landlord'
+                                            : 'Landlord',
                                         style: GoogleFonts.poppins(
                                           fontSize: 14,
                                           color: textLight,
@@ -453,31 +507,52 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                               ),
                               const SizedBox(height: 24),
                               ...[
-                                ...widget.property.amenities.take(5).map((amenityId) {
-                                  final attr = PropertyTaxonomy.getAttributeById(amenityId);
+                                ...widget.property.amenities
+                                    .take(5)
+                                    .map((amenityId) {
+                                  final attr =
+                                      PropertyTaxonomy.getAttributeById(
+                                          amenityId);
                                   final label = attr?.label ?? amenityId;
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 16),
                                     child: Row(
                                       children: [
-                                        Icon(Icons.check_circle, size: 26, color: textDark.withOpacity(0.8)),
+                                        Icon(Icons.check_circle,
+                                            size: 26,
+                                            color: textDark.withOpacity(0.8)),
                                         const SizedBox(width: 16),
-                                        Text(label,
-                                          style: GoogleFonts.poppins(fontSize: 16, color: textDark, fontWeight: FontWeight.w400),
+                                        Text(
+                                          label,
+                                          style: GoogleFonts.poppins(
+                                              fontSize: 16,
+                                              color: textDark,
+                                              fontWeight: FontWeight.w400),
                                         ),
                                       ],
                                     ),
                                   );
                                 }),
-                                ...widget.property.customFeatures.take(5 - (widget.property.amenities.length > 5 ? 5 : widget.property.amenities.length)).map((cf) {
+                                ...widget.property.customFeatures
+                                    .take(5 -
+                                        (widget.property.amenities.length > 5
+                                            ? 5
+                                            : widget.property.amenities.length))
+                                    .map((cf) {
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 16),
                                     child: Row(
                                       children: [
-                                        Icon(Icons.check_circle, size: 26, color: textDark.withOpacity(0.8)),
+                                        Icon(Icons.check_circle,
+                                            size: 26,
+                                            color: textDark.withOpacity(0.8)),
                                         const SizedBox(width: 16),
-                                        Text(cf,
-                                          style: GoogleFonts.poppins(fontSize: 16, color: textDark, fontWeight: FontWeight.w400),
+                                        Text(
+                                          cf,
+                                          style: GoogleFonts.poppins(
+                                              fontSize: 16,
+                                              color: textDark,
+                                              fontWeight: FontWeight.w400),
                                         ),
                                       ],
                                     ),
@@ -490,9 +565,13 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                 child: OutlinedButton(
                                   onPressed: widget.onViewAmenities,
                                   style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                    side: const BorderSide(color: textDark, width: 1.2),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 16),
+                                    side: const BorderSide(
+                                        color: textDark, width: 1.2),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12)),
                                   ),
                                   child: Text(
                                     'Show all ${widget.property.amenities.length} amenities',
@@ -534,18 +613,24 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                     child: IgnorePointer(
                                       child: FlutterMap(
                                         options: MapOptions(
-                                          initialCenter: LatLng(widget.property.lat, widget.property.lng),
+                                          initialCenter: LatLng(
+                                              widget.property.lat,
+                                              widget.property.lng),
                                           initialZoom: 14.0,
                                         ),
                                         children: [
                                           TileLayer(
-                                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                            userAgentPackageName: 'com.rashoti.staynest',
+                                            urlTemplate:
+                                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                            userAgentPackageName:
+                                                'com.rashoti.staynest',
                                           ),
                                           MarkerLayer(
                                             markers: [
                                               Marker(
-                                                point: LatLng(widget.property.lat, widget.property.lng),
+                                                point: LatLng(
+                                                    widget.property.lat,
+                                                    widget.property.lng),
                                                 width: 60,
                                                 height: 60,
                                                 child: Center(
@@ -555,17 +640,26 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                                     decoration: BoxDecoration(
                                                       color: tenantPrimary,
                                                       shape: BoxShape.circle,
-                                                      border: Border.all(color: Colors.white, width: 3),
+                                                      border: Border.all(
+                                                          color: Colors.white,
+                                                          width: 3),
                                                       boxShadow: [
                                                         BoxShadow(
-                                                          color: Colors.black.withOpacity(0.2),
+                                                          color: Colors.black
+                                                              .withOpacity(0.2),
                                                           blurRadius: 8,
-                                                          offset: const Offset(0, 4),
+                                                          offset: const Offset(
+                                                              0, 4),
                                                         ),
                                                       ],
                                                     ),
                                                     child: Center(
-                                                      child: Icon(PhosphorIcons.house(PhosphorIconsStyle.fill), color: Colors.white, size: 20),
+                                                      child: Icon(
+                                                          PhosphorIcons.house(
+                                                              PhosphorIconsStyle
+                                                                  .fill),
+                                                          color: Colors.white,
+                                                          size: 20),
                                                     ),
                                                   ),
                                                 ),
@@ -620,13 +714,16 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                 child: Row(
                                   children: [
                                     Expanded(
-                                        child: _buildRoomImage(previewPhotos[0], height: 120)),
+                                        child: _buildRoomImage(previewPhotos[0],
+                                            height: 120)),
                                     const SizedBox(width: 8),
                                     Expanded(
-                                        child: _buildRoomImage(previewPhotos[1], height: 120)),
+                                        child: _buildRoomImage(previewPhotos[1],
+                                            height: 120)),
                                     const SizedBox(width: 8),
                                     Expanded(
-                                        child: _buildRoomImage(previewPhotos[2], height: 120)),
+                                        child: _buildRoomImage(previewPhotos[2],
+                                            height: 120)),
                                   ],
                                 ),
                               ),
@@ -635,6 +732,55 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                         ),
 
                         _buildDivider(),
+
+                        if (_videoController != null &&
+                            _videoController!.value.isInitialized) ...[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Property Video',
+                                    style: GoogleFonts.poppins(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        color: textDark)),
+                                const SizedBox(height: 16),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: AspectRatio(
+                                    aspectRatio:
+                                        _videoController!.value.aspectRatio,
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        VideoPlayer(_videoController!),
+                                        IconButton(
+                                          tooltip:
+                                              _videoController!.value.isPlaying
+                                                  ? 'Pause video'
+                                                  : 'Play video',
+                                          iconSize: 56,
+                                          color: Colors.white,
+                                          onPressed: () => setState(() {
+                                            _videoController!.value.isPlaying
+                                                ? _videoController!.pause()
+                                                : _videoController!.play();
+                                          }),
+                                          icon: Icon(
+                                              _videoController!.value.isPlaying
+                                                  ? Icons.pause_circle_filled
+                                                  : Icons.play_circle_fill),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _buildDivider(),
+                        ],
 
                         // --- Reviews Carousel Section ---
                         Padding(
@@ -663,9 +809,11 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                   _NavButton(
                     icon: PhosphorIcons.shareNetwork(),
                     onTap: () {
-                      AnalyticsService.logListingInteraction(AnalyticsEvents.listingShare, listingId: widget.property.id);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Listing link copied to clipboard.')));
+                      AnalyticsService.logListingInteraction(
+                          AnalyticsEvents.listingShare,
+                          listingId: widget.property.id);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content: Text('Listing link copied to clipboard.')));
                     },
                   ),
                 ],
@@ -677,10 +825,12 @@ class _PropertyDetailsState extends State<PropertyDetails> {
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
-              padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
+              padding: EdgeInsets.fromLTRB(
+                  24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
               decoration: const BoxDecoration(
                 color: Colors.white,
-                border: Border(top: BorderSide(color: dividerColor, width: 1.2)),
+                border:
+                    Border(top: BorderSide(color: dividerColor, width: 1.2)),
               ),
               child: Row(
                 children: [
@@ -708,7 +858,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         side: BorderSide(color: Colors.grey.shade400, width: 1),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(
                         'Message',
@@ -735,7 +886,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                         backgroundColor: tenantPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(
                         'Book a Visit',
@@ -777,7 +929,9 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                 const Icon(Icons.star_rounded, color: textDark, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  _reviewCount > 0 ? '${_avgRating.toStringAsFixed(1)} · $_reviewCount reviews' : 'No reviews yet',
+                  _reviewCount > 0
+                      ? '${_avgRating.toStringAsFixed(1)} · $_reviewCount reviews'
+                      : 'No reviews yet',
                   style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
@@ -841,7 +995,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
               side: const BorderSide(color: textDark, width: 1.2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
             child: Text(
               'Show all $_reviewCount reviews',
@@ -925,17 +1080,24 @@ class _PropertyDetailsState extends State<PropertyDetails> {
 
   IconData _getAmenityIcon(String amenity) {
     final lower = amenity.toLowerCase();
-    if (lower.contains('wifi') || lower.contains('internet')) return PhosphorIcons.wifiHigh();
+    if (lower.contains('wifi') || lower.contains('internet'))
+      return PhosphorIcons.wifiHigh();
     if (lower.contains('water')) return PhosphorIcons.drop();
-    if (lower.contains('electric') || lower.contains('power')) return PhosphorIcons.lightning();
+    if (lower.contains('electric') || lower.contains('power'))
+      return PhosphorIcons.lightning();
     if (lower.contains('furnish')) return PhosphorIcons.armchair();
-    if (lower.contains('park') || lower.contains('garage')) return PhosphorIcons.car();
-    if (lower.contains('secur') || lower.contains('guard')) return PhosphorIcons.shieldCheck();
-    if (lower.contains('cctv') || lower.contains('camera')) return PhosphorIcons.videoCamera();
+    if (lower.contains('park') || lower.contains('garage'))
+      return PhosphorIcons.car();
+    if (lower.contains('secur') || lower.contains('guard'))
+      return PhosphorIcons.shieldCheck();
+    if (lower.contains('cctv') || lower.contains('camera'))
+      return PhosphorIcons.videoCamera();
     if (lower.contains('heat')) return PhosphorIcons.thermometer();
-    if (lower.contains('ac') || lower.contains('air')) return PhosphorIcons.wind();
+    if (lower.contains('ac') || lower.contains('air'))
+      return PhosphorIcons.wind();
     if (lower.contains('pool')) return PhosphorIcons.swimmingPool();
-    if (lower.contains('gym') || lower.contains('fitness')) return PhosphorIcons.barbell();
+    if (lower.contains('gym') || lower.contains('fitness'))
+      return PhosphorIcons.barbell();
     return Icons.check_circle;
   }
 

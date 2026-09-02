@@ -22,7 +22,17 @@ const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 
 class LandlordOverviewPage extends StatefulWidget {
   final VoidCallback? onViewAllProperties;
-  const LandlordOverviewPage({super.key, this.onViewAllProperties});
+  final VoidCallback? onAddProperty;
+  final VoidCallback? onViewVerification;
+  final VoidCallback? onLogout;
+
+  const LandlordOverviewPage({
+    super.key,
+    this.onViewAllProperties,
+    this.onAddProperty,
+    this.onViewVerification,
+    this.onLogout,
+  });
 
   @override
   State<LandlordOverviewPage> createState() => _LandlordOverviewPageState();
@@ -51,7 +61,8 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
           context: context,
           imagePath: 'assets/images/home_onboarding.png',
           title: 'Welcome to your Dashboard',
-          subtitle: 'Track your total views, manage properties, and monitor your occupancy rate all in one place.',
+          subtitle:
+              'Track your total views, manage properties, and monitor your occupancy rate all in one place.',
           ctaText: 'Get Started',
         ).then((_) => OnboardingPrefs.markAsSeen('landlordOverviewSeen'));
       }
@@ -69,21 +80,29 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
         PropertiesApi.getLandlordProperties(),
         LandlordDashboardService.getLandlordOverview('This Week'),
       ]);
-      
+
       if (!mounted) return;
-      
+
       setState(() {
         _properties = results[0] as List<Map<String, dynamic>>;
         final analyticsData = results[1] as Map<String, dynamic>?;
 
         if (analyticsData != null) {
           _metrics = {
-            'totalViews': analyticsData['overview']?['totalViews']?.toString() ?? '0',
-            'viewsGrowth': analyticsData['overview']?['growth']?.toString() ?? '0%',
-            'totalBookings': analyticsData['metrics']?['totalBookings']?.toString() ?? '0',
-            'bookingsGrowth': analyticsData['metrics']?['bookingsGrowth']?.toString() ?? '+0%',
-            'occupancyRate': analyticsData['metrics']?['occupancyRate']?.toString() ?? '0%',
-            'occupancyGrowth': analyticsData['metrics']?['occupancyGrowth']?.toString() ?? '+0%',
+            'totalViews':
+                analyticsData['overview']?['totalViews']?.toString() ?? '0',
+            'viewsGrowth':
+                analyticsData['overview']?['growth']?.toString() ?? '0%',
+            'totalBookings':
+                analyticsData['metrics']?['totalBookings']?.toString() ?? '0',
+            'bookingsGrowth':
+                analyticsData['metrics']?['bookingsGrowth']?.toString() ??
+                    '+0%',
+            'occupancyRate':
+                analyticsData['metrics']?['occupancyRate']?.toString() ?? '0%',
+            'occupancyGrowth':
+                analyticsData['metrics']?['occupancyGrowth']?.toString() ??
+                    '+0%',
           };
         }
         _isLoading = false;
@@ -107,22 +126,35 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
       crossAxisSpacing: 16,
       mainAxisSpacing: 16,
       childAspectRatio: 1.25,
-      children: List.generate(4, (index) => Shimmer.fromColors(
-        baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-        child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24))),
-      )),
+      children: List.generate(
+          4,
+          (index) => Shimmer.fromColors(
+                baseColor: Colors.grey.shade200,
+                highlightColor: Colors.grey.shade100,
+                child: Container(
+                    decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24))),
+              )),
     );
   }
 
   Widget _buildShimmerProperties() {
     return Column(
-      children: List.generate(2, (index) => Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: Shimmer.fromColors(
-          baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-          child: Container(height: 88, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20))),
-        ),
-      )),
+      children: List.generate(
+          2,
+          (index) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Shimmer.fromColors(
+                  baseColor: Colors.grey.shade200,
+                  highlightColor: Colors.grey.shade100,
+                  child: Container(
+                      height: 88,
+                      decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20))),
+                ),
+              )),
     );
   }
 
@@ -137,8 +169,10 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
           backgroundColor: _surface,
           onRefresh: _loadData,
           child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-            padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 130),
+            physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics()),
+            padding: EdgeInsets.fromLTRB(
+                24, 16, 24, MediaQuery.of(context).padding.bottom + 130),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -174,18 +208,28 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                     ),
                     const SizedBox(width: 16),
                     GestureDetector(
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LandlordNotificationsPage())),
+                      onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  const LandlordNotificationsPage())),
                       child: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: _surface,
                           shape: BoxShape.circle,
                           border: Border.all(color: _grey.withOpacity(0.1)),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+                          boxShadow: [
+                            BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4))
+                          ],
                         ),
                         child: Stack(
                           children: [
-                            const Icon(PhosphorIconsRegular.bell, color: _dark, size: 24),
+                            const Icon(PhosphorIconsRegular.bell,
+                                color: _dark, size: 24),
                             Positioned(
                               top: 2,
                               right: 2,
@@ -193,7 +237,8 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                                 width: 8,
                                 height: 8,
                                 decoration: const BoxDecoration(
-                                  color: Color(0xFFEF4444), // Red notification dot
+                                  color:
+                                      Color(0xFFEF4444), // Red notification dot
                                   shape: BoxShape.circle,
                                 ),
                               ),
@@ -211,17 +256,31 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFFFCA5A5).withOpacity(0.5))),
+                    decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                            color: const Color(0xFFFCA5A5).withOpacity(0.5))),
                     child: Column(
                       children: [
-                        const Icon(PhosphorIconsRegular.warningCircle, color: Color(0xFFEF4444), size: 48),
+                        const Icon(PhosphorIconsRegular.warningCircle,
+                            color: Color(0xFFEF4444), size: 48),
                         const SizedBox(height: 12),
-                        Text(_errorMessage!, textAlign: TextAlign.center, style: GoogleFonts.poppins(color: const Color(0xFF991B1B), fontWeight: FontWeight.w500)),
+                        Text(_errorMessage!,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.poppins(
+                                color: const Color(0xFF991B1B),
+                                fontWeight: FontWeight.w500)),
                         const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: _loadData,
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), elevation: 0),
-                          child: Text('Retry', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFEF4444),
+                              elevation: 0),
+                          child: Text('Retry',
+                              style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600)),
                         ),
                       ],
                     ),
@@ -253,10 +312,23 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                         mainAxisSpacing: 16,
                         childAspectRatio: 1.25,
                         children: [
-                          _buildStatCard('Properties', _properties.length.toString(), '+0', true),
-                          _buildStatCard('Bookings', _metrics['totalBookings']!, _metrics['bookingsGrowth']!, !_metrics['bookingsGrowth']!.startsWith('-')),
-                          _buildStatCard('Views', _metrics['totalViews']!, _metrics['viewsGrowth']!, !_metrics['viewsGrowth']!.startsWith('-')),
-                          _buildStatCard('Occupancy', _metrics['occupancyRate']!, _metrics['occupancyGrowth']!, !_metrics['occupancyGrowth']!.startsWith('-')),
+                          _buildStatCard('Properties',
+                              _properties.length.toString(), '+0', true),
+                          _buildStatCard(
+                              'Bookings',
+                              _metrics['totalBookings']!,
+                              _metrics['bookingsGrowth']!,
+                              !_metrics['bookingsGrowth']!.startsWith('-')),
+                          _buildStatCard(
+                              'Views',
+                              _metrics['totalViews']!,
+                              _metrics['viewsGrowth']!,
+                              !_metrics['viewsGrowth']!.startsWith('-')),
+                          _buildStatCard(
+                              'Occupancy',
+                              _metrics['occupancyRate']!,
+                              _metrics['occupancyGrowth']!,
+                              !_metrics['occupancyGrowth']!.startsWith('-')),
                         ],
                       ),
                 const SizedBox(height: 24),
@@ -266,7 +338,11 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const LandlordAnalyticsPage())),
+                    onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) =>
+                                const LandlordAnalyticsPage())),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _surface,
                       foregroundColor: _dark,
@@ -290,7 +366,11 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
 
                 // ─── RECENT PROPERTIES ───
                 Text(
-                  _isLoading ? 'Your Properties' : (_properties.isEmpty ? 'No Properties Yet' : 'Your Properties'),
+                  _isLoading
+                      ? 'Your Properties'
+                      : (_properties.isEmpty
+                          ? 'No Properties Yet'
+                          : 'Your Properties'),
                   style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
@@ -299,7 +379,7 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 if (_isLoading)
                   _buildShimmerProperties()
                 else if (_properties.isEmpty)
@@ -310,8 +390,11 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                         children: [
                           Container(
                             padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(color: _grey.withOpacity(0.1), shape: BoxShape.circle),
-                            child: const Icon(PhosphorIconsRegular.houseLine, size: 48, color: _grey),
+                            decoration: BoxDecoration(
+                                color: _grey.withOpacity(0.1),
+                                shape: BoxShape.circle),
+                            child: const Icon(PhosphorIconsRegular.houseLine,
+                                size: 48, color: _grey),
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -325,7 +408,8 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                           const SizedBox(height: 4),
                           Text(
                             'Add your first property to start earning.',
-                            style: GoogleFonts.poppins(fontSize: 14, color: _grey),
+                            style:
+                                GoogleFonts.poppins(fontSize: 14, color: _grey),
                           ),
                         ],
                       ),
@@ -338,7 +422,7 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                       child: _buildPropertyCard(property),
                     );
                   }),
-                  
+
                 const SizedBox(height: 16),
 
                 // ─── VIEW ALL PROPERTIES BUTTON ───
@@ -352,7 +436,8 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                       foregroundColor: Colors.white,
                       elevation: 8,
                       shadowColor: Colors.black.withOpacity(0.3),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)),
                     ),
                     child: Text(
                       'View All Properties',
@@ -372,7 +457,8 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, String change, bool isPositive) {
+  Widget _buildStatCard(
+      String title, String value, String change, bool isPositive) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -416,7 +502,9 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isPositive ? _green.withOpacity(0.1) : const Color(0xFFFEF2F2),
+                  color: isPositive
+                      ? _green.withOpacity(0.1)
+                      : const Color(0xFFFEF2F2),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -440,9 +528,14 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
     final title = property['title'] as String? ?? 'Untitled';
     final city = property['city'] as String? ?? 'Unknown';
     final priceValue = property['price'];
-    final price = priceValue is String ? double.tryParse(priceValue) ?? 0 : (priceValue as num? ?? 0);
-    final rating = (double.tryParse(property['average_rating']?.toString() ?? '0') ?? 0.0).toDouble();
-    final reviews = int.tryParse(property['review_count']?.toString() ?? '0') ?? 0;
+    final price = priceValue is String
+        ? double.tryParse(priceValue) ?? 0
+        : (priceValue as num? ?? 0);
+    final rating =
+        (double.tryParse(property['average_rating']?.toString() ?? '0') ?? 0.0)
+            .toDouble();
+    final reviews =
+        int.tryParse(property['review_count']?.toString() ?? '0') ?? 0;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -451,7 +544,10 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _grey.withOpacity(0.1)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Row(
@@ -508,7 +604,8 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                     ),
                     const Spacer(),
                     if (reviews > 0) ...[
-                      const Icon(PhosphorIconsFill.star, size: 14, color: Color(0xFFF59E0B)),
+                      const Icon(PhosphorIconsFill.star,
+                          size: 14, color: Color(0xFFF59E0B)),
                       const SizedBox(width: 4),
                       Text(
                         rating.toStringAsFixed(1),

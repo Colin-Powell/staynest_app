@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS properties (
   area integer NOT NULL DEFAULT 0,
   image_url text NOT NULL,
   images jsonb DEFAULT '[]'::jsonb,
+  video_url text,
   amenities jsonb DEFAULT '[]'::jsonb,
   address text,
   lat numeric,
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS properties (
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS lat numeric;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS lng numeric;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS images jsonb DEFAULT '[]'::jsonb;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS video_url text;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS amenities jsonb DEFAULT '[]'::jsonb;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS address text;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS average_rating numeric DEFAULT 0;

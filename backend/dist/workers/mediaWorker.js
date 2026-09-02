@@ -36,12 +36,23 @@ export const mediaWorker = new Worker('media-processing', async (job) => {
             result = await uploadToCloudinary(processedBuffer, `${originalName}.webp`);
         }
         else if (isVideo) {
+            const duration = await new Promise((resolve, reject) => {
+                ffmpeg.ffprobe(filePath, (error, metadata) => {
+                    if (error)
+                        return reject(error);
+                    resolve(Number(metadata.format?.duration ?? 0));
+                });
+            });
+            if (!Number.isFinite(duration) || duration <= 0 || duration > 30.5) {
+                throw new Error('Property videos must be 30 seconds or shorter.');
+            }
             // Compress video with FFmpeg
             const outputPath = `${filePath}_processed.mp4`;
             await new Promise((resolve, reject) => {
                 ffmpeg(filePath)
                     .size('?x720')
                     .fps(30)
+                    .duration(30)
                     .videoCodec('libx264')
                     .on('end', resolve)
                     .on('error', reject)

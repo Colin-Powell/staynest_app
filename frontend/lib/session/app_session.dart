@@ -247,6 +247,7 @@ class AppSession {
           'avatar': currentUserAvatar,
           'role': currentRole,
           'verified': currentUserVerified,
+          'email_verified': emailVerified,
           'referral_code': referralCode,
           'wallet_balance': walletBalance,
         },
@@ -322,7 +323,10 @@ class AppSession {
     currentUserPhone = user['phone']?.toString();
     currentUserAvatar = user['avatar']?.toString();
     currentRole = user['role']?.toString() ?? currentRole;
-    currentUserVerified = user['verified'] == true;
+    currentUserVerified = user['verified'] == true ||
+        user['is_verified'] == true ||
+        user['current_user_verified'] == true ||
+        user['kyc_verified'] == true;
     emailVerified = user['email_verified'] == true ||
         user['otp_verified'] == true ||
         user['verified'] == true ||

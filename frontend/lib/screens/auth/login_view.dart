@@ -29,9 +29,9 @@ class LoginView extends StatefulWidget {
 
 class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   // ─── Theme Constants (Minimalist Style) ──────────────────────────────────────
-  static const Color _primary = Color(0xFF3F37C9);      // Tenant Blue
-  static const Color _textDark = Color(0xFF222222);     // Dark Grey/Black
-  static const Color _textLight = Color(0xFF717171);    // Light Grey
+  static const Color _primary = Color(0xFF3F37C9); // Tenant Blue
+  static const Color _textDark = Color(0xFF222222); // Dark Grey/Black
+  static const Color _textLight = Color(0xFF717171); // Light Grey
   static const Color _dividerColor = Color(0xFFEBEBEB); // Soft Border Color
   static const Color _errorColor = Color(0xFFE53935);
 
@@ -70,7 +70,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
     );
 
     _fadeAnim = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
+    _slideAnim =
+        Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
       CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic),
     );
 
@@ -155,13 +156,20 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
         return;
       }
 
-      AppSession.updateCurrentUser(user);
-      AnalyticsService.logAuthEvent(AnalyticsEvents.login, method: 'email');
       AppSession.apiToken = user['token']?.toString() ??
           user['accessToken']?.toString() ??
           AppSession.apiToken;
       AppSession.refreshToken =
           user['refreshToken']?.toString() ?? AppSession.refreshToken;
+
+      AppSession.updateCurrentUser(user);
+      try {
+        final freshUser = await repository.loadCurrentUser();
+        AppSession.updateCurrentUser(freshUser);
+      } catch (_) {
+        // The auth payload is already enough to continue; fall back to it.
+      }
+      AnalyticsService.logAuthEvent(AnalyticsEvents.login, method: 'email');
       await AppSession.persistSession();
 
       if (AppSession.currentUserId != null && AppSession.apiToken != null) {
@@ -203,7 +211,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   }
 
   String _buildErrorMessage(Object err) {
-    if (err is TimeoutException) return 'Server taking too long. Check your internet.';
+    if (err is TimeoutException)
+      return 'Server taking too long. Check your internet.';
     if (err is ApiException) {
       if (err.statusCode == 401) return 'Invalid email or password.';
       if (err.statusCode == 400) return 'Invalid login request.';
@@ -227,7 +236,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
               behavior: HitTestBehavior.opaque,
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -242,7 +252,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             shape: BoxShape.circle,
-                            border: Border.all(color: _dividerColor, width: 1.2),
+                            border:
+                                Border.all(color: _dividerColor, width: 1.2),
                           ),
                           child: const Icon(
                             Icons.arrow_back_ios_new_rounded,
@@ -276,7 +287,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                             builder: (_, __) => Transform.rotate(
                               angle: _waveAnim.value,
                               alignment: const Alignment(0.7, 0.8),
-                              child: Text('👋', style: GoogleFonts.poppins(fontSize: 28)),
+                              child: Text('👋',
+                                  style: GoogleFonts.poppins(fontSize: 28)),
                             ),
                           ),
                         ),
@@ -308,12 +320,12 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                               label: 'Email Address',
                               keyboardType: TextInputType.emailAddress,
                               validator: (v) {
-                                if (v == null || v.trim().isEmpty) return 'Enter your email';
+                                if (v == null || v.trim().isEmpty)
+                                  return 'Enter your email';
                                 return null;
                               },
                             ),
                             const SizedBox(height: 16),
-                            
                             _InputField(
                               controller: _passwordCtrl,
                               label: 'Password',
@@ -321,9 +333,12 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                               textInputAction: TextInputAction.done,
                               onSubmitted: (_) => _handleLogin(),
                               suffixIcon: GestureDetector(
-                                onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+                                onTap: () => setState(
+                                    () => _obscurePassword = !_obscurePassword),
                                 child: Icon(
-                                  _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                  _obscurePassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
                                   size: 22,
                                   color: _textLight,
                                 ),
@@ -377,7 +392,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                                 height: 24,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2.5,
-                                  valueColor: AlwaysStoppedAnimation(Colors.white),
+                                  valueColor:
+                                      AlwaysStoppedAnimation(Colors.white),
                                 ),
                               )
                             : Text(
@@ -395,7 +411,9 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                     // --- Divider ---
                     Row(
                       children: [
-                        const Expanded(child: Divider(color: _dividerColor, thickness: 1.2)),
+                        const Expanded(
+                            child:
+                                Divider(color: _dividerColor, thickness: 1.2)),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Text(
@@ -406,7 +424,9 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                             ),
                           ),
                         ),
-                        const Expanded(child: Divider(color: _dividerColor, thickness: 1.2)),
+                        const Expanded(
+                            child:
+                                Divider(color: _dividerColor, thickness: 1.2)),
                       ],
                     ),
                     const SizedBox(height: 32),
@@ -416,7 +436,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                       width: double.infinity,
                       height: 56,
                       child: OutlinedButton(
-                        onPressed: _isGoogleSigningIn ? null : _handleGoogleSignIn,
+                        onPressed:
+                            _isGoogleSigningIn ? null : _handleGoogleSignIn,
                         style: OutlinedButton.styleFrom(
                           foregroundColor: _textDark,
                           side: const BorderSide(color: _textDark, width: 1.2),
@@ -462,19 +483,20 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                       children: [
                         Text(
                           "Don't have an account? ",
-                          style: GoogleFonts.poppins(fontSize: 15, color: _textLight),
+                          style: GoogleFonts.poppins(
+                              fontSize: 15, color: _textLight),
                         ),
                         GestureDetector(
                           onTap: widget.onRegister,
                           child: Text(
-                          'Sign Up',
-                          style: GoogleFonts.poppins(
-                            fontSize: 15,
-                            color: _textDark,
-                            fontWeight: FontWeight.w700,
-                            decoration: TextDecoration.underline,
+                            'Sign Up',
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              color: _textDark,
+                              fontWeight: FontWeight.w700,
+                              decoration: TextDecoration.underline,
+                            ),
                           ),
-                        ),
                         ),
                       ],
                     ),
@@ -553,7 +575,9 @@ class _InputFieldState extends State<_InputField> {
       decoration: InputDecoration(
         labelText: widget.label,
         labelStyle: GoogleFonts.poppins(
-          color: _isFocused ? _LoginViewState._textDark : _LoginViewState._textLight,
+          color: _isFocused
+              ? _LoginViewState._textDark
+              : _LoginViewState._textLight,
           fontSize: 15,
         ),
         floatingLabelStyle: GoogleFonts.poppins(
@@ -599,7 +623,8 @@ class _InputFieldState extends State<_InputField> {
             width: 1.5,
           ),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
         errorStyle: GoogleFonts.poppins(
           color: _LoginViewState._errorColor,
           fontSize: 12,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/widgets/skeleton_property_card.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/verification_api.dart';
@@ -28,7 +29,6 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   bool _isChatOpen = false;
   Map<String, dynamic>? _verificationStatus;
   bool _isLoadingStatus = true;
-  bool _wasVerifiedBefore = false;
   bool _isRefreshing = false;
 
   @override
@@ -49,6 +49,19 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
     });
   }
 
+  String get _congratsSeenKey =>
+      'verification_congrats_seen_${AppSession.currentUserId ?? "unknown"}';
+
+  Future<bool> _hasSeenCongrats() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_congratsSeenKey) ?? false;
+  }
+
+  Future<void> _markCongratsAsSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_congratsSeenKey, true);
+  }
+
   Future<void> _loadVerificationStatus() async {
     try {
       final status = await VerificationApi.getVerificationStatus();
@@ -56,18 +69,18 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
           status?['status']?.toString().toLowerCase() == 'approved';
 
       if (mounted) {
-        if (isCurrentlyApproved && !_wasVerifiedBefore) {
-          _wasVerifiedBefore = true;
-          await _refreshUserData();
-          _showVerificationSuccessModal();
+        if (isCurrentlyApproved) {
+          final alreadySeen = await _hasSeenCongrats();
+          if (!alreadySeen) {
+            await _markCongratsAsSeen();
+            await _refreshUserData();
+            if (mounted) _showVerificationSuccessModal();
+          }
         }
 
         setState(() {
           _verificationStatus = status;
           _isLoadingStatus = false;
-          if (isCurrentlyApproved) {
-            _wasVerifiedBefore = true;
-          }
         });
       }
     } catch (_) {
@@ -297,20 +310,26 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
       return _buildUnauthorizedView();
     }
 
-    final isKycApproved = _verificationStatus != null &&
-        _verificationStatus!['status']?.toString().toLowerCase() == 'approved';
-    if (!isKycApproved) {
-      if (_isVerificationRejected) {
-        return _buildVerificationRequiredView();
+    final kycStatus =
+        _verificationStatus?['status']?.toString().toLowerCase();
+
+    // Approved → full portal access
+    if (kycStatus == 'approved') {
+      if (_selectedNav == 'Properties') {
+        return LandlordPropertiesPage(onAddProperty: widget.onAddProperty);
       }
-      return _buildVerificationRequiredView();
+      return _getLegacyPage();
     }
 
-    if (_selectedNav == 'Properties') {
-      return LandlordPropertiesPage(onAddProperty: widget.onAddProperty);
+    // Submitted / under review → show "pending" screen with Refresh button
+    if (kycStatus == 'submitted' ||
+        kycStatus == 'under_review' ||
+        kycStatus == 'pending_review') {
+      return _buildRestrictedPortalView();
     }
 
-    return _getLegacyPage();
+    // Rejected or no submission → prompt to start/resubmit
+    return _buildVerificationRequiredView();
   }
 
   Widget _buildUnauthorizedView() {
@@ -347,75 +366,131 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   }
 
   Widget _buildVerificationRequiredView() {
-    final message = _isVerificationRejected
-        ? 'Your verification was rejected. Please resubmit your documents.'
-        : 'You need to complete landlord verification before accessing the portal.';
+    final kycStatus =
+        _verificationStatus?['status']?.toString().toLowerCase();
+    final isRejected = kycStatus == 'rejected';
+    final adminNotes = _verificationStatus?['admin_notes']?.toString();
 
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill),
-                size: 72, color: const Color(0xFF059669)),
-            const SizedBox(height: 20),
-            Text(
-              _isVerificationRejected
-                  ? 'Verification required'
-                  : 'Verify your account',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 32),
+              Icon(
+                isRejected
+                    ? PhosphorIcons.warningCircle(PhosphorIconsStyle.fill)
+                    : PhosphorIcons.shieldCheck(PhosphorIconsStyle.fill),
+                size: 72,
+                color: isRejected
+                    ? const Color(0xFFEF4444)
+                    : const Color(0xFF059669),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 15,
-                color: const Color(0xFF6B7280),
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () =>
-                  Navigator.pushNamed(context, '/verification_center'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF059669),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-              ),
-              child: Text(
-                _isVerificationRejected
-                    ? 'Resubmit Verification'
-                    : 'Start Verification',
+              const SizedBox(height: 20),
+              Text(
+                isRejected ? 'Verification Rejected' : 'Verify Your Account',
+                textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
-                    fontSize: 16, fontWeight: FontWeight.w600),
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: isRejected
+                      ? const Color(0xFFEF4444)
+                      : const Color(0xFF111827),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Text(
+                isRejected
+                    ? 'Your verification was not approved. Review the notes below and resubmit your documents.'
+                    : 'Complete landlord verification to unlock your full portal and start listing properties.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  color: const Color(0xFF6B7280),
+                  height: 1.4,
+                ),
+              ),
+              // Show admin rejection notes if present
+              if (isRejected &&
+                  adminNotes != null &&
+                  adminNotes.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border:
+                        Border.all(color: const Color(0xFFFCA5A5)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Reviewer Notes:',
+                        style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF991B1B),
+                            fontSize: 13),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        adminNotes,
+                        style: GoogleFonts.poppins(
+                            color: const Color(0xFF991B1B),
+                            fontSize: 14,
+                            height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () =>
+                    Navigator.pushNamed(context, '/verification_center'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isRejected
+                      ? const Color(0xFFEF4444)
+                      : const Color(0xFF059669),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 32, vertical: 14),
+                ),
+                child: Text(
+                  isRejected ? 'Resubmit Documents' : 'Start Verification',
+                  style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white),
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildRestrictedPortalView() {
-    final statusLabel = _hasVerificationSubmitted
-        ? 'Pending approval'
-        : 'Verification required';
+    final kycStatus =
+        _verificationStatus?['status']?.toString().toLowerCase();
+    final statusLabel = (kycStatus == 'under_review' ||
+            kycStatus == 'pending_review')
+        ? 'Under Review'
+        : 'Pending Approval';
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(PhosphorIcons.lockKey(PhosphorIconsStyle.fill),
+            Icon(PhosphorIcons.clockCountdown(PhosphorIconsStyle.fill),
                 size: 72, color: const Color(0xFF0F766E)),
             const SizedBox(height: 20),
             Text(
@@ -428,7 +503,7 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Your landlord verification has been submitted and is under review. The portal is available, but pages will remain locked until approval.',
+              'Your documents have been submitted and are currently being reviewed. You\'ll be notified via email once a decision is made.',
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
                 fontSize: 15,

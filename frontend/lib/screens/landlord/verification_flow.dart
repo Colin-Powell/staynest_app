@@ -74,6 +74,46 @@ class VerificationCenter extends StatefulWidget {
 class _VerificationCenterState extends State<VerificationCenter> {
   final VerificationSession _session = VerificationSession();
 
+  // Live status loaded from the backend
+  bool _isLoading = true;
+  Map<String, dynamic>? _verificationData;
+  String? _status; // null, 'submitted', 'under_review', 'approved', 'rejected'
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
+  }
+
+  Future<void> _loadStatus() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final data = await VerificationApi.getVerificationStatus();
+      if (!mounted) return;
+      setState(() {
+        _verificationData = data;
+        _status = data?['status']?.toString().toLowerCase();
+        _isLoading = false;
+      });
+      // Approved landlords should never reach this screen — route to portal immediately
+      if (_status == 'approved') {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) Navigator.pushReplacementNamed(context, '/portal');
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
+
+  bool get _hasActiveSubmission =>
+      _status == 'submitted' || _status == 'under_review' || _status == 'pending_review';
+
+  bool get _canStartFresh =>
+      _status == null || _status == 'rejected';
+
   @override
   Widget build(BuildContext context) {
     if (!AppSession.isLandlord) {
@@ -133,84 +173,217 @@ class _VerificationCenterState extends State<VerificationCenter> {
                 fontSize: 22,
                 letterSpacing: -0.5)),
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                          color: _green.withOpacity(0.1),
-                          shape: BoxShape.circle),
-                      child: const Icon(PhosphorIconsFill.shieldCheck,
-                          size: 80, color: _green),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                        'Complete verification to build trust with\ntenants and unlock premium features.',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(
-                            fontSize: 15, color: _grey, height: 1.5)),
-                    const SizedBox(height: 48),
-                    _buildFeature(PhosphorIconsFill.sealCheck, 'Verified Badge',
-                        'Show tenants you are trustworthy'),
-                    _buildFeature(PhosphorIconsFill.eye, 'Higher Visibility',
-                        'Get featured in more searches'),
-                    _buildFeature(
-                        PhosphorIconsFill.lightning,
-                        'Faster Bookings',
-                        'Verified landlords get more bookings'),
-                    _buildFeature(PhosphorIconsFill.lockKey, 'Secure Platform',
-                        'We protect you and your tenants'),
-                  ],
-                ),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: _surface,
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 20,
-                      offset: const Offset(0, -4))
-                ],
-                border: Border(top: BorderSide(color: _grey.withOpacity(0.1))),
-              ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: _green))
+          : SafeArea(
               child: Column(
                 children: [
-                  PrimaryButton(
-                      text: 'Start Verification',
-                      onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => VerificationRequirementHub(
-                                  session: _session)))),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const VerificationStatusView(
-                                statusData: {'status': 'submitted'}))),
-                    child: Text('Check Existing Status',
-                        style: GoogleFonts.poppins(
-                            color: _green,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600)),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                                color: _green.withOpacity(0.1),
+                                shape: BoxShape.circle),
+                            child: Icon(
+                              _hasActiveSubmission
+                                  ? PhosphorIconsFill.hourglassMedium
+                                  : (_status == 'rejected'
+                                      ? PhosphorIconsFill.warningCircle
+                                      : PhosphorIconsFill.shieldCheck),
+                              size: 80,
+                              color: _hasActiveSubmission
+                                  ? const Color(0xFFF59E0B)
+                                  : (_status == 'rejected'
+                                      ? const Color(0xFFEF4444)
+                                      : _green),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          // Status-specific header message
+                          if (_hasActiveSubmission) ...[
+                            Text('Under Review',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700,
+                                    color: _dark)),
+                            const SizedBox(height: 8),
+                            Text(
+                                'Your documents have been submitted and are being reviewed by our team. We will notify you once a decision has been made.',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                    fontSize: 15, color: _grey, height: 1.5)),
+                            const SizedBox(height: 24),
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFFBEB),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                    color: const Color(0xFFFDE68A)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(PhosphorIconsRegular.clock,
+                                      color: Color(0xFFF59E0B), size: 24),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Estimated: 1–2 business days',
+                                            style: GoogleFonts.poppins(
+                                                fontWeight: FontWeight.w700,
+                                                color: const Color(
+                                                    0xFF92400E),
+                                                fontSize: 14)),
+                                        Text(
+                                            'You will receive an email and push notification.',
+                                            style: GoogleFonts.poppins(
+                                                color: const Color(
+                                                    0xFFA16207),
+                                                fontSize: 13)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ] else if (_status == 'rejected') ...[
+                            Text('Action Required',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700,
+                                    color: _dark)),
+                            const SizedBox(height: 8),
+                            Text(
+                                'Your previous submission was not approved. Please review the notes below and resubmit.',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                    fontSize: 15, color: _grey, height: 1.5)),
+                            if (_verificationData?['admin_notes'] != null &&
+                                (_verificationData!['admin_notes']
+                                        as String)
+                                    .isNotEmpty) ...[
+                              const SizedBox(height: 24),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF2F2),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                        color: const Color(0xFFFCA5A5))),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Admin Notes:',
+                                        style: GoogleFonts.poppins(
+                                            fontWeight: FontWeight.w700,
+                                            color: const Color(0xFF991B1B),
+                                            fontSize: 14)),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                        _verificationData!['admin_notes']
+                                            .toString(),
+                                        style: GoogleFonts.poppins(
+                                            color: const Color(0xFF991B1B),
+                                            fontSize: 14,
+                                            height: 1.5)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ] else ...[
+                            Text(
+                                'Complete verification to build trust with\ntenants and unlock premium features.',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                    fontSize: 15,
+                                    color: _grey,
+                                    height: 1.5)),
+                            const SizedBox(height: 48),
+                            _buildFeature(PhosphorIconsFill.sealCheck,
+                                'Verified Badge',
+                                'Show tenants you are trustworthy'),
+                            _buildFeature(PhosphorIconsFill.eye,
+                                'Higher Visibility',
+                                'Get featured in more searches'),
+                            _buildFeature(PhosphorIconsFill.lightning,
+                                'Faster Bookings',
+                                'Verified landlords get more bookings'),
+                            _buildFeature(PhosphorIconsFill.lockKey,
+                                'Secure Platform',
+                                'We protect you and your tenants'),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: _surface,
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 20,
+                            offset: const Offset(0, -4))
+                      ],
+                      border:
+                          Border(top: BorderSide(color: _grey.withOpacity(0.1))),
+                    ),
+                    child: Column(
+                      children: [
+                        // Only show the upload flow button if no active submission
+                        if (_canStartFresh)
+                          PrimaryButton(
+                              text: _status == 'rejected'
+                                  ? 'Resubmit Documents'
+                                  : 'Start Verification',
+                              onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          VerificationRequirementHub(
+                                              session: _session)))),
+                        if (_hasActiveSubmission) ...[
+                          PrimaryButton(
+                              text: 'View Submission Status',
+                              onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => VerificationStatusView(
+                                          statusData:
+                                              _verificationData ?? {})))),
+                        ],
+                        if (_canStartFresh && _verificationData != null) ...[
+                          const SizedBox(height: 16),
+                          TextButton(
+                            onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => VerificationStatusView(
+                                        statusData: _verificationData ?? {}))),
+                            child: Text('View Previous Submission',
+                                style: GoogleFonts.poppins(
+                                    color: _green,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -245,6 +418,7 @@ class _VerificationCenterState extends State<VerificationCenter> {
     );
   }
 }
+
 
 // ==========================================
 // 3. HUB PAGE: Verification Requirements
@@ -1037,7 +1211,7 @@ class VerificationStatusView extends StatelessWidget {
     } else if (status == 'rejected' || status == 'action_required') {
       return _RejectedScreen(rejections: statusData['reasons'] ?? []);
     }
-    return const _ReviewScreen();
+    return _ReviewScreen(statusData: statusData);
   }
 }
 
@@ -1127,9 +1301,26 @@ class _RejectedScreen extends StatelessWidget {
 }
 
 class _ReviewScreen extends StatelessWidget {
-  const _ReviewScreen();
+  final Map<String, dynamic> statusData;
+  const _ReviewScreen({required this.statusData});
+
+  String _formatDate(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '';
+    try {
+      final date = DateTime.parse(isoString).toLocal();
+      return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return '';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final status = statusData['status']?.toString().toLowerCase() ?? 'submitted';
+    final createdAt = statusData['created_at']?.toString();
+    final adminNotes = statusData['admin_notes']?.toString();
+    final dateStr = _formatDate(createdAt);
+
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -1153,12 +1344,46 @@ class _ReviewScreen extends StatelessWidget {
                         style: GoogleFonts.poppins(color: _grey, fontSize: 16)),
                     const SizedBox(height: 48),
                     _buildTimelineStep(
-                        'Submitted', 'Information received', true, false),
-                    _buildTimelineStep('Under Review',
-                        'Currently reviewing documents', false, true),
+                        'Submitted',
+                        dateStr.isNotEmpty ? 'Received on $dateStr' : 'Information received',
+                        true,
+                        status == 'submitted'),
+
                     _buildTimelineStep(
-                        'Approved', 'Pending final sign-off', false, false,
+                        'Under Review',
+                        'Currently reviewing documents',
+                        status == 'approved' || status == 'rejected',
+                        status == 'under_review' || status == 'pending_review'),
+                    _buildTimelineStep(
+                        'Approved',
+                        'Pending final sign-off',
+                        status == 'approved',
+                        status == 'approved',
                         isLast: true),
+                    if (adminNotes != null && adminNotes.isNotEmpty) ...[
+                      const SizedBox(height: 32),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFFCA5A5))),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Admin Note:',
+                                style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF991B1B))),
+                            const SizedBox(height: 8),
+                            Text(adminNotes,
+                                style: GoogleFonts.poppins(
+                                    color: const Color(0xFF991B1B),
+                                    fontSize: 14)),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 64),
                     Container(
                       padding: const EdgeInsets.all(24),

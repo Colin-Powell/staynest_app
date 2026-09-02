@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -41,6 +42,14 @@ class PickedPhoto {
     this.isUploading = false,
     this.error,
   });
+}
+
+class PickedVideo {
+  final File file;
+  String? url;
+  bool isUploading;
+
+  PickedVideo(this.file, {this.url, this.isUploading = false});
 }
 
 class AddListingFlow extends StatefulWidget {
@@ -97,6 +106,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
   // --- Step 4: Photos ---
   final List<PickedPhoto> _pickedPhotos = [];
+  PickedVideo? _pickedVideo;
 
   // --- Step 5: Pricing and Details ---
   final _rentPrice = TextEditingController();
@@ -161,6 +171,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
       } else if (existing['image_url'] != null) {
         _pickedPhotos.add(PickedPhoto(File(''),
             url: existing['image_url'].toString(), progress: 1.0));
+      }
+      final existingVideo = existing['video_url']?.toString();
+      if (existingVideo != null && existingVideo.isNotEmpty) {
+        _pickedVideo = PickedVideo(File(''), url: existingVideo);
       }
       final existingAmenities = existing['amenities'];
       if (existingAmenities is List) {
@@ -310,6 +324,38 @@ class _AddListingFlowState extends State<AddListingFlow> {
     }
   }
 
+  Future<void> _pickPropertyVideo() async {
+    final picked = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    if (picked == null) return;
+
+    final file = File(picked.path);
+    final controller = VideoPlayerController.file(file);
+    try {
+      await controller.initialize();
+      if (controller.value.duration > const Duration(seconds: 30)) {
+        if (mounted) {
+          ModalUtils.showError(context, 'Video Too Long',
+              'Choose a property video that is 30 seconds or shorter.');
+        }
+        return;
+      }
+
+      final video = PickedVideo(file, isUploading: true);
+      setState(() => _pickedVideo = video);
+      final task = UploadsService.uploadFileWithProgress(file, (_) {});
+      video.url = await task.future;
+      if (mounted) setState(() => video.isUploading = false);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _pickedVideo = null);
+        ModalUtils.showError(context, 'Video Upload Failed',
+            'We could not process that video. Please try another clip.');
+      }
+    } finally {
+      await controller.dispose();
+    }
+  }
+
   Future<void> _publishListing() async {
     final verificationStatus = await VerificationApi.getVerificationStatus();
     final normalizedStatus =
@@ -380,6 +426,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'area': estimatedArea,
         'image_url': uploadedUrls.first,
         'images': uploadedUrls,
+        'video_url': _pickedVideo?.url,
         'amenities': selectedAmenities,
         'lat': _selectedLatitude,
         'lng': _selectedLongitude,
@@ -1195,6 +1242,44 @@ class _AddListingFlowState extends State<AddListingFlow> {
               );
             },
           ),
+          const SizedBox(height: 24),
+          Text('Property Video (optional)',
+              style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700, fontSize: 16, color: _dark)),
+          const SizedBox(height: 4),
+          Text(
+              'Gallery videos only, up to 30 seconds. The server compresses the video after upload.',
+              style: GoogleFonts.poppins(fontSize: 13, color: _grey)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickedVideo?.isUploading == true
+                      ? null
+                      : _pickPropertyVideo,
+                  icon: const Icon(PhosphorIconsRegular.videoCamera),
+                  label: Text(_pickedVideo?.isUploading == true
+                      ? 'Uploading video...'
+                      : (_pickedVideo?.url == null
+                          ? 'Add property video'
+                          : 'Replace video')),
+                ),
+              ),
+              if (_pickedVideo?.url != null) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Remove video',
+                  onPressed: () => setState(() => _pickedVideo = null),
+                  icon: const Icon(PhosphorIconsRegular.trash,
+                      color: Colors.redAccent),
+                ),
+              ],
+            ],
+          ),
+          if (_pickedVideo?.url != null && _pickedVideo?.isUploading != true)
+            Text('Video ready',
+                style: GoogleFonts.poppins(color: _green, fontSize: 12)),
           const SizedBox(height: 32),
           Text('Tips',
               style: GoogleFonts.poppins(

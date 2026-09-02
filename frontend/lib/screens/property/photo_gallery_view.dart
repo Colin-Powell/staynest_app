@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/session/app_session.dart';
+import 'package:property_app/utils/property_image_url.dart';
+import 'package:video_player/video_player.dart';
 
 class PhotoGalleryView extends StatefulWidget {
   final VoidCallback onClose;
   final List<String>? photos;
+  final String? videoUrl;
 
   const PhotoGalleryView({
     super.key,
     required this.onClose,
     this.photos,
+    this.videoUrl,
   });
 
   @override
@@ -19,9 +24,12 @@ class PhotoGalleryView extends StatefulWidget {
 class _PhotoGalleryViewState extends State<PhotoGalleryView> {
   late final PageController _pageController;
   int _pageIndex = 0;
+  VideoPlayerController? _videoController;
+  bool _videoLoading = false;
+  String? _videoError;
 
   static const _tabs = ['Photos', 'Videos', '360º', 'Floor Plan'];
-  static const _comingSoonTabs = {'Videos', '360º', 'Floor Plan'};
+  static const _comingSoonTabs = {'360º', 'Floor Plan'};
 
   @override
   void initState() {
@@ -32,6 +40,7 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
   @override
   void dispose() {
     _pageController.dispose();
+    _videoController?.dispose();
     super.dispose();
   }
 
@@ -44,7 +53,50 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
     );
   }
 
-  void _onPageChanged(int index) => setState(() => _pageIndex = index);
+  void _onPageChanged(int index) {
+    setState(() => _pageIndex = index);
+    if (index == 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadVideo();
+      });
+    }
+  }
+
+  Future<void> _loadVideo() async {
+    if (_videoController != null || _videoLoading ||
+        widget.videoUrl?.trim().isNotEmpty != true) {
+      return;
+    }
+    setState(() {
+      _videoLoading = true;
+      _videoError = null;
+    });
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(resolvePropertyImageUrl(widget.videoUrl!)),
+      httpHeaders: AppSession.apiToken == null
+          ? const {}
+          : {'Authorization': 'Bearer ${AppSession.apiToken}'},
+    );
+    try {
+      await controller.initialize();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      setState(() {
+        _videoController = controller;
+        _videoLoading = false;
+      });
+    } catch (_) {
+      await controller.dispose();
+      if (mounted) {
+        setState(() {
+          _videoLoading = false;
+          _videoError = 'This property video could not be loaded.';
+        });
+      }
+    }
+  }
 
   List<String> get _photos {
     if (widget.photos != null && widget.photos!.isNotEmpty) {
@@ -164,6 +216,9 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
                 physics: const BouncingScrollPhysics(),
                 itemBuilder: (context, index) {
                   final tab = _tabs[index];
+                  if (tab == 'Videos') {
+                    return _buildVideoPage(key: const ValueKey('Videos'));
+                  }
                   if (_comingSoonTabs.contains(tab)) {
                     return _buildComingSoon(tab, key: ValueKey('Soon-$tab'));
                   }
@@ -182,6 +237,84 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildVideoPage({Key? key}) {
+    if (widget.videoUrl?.trim().isNotEmpty != true) {
+      return _buildVideoMessage(
+          key, Icons.videocam_off_outlined, 'No property video available.');
+    }
+    if (_videoError != null) {
+      return _buildVideoMessage(key, Icons.error_outline, _videoError!);
+    }
+    if (_videoLoading || _videoController == null ||
+        !_videoController!.value.isInitialized) {
+      return const Center(
+          child: CircularProgressIndicator(color: Color(0xFF3F37C9)));
+    }
+
+    final controller = _videoController!;
+    return Center(
+      key: key,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: AspectRatio(
+            aspectRatio: controller.value.aspectRatio,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                VideoPlayer(controller),
+                IconButton(
+                  tooltip: controller.value.isPlaying
+                      ? 'Pause video'
+                      : 'Play video',
+                  iconSize: 64,
+                  color: Colors.white,
+                  onPressed: () => setState(() {
+                    controller.value.isPlaying
+                        ? controller.pause()
+                        : controller.play();
+                  }),
+                  icon: Icon(controller.value.isPlaying
+                      ? Icons.pause_circle_filled
+                      : Icons.play_circle_fill),
+                ),
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 8,
+                  child: VideoProgressIndicator(controller,
+                      allowScrubbing: true,
+                      colors: const VideoProgressColors(
+                          playedColor: Color(0xFF3F37C9))),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoMessage(Key? key, IconData icon, String message) {
+    return Center(
+      key: key,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 64, color: const Color(0xFF9CA3AF)),
+          const SizedBox(height: 16),
+          Text(message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF6B7280))),
+        ],
       ),
     );
   }

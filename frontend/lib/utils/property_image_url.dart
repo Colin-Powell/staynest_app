@@ -40,7 +40,7 @@ String resolvePropertyImageUrl(String url) {
 
   // Common backend habit: return server-relative paths without a leading `/`
   // (e.g. "uploads/abc.jpg"). Treat these as relative to API origin.
-  if (RegExp(r'^[A-Za-z0-9_\-./]+\.(jpg|jpeg|png|webp|gif|svg)$',
+  if (RegExp(r'^[A-Za-z0-9_\-./]+\.(jpg|jpeg|png|webp|gif|svg|mp4|mov|webm)$',
           caseSensitive: false)
       .hasMatch(trimmed)) {
     final base = AppSession.apiBaseUrl;

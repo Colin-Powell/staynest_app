@@ -81,6 +81,7 @@ const PROPERTY_SELECT = `p.id,
               p.image_url,
 
               p.images,
+              p.video_url,
               p.amenities,
               p.lat,
               p.lng,
@@ -606,7 +607,7 @@ router.post('/reviews/:id/report', requireAuth, async (req, res, next) => {
     }
 });
 function createPropertyInsertArgs(body) {
-    const { title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, } = body;
+    const { title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, } = body;
     const imageList = Array.isArray(images) && images.length > 0 ? images : [image_url];
     const amenityList = Array.isArray(amenities) ? amenities : [];
     return [
@@ -621,6 +622,7 @@ function createPropertyInsertArgs(body) {
         Number(area),
         image_url,
         JSON.stringify(imageList),
+        typeof video_url === 'string' && video_url.trim() ? video_url.trim() : null,
         JSON.stringify(amenityList),
         lat != null ? Number(lat) : null,
         lng != null ? Number(lng) : null,
@@ -673,9 +675,9 @@ async function handleCreateProperty(req, res, next, logRouteName) {
         }
         const insertArgs = createPropertyInsertArgs({ ...body, __userId: userId });
         console.log(`${logPrefix} inserting userId=${userId} lat=${body.lat ?? null} lng=${body.lng ?? null} price=${Number(body.price)} area=${Number(body.area)}`);
-        const result = await query(`INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, landlord_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13, $14, $15, $16)
-       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, amenities, lat, lng, status`, insertArgs);
+        const result = await query(`INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, landlord_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13::jsonb, $14, $15, $16, $17)
+       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, status`, insertArgs);
         console.log(`${logPrefix} success userId=${userId} propertyId=${result.rows[0]?.id}`);
         // The listing remains pending-review until an admin approves it.
         // Do not surface it to tenants before approval.
@@ -701,7 +703,7 @@ router.post('/from-listing', requireAuth, authorize('landlord', 'host'), async (
 });
 router.put('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
     try {
-        const fields = ['title', 'description', 'category', 'city', 'address', 'price', 'bedrooms', 'bathrooms', 'area', 'image_url', 'images', 'amenities', 'lat', 'lng'];
+        const fields = ['title', 'description', 'category', 'city', 'address', 'price', 'bedrooms', 'bathrooms', 'area', 'image_url', 'images', 'video_url', 'amenities', 'lat', 'lng'];
         const updates = [];
         const values = [];
         for (const field of fields) {

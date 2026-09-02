@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/api_client.dart';
+import 'package:property_app/services/verification_api.dart';
 import 'package:property_app/widgets/otp_input.dart';
 import 'package:property_app/utils/otp_parser.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
@@ -244,10 +245,22 @@ class _OtpViewState extends State<OtpView>
       ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
 
       if (AppSession.isLandlord) {
-        final target = AppSession.currentUserVerified
-            ? '/landlord_dashboard'
-            : '/verification_center';
-        Navigator.pushReplacementNamed(context, target);
+        try {
+          final status = await VerificationApi.getVerificationStatus();
+          final isApproved =
+              status?['status']?.toString().toLowerCase() == 'approved';
+          final target = isApproved || AppSession.currentUserVerified
+              ? '/landlord'
+              : '/verification_center';
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(context, target);
+        } catch (_) {
+          final fallback = AppSession.currentUserVerified
+              ? '/landlord'
+              : '/verification_center';
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(context, fallback);
+        }
       } else {
         Navigator.pushReplacementNamed(context, '/home');
       }
