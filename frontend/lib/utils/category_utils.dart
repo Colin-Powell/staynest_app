@@ -52,7 +52,7 @@ bool categoryMatchesUiFilter(String propertyCategory, String uiFilter,
   if (uiFilter == 'All') return true;
 
   final mapped = uiFilterForCategory(propertyCategory);
-  if (mapped != null && mapped == uiFilter) return true;
+  if (mapped != null) return mapped == uiFilter;
 
   final propKey = normalizeCategoryKey(propertyCategory);
   final filterKey = normalizeCategoryKey(uiFilter);
@@ -61,6 +61,7 @@ bool categoryMatchesUiFilter(String propertyCategory, String uiFilter,
   if (beds >= 0) {
     if (filterKey == 'bedsitter' && beds <= 1) return true;
     if (filterKey == 'singleroom' && beds == 1) return true;
+    if (filterKey == 'onebedroom' && beds == 1) return true;
   }
   return false;
 }

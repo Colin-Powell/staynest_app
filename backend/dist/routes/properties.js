@@ -307,8 +307,11 @@ router.get('/categories', async (_req, res, next) => {
               json_agg(json_build_object(
                 'id', id,
                 'title', title,
+                'category', category,
                 'city', city,
                 'price', price,
+                'bedrooms', bedrooms,
+                'bathrooms', bathrooms,
                 'image_url', image_url
               ) ORDER BY created_at DESC) AS items
        FROM properties

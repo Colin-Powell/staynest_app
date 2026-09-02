@@ -12,6 +12,7 @@ import 'package:property_app/services/version_service.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/utils/property_mapper.dart';
+import 'package:property_app/utils/category_utils.dart';
 
 const _bg = Color(0xFFFAFAFA);
 const _dark = Color(0xFF111827);
@@ -43,36 +44,28 @@ class _HomeViewState extends State<HomeView> {
   String _selectedCategory = 'All';
 
   bool _matchesCategory(Property p, String category) {
-    if (category.isEmpty || category.toLowerCase() == 'all') return true;
-    final cat = p.category.toLowerCase().trim();
-    final normalizedType = category.toLowerCase().trim();
-    
-    if (cat == normalizedType || cat.contains(normalizedType)) return true;
-    
-    final beds = p.features.beds;
-    if (normalizedType == 'bedsitter' || normalizedType == 'single room') {
-      return beds <= 1 || cat.contains('studio') || cat.contains('room');
-    }
-    if (normalizedType == 'one bedroom') {
-      return beds == 1;
-    }
-    return false;
+    return categoryMatchesUiFilter(
+      p.category,
+      category,
+      beds: p.features.beds,
+    );
   }
 
   @override
   void initState() {
     super.initState();
     _loadCollections();
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       VersionService.checkVersion(context);
 
       if (!OnboardingPrefs.hasSeen('homeSeen')) {
         OnboardingBottomSheet.show(
           context: context,
-          imagePath:'assets/images/home_onboarding.png',
+          imagePath: 'assets/images/home_onboarding.png',
           title: 'Discover your next stay',
-          subtitle: 'Browse curated property collections, discover trending stays, and find highly rated properties near you.',
+          subtitle:
+              'Browse curated property collections, discover trending stays, and find highly rated properties near you.',
           ctaText: 'Explore stays',
         ).then((_) => OnboardingPrefs.markAsSeen('homeSeen'));
       }
@@ -94,35 +87,38 @@ class _HomeViewState extends State<HomeView> {
     try {
       final categoriesData = await PropertiesApi.getCategories();
       Map<String, List<Property>> mapped = {};
-      
+
       // Fetch Recently Viewed and Promotions
       try {
         if (AppSession.currentUserId != null) {
           final recentData = await PropertiesApi.getRecentlyViewed();
           if (recentData.isNotEmpty) {
-            mapped['Recently Viewed'] = recentData.map((e) => mapApiProperty(e)).toList();
+            mapped['Recently Viewed'] =
+                recentData.map((e) => mapApiProperty(e)).toList();
           }
         }
-        
-
       } catch (e) {
         debugPrint('Error loading analytics layers: ');
       }
 
       categoriesData.forEach((key, value) {
         if (value is List) {
-          mapped[key] = value.map((e) => mapApiProperty(Map<String, dynamic>.from(e as Map))).toList();
+          mapped[key] = value
+              .map((e) => mapApiProperty(Map<String, dynamic>.from(e as Map)))
+              .toList();
         }
       });
-      
+
       // Fallback if categories are empty, fetch all and group manually
       if (categoriesData.isEmpty) {
         final allProps = await PropertiesApi.getAllProperties();
         final list = allProps.map((e) => mapApiProperty(e)).toList();
-        
+
         mapped['New on StayNest'] = list.take(5).toList();
-        mapped['Trending Now'] = list.where((p) => p.rating >= 4.0).take(5).toList();
-        mapped['Budget-Friendly'] = list.where((p) => p.price < 25000).take(5).toList();
+        mapped['Trending Now'] =
+            list.where((p) => p.rating >= 4.0).take(5).toList();
+        mapped['Budget-Friendly'] =
+            list.where((p) => p.price < 25000).take(5).toList();
       }
 
       if (mounted) {
@@ -146,7 +142,9 @@ class _HomeViewState extends State<HomeView> {
   Widget build(BuildContext context) {
     final filteredCollections = <String, List<Property>>{};
     for (final entry in _collections.entries) {
-      final filteredList = entry.value.where((p) => _matchesCategory(p, _selectedCategory)).toList();
+      final filteredList = entry.value
+          .where((p) => _matchesCategory(p, _selectedCategory))
+          .toList();
       if (filteredList.isNotEmpty) {
         filteredCollections[entry.key] = filteredList;
       }
@@ -170,7 +168,8 @@ class _HomeViewState extends State<HomeView> {
                   child: Center(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 40),
-                      child: Text('Failed to load properties', style: GoogleFonts.poppins(color: _grey)),
+                      child: Text('Failed to load properties',
+                          style: GoogleFonts.poppins(color: _grey)),
                     ),
                   ),
                 )
@@ -180,9 +179,10 @@ class _HomeViewState extends State<HomeView> {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 40),
                       child: Text(
-                        _collections.isEmpty ? 'No properties available' : 'No properties match this category', 
-                        style: GoogleFonts.poppins(color: _grey)
-                      ),
+                          _collections.isEmpty
+                              ? 'No properties available'
+                              : 'No properties match this category',
+                          style: GoogleFonts.poppins(color: _grey)),
                     ),
                   ),
                 )
@@ -203,12 +203,12 @@ class _HomeViewState extends State<HomeView> {
   Widget _buildCategoryPills() {
     final types = [
       {'name': 'All', 'image': 'assets/images/all.webp'},
-      {'name': 'Apartment', 'image': 'assets/images/apartments.webp'},
+      {'name': 'Apartments', 'image': 'assets/images/apartments.webp'},
       {'name': 'Bedsitter', 'image': 'assets/images/bedsitter.webp'},
       {'name': 'Single Room', 'image': 'assets/images/singleroom.webp'},
       {'name': 'One Bedroom', 'image': 'assets/images/onebedroom.webp'},
     ];
-    
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
       child: SizedBox(
@@ -223,7 +223,7 @@ class _HomeViewState extends State<HomeView> {
             final label = type['name']!;
             final imagePath = type['image']!;
             final isSelected = _selectedCategory == label;
-            
+
             return GestureDetector(
               onTap: () {
                 setState(() {
@@ -236,12 +236,15 @@ class _HomeViewState extends State<HomeView> {
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
+                padding: const EdgeInsets.only(
+                    left: 6, right: 16, top: 6, bottom: 6),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(30),
                   border: Border.all(
-                    color: isSelected ? Colors.black : Colors.grey.withOpacity(0.2),
+                    color: isSelected
+                        ? Colors.black
+                        : Colors.grey.withOpacity(0.2),
                     width: isSelected ? 2.0 : 1.5,
                   ),
                 ),
@@ -313,7 +316,8 @@ class _HomeViewState extends State<HomeView> {
                       )
                     ],
                   ),
-                  child: const Icon(PhosphorIconsRegular.bell, color: _dark, size: 24),
+                  child: const Icon(PhosphorIconsRegular.bell,
+                      color: _dark, size: 24),
                 ),
               )
             ],
@@ -336,7 +340,8 @@ class _HomeViewState extends State<HomeView> {
               ),
               child: Row(
                 children: [
-                  const Icon(PhosphorIconsRegular.magnifyingGlass, color: _grey, size: 22),
+                  const Icon(PhosphorIconsRegular.magnifyingGlass,
+                      color: _grey, size: 22),
                   const SizedBox(width: 12),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,7 +395,8 @@ class _HomeViewState extends State<HomeView> {
                   ),
                 ),
                 GestureDetector(
-                  onTap: () => widget.onSeeCategory?.call(title), // Route to search tab with category
+                  onTap: () => widget.onSeeCategory
+                      ?.call(title), // Route to search tab with category
                   child: Text(
                     'See All',
                     style: GoogleFonts.poppins(

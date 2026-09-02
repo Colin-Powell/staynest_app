@@ -63,7 +63,8 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
   }
 
   Future<void> _loadVideo() async {
-    if (_videoController != null || _videoLoading ||
+    if (_videoController != null ||
+        _videoLoading ||
         widget.videoUrl?.trim().isNotEmpty != true) {
       return;
     }
@@ -227,8 +228,7 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
                       return _photos.isEmpty
                           ? _buildEmptyPhotos(
                               key: const ValueKey('Photos-empty'))
-                          : _buildGrid(_photos,
-                              key: ValueKey('Photos-$index'));
+                          : _buildGrid(_photos, key: ValueKey('Photos-$index'));
                     default:
                       return const SizedBox.shrink();
                   }
@@ -249,7 +249,8 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
     if (_videoError != null) {
       return _buildVideoMessage(key, Icons.error_outline, _videoError!);
     }
-    if (_videoLoading || _videoController == null ||
+    if (_videoLoading ||
+        _videoController == null ||
         !_videoController!.value.isInitialized) {
       return const Center(
           child: CircularProgressIndicator(color: Color(0xFF3F37C9)));
@@ -269,9 +270,8 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
               children: [
                 VideoPlayer(controller),
                 IconButton(
-                  tooltip: controller.value.isPlaying
-                      ? 'Pause video'
-                      : 'Play video',
+                  tooltip:
+                      controller.value.isPlaying ? 'Pause video' : 'Play video',
                   iconSize: 64,
                   color: Colors.white,
                   onPressed: () => setState(() {
@@ -506,8 +506,8 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer>
                 children: [
                   _CircleButton(icon: Icons.close, onTap: _close),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 7),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
                       color: Colors.black54,
                       borderRadius: BorderRadius.circular(20),
