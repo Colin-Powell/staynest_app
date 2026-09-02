@@ -2,9 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:property_app/screens/dashboard/landlord_overview_page.dart';
 import 'theme.dart';
 import 'data.dart';
 import 'models/property.dart';
@@ -13,6 +15,7 @@ import 'screens/screens.dart'
 import 'services/google_auth_service.dart';
 import 'screens/dashboard/landlord_property_management_page.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
+import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
 import 'screens/dashboard/landlord_tenants_page.dart';
 import 'screens/landlord/verification_flow.dart' show VerificationCenter;
 import 'app_theme.dart';
@@ -28,7 +31,7 @@ import 'services/property_service.dart';
 import 'services/socket_service.dart';
 import 'services/fcm_service.dart';
 import 'services/auth_service.dart'; // Import AuthService
-import 'screens/landlord/landlord_dashboard_view.dart';
+import 'services/verification_api.dart';
 import 'screens/super_admin/super_admin_shell.dart';
 import 'screens/super_admin/super_admin_login.dart';
 import 'package:property_app/firebase_options.dart';
@@ -178,6 +181,30 @@ class _PropertyAppState extends State<PropertyApp> {
     }
   }
 
+  Future<String> _resolveLandlordRoute() async {
+    if (!AppSession.isLandlord) {
+      return '/home';
+    }
+
+    try {
+      final status = await VerificationApi.getVerificationStatus();
+      final isApproved =
+          status?['status']?.toString().toLowerCase() == 'approved';
+      if (isApproved) {
+        AppSession.currentUserVerified = true;
+        return '/landlord';
+      }
+      if (AppSession.currentUserVerified) {
+        return '/landlord';
+      }
+      return '/verification_center';
+    } catch (_) {
+      return AppSession.currentUserVerified
+          ? '/landlord'
+          : '/verification_center';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -191,7 +218,7 @@ class _PropertyAppState extends State<PropertyApp> {
         '/': (context) => const SplashView(),
         '/login': (context) => LoginView(
               onLogin: () async {
-                if (!AppSession.currentUserVerified) {
+                if (!AppSession.isEmailVerified) {
                   Navigator.pushReplacementNamed(context, '/otp');
                   return;
                 }
@@ -201,14 +228,10 @@ class _PropertyAppState extends State<PropertyApp> {
                   return;
                 }
 
-                // Verified landlords go directly to the portal.
-                // Only unverified landlords must complete KYC first.
                 if (AppSession.isLandlord) {
-                  if (AppSession.currentUserVerified) {
-                    Navigator.pushReplacementNamed(context, '/portal');
-                  } else {
-                    Navigator.pushReplacementNamed(context, '/verification_center');
-                  }
+                  final target = await _resolveLandlordRoute();
+                  if (!context.mounted) return;
+                  Navigator.pushReplacementNamed(context, target);
                   return;
                 }
 
@@ -225,7 +248,7 @@ class _PropertyAppState extends State<PropertyApp> {
                     await GoogleAuthService.instance.signInWithGoogle();
                 if (!success) throw Exception("Sign in failed");
                 if (success) {
-                  if (!AppSession.currentUserVerified) {
+                  if (!AppSession.isEmailVerified) {
                     Navigator.pushReplacementNamed(context, '/otp');
                     return;
                   }
@@ -235,11 +258,9 @@ class _PropertyAppState extends State<PropertyApp> {
                     return;
                   }
                   if (AppSession.isLandlord) {
-                    if (AppSession.currentUserVerified) {
-                      Navigator.pushReplacementNamed(context, '/portal');
-                    } else {
-                      Navigator.pushReplacementNamed(context, '/verification_center');
-                    }
+                    final target = await _resolveLandlordRoute();
+                    if (!context.mounted) return;
+                    Navigator.pushReplacementNamed(context, target);
                     return;
                   }
                   await _enforceTenantPreferencesIfMissing(context);
@@ -261,7 +282,7 @@ class _PropertyAppState extends State<PropertyApp> {
                     await GoogleAuthService.instance.signInWithGoogle();
                 if (!success) throw Exception("Sign in failed");
                 if (success) {
-                  if (!AppSession.currentUserVerified) {
+                  if (!AppSession.isEmailVerified) {
                     Navigator.pushReplacementNamed(context, '/otp');
                     return;
                   }
@@ -271,11 +292,9 @@ class _PropertyAppState extends State<PropertyApp> {
                     return;
                   }
                   if (AppSession.isLandlord) {
-                    if (AppSession.currentUserVerified) {
-                      Navigator.pushReplacementNamed(context, '/portal');
-                    } else {
-                      Navigator.pushReplacementNamed(context, '/verification_center');
-                    }
+                    final target = await _resolveLandlordRoute();
+                    if (!context.mounted) return;
+                    Navigator.pushReplacementNamed(context, target);
                     return;
                   }
                   await _enforceTenantPreferencesIfMissing(context);
@@ -288,7 +307,11 @@ class _PropertyAppState extends State<PropertyApp> {
         '/privacy': (context) => const PrivacyPolicyView(),
         '/otp': (context) => const OtpView(),
         '/home': (context) => const AppShell(),
-        '/landlord_dashboard': (context) => LandlordDashboardView(
+        '/landlord': (context) => LandlordPortalView(
+              onAddProperty: () =>
+                  Navigator.pushNamed(context, '/list_property'),
+            ),
+        '/dashboard': (context) => LandlordOverviewPage(
               onLogout: () async {
                 await AppSession.reset();
                 if (context.mounted) {
@@ -533,7 +556,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   _AppScreen _screen = _AppScreen.home;
-  final int _savedTab = 0;
+  int _savedTab = 0;
 
   @override
   void initState() {
@@ -884,6 +907,7 @@ class _AppShellState extends State<AppShell> {
       child: PhotoGalleryView(
         onClose: _closePhotoGallery,
         photos: photos,
+        videoUrl: property?.videoUrl,
       ),
     );
   }

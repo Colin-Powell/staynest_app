@@ -18,10 +18,13 @@ export async function uploadToCloudinary(fileBuffer, fileName, folder = 'staynes
     const baseName = fileName
         .replace(/\.[^/.]+$/, '') // remove extension e.g. ".jpg"
         .replace(/[^a-zA-Z0-9-]/g, '-'); // sanitize to url-safe chars
+    const resourceType = /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(fileName)
+        ? 'video'
+        : 'image';
     return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream({
             folder,
-            resource_type: 'image',
+            resource_type: resourceType,
             public_id: `${Date.now()}-${baseName}`,
         }, (error, result) => {
             if (error) {

@@ -12,16 +12,12 @@ export const mediaWorker = new Worker('media-processing', async (job) => {
     const { filePath, originalName, mimeType } = job.data;
     let processedBuffer;
     try {
-        let isImage = mimeType.startsWith('image/');
-        let isVideo = mimeType.startsWith('video/');
-        // Fallback for Flutter application/octet-stream uploads
-        if (!isImage && !isVideo) {
-            const lowerName = originalName.toLowerCase();
-            if (lowerName.match(/\.(jpg|jpeg|png|webp|gif|bmp)$/))
-                isImage = true;
-            if (lowerName.match(/\.(mp4|mov|avi|mkv|webm)$/))
-                isVideo = true;
-        }
+        const lowerName = originalName.toLowerCase();
+        const isVideoByName = /\.(mp4|mov|avi|mkv|webm|m4v)$/.test(lowerName);
+        const isImageByName = /\.(jpg|jpeg|png|webp|gif|bmp|tiff|heic|heif)$/.test(lowerName);
+        // Prefer the extension because mobile clients can send video as image/* or octet-stream.
+        let isVideo = isVideoByName || (!isImageByName && mimeType.startsWith('video/'));
+        let isImage = !isVideo && (isImageByName || mimeType.startsWith('image/'));
         // If file doesn't exist anymore (e.g. on a retry after it was deleted), we can't process it.
         if (!fs.existsSync(filePath)) {
             throw new Error(`Input file is missing (possibly deleted during a previous failed attempt): ${filePath}`);

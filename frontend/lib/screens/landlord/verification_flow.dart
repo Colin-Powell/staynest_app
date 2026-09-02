@@ -8,6 +8,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/services/api_client.dart';
 import 'package:property_app/services/uploads.dart';
 import 'package:property_app/services/image_upload_service.dart';
 import 'package:property_app/services/verification_api.dart';
@@ -74,48 +75,49 @@ class VerificationCenter extends StatefulWidget {
 class _VerificationCenterState extends State<VerificationCenter> {
   final VerificationSession _session = VerificationSession();
 
-  // Live status loaded from the backend
-  bool _isLoading = true;
-  Map<String, dynamic>? _verificationData;
-  String? _status; // null, 'submitted', 'under_review', 'approved', 'rejected'
-
-  @override
-  void initState() {
-    super.initState();
-    _loadStatus();
-  }
-
-  Future<void> _loadStatus() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
-    try {
-      final data = await VerificationApi.getVerificationStatus();
-      if (!mounted) return;
-      setState(() {
-        _verificationData = data;
-        _status = data?['status']?.toString().toLowerCase();
-        _isLoading = false;
-      });
-      // Approved landlords should never reach this screen — route to portal immediately
-      if (_status == 'approved') {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) Navigator.pushReplacementNamed(context, '/portal');
-        });
-      }
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-    }
-  }
-
-  bool get _hasActiveSubmission =>
-      _status == 'submitted' || _status == 'under_review' || _status == 'pending_review';
-
-  bool get _canStartFresh =>
-      _status == null || _status == 'rejected';
-
   @override
   Widget build(BuildContext context) {
+    if (!AppSession.isEmailVerified) {
+      return Scaffold(
+        backgroundColor: _bg,
+        appBar: AppBar(
+          backgroundColor: _bg,
+          elevation: 0,
+          leading: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: const Icon(PhosphorIconsRegular.caretLeft,
+                color: _dark, size: 24),
+          ),
+          title: Text('Verify Email First',
+              style: GoogleFonts.poppins(
+                  color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(PhosphorIconsRegular.shieldSlash,
+                    size: 64, color: _grey),
+                const SizedBox(height: 16),
+                Text(
+                  'Please complete OTP email verification before starting landlord KYC.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(fontSize: 16, color: _grey),
+                ),
+                const SizedBox(height: 24),
+                PrimaryButton(
+                    text: 'Verify Now',
+                    onPressed: () =>
+                        Navigator.pushReplacementNamed(context, '/otp')),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     if (!AppSession.isLandlord) {
       return Scaffold(
         backgroundColor: _bg,
@@ -173,217 +175,104 @@ class _VerificationCenterState extends State<VerificationCenter> {
                 fontSize: 22,
                 letterSpacing: -0.5)),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: _green))
-          : SafeArea(
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                          color: _green.withOpacity(0.1),
+                          shape: BoxShape.circle),
+                      child: const Icon(PhosphorIconsFill.shieldCheck,
+                          size: 80, color: _green),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                        'Complete verification to build trust with\ntenants and unlock premium features.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                            fontSize: 15, color: _grey, height: 1.5)),
+                    const SizedBox(height: 48),
+                    _buildFeature(PhosphorIconsFill.sealCheck, 'Verified Badge',
+                        'Show tenants you are trustworthy'),
+                    _buildFeature(PhosphorIconsFill.eye, 'Higher Visibility',
+                        'Get featured in more searches'),
+                    _buildFeature(
+                        PhosphorIconsFill.lightning,
+                        'Faster Bookings',
+                        'Verified landlords get more bookings'),
+                    _buildFeature(PhosphorIconsFill.lockKey, 'Secure Platform',
+                        'We protect you and your tenants'),
+                  ],
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: _surface,
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 20,
+                      offset: const Offset(0, -4))
+                ],
+                border: Border(top: BorderSide(color: _grey.withOpacity(0.1))),
+              ),
               child: Column(
                 children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      physics: const BouncingScrollPhysics(),
-                      child: Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                                color: _green.withOpacity(0.1),
-                                shape: BoxShape.circle),
-                            child: Icon(
-                              _hasActiveSubmission
-                                  ? PhosphorIconsFill.hourglassMedium
-                                  : (_status == 'rejected'
-                                      ? PhosphorIconsFill.warningCircle
-                                      : PhosphorIconsFill.shieldCheck),
-                              size: 80,
-                              color: _hasActiveSubmission
-                                  ? const Color(0xFFF59E0B)
-                                  : (_status == 'rejected'
-                                      ? const Color(0xFFEF4444)
-                                      : _green),
+                  PrimaryButton(
+                      text: 'Start Verification',
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => VerificationRequirementHub(
+                                  session: _session)))),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () async {
+                      try {
+                        final status =
+                            await VerificationApi.getVerificationStatus();
+                        if (!context.mounted) return;
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => VerificationStatusView(
+                              statusData: status ?? {'status': 'not_started'},
                             ),
                           ),
-                          const SizedBox(height: 24),
-                          // Status-specific header message
-                          if (_hasActiveSubmission) ...[
-                            Text('Under Review',
-                                style: GoogleFonts.poppins(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
-                                    color: _dark)),
-                            const SizedBox(height: 8),
-                            Text(
-                                'Your documents have been submitted and are being reviewed by our team. We will notify you once a decision has been made.',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.poppins(
-                                    fontSize: 15, color: _grey, height: 1.5)),
-                            const SizedBox(height: 24),
-                            Container(
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFFBEB),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                    color: const Color(0xFFFDE68A)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(PhosphorIconsRegular.clock,
-                                      color: Color(0xFFF59E0B), size: 24),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text('Estimated: 1–2 business days',
-                                            style: GoogleFonts.poppins(
-                                                fontWeight: FontWeight.w700,
-                                                color: const Color(
-                                                    0xFF92400E),
-                                                fontSize: 14)),
-                                        Text(
-                                            'You will receive an email and push notification.',
-                                            style: GoogleFonts.poppins(
-                                                color: const Color(
-                                                    0xFFA16207),
-                                                fontSize: 13)),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
+                        );
+                      } catch (_) {
+                        if (!context.mounted) return;
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const VerificationStatusView(
+                              statusData: {'status': 'not_started'},
                             ),
-                          ] else if (_status == 'rejected') ...[
-                            Text('Action Required',
-                                style: GoogleFonts.poppins(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
-                                    color: _dark)),
-                            const SizedBox(height: 8),
-                            Text(
-                                'Your previous submission was not approved. Please review the notes below and resubmit.',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.poppins(
-                                    fontSize: 15, color: _grey, height: 1.5)),
-                            if (_verificationData?['admin_notes'] != null &&
-                                (_verificationData!['admin_notes']
-                                        as String)
-                                    .isNotEmpty) ...[
-                              const SizedBox(height: 24),
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                    color: const Color(0xFFFEF2F2),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                        color: const Color(0xFFFCA5A5))),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Admin Notes:',
-                                        style: GoogleFonts.poppins(
-                                            fontWeight: FontWeight.w700,
-                                            color: const Color(0xFF991B1B),
-                                            fontSize: 14)),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                        _verificationData!['admin_notes']
-                                            .toString(),
-                                        style: GoogleFonts.poppins(
-                                            color: const Color(0xFF991B1B),
-                                            fontSize: 14,
-                                            height: 1.5)),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ] else ...[
-                            Text(
-                                'Complete verification to build trust with\ntenants and unlock premium features.',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.poppins(
-                                    fontSize: 15,
-                                    color: _grey,
-                                    height: 1.5)),
-                            const SizedBox(height: 48),
-                            _buildFeature(PhosphorIconsFill.sealCheck,
-                                'Verified Badge',
-                                'Show tenants you are trustworthy'),
-                            _buildFeature(PhosphorIconsFill.eye,
-                                'Higher Visibility',
-                                'Get featured in more searches'),
-                            _buildFeature(PhosphorIconsFill.lightning,
-                                'Faster Bookings',
-                                'Verified landlords get more bookings'),
-                            _buildFeature(PhosphorIconsFill.lockKey,
-                                'Secure Platform',
-                                'We protect you and your tenants'),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: _surface,
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
-                            blurRadius: 20,
-                            offset: const Offset(0, -4))
-                      ],
-                      border:
-                          Border(top: BorderSide(color: _grey.withOpacity(0.1))),
-                    ),
-                    child: Column(
-                      children: [
-                        // Only show the upload flow button if no active submission
-                        if (_canStartFresh)
-                          PrimaryButton(
-                              text: _status == 'rejected'
-                                  ? 'Resubmit Documents'
-                                  : 'Start Verification',
-                              onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) =>
-                                          VerificationRequirementHub(
-                                              session: _session)))),
-                        if (_hasActiveSubmission) ...[
-                          PrimaryButton(
-                              text: 'View Submission Status',
-                              onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) => VerificationStatusView(
-                                          statusData:
-                                              _verificationData ?? {})))),
-                        ],
-                        if (_canStartFresh && _verificationData != null) ...[
-                          const SizedBox(height: 16),
-                          TextButton(
-                            onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => VerificationStatusView(
-                                        statusData: _verificationData ?? {}))),
-                            child: Text('View Previous Submission',
-                                style: GoogleFonts.poppins(
-                                    color: _green,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600)),
                           ),
-                        ],
-                      ],
-                    ),
+                        );
+                      }
+                    },
+                    child: Text('Check Existing Status',
+                        style: GoogleFonts.poppins(
+                            color: _green,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
             ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -418,7 +307,6 @@ class _VerificationCenterState extends State<VerificationCenter> {
     );
   }
 }
-
 
 // ==========================================
 // 3. HUB PAGE: Verification Requirements
@@ -608,23 +496,46 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
     try {
       final payload = {
         'documents': widget.session.toDocumentsMap(),
-        'property': {}
+        'property': {},
       };
-      final resp = await VerificationApi.submitVerification(payload,
-          idempotencyKey: _idempotencyKey);
+      final resp = await VerificationApi.submitVerification(
+        payload,
+        idempotencyKey: _idempotencyKey,
+      );
       final data = resp['data'] ?? resp;
+      final nextStatus =
+          (data['status'] ?? 'submitted').toString().toLowerCase();
       if (mounted) {
         setState(() => _isSubmitting = false);
+        if (nextStatus == 'submitted' ||
+            nextStatus == 'under_review' ||
+            nextStatus == 'pending_review') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Verification submitted. Dashboard actions unlock after admin approval.'),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Color(0xFF059669),
+            ),
+          );
+          Navigator.pushNamedAndRemoveUntil(
+              context, '/portal', (route) => false);
+          return;
+        }
         Navigator.pushReplacement(
             context,
             MaterialPageRoute(
                 builder: (_) => VerificationStatusView(
-                    statusData: data ?? {'status': 'submitted'})));
+                    statusData: data ?? {'status': 'not_started'})));
       }
     } catch (e) {
       if (mounted) setState(() => _isSubmitting = false);
-      ModalUtils.showError(context, 'Submission Failed',
-          'Something went wrong while submitting your documents. Please try again later.');
+      final message = e is ApiException && e.message.isNotEmpty
+          ? e.message
+          : 'Something went wrong while submitting your documents. Please try again later.';
+      if (mounted) {
+        ModalUtils.showError(context, 'Submission Failed', message);
+      }
     }
   }
 
@@ -784,6 +695,13 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
             hasError:
                 widget.session.adminRejections.containsKey('idPhotoFront'),
             errorMessage: widget.session.adminRejections['idPhotoFront'],
+            previewWidget: widget.session.idPhotoFront != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(widget.session.idPhotoFront!,
+                        width: 72, height: 72, fit: BoxFit.cover),
+                  )
+                : null,
             onTap: () async {
               await Navigator.push(
                   context,
@@ -814,6 +732,13 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
                 widget.session.idPhotoBack != null ? 'Approved' : 'Upload',
             hasError: widget.session.adminRejections.containsKey('idPhotoBack'),
             errorMessage: widget.session.adminRejections['idPhotoBack'],
+            previewWidget: widget.session.idPhotoBack != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(widget.session.idPhotoBack!,
+                        width: 72, height: 72, fit: BoxFit.cover),
+                  )
+                : null,
             onTap: () async {
               await Navigator.push(
                   context,
@@ -840,6 +765,13 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
             statusText: widget.session.selfie != null ? 'Approved' : 'Capture',
             hasError: widget.session.adminRejections.containsKey('selfie'),
             errorMessage: widget.session.adminRejections['selfie'],
+            previewWidget: widget.session.selfie != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(widget.session.selfie!,
+                        width: 72, height: 72, fit: BoxFit.cover),
+                  )
+                : null,
             onTap: () async {
               await Navigator.push(
                   context,
@@ -864,16 +796,24 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
 // ==========================================
 // 5. CAPTURE SCREENS WITH CROPPER
 // ==========================================
-class DocumentCapture extends StatelessWidget {
+class DocumentCapture extends StatefulWidget {
   final String title;
   final String subtitle;
-  final ValueChanged<File> onFileCaptured;
+  final Future<void> Function(File file) onFileCaptured;
 
   const DocumentCapture(
       {super.key,
       required this.title,
       required this.subtitle,
       required this.onFileCaptured});
+
+  @override
+  State<DocumentCapture> createState() => _DocumentCaptureState();
+}
+
+class _DocumentCaptureState extends State<DocumentCapture> {
+  File? _previewFile;
+  bool _isUploading = false;
 
   Future<void> _captureDocument(
       BuildContext context, ImageSource source) async {
@@ -910,11 +850,18 @@ class DocumentCapture extends StatelessWidget {
 
       final compressedFile =
           await ImageUploadService.compressImageFile(finalFile);
-      if (!context.mounted) return;
-      onFileCaptured(compressedFile);
-      Navigator.pop(context);
+      if (!mounted) return;
+
+      setState(() {
+        _previewFile = compressedFile;
+        _isUploading = true;
+      });
+
+      await widget.onFileCaptured(compressedFile);
+      if (mounted) Navigator.pop(context);
     } catch (_) {
-      if (context.mounted) {
+      if (mounted) {
+        setState(() => _isUploading = false);
         ModalUtils.showError(context, 'Process Error',
             "We couldn't prepare your photo. Please try again.");
       }
@@ -988,16 +935,67 @@ class DocumentCapture extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title,
+                    Text(widget.title,
                         style: GoogleFonts.poppins(
                             fontSize: 22,
                             fontWeight: FontWeight.w700,
                             color: _dark,
                             letterSpacing: -0.5)),
                     const SizedBox(height: 8),
-                    Text(subtitle,
+                    Text(widget.subtitle,
                         style: GoogleFonts.poppins(color: _grey, fontSize: 15)),
-                    const SizedBox(height: 48),
+                    const SizedBox(height: 32),
+                    if (_previewFile != null) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _surface,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: _grey.withOpacity(0.15)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.file(_previewFile!,
+                                  width: double.infinity,
+                                  height: 220,
+                                  fit: BoxFit.cover),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                if (_isUploading)
+                                  const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: _green,
+                                    ),
+                                  ),
+                                if (_isUploading) const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _isUploading
+                                        ? 'Uploading securely...'
+                                        : 'Preview ready',
+                                    style: GoogleFonts.poppins(
+                                      color: _isUploading ? _green : _dark,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                     GestureDetector(
                       onTap: () => _chooseSource(context),
                       child: CustomPaint(
@@ -1049,7 +1047,7 @@ class DocumentCapture extends StatelessWidget {
 }
 
 class SelfieCaptureScreen extends StatefulWidget {
-  final ValueChanged<File> onFileCaptured;
+  final Future<void> Function(File file) onFileCaptured;
   const SelfieCaptureScreen({super.key, required this.onFileCaptured});
   @override
   State<SelfieCaptureScreen> createState() => _SelfieCaptureScreenState();
@@ -1060,6 +1058,7 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
   CameraController? _cameraController;
   bool _cameraReady = false;
   bool _initializingCamera = false;
+  bool _isUploading = false;
 
   Future<void> _takeSelfie() async {
     try {
@@ -1078,15 +1077,18 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
       final imageFile = File(xfile.path);
       if (!await imageFile.exists()) throw Exception();
 
-      // Compress selfie before returning
       final compressedFile =
           await ImageUploadService.compressImageFile(imageFile);
 
-      setState(() => _capturedImage = compressedFile);
-      widget.onFileCaptured(_capturedImage!);
+      setState(() {
+        _capturedImage = compressedFile;
+        _isUploading = true;
+      });
+      await widget.onFileCaptured(_capturedImage!);
       if (!mounted) return;
       Navigator.pop(context);
     } catch (e) {
+      setState(() => _isUploading = false);
       ModalUtils.showError(context, 'Capture Error',
           "Failed to capture selfie. Please try again.");
     }
@@ -1174,6 +1176,26 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
                                   child: Icon(PhosphorIconsRegular.userFocus,
                                       size: 80, color: _grey))),
                     ),
+                    if (_isUploading) ...[
+                      const SizedBox(height: 24),
+                      const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: _green,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Uploading selfie securely...',
+                        style: GoogleFonts.poppins(
+                          color: _green,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1181,7 +1203,9 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
             Padding(
                 padding: const EdgeInsets.all(24),
                 child: PrimaryButton(
-                    text: 'Capture Selfie', onPressed: _takeSelfie))
+                    text: _isUploading ? 'Uploading...' : 'Capture Selfie',
+                    onPressed: _isUploading ? () {} : _takeSelfie,
+                    enabled: !_isUploading))
           ],
         ),
       ),
@@ -1199,7 +1223,7 @@ class VerificationStatusView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status =
-        statusData['status']?.toString().toLowerCase() ?? 'submitted';
+        statusData['status']?.toString().toLowerCase() ?? 'not_started';
 
     if (status == 'approved') {
       AppSession.currentRole = 'landlord';
@@ -1210,8 +1234,75 @@ class VerificationStatusView extends StatelessWidget {
       return const _SuccessScreen();
     } else if (status == 'rejected' || status == 'action_required') {
       return _RejectedScreen(rejections: statusData['reasons'] ?? []);
+    } else if (status == 'not_started') {
+      return _NotStartedScreen();
     }
     return _ReviewScreen(statusData: statusData);
+  }
+}
+
+class _NotStartedScreen extends StatelessWidget {
+  const _NotStartedScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bg,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE0F2FE),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  PhosphorIconsFill.shieldCheck,
+                  size: 72,
+                  color: Color(0xFF2563EB),
+                ),
+              ),
+              const SizedBox(height: 32),
+              Text(
+                'Verification not started',
+                style: GoogleFonts.poppins(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: _dark,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'You have no active landlord KYC yet. Start the verification process to unlock dashboard access and listings.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  color: _grey,
+                  fontSize: 15,
+                  height: 1.5,
+                ),
+              ),
+              const Spacer(),
+              PrimaryButton(
+                text: 'Start Verification',
+                onPressed: () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => VerificationRequirementHub(
+                      session: VerificationSession(),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1231,8 +1322,8 @@ class _RejectedScreen extends StatelessWidget {
               const Spacer(),
               Container(
                   padding: const EdgeInsets.all(24),
-                  decoration: const BoxDecoration(
-                      color: Color(0xFFFEF2F2), shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2), shape: BoxShape.circle),
                   child: const Icon(PhosphorIconsFill.warningCircle,
                       size: 80, color: Color(0xFFEF4444))),
               const SizedBox(height: 32),
@@ -1304,22 +1395,23 @@ class _ReviewScreen extends StatelessWidget {
   final Map<String, dynamic> statusData;
   const _ReviewScreen({required this.statusData});
 
-  String _formatDate(String? isoString) {
-    if (isoString == null || isoString.isEmpty) return '';
-    try {
-      final date = DateTime.parse(isoString).toLocal();
-      return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-    } catch (_) {
-      return '';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final status = statusData['status']?.toString().toLowerCase() ?? 'submitted';
-    final createdAt = statusData['created_at']?.toString();
-    final adminNotes = statusData['admin_notes']?.toString();
-    final dateStr = _formatDate(createdAt);
+    final rawStatus =
+        statusData['status']?.toString().toLowerCase() ?? 'submitted';
+    final status = rawStatus == 'pending_review' ? 'under_review' : rawStatus;
+
+    final bool submittedComplete = status == 'submitted' ? false : true;
+    final bool underReviewCurrent = status == 'under_review';
+    final bool underReviewComplete =
+        status == 'under_review' || status == 'submitted';
+
+    final String heading = status == 'submitted'
+        ? 'Verification received'
+        : 'Verification in progress';
+    final String subheading = status == 'submitted'
+        ? 'We have received your documents and are preparing them for review.'
+        : 'Your application is currently being reviewed by the admin team.';
 
     return Scaffold(
       backgroundColor: _bg,
@@ -1340,50 +1432,22 @@ class _ReviewScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Reviewing your information',
+                    Text(heading,
                         style: GoogleFonts.poppins(color: _grey, fontSize: 16)),
+                    const SizedBox(height: 8),
+                    Text(subheading,
+                        style: GoogleFonts.poppins(color: _grey, fontSize: 14)),
                     const SizedBox(height: 48),
-                    _buildTimelineStep(
-                        'Submitted',
-                        dateStr.isNotEmpty ? 'Received on $dateStr' : 'Information received',
-                        true,
-                        status == 'submitted'),
-
+                    _buildTimelineStep('Submitted', 'Information received',
+                        submittedComplete, status == 'submitted'),
                     _buildTimelineStep(
                         'Under Review',
-                        'Currently reviewing documents',
-                        status == 'approved' || status == 'rejected',
-                        status == 'under_review' || status == 'pending_review'),
+                        'Admin team is checking your documents',
+                        underReviewComplete,
+                        underReviewCurrent),
                     _buildTimelineStep(
-                        'Approved',
-                        'Pending final sign-off',
-                        status == 'approved',
-                        status == 'approved',
+                        'Approved', 'Pending final sign-off', false, false,
                         isLast: true),
-                    if (adminNotes != null && adminNotes.isNotEmpty) ...[
-                      const SizedBox(height: 32),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                            color: const Color(0xFFFEF2F2),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFFCA5A5))),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Admin Note:',
-                                style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w700,
-                                    color: const Color(0xFF991B1B))),
-                            const SizedBox(height: 8),
-                            Text(adminNotes,
-                                style: GoogleFonts.poppins(
-                                    color: const Color(0xFF991B1B),
-                                    fontSize: 14)),
-                          ],
-                        ),
-                      ),
-                    ],
                     const SizedBox(height: 64),
                     Container(
                       padding: const EdgeInsets.all(24),
@@ -1402,14 +1466,16 @@ class _ReviewScreen extends StatelessWidget {
                           const Icon(PhosphorIconsRegular.clock,
                               size: 32, color: _green),
                           const SizedBox(height: 16),
-                          Text('Estimated Completion',
+                          Text('Current stage',
                               style: GoogleFonts.poppins(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
                                   color: _dark)),
                           const SizedBox(height: 8),
                           Text(
-                              '1-2 business days. We will notify you via email and push notification.',
+                              status == 'submitted'
+                                  ? 'Waiting for admin review.'
+                                  : 'Your documents are currently under review.',
                               textAlign: TextAlign.center,
                               style: GoogleFonts.poppins(
                                   color: _grey, fontSize: 14)),
@@ -1423,7 +1489,7 @@ class _ReviewScreen extends StatelessWidget {
             Padding(
                 padding: const EdgeInsets.all(24),
                 child: PrimaryButton(
-                    text: 'Continue to Dashboard',
+                    text: 'Go to Dashboard',
                     onPressed: () => Navigator.pushNamedAndRemoveUntil(
                         context, '/portal', (route) => false))),
           ],
@@ -1515,9 +1581,9 @@ class _SuccessScreen extends StatelessWidget {
                       color: _grey, fontSize: 15, height: 1.5)),
               const Spacer(),
               PrimaryButton(
-                  text: 'Go to Dashboard',
-                  onPressed: () =>
-                      Navigator.popUntil(context, (route) => route.isFirst))
+                  text: 'Back to Login',
+                  onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                      context, '/login', (route) => false))
             ],
           ),
         ),
@@ -1572,6 +1638,7 @@ class VerificationCard extends StatelessWidget {
   final VoidCallback? onTap;
   final bool hasError;
   final String? errorMessage;
+  final Widget? previewWidget;
 
   const VerificationCard({
     super.key,
@@ -1583,6 +1650,7 @@ class VerificationCard extends StatelessWidget {
     this.onTap,
     this.hasError = false,
     this.errorMessage,
+    this.previewWidget,
   });
 
   @override
@@ -1656,6 +1724,10 @@ class VerificationCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (previewWidget != null) ...[
+              const SizedBox(height: 16),
+              previewWidget!,
+            ],
             if (hasError && errorMessage != null) ...[
               const SizedBox(height: 16),
               Container(
@@ -1744,11 +1816,10 @@ class ModalUtils {
           try {
             Navigator.pop(context);
           } catch (_) {}
-          if (onOk != null) {
+          if (onOk != null)
             try {
               onOk();
             } catch (_) {}
-          }
         }
       });
     }

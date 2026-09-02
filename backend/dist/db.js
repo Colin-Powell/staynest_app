@@ -1,6 +1,14 @@
 import { Pool } from 'pg';
 import { env } from './config.js';
-export const pool = new Pool({ connectionString: env.databaseUrl });
+const sslMode = new URL(env.databaseUrl).searchParams.get('sslmode');
+export const pool = new Pool({
+    connectionString: env.databaseUrl,
+    ssl: sslMode === 'verify-full' || sslMode === 'verify-ca'
+        ? { rejectUnauthorized: true }
+        : sslMode === 'require'
+            ? { rejectUnauthorized: false }
+            : undefined,
+});
 pool.on('error', (error) => {
     console.error('Postgres client error:', error);
 });

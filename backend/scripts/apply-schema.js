@@ -12,9 +12,14 @@ async function applySchema() {
     process.exit(1);
   }
 
+  const sslMode = new URL(connectionString).searchParams.get('sslmode');
   const pool = new Pool({
     connectionString,
-    ssl: connectionString.includes('render.com') ? { rejectUnauthorized: false } : false
+    ssl: sslMode === 'verify-full' || sslMode === 'verify-ca'
+      ? { rejectUnauthorized: true }
+      : sslMode === 'require'
+        ? { rejectUnauthorized: false }
+        : undefined,
   });
 
   try {

@@ -135,7 +135,7 @@ class _RegisterViewState extends State<RegisterView>
       if (mounted) {
         setState(() => _isLoading = false);
         if (AppSession.isLandlord) {
-          Navigator.pushReplacementNamed(context, '/verification_center');
+          Navigator.pushReplacementNamed(context, '/otp');
         } else {
           Navigator.pushReplacementNamed(context, '/survey');
         }
@@ -253,9 +253,8 @@ class _RegisterViewState extends State<RegisterView>
                           label: 'Email Address',
                           keyboardType: TextInputType.emailAddress,
                           validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
+                            if (v == null || v.trim().isEmpty)
                               return 'Enter your email';
-                            }
                             if (!v.contains('@')) return 'Enter a valid email';
                             return null;
                           },

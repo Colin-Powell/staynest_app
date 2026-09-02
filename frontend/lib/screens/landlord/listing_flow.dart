@@ -48,8 +48,9 @@ class PickedVideo {
   final File file;
   String? url;
   bool isUploading;
+  double progress;
 
-  PickedVideo(this.file, {this.url, this.isUploading = false});
+  PickedVideo(this.file, {this.url, this.isUploading = false, this.progress = 0.0});
 }
 
 class AddListingFlow extends StatefulWidget {
@@ -101,12 +102,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // --- Step 3: Amenities ---
   final Set<String> _selectedAttributes = {};
   final List<String> _customFeatures = [];
-  final TextEditingController _customFeatureController =
-      TextEditingController();
+  final TextEditingController _customFeatureController = TextEditingController();
 
-  // --- Step 4: Photos ---
+  // --- Step 4: Photos & Video ---
   final List<PickedPhoto> _pickedPhotos = [];
   PickedVideo? _pickedVideo;
+  VideoPlayerController? _videoThumbnailController;
 
   // --- Step 5: Pricing and Details ---
   final _rentPrice = TextEditingController();
@@ -124,7 +125,6 @@ class _AddListingFlowState extends State<AddListingFlow> {
   @override
   void initState() {
     super.initState();
-
     _loadDraft();
   }
 
@@ -139,11 +139,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
     _rentPrice.dispose();
     _serviceCharges.dispose();
     _securityDeposit.dispose();
+    _videoThumbnailController?.dispose();
     super.dispose();
   }
 
   // ==========================================
-  // DRAFT & SUBMISSION LOGIC (Omitted unchanged logic for brevity)
+  // DRAFT & SUBMISSION LOGIC
   // ==========================================
   Future<void> _loadDraft() async {
     final existing = widget.property;
@@ -160,6 +161,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
       _selectedLatitude = (existing['lat'] as num?)?.toDouble();
       _selectedLongitude = (existing['lng'] as num?)?.toDouble();
       _selectedLocationLabel = _locationSearch.text;
+      
       final existingImages = existing['images'];
       if (existingImages is List) {
         for (final image in existingImages) {
@@ -169,20 +171,25 @@ class _AddListingFlowState extends State<AddListingFlow> {
           }
         }
       } else if (existing['image_url'] != null) {
-        _pickedPhotos.add(PickedPhoto(File(''),
-            url: existing['image_url'].toString(), progress: 1.0));
+        _pickedPhotos.add(PickedPhoto(File(''), url: existing['image_url'].toString(), progress: 1.0));
       }
+      
       final existingVideo = existing['video_url']?.toString();
       if (existingVideo != null && existingVideo.isNotEmpty) {
         _pickedVideo = PickedVideo(File(''), url: existingVideo);
+        // Load thumbnail for existing video
+        _videoThumbnailController = VideoPlayerController.networkUrl(Uri.parse(existingVideo))
+          ..initialize().then((_) {
+            if (mounted) setState(() {});
+          });
       }
+      
       final existingAmenities = existing['amenities'];
       if (existingAmenities is List) {
         for (final amenity in existingAmenities) {
           final str = amenity.toString();
           if (str.startsWith('custom:')) {
-            var customFeatures;
-            customFeatures.add(str.substring(7));
+            _customFeatures.add(str.substring(7));
           } else {
             final mapped = PropertyTaxonomy.mapLegacyLabel(str);
             final attr = PropertyTaxonomy.getAttributeById(mapped);
@@ -193,6 +200,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
       if (mounted) setState(() => _loadingDraft = false);
       return;
     }
+    
     try {
       final drafts = await PropertyService.instance.getDrafts();
       if (drafts.isNotEmpty) {
@@ -206,10 +214,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
         _selectedCity = data['city'] ?? 'Dubai';
         _neighborhood.text = data['address'] ?? '';
         _locationSearch.text = data['address'] ?? '';
-        if (data['lat'] != null)
-          _selectedLatitude = (data['lat'] as num).toDouble();
-        if (data['lng'] != null)
-          _selectedLongitude = (data['lng'] as num).toDouble();
+        if (data['lat'] != null) _selectedLatitude = (data['lat'] as num).toDouble();
+        if (data['lng'] != null) _selectedLongitude = (data['lng'] as num).toDouble();
         _rentPrice.text = data['price']?.toString() ?? '';
         if (data['amenities'] is List) {
           for (final a in (data['amenities'] as List)) {
@@ -248,15 +254,13 @@ class _AddListingFlowState extends State<AddListingFlow> {
           ..._customFeatures.map((c) => 'custom:$c')
         ],
       };
-      final data =
-          await PropertyService.instance.saveDraft(payload, draftId: _draftId);
+      final data = await PropertyService.instance.saveDraft(payload, draftId: _draftId);
       if (data['id'] != null) _draftId = data['id'].toString();
     } catch (e) {
       debugPrint('Failed to save draft $e');
     }
     if (mounted && showConfirmation) {
-      ModalUtils.showSuccess(context, "Draft Saved!",
-          "Your progress has been safely tucked away. You can resume anytime.");
+      ModalUtils.showSuccess(context, "Draft Saved!", "Your progress has been safely tucked away. You can resume anytime.");
     }
   }
 
@@ -283,8 +287,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   void _selectLocation(GeocodingSuggestion suggestion) {
     setState(() {
       _locationSearch.text = suggestion.displayName;
-      _locationSearch.selection =
-          TextSelection.collapsed(offset: _locationSearch.text.length);
+      _locationSearch.selection = TextSelection.collapsed(offset: _locationSearch.text.length);
       _selectedLatitude = suggestion.lat;
       _selectedLongitude = suggestion.lng;
       _selectedLocationLabel = suggestion.displayName.trim();
@@ -301,8 +304,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
     try {
       final compressed = await ImageUploadService.compressImageFile(photo.file);
-      final task =
-          UploadsService.uploadFileWithProgress(compressed, (progress) {
+      final task = UploadsService.uploadFileWithProgress(compressed, (progress) {
         if (!mounted) return;
         setState(() => photo.progress = progress);
       });
@@ -330,37 +332,51 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
     final file = File(picked.path);
     final controller = VideoPlayerController.file(file);
+    
     try {
       await controller.initialize();
       if (controller.value.duration > const Duration(seconds: 30)) {
         if (mounted) {
-          ModalUtils.showError(context, 'Video Too Long',
-              'Choose a property video that is 30 seconds or shorter.');
+          ModalUtils.showError(context, 'Video Too Long', 'Choose a property video that is 30 seconds or shorter.');
         }
+        await controller.dispose();
         return;
       }
 
-      final video = PickedVideo(file, isUploading: true);
-      setState(() => _pickedVideo = video);
-      final task = UploadsService.uploadFileWithProgress(file, (_) {});
-      video.url = await task.future;
-      if (mounted) setState(() => video.isUploading = false);
+      setState(() {
+        _videoThumbnailController?.dispose();
+        _videoThumbnailController = controller;
+        _pickedVideo = PickedVideo(file, isUploading: true, progress: 0.0);
+      });
+
+      final task = UploadsService.uploadFileWithProgress(file, (progress) {
+        if (mounted) {
+          setState(() {
+            _pickedVideo?.progress = progress;
+          });
+        }
+      });
+      
+      final url = await task.future;
+      if (mounted) {
+        setState(() {
+          _pickedVideo?.url = url;
+          _pickedVideo?.isUploading = false;
+          _pickedVideo?.progress = 1.0;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() => _pickedVideo = null);
-        ModalUtils.showError(context, 'Video Upload Failed',
-            'We could not process that video. Please try another clip.');
+        ModalUtils.showError(context, 'Video Upload Failed', 'We could not process that video. Please try another clip.');
       }
-    } finally {
       await controller.dispose();
     }
   }
 
   Future<void> _publishListing() async {
     final verificationStatus = await VerificationApi.getVerificationStatus();
-    final normalizedStatus =
-        verificationStatus?['status']?.toString().toLowerCase() ??
-            'not_started';
+    final normalizedStatus = verificationStatus?['status']?.toString().toLowerCase() ?? 'not_started';
     final isApproved = normalizedStatus == 'approved';
 
     if (!isApproved || AppSession.currentUserVerified != true) {
@@ -371,14 +387,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
     }
 
     if (_pickedPhotos.isEmpty) {
-      ModalUtils.showError(context, "Photos Required",
-          "Please add at least one photo of your amazing property.");
+      ModalUtils.showError(context, "Photos Required", "Please add at least one photo of your amazing property.");
       return;
     }
 
     if (AppSession.apiToken == null) {
-      ModalUtils.showError(context, "Session Expired",
-          "Please log out and log back in, then try again.");
+      ModalUtils.showError(context, "Session Expired", "Please log out and log back in, then try again.");
       return;
     }
 
@@ -389,23 +403,19 @@ class _AddListingFlowState extends State<AddListingFlow> {
     });
 
     try {
-      if (_pickedPhotos.any((p) => p.isUploading))
-        throw Exception('Please wait for all photos to finish uploading.');
-      if (_pickedPhotos.any((p) => p.error != null))
-        throw Exception(
-            'Some photos failed to upload. Please remove them or try again.');
+      if (_pickedPhotos.any((p) => p.isUploading)) throw Exception('Please wait for all photos to finish uploading.');
+      if (_pickedPhotos.any((p) => p.error != null)) throw Exception('Some photos failed to upload. Please remove them or try again.');
+      if (_pickedVideo?.isUploading == true) throw Exception('Please wait for the video to finish uploading.');
+      
       final uploadedUrls = _pickedPhotos.map((p) => p.url!).toList();
       if (uploadedUrls.isEmpty) throw Exception('No photos uploaded');
 
       final resolvedAddress = _locationSearch.text.trim();
       final addressParts = resolvedAddress.split(',');
-      final derivedCity = addressParts.length > 1
-          ? addressParts[addressParts.length - 2].trim()
-          : resolvedAddress;
+      final derivedCity = addressParts.length > 1 ? addressParts[addressParts.length - 2].trim() : resolvedAddress;
 
       if (_selectedLatitude == null || _selectedLongitude == null) {
-        throw Exception(
-            'Select a location from the address suggestions before publishing.');
+        throw Exception('Select a location from the address suggestions before publishing.');
       }
       final selectedAmenities = [
         ..._selectedAttributes,
@@ -434,8 +444,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
       final existingPropertyId = widget.property?['id']?.toString();
       if (existingPropertyId != null && existingPropertyId.isNotEmpty) {
-        await repo.updatePropertyFromListing(
-            propertyId: existingPropertyId, listingPayload: propertyPayload);
+        await repo.updatePropertyFromListing(propertyId: existingPropertyId, listingPayload: propertyPayload);
       } else {
         await repo.createPropertyFromListing(listingPayload: propertyPayload);
       }
@@ -451,25 +460,22 @@ class _AddListingFlowState extends State<AddListingFlow> {
       ModalUtils.showSuccess(
         context,
         widget.isEditing ? "Listing Updated" : "Hooray! Listing Published",
-        widget.isEditing
-            ? "Your property details were updated successfully."
-            : "Your property is now live and ready to be discovered.",
+        widget.isEditing ? "Your property details were updated successfully." : "Your property is now live and ready to be discovered.",
         onOk: () {
           Navigator.pop(context);
           Navigator.pop(context);
         },
       );
     } catch (e) {
-      if (mounted)
-        ModalUtils.showError(
-            context, "Oops! We hit a snag", ApiResult.mapError(e));
+      if (mounted) ModalUtils.showError(context, "Oops! We hit a snag", ApiResult.mapError(e));
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _submitting = false;
           _isUploadingImages = false;
           _uploadProgress = 0.0;
         });
+      }
     }
   }
 
@@ -483,18 +489,14 @@ class _AddListingFlowState extends State<AddListingFlow> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(PhosphorIconsFill.lockKey,
-                color: Color(0xFFF59E0B), size: 64),
+            const Icon(PhosphorIconsFill.lockKey, color: Color(0xFFF59E0B), size: 64),
             const SizedBox(height: 16),
-            Text('Verification Required',
-                style: GoogleFonts.poppins(
-                    fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
+            Text('Verification Required', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
             const SizedBox(height: 8),
             Text(
                 'To keep our community safe, we require all landlords to be verified before their listings go live. We\'ve saved your draft!',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                    color: _grey, height: 1.5, fontSize: 14)),
+                style: GoogleFonts.poppins(color: _grey, height: 1.5, fontSize: 14)),
             const SizedBox(height: 24),
           ],
         ),
@@ -502,24 +504,18 @@ class _AddListingFlowState extends State<AddListingFlow> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text('Edit Draft',
-                  style: GoogleFonts.poppins(
-                      color: _grey, fontWeight: FontWeight.w600))),
+              child: Text('Edit Draft', style: GoogleFonts.poppins(color: _grey, fontWeight: FontWeight.w600))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
                 backgroundColor: _green,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(32)),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 elevation: 0),
             onPressed: () {
               Navigator.pop(ctx);
               Navigator.pushNamed(context, '/verification_center');
             },
-            child: Text('Verify Now',
-                style: GoogleFonts.poppins(
-                    color: _surface, fontWeight: FontWeight.w600)),
+            child: Text('Verify Now', style: GoogleFonts.poppins(color: _surface, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -530,52 +526,31 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // NAVIGATION
   // ==========================================
   void _nextStep() {
-    if (_currentStep == 1 && !(_step1Key.currentState?.validate() ?? false))
-      return;
-    if (_currentStep == 2 && !(_step2Key.currentState?.validate() ?? false))
-      return;
+    if (_currentStep == 1 && !(_step1Key.currentState?.validate() ?? false)) return;
+    if (_currentStep == 2 && !(_step2Key.currentState?.validate() ?? false)) return;
     if (_currentStep == 4 && _pickedPhotos.isEmpty) {
-      ModalUtils.showError(context, "Photos Required",
-          "Let's show off your property! Please upload at least one photo.");
+      ModalUtils.showError(context, "Photos Required", "Let's show off your property! Please upload at least one photo.");
       return;
     }
-    if (_currentStep == 5 && !(_step5Key.currentState?.validate() ?? false))
-      return;
+    if (_currentStep == 5 && !(_step5Key.currentState?.validate() ?? false)) return;
 
     if (_currentStep < _totalSteps) {
       setState(() => _currentStep++);
-      _pageController.nextPage(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic);
+      _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
     }
   }
 
   void _previousStep() {
     if (_currentStep > 1) {
       setState(() => _currentStep--);
-      _pageController.previousPage(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic);
+      _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
     } else {
       Navigator.pop(context);
     }
   }
 
   String _formatDate(DateTime date) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
@@ -605,9 +580,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   @override
   Widget build(BuildContext context) {
     if (_loadingDraft) {
-      return const Scaffold(
-          backgroundColor: _bg,
-          body: Center(child: CircularProgressIndicator(color: _green)));
+      return const Scaffold(backgroundColor: _bg, body: Center(child: CircularProgressIndicator(color: _green)));
     }
 
     return Scaffold(
@@ -619,13 +592,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
         leading: GestureDetector(
           onTap: _previousStep,
           behavior: HitTestBehavior.opaque,
-          child: const Icon(PhosphorIconsRegular.caretLeft,
-              size: 24, color: _dark),
+          child: const Icon(PhosphorIconsRegular.caretLeft, size: 24, color: _dark),
         ),
         title: _currentStep < _totalSteps
-            ? Text('Add New Listing',
-                style: GoogleFonts.poppins(
-                    color: _dark, fontWeight: FontWeight.w700, fontSize: 20))
+            ? Text('Add New Listing', style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w700, fontSize: 20))
             : null,
         centerTitle: true,
       ),
@@ -670,19 +640,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isActive || isPast ? _green : _surface,
-              border: isActive || isPast
-                  ? null
-                  : Border.all(color: _grey.withOpacity(0.3)),
+              border: isActive || isPast ? null : Border.all(color: _grey.withOpacity(0.3)),
             ),
             child: Center(
               child: isPast
-                  ? const Icon(PhosphorIconsBold.check,
-                      color: _surface, size: 16)
-                  : Text(stepNum.toString(),
-                      style: GoogleFonts.poppins(
-                          color: isActive ? _surface : _grey,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13)),
+                  ? const Icon(PhosphorIconsBold.check, color: _surface, size: 16)
+                  : Text(stepNum.toString(), style: GoogleFonts.poppins(color: isActive ? _surface : _grey, fontWeight: FontWeight.w700, fontSize: 13)),
             ),
           );
         }),
@@ -702,12 +665,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Basic Information',
-                style: GoogleFonts.poppins(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: _dark,
-                    letterSpacing: -0.5)),
+            Text('Basic Information', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
             const SizedBox(height: 24),
             _buildLabel('Property Type'),
             const SizedBox(height: 12),
@@ -715,14 +673,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
               spacing: 12,
               runSpacing: 12,
               children: [
-                _buildPropertyTypeChip(
-                    'Apartment', 'assets/images/apartments.webp'),
-                _buildPropertyTypeChip(
-                    'Bedsitter', 'assets/images/bedsitter.webp'),
-                _buildPropertyTypeChip(
-                    'Single Room', 'assets/images/singleroom.webp'),
-                _buildPropertyTypeChip(
-                    'One Bedroom', 'assets/images/onebedroom.webp'),
+                _buildPropertyTypeChip('Apartment', 'assets/images/apartments.webp'),
+                _buildPropertyTypeChip('Bedsitter', 'assets/images/bedsitter.webp'),
+                _buildPropertyTypeChip('Single Room', 'assets/images/singleroom.webp'),
+                _buildPropertyTypeChip('One Bedroom', 'assets/images/onebedroom.webp'),
               ],
             ),
             const SizedBox(height: 32),
@@ -732,37 +686,21 @@ class _AddListingFlowState extends State<AddListingFlow> {
             Row(
               children: [
                 Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      _buildLabel('Bedrooms'),
-                      _buildCounter(
-                          () => setState(() {
-                                if (_bedrooms > 0) _bedrooms--;
-                              }),
-                          () => setState(() => _bedrooms++),
-                          _bedrooms),
-                    ])),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _buildLabel('Bedrooms'),
+                  _buildCounter(() => setState(() { if (_bedrooms > 0) _bedrooms--; }), () => setState(() => _bedrooms++), _bedrooms),
+                ])),
                 const SizedBox(width: 16),
                 Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      _buildLabel('Bathrooms'),
-                      _buildCounter(
-                          () => setState(() {
-                                if (_bathrooms > 0) _bathrooms--;
-                              }),
-                          () => setState(() => _bathrooms++),
-                          _bathrooms),
-                    ])),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _buildLabel('Bathrooms'),
+                  _buildCounter(() => setState(() { if (_bathrooms > 0) _bathrooms--; }), () => setState(() => _bathrooms++), _bathrooms),
+                ])),
               ],
             ),
             const SizedBox(height: 24),
             _buildLabel('Description'),
-            _buildTextField(_description,
-                'A modern and spacious 2-bedroom apartment\nin a secure compound and amenities',
-                maxLines: 5),
+            _buildTextField(_description, 'A modern and spacious 2-bedroom apartment\nin a secure compound and amenities', maxLines: 5),
             const SizedBox(height: 48),
             _buildNextButton('Next: Location', _nextStep),
             const SizedBox(height: 24),
@@ -804,43 +742,25 @@ class _AddListingFlowState extends State<AddListingFlow> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Location & Address',
-                style: GoogleFonts.poppins(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: _dark,
-                    letterSpacing: -0.5)),
+            Text('Location & Address', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
             const SizedBox(height: 32),
             _buildLabel('Search exact location'),
             TextFormField(
               controller: _locationSearch,
               onChanged: _searchLocations,
               textInputAction: TextInputAction.search,
-              style: GoogleFonts.poppins(
-                  color: _dark, fontWeight: FontWeight.w500, fontSize: 14),
+              style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w500, fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Start typing an address or landmark',
-                hintStyle: GoogleFonts.poppins(
-                    color: _grey, fontWeight: FontWeight.w400, fontSize: 14),
-                prefixIcon: const Icon(PhosphorIconsRegular.magnifyingGlass,
-                    color: _grey, size: 20),
-                suffixIcon: _selectedLatitude != null
-                    ? const Icon(PhosphorIconsFill.checkCircle,
-                        color: _green, size: 20)
-                    : null,
+                hintStyle: GoogleFonts.poppins(color: _grey, fontWeight: FontWeight.w400, fontSize: 14),
+                prefixIcon: const Icon(PhosphorIconsRegular.magnifyingGlass, color: _grey, size: 20),
+                suffixIcon: _selectedLatitude != null ? const Icon(PhosphorIconsFill.checkCircle, color: _green, size: 20) : null,
                 filled: true,
                 fillColor: _surface,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: _grey.withOpacity(0.2))),
-                enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: _grey.withOpacity(0.2))),
-                focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: _green)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _green)),
               ),
             ),
             if (_locationSuggestions.isNotEmpty)
@@ -849,23 +769,13 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 decoration: BoxDecoration(
                   color: _surface,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4))
-                  ],
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
                 ),
                 child: Column(
                   children: _locationSuggestions.map((suggestion) {
                     return ListTile(
-                      leading: const Icon(PhosphorIconsRegular.mapPin,
-                          color: _grey, size: 20),
-                      title: Text(suggestion.displayName,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                              GoogleFonts.poppins(fontSize: 14, color: _dark)),
+                      leading: const Icon(PhosphorIconsRegular.mapPin, color: _grey, size: 20),
+                      title: Text(suggestion.displayName, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontSize: 14, color: _dark)),
                       onTap: () => _selectLocation(suggestion),
                     );
                   }).toList(),
@@ -876,14 +786,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
               onTap: _openLocationPickerSheet,
               child: Row(
                 children: [
-                  const Icon(PhosphorIconsRegular.crosshair,
-                      color: _green, size: 20),
+                  const Icon(PhosphorIconsRegular.crosshair, color: _green, size: 20),
                   const SizedBox(width: 8),
-                  Text('Use my current location',
-                      style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: _green)),
+                  Text('Use my current location', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: _green)),
                 ],
               ),
             ),
@@ -893,20 +798,16 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 color: _surface,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: _grey.withOpacity(0.2)),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4))
-                ],
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
               ),
               child: Row(
                 children: [
                   ClipRRect(
-                    borderRadius: const BorderRadius.horizontal(
-                        left: Radius.circular(20)),
-                    child: Image.asset('assets/images/mapsheet.webp',
-                        width: 100, height: 120, fit: BoxFit.cover),
+                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Image.asset('assets/images/mapsheet.webp', width: 90, height: 100, fit: BoxFit.contain), // Fixed Image Fit
+                    ),
                   ),
                   Expanded(
                     child: Padding(
@@ -916,21 +817,13 @@ class _AddListingFlowState extends State<AddListingFlow> {
                         children: [
                           Row(
                             children: [
-                              const Icon(PhosphorIconsRegular.info,
-                                  color: _green, size: 18),
+                              const Icon(PhosphorIconsRegular.info, color: _green, size: 18),
                               const SizedBox(width: 8),
-                              Text('Location Setup',
-                                  style: GoogleFonts.poppins(
-                                      fontWeight: FontWeight.w600,
-                                      color: _dark,
-                                      fontSize: 14)),
+                              Text('Location Setup', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: _dark, fontSize: 14)),
                             ],
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                              'Search for the exact location or use your current location. The address will auto-fill.',
-                              style: GoogleFonts.poppins(
-                                  fontSize: 12, color: _grey, height: 1.4)),
+                          Text('Search for the exact location or use your current location. The address will auto-fill.', style: GoogleFonts.poppins(fontSize: 12, color: _grey, height: 1.4)),
                         ],
                       ),
                     ),
@@ -951,10 +844,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // STEP 3: Amenities
   // ==========================================
   Widget _buildStep3Amenities() {
-    final popular =
-        PropertyTaxonomy.getPopularAttributes(propertyType: _propertyType);
-    final allAttrs =
-        PropertyTaxonomy.getAttributesForPropertyType(_propertyType);
+    final popular = PropertyTaxonomy.getPopularAttributes(propertyType: _propertyType);
+    final allAttrs = PropertyTaxonomy.getAttributesForPropertyType(_propertyType);
     final categorized = <String, List<PropertyAttribute>>{};
 
     for (var attr in allAttrs) {
@@ -970,21 +861,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Property Features',
-              style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: _dark,
-                  letterSpacing: -0.5)),
+          Text('Property Features', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
           const SizedBox(height: 4),
-          Text(
-              'Select the features, utilities and services available at this property.',
-              style: GoogleFonts.poppins(fontSize: 14, color: _grey)),
+          Text('Select the features, utilities and services available at this property.', style: GoogleFonts.poppins(fontSize: 14, color: _grey)),
           const SizedBox(height: 32),
           if (popular.isNotEmpty) ...[
-            Text('Popular for students',
-                style: GoogleFonts.poppins(
-                    fontSize: 18, fontWeight: FontWeight.w600, color: _dark)),
+            Text('Popular for students', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: _dark)),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
@@ -992,7 +874,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
               children: popular.map((p) => _buildFeatureChip(p)).toList(),
             ),
             const SizedBox(height: 32),
-            Container(height: 1, color: _grey.withValues(alpha: 0.2)),
+            Container(height: 1, color: _grey.withOpacity(0.2)),
             const SizedBox(height: 24),
           ],
           ...PropertyTaxonomy.categories.map((cat) {
@@ -1001,11 +883,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(cat.label,
-                    style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: _dark)),
+                Text(cat.label, style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: _dark)),
                 const SizedBox(height: 16),
                 Wrap(
                   spacing: 8,
@@ -1016,23 +894,18 @@ class _AddListingFlowState extends State<AddListingFlow> {
               ],
             );
           }),
-          Text('Custom Features',
-              style: GoogleFonts.poppins(
-                  fontSize: 18, fontWeight: FontWeight.w600, color: _dark)),
+          Text('Custom Features', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600, color: _dark)),
           const SizedBox(height: 16),
           ..._customFeatures.map((c) => Padding(
                 padding: const EdgeInsets.only(bottom: 8.0),
                 child: Row(
                   children: [
-                    const Icon(Icons.check_circle, color: _green, size: 20),
+                    const Icon(PhosphorIconsFill.checkCircle, color: _green, size: 20),
                     const SizedBox(width: 8),
-                    Expanded(
-                        child:
-                            Text(c, style: GoogleFonts.poppins(fontSize: 14))),
+                    Expanded(child: Text(c, style: GoogleFonts.poppins(fontSize: 14))),
                     IconButton(
-                      icon: const Icon(Icons.close, size: 20, color: _grey),
-                      onPressed: () =>
-                          setState(() => _customFeatures.remove(c)),
+                      icon: const Icon(PhosphorIconsRegular.x, size: 16, color: _grey),
+                      onPressed: () => setState(() => _customFeatures.remove(c)),
                     ),
                   ],
                 ),
@@ -1045,16 +918,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
                   decoration: InputDecoration(
                     hintText: 'Add another feature...',
                     hintStyle: GoogleFonts.poppins(color: _grey, fontSize: 14),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide:
-                            BorderSide(color: _grey.withValues(alpha: 0.3))),
-                    enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide:
-                            BorderSide(color: _grey.withValues(alpha: 0.3))),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    filled: true,
+                    fillColor: _surface,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _green)),
                   ),
                   onSubmitted: (v) {
                     if (v.trim().isNotEmpty) {
@@ -1068,7 +937,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
               ),
               const SizedBox(width: 8),
               IconButton(
-                icon: const Icon(Icons.add_circle, color: _green, size: 36),
+                icon: const Icon(PhosphorIconsFill.plusCircle, color: _green, size: 40),
                 onPressed: () {
                   if (_customFeatureController.text.trim().isNotEmpty) {
                     setState(() {
@@ -1100,11 +969,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
       ),
       selectedColor: _green,
       backgroundColor: Colors.white,
+      showCheckmark: false,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: isSelected ? _green : _grey.withValues(alpha: 0.3),
-        ),
+        side: BorderSide(color: isSelected ? _green : _grey.withOpacity(0.3)),
       ),
       onSelected: (val) {
         setState(() {
@@ -1119,7 +987,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   }
 
   // ==========================================
-  // STEP 4: Photos
+  // STEP 4: Photos & Video
   // ==========================================
   Widget _buildStep4Photos() {
     return SingleChildScrollView(
@@ -1128,31 +996,20 @@ class _AddListingFlowState extends State<AddListingFlow> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Photos',
-              style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: _dark,
-                  letterSpacing: -0.5)),
+          Text('Photos', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
           const SizedBox(height: 4),
-          Text('Upload high-quality photos of your property',
-              style: GoogleFonts.poppins(fontSize: 14, color: _grey)),
+          Text('Upload high-quality photos of your property', style: GoogleFonts.poppins(fontSize: 14, color: _grey)),
           const SizedBox(height: 32),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 16, mainAxisSpacing: 16, childAspectRatio: 1),
             itemCount: _pickedPhotos.length + 1,
             itemBuilder: (context, index) {
               if (index == _pickedPhotos.length) {
                 return GestureDetector(
                   onTap: () async {
-                    final picked =
-                        await ImagePicker().pickMultiImage(imageQuality: 75);
+                    final picked = await ImagePicker().pickMultiImage(imageQuality: 75);
                     if (picked.isNotEmpty) {
                       for (final x in picked) {
                         final photo = PickedPhoto(File(x.path));
@@ -1165,21 +1022,14 @@ class _AddListingFlowState extends State<AddListingFlow> {
                     decoration: BoxDecoration(
                       color: _surface,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: _grey.withOpacity(0.3),
-                          style: BorderStyle.solid),
+                      border: Border.all(color: _grey.withOpacity(0.3), style: BorderStyle.solid),
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(PhosphorIconsRegular.plus,
-                            size: 32, color: _green),
+                        const Icon(PhosphorIconsRegular.plus, size: 32, color: _green),
                         const SizedBox(height: 12),
-                        Text('Add Photo',
-                            style: GoogleFonts.poppins(
-                                color: _green,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14)),
+                        Text('Add Photo', style: GoogleFonts.poppins(color: _green, fontWeight: FontWeight.w600, fontSize: 14)),
                       ],
                     ),
                   ),
@@ -1191,50 +1041,32 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(20),
-                    child: photo.url != null
-                        ? buildPropertyImage(photo.url!, fit: BoxFit.cover)
-                        : Image.file(photo.file, fit: BoxFit.cover),
+                    child: photo.url != null ? buildPropertyImage(photo.url!, fit: BoxFit.cover) : Image.file(photo.file, fit: BoxFit.cover),
                   ),
                   if (photo.isUploading)
                     Container(
-                      decoration: BoxDecoration(
-                          color: Colors.black45,
-                          borderRadius: BorderRadius.circular(20)),
+                      decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(20)),
                       child: Center(
                         child: CircularProgressIndicator(
                           value: photo.progress > 0 ? photo.progress : null,
-                          valueColor:
-                              const AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       ),
                     ),
                   if (photo.error != null)
                     Container(
-                      decoration: BoxDecoration(
-                          color: Colors.black45,
-                          borderRadius: BorderRadius.circular(20)),
-                      child: const Center(
-                          child: Icon(PhosphorIconsRegular.warningCircle,
-                              color: Colors.redAccent, size: 32)),
+                      decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(20)),
+                      child: const Center(child: Icon(PhosphorIconsRegular.warningCircle, color: Colors.redAccent, size: 32)),
                     ),
                   Positioned(
                     top: 8,
                     right: 8,
                     child: GestureDetector(
-                      onTap: () =>
-                          setState(() => _pickedPhotos.removeAt(index)),
+                      onTap: () => setState(() => _pickedPhotos.removeAt(index)),
                       child: Container(
                         padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                            color: _surface,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 4)
-                            ]),
-                        child: const Icon(PhosphorIconsRegular.x,
-                            size: 14, color: _dark),
+                        decoration: BoxDecoration(color: _surface, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)]),
+                        child: const Icon(PhosphorIconsRegular.x, size: 14, color: _dark),
                       ),
                     ),
                   ),
@@ -1242,53 +1074,99 @@ class _AddListingFlowState extends State<AddListingFlow> {
               );
             },
           ),
-          const SizedBox(height: 24),
-          Text('Property Video (optional)',
-              style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w700, fontSize: 16, color: _dark)),
-          const SizedBox(height: 4),
-          Text(
-              'Gallery videos only, up to 30 seconds. The server compresses the video after upload.',
-              style: GoogleFonts.poppins(fontSize: 13, color: _grey)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _pickedVideo?.isUploading == true
-                      ? null
-                      : _pickPropertyVideo,
-                  icon: const Icon(PhosphorIconsRegular.videoCamera),
-                  label: Text(_pickedVideo?.isUploading == true
-                      ? 'Uploading video...'
-                      : (_pickedVideo?.url == null
-                          ? 'Add property video'
-                          : 'Replace video')),
-                ),
-              ),
-              if (_pickedVideo?.url != null) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Remove video',
-                  onPressed: () => setState(() => _pickedVideo = null),
-                  icon: const Icon(PhosphorIconsRegular.trash,
-                      color: Colors.redAccent),
-                ),
-              ],
-            ],
-          ),
-          if (_pickedVideo?.url != null && _pickedVideo?.isUploading != true)
-            Text('Video ready',
-                style: GoogleFonts.poppins(color: _green, fontSize: 12)),
           const SizedBox(height: 32),
-          Text('Tips',
-              style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w700, fontSize: 16, color: _dark)),
+          Text('Property Video (optional)', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 16, color: _dark)),
+          const SizedBox(height: 4),
+          Text('Upload a quick 30s tour to get 3x more views.', style: GoogleFonts.poppins(fontSize: 13, color: _grey)),
+          const SizedBox(height: 16),
+          
+          // ─── NEW REFACTORED VIDEO UPLOAD UI ───
+          if (_pickedVideo != null) ...[
+            Container(
+              height: 180,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: _videoThumbnailController != null && _videoThumbnailController!.value.isInitialized
+                      ? AspectRatio(aspectRatio: _videoThumbnailController!.value.aspectRatio, child: VideoPlayer(_videoThumbnailController!))
+                      : Container(color: _grey.withOpacity(0.1)),
+                  ),
+                  if (_pickedVideo!.isUploading)
+                    Container(
+                      decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), borderRadius: BorderRadius.circular(20)),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(value: _pickedVideo!.progress, color: Colors.white),
+                            const SizedBox(height: 12),
+                            Text('${(_pickedVideo!.progress * 100).toStringAsFixed(0)}%', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
+                          ],
+                        )
+                      )
+                    ),
+                  if (!_pickedVideo!.isUploading)
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                        child: const Icon(PhosphorIconsFill.play, color: Colors.white, size: 28),
+                      )
+                    ),
+                  if (!_pickedVideo!.isUploading)
+                    Positioned(
+                      top: 12, right: 12,
+                      child: GestureDetector(
+                        onTap: () {
+                          _videoThumbnailController?.dispose();
+                          _videoThumbnailController = null;
+                          setState(() => _pickedVideo = null);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                          child: const Icon(PhosphorIconsRegular.x, size: 14, color: Colors.black),
+                        )
+                      )
+                    )
+                ]
+              )
+            )
+          ] else ...[
+            GestureDetector(
+              onTap: _pickPropertyVideo,
+              child: Container(
+                height: 140,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: _surface,
+                  border: Border.all(color: _grey.withOpacity(0.3), style: BorderStyle.solid),
+                  borderRadius: BorderRadius.circular(20)
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(PhosphorIconsRegular.videoCamera, size: 36, color: _green),
+                    const SizedBox(height: 12),
+                    Text('Add property video', style: GoogleFonts.poppins(color: _green, fontWeight: FontWeight.w600, fontSize: 14)),
+                  ]
+                )
+              )
+            )
+          ],
+
+          const SizedBox(height: 32),
+          Text('Tips', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 16, color: _dark)),
           const SizedBox(height: 12),
-          Text(
-              '• Include a picture of the living room, bedroom, and kitchen.\n• Shoot in landscape mode with good natural lighting.',
-              style:
-                  GoogleFonts.poppins(color: _grey, height: 1.6, fontSize: 14)),
+          Text('• Include a picture of the living room, bedroom, and kitchen.\n• Shoot in landscape mode with good natural lighting.',
+              style: GoogleFonts.poppins(color: _grey, height: 1.6, fontSize: 14)),
           const SizedBox(height: 48),
           _buildNextButton('Next: Pricing & Details', _nextStep),
           const SizedBox(height: 24),
@@ -1309,12 +1187,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Pricing and Details',
-                style: GoogleFonts.poppins(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: _dark,
-                    letterSpacing: -0.5)),
+            Text('Pricing and Details', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
             const SizedBox(height: 24),
             _buildLabel('Rent Price'),
             _buildPricingField(_rentPrice, '12000', '/month'),
@@ -1330,16 +1203,14 @@ class _AddListingFlowState extends State<AddListingFlow> {
               value: _minimumStay,
               items: ['1 Month', '3 Months', '6 Months', '1 Year'],
               hint: 'Select Minimum Stay',
-              onChanged: (val) =>
-                  setState(() => _minimumStay = val ?? '6 Months'),
+              onChanged: (val) => setState(() => _minimumStay = val ?? '6 Months'),
             ),
             const SizedBox(height: 20),
             _buildLabel('Available From'),
             GestureDetector(
               onTap: _selectDate,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 decoration: BoxDecoration(
                   color: _surface,
                   border: Border.all(color: _grey.withOpacity(0.2)),
@@ -1349,17 +1220,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      _availableFrom != null
-                          ? _formatDate(_availableFrom!)
-                          : 'Select Date',
-                      style: GoogleFonts.poppins(
-                        color: _availableFrom != null ? _dark : _grey,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
-                      ),
+                      _availableFrom != null ? _formatDate(_availableFrom!) : 'Select Date',
+                      style: GoogleFonts.poppins(color: _availableFrom != null ? _dark : _grey, fontWeight: FontWeight.w500, fontSize: 14),
                     ),
-                    const Icon(PhosphorIconsRegular.calendarBlank,
-                        color: _grey, size: 20),
+                    const Icon(PhosphorIconsRegular.calendarBlank, color: _grey, size: 20),
                   ],
                 ),
               ),
@@ -1373,42 +1237,30 @@ class _AddListingFlowState extends State<AddListingFlow> {
     );
   }
 
-  Widget _buildPricingField(
-      TextEditingController controller, String hint, String suffix) {
+  Widget _buildPricingField(TextEditingController controller, String hint, String suffix) {
     return TextFormField(
       controller: controller,
       keyboardType: TextInputType.number,
-      style: GoogleFonts.poppins(
-          color: _dark, fontWeight: FontWeight.w500, fontSize: 14),
-      validator: (value) =>
-          (value == null || value.trim().isEmpty) ? 'Required' : null,
+      style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w500, fontSize: 14),
+      validator: (value) => (value == null || value.trim().isEmpty) ? 'Required' : null,
       decoration: InputDecoration(
         hintText: hint,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        hintStyle: GoogleFonts.poppins(
-            color: _grey, fontWeight: FontWeight.w400, fontSize: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        hintStyle: GoogleFonts.poppins(color: _grey, fontWeight: FontWeight.w400, fontSize: 14),
         suffixIcon: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Padding(
               padding: const EdgeInsets.only(right: 16.0),
-              child: Text(suffix,
-                  style: GoogleFonts.poppins(color: _grey, fontSize: 14)),
+              child: Text(suffix, style: GoogleFonts.poppins(color: _grey, fontSize: 14)),
             ),
           ],
         ),
         filled: true,
         fillColor: _surface,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: _grey.withOpacity(0.2))),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: _grey.withOpacity(0.2))),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: _green)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _green)),
       ),
     );
   }
@@ -1418,8 +1270,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // ==========================================
   Widget _buildStep6Review() {
     final selectedAmenities = [
-      ..._selectedAttributes
-          .map((id) => PropertyTaxonomy.getAttributeById(id)?.label ?? id),
+      ..._selectedAttributes.map((id) => PropertyTaxonomy.getAttributeById(id)?.label ?? id),
       ..._customFeatures
     ];
 
@@ -1429,15 +1280,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Review & Publish',
-              style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: _dark,
-                  letterSpacing: -0.5)),
+          Text('Review & Publish', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
           const SizedBox(height: 4),
-          Text('Review your listing details',
-              style: GoogleFonts.poppins(fontSize: 14, color: _grey)),
+          Text('Review your listing details', style: GoogleFonts.poppins(fontSize: 14, color: _grey)),
           const SizedBox(height: 32),
 
           // Preview Card
@@ -1446,75 +1291,37 @@ class _AddListingFlowState extends State<AddListingFlow> {
             decoration: BoxDecoration(
               color: _surface,
               borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4))
-              ],
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
             ),
             child: Row(
               children: [
                 ClipRRect(
-                  borderRadius:
-                      const BorderRadius.horizontal(left: Radius.circular(24)),
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(24)),
                   child: _pickedPhotos.isNotEmpty
                       ? (_pickedPhotos.first.url != null
-                          ? buildPropertyImage(_pickedPhotos.first.url!,
-                              width: 120,
-                              height: double.infinity,
-                              fit: BoxFit.cover)
-                          : Image.file(_pickedPhotos.first.file,
-                              width: 120,
-                              height: double.infinity,
-                              fit: BoxFit.cover))
-                      : Container(
-                          width: 120,
-                          color: _greyLight,
-                          child: const Icon(PhosphorIconsRegular.image,
-                              color: _grey)),
+                          ? buildPropertyImage(_pickedPhotos.first.url!, width: 120, height: double.infinity, fit: BoxFit.cover)
+                          : Image.file(_pickedPhotos.first.file, width: 120, height: double.infinity, fit: BoxFit.cover))
+                      : Container(width: 120, color: _greyLight, child: const Icon(PhosphorIconsRegular.image, color: _grey)),
                 ),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 16.0, horizontal: 16.0),
+                    padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(_title.text.isEmpty ? 'Untitled' : _title.text,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                                color: _dark)),
+                        Text(_title.text.isEmpty ? 'Untitled' : _title.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 16, color: _dark)),
                         const SizedBox(height: 6),
                         Row(children: [
-                          const Icon(PhosphorIconsRegular.mapPin,
-                              size: 14, color: _grey),
+                          const Icon(PhosphorIconsRegular.mapPin, size: 14, color: _grey),
                           const SizedBox(width: 4),
-                          Expanded(
-                              child: Text(
-                                  '${_neighborhood.text.isEmpty ? 'Area' : _neighborhood.text}, ${_selectedCity ?? 'City'}',
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.poppins(
-                                      color: _grey, fontSize: 13))),
+                          Expanded(child: Text('${_neighborhood.text.isEmpty ? 'Area' : _neighborhood.text}, ${_selectedCity ?? 'City'}', overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: _grey, fontSize: 13))),
                         ]),
                         const Spacer(),
                         RichText(
                           text: TextSpan(children: [
-                            TextSpan(
-                                text:
-                                    'Ksh. ${_rentPrice.text.isEmpty ? '0' : _rentPrice.text}',
-                                style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
-                                    color: _dark)),
-                            TextSpan(
-                                text: ' /mo',
-                                style: GoogleFonts.poppins(
-                                    color: _grey, fontSize: 13)),
+                            TextSpan(text: 'Ksh. ${_rentPrice.text.isEmpty ? '0' : _rentPrice.text}', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 14, color: _dark)),
+                            TextSpan(text: ' /mo', style: GoogleFonts.poppins(color: _grey, fontSize: 13)),
                           ]),
                         )
                       ],
@@ -1526,44 +1333,28 @@ class _AddListingFlowState extends State<AddListingFlow> {
           ),
 
           const SizedBox(height: 40),
-          if (_isUploadingImages || _imageUploadStatus.isNotEmpty) ...[
+          if (_isUploadingImages || _imageUploadStatus.isNotEmpty || _pickedVideo?.isUploading == true) ...[
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: _surface,
                 borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8))
-                ],
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8))],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const Icon(PhosphorIconsRegular.cloudArrowUp,
-                          color: _green, size: 28),
+                      const Icon(PhosphorIconsRegular.cloudArrowUp, color: _green, size: 28),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                                _uploadProgress < 1.0
-                                    ? 'Optimizing & Uploading...'
-                                    : 'Upload Complete',
-                                style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
-                                    color: _dark)),
+                            Text(_uploadProgress < 1.0 || _pickedVideo?.isUploading == true ? 'Optimizing & Uploading...' : 'Upload Complete', style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 14, color: _dark)),
                             const SizedBox(height: 2),
-                            Text(
-                                '${(_uploadProgress * 100).toStringAsFixed(0)}% • ${_imageUploadStatus.length} photos',
-                                style: GoogleFonts.poppins(
-                                    color: _grey, fontSize: 12)),
+                            Text('${(_uploadProgress * 100).toStringAsFixed(0)}% • ${_imageUploadStatus.length} media files', style: GoogleFonts.poppins(color: _grey, fontSize: 12)),
                           ],
                         ),
                       ),
@@ -1573,7 +1364,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: LinearProgressIndicator(
-                      value: _uploadProgress,
+                      value: (_uploadProgress + (_pickedVideo?.progress ?? 1.0)) / 2.0, // Blended progress
                       minHeight: 8,
                       backgroundColor: _greyLight,
                       valueColor: const AlwaysStoppedAnimation<Color>(_green),
@@ -1585,38 +1376,26 @@ class _AddListingFlowState extends State<AddListingFlow> {
             const SizedBox(height: 32),
           ],
 
-          Text('Details',
-              style: GoogleFonts.poppins(
-                  fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
+          Text('Details', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
           const SizedBox(height: 20),
           _buildReviewRow('Property Type', _propertyType),
           _buildReviewRow('Bedrooms', _bedrooms.toString()),
           _buildReviewRow('Bathrooms', _bathrooms.toString()),
-          _buildReviewRow('Furnished',
-              _selectedAttributes.contains('furnished') ? 'Yes' : 'No'),
+          _buildReviewRow('Furnished', _selectedAttributes.contains('furnished') ? 'Yes' : 'No'),
 
           Divider(color: _grey.withOpacity(0.2), height: 40),
 
-          Text('Pricing',
-              style: GoogleFonts.poppins(
-                  fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
+          Text('Pricing', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
           const SizedBox(height: 20),
           _buildReviewRow('Rent Price', 'Ksh. ${_rentPrice.text} /month'),
-          _buildReviewRow(
-              'Service Charges', 'Ksh. ${_serviceCharges.text} /month'),
+          _buildReviewRow('Service Charges', 'Ksh. ${_serviceCharges.text} /month'),
           _buildReviewRow('Security Deposit', 'Ksh. ${_securityDeposit.text}'),
           _buildReviewRow('Minimum Stay', _minimumStay),
-          _buildReviewRow(
-              'Available From',
-              _availableFrom != null
-                  ? _formatDate(_availableFrom!)
-                  : 'Immediate'),
+          _buildReviewRow('Available From', _availableFrom != null ? _formatDate(_availableFrom!) : 'Immediate'),
 
           Divider(color: _grey.withOpacity(0.2), height: 40),
 
-          Text('Amenities',
-              style: GoogleFonts.poppins(
-                  fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
+          Text('Amenities', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
           const SizedBox(height: 20),
           Wrap(
             spacing: 10,
@@ -1626,25 +1405,14 @@ class _AddListingFlowState extends State<AddListingFlow> {
             }).toList()
               ..addAll([
                 if (selectedAmenities.isEmpty)
-                  Text('No features selected.',
-                      style: GoogleFonts.poppins(
-                          color: _grey,
-                          fontStyle: FontStyle.italic,
-                          fontSize: 14))
+                  Text('No features selected.', style: GoogleFonts.poppins(color: _grey, fontStyle: FontStyle.italic, fontSize: 14))
               ]),
           ),
 
           const SizedBox(height: 32),
-          Text('Description',
-              style: GoogleFonts.poppins(
-                  fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
+          Text('Description', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
           const SizedBox(height: 16),
-          Text(
-              _description.text.isEmpty
-                  ? 'No description provided.'
-                  : _description.text,
-              style:
-                  GoogleFonts.poppins(color: _grey, height: 1.6, fontSize: 14)),
+          Text(_description.text.isEmpty ? 'No description provided.' : _description.text, style: GoogleFonts.poppins(color: _grey, height: 1.6, fontSize: 14)),
 
           const SizedBox(height: 48),
           Row(
@@ -1655,14 +1423,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     side: const BorderSide(color: _green, width: 1.5),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(32)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
                   ),
-                  child: Text('Save Draft',
-                      style: GoogleFonts.poppins(
-                          color: _green,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14)),
+                  child: Text('Save Draft', style: GoogleFonts.poppins(color: _green, fontWeight: FontWeight.w600, fontSize: 14)),
                 ),
               ),
               const SizedBox(width: 16),
@@ -1672,21 +1435,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     backgroundColor: _green,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(32)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
                     elevation: 0,
                   ),
                   child: _submitting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              color: _surface, strokeWidth: 2))
-                      : Text('Publish',
-                          style: GoogleFonts.poppins(
-                              color: _surface,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14)),
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: _surface, strokeWidth: 2))
+                      : Text('Publish', style: GoogleFonts.poppins(color: _surface, fontWeight: FontWeight.w600, fontSize: 14)),
                 ),
               ),
             ],
@@ -1703,12 +1457,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title,
-              style: GoogleFonts.poppins(
-                  color: _grey, fontWeight: FontWeight.w500, fontSize: 14)),
-          Text(value,
-              style: GoogleFonts.poppins(
-                  color: _dark, fontWeight: FontWeight.w600, fontSize: 14)),
+          Text(title, style: GoogleFonts.poppins(color: _grey, fontWeight: FontWeight.w500, fontSize: 14)),
+          Text(value, style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w600, fontSize: 14)),
         ],
       ),
     );
@@ -1727,9 +1477,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
         children: [
           Icon(icon, color: _dark, size: 16),
           const SizedBox(width: 8),
-          Text(label,
-              style: GoogleFonts.poppins(
-                  fontSize: 13, fontWeight: FontWeight.w500, color: _dark)),
+          Text(label, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: _dark)),
         ],
       ),
     );
@@ -1760,16 +1508,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
               height: 36,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                image: DecorationImage(
-                    image: AssetImage(imagePath), fit: BoxFit.cover),
+                image: DecorationImage(image: AssetImage(imagePath), fit: BoxFit.cover),
               ),
             ),
             const SizedBox(width: 8),
-            Text(label,
-                style: GoogleFonts.poppins(
-                    color: isSelected ? _green : _dark,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600)),
+            Text(label, style: GoogleFonts.poppins(color: isSelected ? _green : _dark, fontSize: 14, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -1787,17 +1530,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          GestureDetector(
-              onTap: onDec,
-              child: const Icon(PhosphorIconsRegular.minus,
-                  color: _grey, size: 20)),
-          Text(value.toString(),
-              style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600, fontSize: 14, color: _dark)),
-          GestureDetector(
-              onTap: onInc,
-              child: const Icon(PhosphorIconsRegular.plus,
-                  color: _dark, size: 20)),
+          GestureDetector(onTap: onDec, child: const Icon(PhosphorIconsRegular.minus, color: _grey, size: 20)),
+          Text(value.toString(), style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14, color: _dark)),
+          GestureDetector(onTap: onInc, child: const Icon(PhosphorIconsRegular.plus, color: _dark, size: 20)),
         ],
       ),
     );
@@ -1806,81 +1541,45 @@ class _AddListingFlowState extends State<AddListingFlow> {
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0, left: 4.0),
-      child: Text(text,
-          style: GoogleFonts.poppins(
-              fontSize: 14, fontWeight: FontWeight.w600, color: _dark)),
+      child: Text(text, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: _dark)),
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String hint,
-      {int maxLines = 1,
-      TextInputType keyboardType = TextInputType.text,
-      bool required = true}) {
+  Widget _buildTextField(TextEditingController controller, String hint, {int maxLines = 1, TextInputType keyboardType = TextInputType.text, bool required = true}) {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
-      style: GoogleFonts.poppins(
-          color: _dark, fontWeight: FontWeight.w500, fontSize: 14),
-      validator: (value) =>
-          (required && (value == null || value.trim().isEmpty))
-              ? 'Required'
-              : null,
+      style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w500, fontSize: 14),
+      validator: (value) => (required && (value == null || value.trim().isEmpty)) ? 'Required' : null,
       decoration: InputDecoration(
         hintText: hint,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        hintStyle: GoogleFonts.poppins(
-            color: _grey, fontWeight: FontWeight.w400, fontSize: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        hintStyle: GoogleFonts.poppins(color: _grey, fontWeight: FontWeight.w400, fontSize: 14),
         filled: true,
         fillColor: _surface,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: _grey.withOpacity(0.2))),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: _grey.withOpacity(0.2))),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: _green)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _green)),
       ),
     );
   }
 
-  Widget _buildDropdown(
-      {required String? value,
-      required List<String> items,
-      required String hint,
-      required Function(String?) onChanged}) {
+  Widget _buildDropdown({required String? value, required List<String> items, required String hint, required Function(String?) onChanged}) {
     return DropdownButtonFormField<String>(
       initialValue: value,
       icon: const Icon(PhosphorIconsRegular.caretDown, color: _grey),
-      items: items
-          .map((e) => DropdownMenuItem(
-              value: e,
-              child: Text(e,
-                  style: GoogleFonts.poppins(
-                      color: _dark,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 14))))
-          .toList(),
+      items: items.map((e) => DropdownMenuItem(value: e, child: Text(e, style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w500, fontSize: 14)))).toList(),
       onChanged: onChanged,
       validator: (val) => val == null || val.isEmpty ? 'Required' : null,
       decoration: InputDecoration(
         hintText: hint,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         filled: true,
         fillColor: _surface,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: _grey.withOpacity(0.2))),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: _grey.withOpacity(0.2))),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: _green)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _grey.withOpacity(0.2))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _green)),
       ),
     );
   }
@@ -1892,14 +1591,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: _green,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
           elevation: 0,
         ),
         onPressed: onPressed,
-        child: Text(text,
-            style: GoogleFonts.poppins(
-                color: _surface, fontWeight: FontWeight.w600, fontSize: 16)),
+        child: Text(text, style: GoogleFonts.poppins(color: _surface, fontWeight: FontWeight.w600, fontSize: 16)),
       ),
     );
   }
@@ -1909,8 +1605,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
 // MODAL UTILITIES
 // ==========================================
 class ModalUtils {
-  static void showSuccess(BuildContext context, String title, String message,
-      {VoidCallback? onOk}) {
+  static void showSuccess(BuildContext context, String title, String message, {VoidCallback? onOk}) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1922,30 +1617,17 @@ class ModalUtils {
           children: [
             const Icon(PhosphorIconsFill.checkCircle, color: _green, size: 64),
             const SizedBox(height: 16),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                    fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
+            Text(title, textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
             const SizedBox(height: 8),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                    color: _grey, height: 1.5, fontSize: 14)),
+            Text(message, textAlign: TextAlign.center, style: GoogleFonts.poppins(color: _grey, height: 1.5, fontSize: 14)),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _green,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(32)),
-                  elevation: 0,
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: _green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)), elevation: 0),
                 onPressed: onOk ?? () => Navigator.pop(ctx),
-                child: Text('Awesome!',
-                    style: GoogleFonts.poppins(
-                        color: _surface, fontWeight: FontWeight.w600)),
+                child: Text('Awesome!', style: GoogleFonts.poppins(color: _surface, fontWeight: FontWeight.w600)),
               ),
             )
           ],
@@ -1963,33 +1645,19 @@ class ModalUtils {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(PhosphorIconsFill.warningCircle,
-                color: Colors.redAccent, size: 64),
+            const Icon(PhosphorIconsFill.warningCircle, color: Colors.redAccent, size: 64),
             const SizedBox(height: 16),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                    fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
+            Text(title, textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
             const SizedBox(height: 8),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                    color: _grey, height: 1.5, fontSize: 14)),
+            Text(message, textAlign: TextAlign.center, style: GoogleFonts.poppins(color: _grey, height: 1.5, fontSize: 14)),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _dark,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(32)),
-                  elevation: 0,
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: _dark, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)), elevation: 0),
                 onPressed: () => Navigator.pop(ctx),
-                child: Text('Got it',
-                    style: GoogleFonts.poppins(
-                        color: _surface, fontWeight: FontWeight.w600)),
+                child: Text('Got it', style: GoogleFonts.poppins(color: _surface, fontWeight: FontWeight.w600)),
               ),
             )
           ],
@@ -2000,8 +1668,7 @@ class ModalUtils {
 }
 
 class _LocationPickerSheet extends StatefulWidget {
-  final void Function(String address, double lat, double lng)
-      onLocationSelected;
+  final void Function(String address, double lat, double lng) onLocationSelected;
   const _LocationPickerSheet({required this.onLocationSelected});
 
   @override
@@ -2026,32 +1693,23 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied)
-          throw Exception('Location permissions denied');
+        if (permission == LocationPermission.denied) throw Exception('Location permissions denied');
       }
-      if (permission == LocationPermission.deniedForever)
-        throw Exception('Location permissions permanently denied');
+      if (permission == LocationPermission.deniedForever) throw Exception('Location permissions permanently denied');
 
-      final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-      final address =
-          await reverseGeocode(position.latitude, position.longitude);
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final address = await reverseGeocode(position.latitude, position.longitude);
 
       if (mounted) {
         setState(() {
           _lat = position.latitude;
           _lng = position.longitude;
-          _locationName =
-              address ?? '${position.latitude}, ${position.longitude}';
+          _locationName = address ?? '${position.latitude}, ${position.longitude}';
           _isLoading = false;
         });
       }
     } catch (e) {
-      if (mounted)
-        setState(() {
-          _error = e.toString().replaceAll('Exception: ', '');
-          _isLoading = false;
-        });
+      if (mounted) setState(() { _error = e.toString().replaceAll('Exception: ', ''); _isLoading = false; });
     }
   }
 
@@ -2071,23 +1729,18 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                 margin: const EdgeInsets.only(top: 12, bottom: 16),
                 width: 40,
                 height: 4,
-                decoration: BoxDecoration(
-                    color: _grey.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(color: _grey.withOpacity(0.3), borderRadius: BorderRadius.circular(2)),
               ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: Text('Confirm Location',
-                  style: GoogleFonts.poppins(
-                      fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
+              child: Text('Confirm Location', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-                child: Image.asset('assets/images/mapsheet.webp',
-                    height: 160, fit: BoxFit.cover, width: double.infinity),
+                child: Image.asset('assets/images/mapsheet.webp', height: 160, fit: BoxFit.contain, width: double.infinity),
               ),
             ),
             Padding(
@@ -2097,30 +1750,19 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                       children: [
                         const CircularProgressIndicator(color: _green),
                         const SizedBox(height: 16),
-                        Text('Detecting your location...',
-                            style: GoogleFonts.poppins(
-                                color: _grey, fontSize: 14)),
+                        Text('Detecting your location...', style: GoogleFonts.poppins(color: _grey, fontSize: 14)),
                       ],
                     )
                   : _error != null
-                      ? Text('Error: $_error',
-                          style: GoogleFonts.poppins(color: Colors.redAccent))
+                      ? Text('Error: $_error', style: GoogleFonts.poppins(color: Colors.redAccent))
                       : Container(
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                              color: _greyLight,
-                              borderRadius: BorderRadius.circular(16)),
+                          decoration: BoxDecoration(color: _greyLight, borderRadius: BorderRadius.circular(16)),
                           child: Row(
                             children: [
-                              const Icon(PhosphorIconsRegular.mapPin,
-                                  color: _green, size: 20),
+                              const Icon(PhosphorIconsRegular.mapPin, color: _green, size: 20),
                               const SizedBox(width: 12),
-                              Expanded(
-                                  child: Text(_locationName ?? '',
-                                      style: GoogleFonts.poppins(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500,
-                                          color: _dark))),
+                              Expanded(child: Text(_locationName ?? '', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: _dark))),
                             ],
                           ),
                         ),
@@ -2139,15 +1781,10 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _green,
                   disabledBackgroundColor: _grey.withOpacity(0.2),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(32)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
                   elevation: 0,
                 ),
-                child: Text('Use this location',
-                    style: GoogleFonts.poppins(
-                        color: _surface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600)),
+                child: Text('Use this location', style: GoogleFonts.poppins(color: _surface, fontSize: 16, fontWeight: FontWeight.w600)),
               ),
             ),
           ],

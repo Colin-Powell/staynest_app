@@ -25,7 +25,7 @@ const asyncStorage = multer.diskStorage({
 });
 function fileFilter(_req, file, callback) {
     // Allow all image and video formats
-    const allowedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.svg', '.heic', '.heif', '.mp4', '.mov', '.avi'];
+    const allowedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.svg', '.heic', '.heif', '.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v'];
     const fileExt = file.originalname.toLowerCase().substring(file.originalname.lastIndexOf('.'));
     if (allowedExtensions.includes(fileExt) || file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
         callback(null, true);
