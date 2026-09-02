@@ -1,8 +1,5 @@
-// START OF FILE
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -15,6 +12,13 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/services/property_service.dart';
 import 'package:property_app/widgets/property_image.dart';
+
+// ─── Tenant Design System Constants ───────────────────────────────────────────
+const Color _bg = Color(0xFFFAFAFA);
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF9CA3AF);
+const Color _surface = Colors.white;
+const Color _primary = Color(0xFF3F37C9); // Tenant Blue Theme
 
 class LocationView extends StatefulWidget {
   final VoidCallback onClose;
@@ -37,14 +41,13 @@ class LocationView extends StatefulWidget {
 class _LocationViewState extends State<LocationView> {
   final MapController _mapController = MapController();
 
-  static const Color _tenantPrimary = Color(0xFF3F37C9); // Tenant Blue
-  static const Color _textDark = Color(0xFF111827);
-
   LatLng? _currentLocation;
   LatLng? _activePropertyLocation;
   String? _currentAddress;
+  
   bool _loadingPlaces = false;
   bool _fetchingLocation = true;
+  bool _mapReady = false;
 
   List<dynamic> nearbyPlaces = [];
   Property? _activeProperty;
@@ -57,20 +60,14 @@ class _LocationViewState extends State<LocationView> {
       googleApiKey.isNotEmpty && googleApiKey != 'YOUR_GOOGLE_API_KEY';
 
   String get _locationTitle {
-    if (_activeProperty != null) {
-      return 'Property Location';
-    }
+    if (_activeProperty != null) return 'Property Location';
     return 'Current Location';
   }
 
   String get _locationSubtitle {
-    if (_activeProperty != null) {
-      return _activeProperty!.location;
-    }
+    if (_activeProperty != null) return _activeProperty!.location;
     return _currentAddress ?? 'Fetching current address...';
   }
-
-  Color? get _textLight => null;
 
   @override
   void initState() {
@@ -91,38 +88,38 @@ class _LocationViewState extends State<LocationView> {
 
     try {
       _allProperties = await PropertyService.instance.fetchProperties();
-      await _getCurrentLocation();
+      await _getCurrentLocation(); // Safe fetch, won't throw if denied
 
-      // Resolve Property Location (Geocode if lat/lng is 0)
+      // Resolve Property Location (Geocode if lat/lng is missing)
       if (_activeProperty != null) {
         if (_activeProperty!.lat == 0.0 && _activeProperty!.lng == 0.0) {
-          _activePropertyLocation =
-              await _geocodeAddress(_activeProperty!.location);
+          _activePropertyLocation = await _geocodeAddress(_activeProperty!.location);
         } else {
-          _activePropertyLocation =
-              LatLng(_activeProperty!.lat, _activeProperty!.lng);
+          _activePropertyLocation = LatLng(_activeProperty!.lat, _activeProperty!.lng);
         }
       }
 
-      final targetLocation = _currentLocation ?? _activePropertyLocation;
+      final targetLocation = _activePropertyLocation ?? _currentLocation ?? const LatLng(-1.2921, 36.8219); // Fallback to Nairobi
 
-      if (targetLocation == null) {
-        throw Exception('Property location is unavailable.');
-      }
-
-      // Fit bounds if we have both current location and a property location
-      if (_currentLocation != null && _activePropertyLocation != null) {
-        final bounds = LatLngBounds.fromPoints(
-            [_currentLocation!, _activePropertyLocation!]);
-        _mapController.fitBounds(
-          bounds,
-          options: const FitBoundsOptions(padding: EdgeInsets.all(80)),
-        );
-      } else {
-        _mapController.move(targetLocation, 15);
+      if (mounted) {
+        setState(() => _mapReady = true);
+        
+        // Wait for map widget to be built before moving
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (_currentLocation != null && _activePropertyLocation != null) {
+            final bounds = LatLngBounds.fromPoints([_currentLocation!, _activePropertyLocation!]);
+            _mapController.fitBounds(
+              bounds,
+              options: const FitBoundsOptions(padding: EdgeInsets.all(80)),
+            );
+          } else {
+            _mapController.move(targetLocation, 14.5);
+          }
+        });
       }
 
       await fetchNearbyPlaces(targetLocation);
+      
     } catch (e) {
       debugPrint('Location init error: $e');
     } finally {
@@ -132,17 +129,14 @@ class _LocationViewState extends State<LocationView> {
 
   Future<LatLng?> _geocodeAddress(String address) async {
     if (!_hasGoogleApiKeyConfigured) {
-      // OpenStreetMap (Nominatim) Fallback
-      final url = Uri.parse(
-          'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(address)}&format=json&limit=1');
+      // OpenStreetMap Fallback
+      final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(address)}&format=json&limit=1');
       try {
-        final res =
-            await http.get(url, headers: {'User-Agent': 'PropertyApp/1.0'});
+        final res = await http.get(url, headers: {'User-Agent': 'PropertyApp/1.0'});
         if (res.statusCode == 200) {
           final data = json.decode(res.body);
           if (data.isNotEmpty) {
-            return LatLng(
-                double.parse(data[0]['lat']), double.parse(data[0]['lon']));
+            return LatLng(double.parse(data[0]['lat']), double.parse(data[0]['lon']));
           }
         }
       } catch (_) {}
@@ -150,8 +144,7 @@ class _LocationViewState extends State<LocationView> {
     }
 
     // Google Maps Geocoding
-    final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/geocode/json?address=${Uri.encodeComponent(address)}&key=$googleApiKey');
+    final url = Uri.parse('https://maps.googleapis.com/maps/api/geocode/json?address=${Uri.encodeComponent(address)}&key=$googleApiKey');
     try {
       final res = await http.get(url);
       if (res.statusCode == 200) {
@@ -194,9 +187,7 @@ class _LocationViewState extends State<LocationView> {
     }
 
     try {
-      final Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      ).timeout(const Duration(seconds: 10));
+      final Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high).timeout(const Duration(seconds: 10));
 
       if (mounted) {
         setState(() {
@@ -214,9 +205,10 @@ class _LocationViewState extends State<LocationView> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message, style: GoogleFonts.poppins()),
-          backgroundColor: Colors.redAccent,
+          content: Text(message, style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
+          backgroundColor: _dark,
           behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     }
@@ -228,11 +220,8 @@ class _LocationViewState extends State<LocationView> {
 
     if (!_hasGoogleApiKeyConfigured) {
       try {
-        final url = Uri.parse(
-            'https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}');
-        final response = await http.get(url, headers: {
-          'User-Agent': 'PropertyApp/1.0'
-        }).timeout(const Duration(seconds: 10));
+        final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}');
+        final response = await http.get(url, headers: {'User-Agent': 'PropertyApp/1.0'}).timeout(const Duration(seconds: 10));
 
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
@@ -245,18 +234,11 @@ class _LocationViewState extends State<LocationView> {
         }
       } catch (_) {}
 
-      if (mounted) {
-        setState(() {
-          _currentAddress =
-              '${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}';
-        });
-      }
+      if (mounted) setState(() => _currentAddress = '${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}');
       return;
     }
 
-    final url = Uri.parse(
-      'https://maps.googleapis.com/maps/api/geocode/json?latlng=${location.latitude},${location.longitude}&key=$googleApiKey',
-    );
+    final url = Uri.parse('https://maps.googleapis.com/maps/api/geocode/json?latlng=${location.latitude},${location.longitude}&key=$googleApiKey');
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 10));
@@ -264,14 +246,11 @@ class _LocationViewState extends State<LocationView> {
         final data = json.decode(response.body);
         final results = data['results'] as List<dynamic>?;
         if (results != null && results.isNotEmpty) {
-          setState(() {
-            _currentAddress = results.first['formatted_address'] as String? ??
-                'Unknown address';
-          });
+          if (mounted) setState(() => _currentAddress = results.first['formatted_address'] as String? ?? 'Unknown address');
           return;
         }
       }
-      setState(() => _currentAddress = 'Unknown address');
+      if (mounted) setState(() => _currentAddress = 'Unknown address');
     } catch (_) {
       if (mounted) setState(() => _currentAddress = 'Unable to fetch address');
     }
@@ -301,10 +280,7 @@ class _LocationViewState extends State<LocationView> {
       return;
     }
 
-    final url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
-        '?location=${location.latitude},${location.longitude}'
-        '&radius=2000'
-        '&key=$googleApiKey';
+    final url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${location.latitude},${location.longitude}&radius=2000&key=$googleApiKey';
 
     try {
       final response = await http.get(Uri.parse(url));
@@ -312,9 +288,7 @@ class _LocationViewState extends State<LocationView> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
-        if (mounted &&
-            data['results'] != null &&
-            (data['results'] as List).isNotEmpty) {
+        if (mounted && data['results'] != null && (data['results'] as List).isNotEmpty) {
           setState(() => nearbyPlaces = data['results']);
         } else if (mounted) {
           setState(() => nearbyPlaces = _localNearbyPlaces(location));
@@ -331,20 +305,12 @@ class _LocationViewState extends State<LocationView> {
 
   List<Map<String, dynamic>> _localNearbyPlaces(LatLng origin) {
     final results = _allProperties
-        .where((prop) =>
-            prop.lat != 0 || prop.lng != 0 || prop.id == _activeProperty?.id)
+        .where((prop) => prop.lat != 0 || prop.lng != 0 || prop.id == _activeProperty?.id)
         .map((prop) {
-      final pLat =
-          (prop.id == _activeProperty?.id && _activePropertyLocation != null)
-              ? _activePropertyLocation!.latitude
-              : prop.lat;
-      final pLng =
-          (prop.id == _activeProperty?.id && _activePropertyLocation != null)
-              ? _activePropertyLocation!.longitude
-              : prop.lng;
+      final pLat = (prop.id == _activeProperty?.id && _activePropertyLocation != null) ? _activePropertyLocation!.latitude : prop.lat;
+      final pLng = (prop.id == _activeProperty?.id && _activePropertyLocation != null) ? _activePropertyLocation!.longitude : prop.lng;
 
-      final dist = Geolocator.distanceBetween(
-          origin.latitude, origin.longitude, pLat, pLng);
+      final dist = Geolocator.distanceBetween(origin.latitude, origin.longitude, pLat, pLng);
       return {
         'name': prop.name,
         'property_id': prop.id,
@@ -358,10 +324,8 @@ class _LocationViewState extends State<LocationView> {
     }).toList();
 
     results.sort((a, b) {
-      final aDist =
-          double.tryParse(a['dist'].toString().replaceAll(' km', '')) ?? 0;
-      final bDist =
-          double.tryParse(b['dist'].toString().replaceAll(' km', '')) ?? 0;
+      final aDist = double.tryParse(a['dist'].toString().replaceAll(' km', '')) ?? 0;
+      final bDist = double.tryParse(b['dist'].toString().replaceAll(' km', '')) ?? 0;
       return aDist.compareTo(bDist);
     });
 
@@ -373,18 +337,10 @@ class _LocationViewState extends State<LocationView> {
   // ─────────────────────────────────────────────
 
   Future<void> _openDirections(double destLat, double destLng) async {
-    final url = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&destination=$destLat,$destLng&travelmode=driving',
-    );
-
+    final url = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$destLat,$destLng&travelmode=driving');
     try {
-      // Force opening in Native Application (Google Maps / Apple Maps)
-      final launched =
-          await launchUrl(url, mode: LaunchMode.externalNonBrowserApplication);
-      if (!launched) {
-        // Fallback to browser ONLY if native maps application is not found
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      }
+      final launched = await launchUrl(url, mode: LaunchMode.externalNonBrowserApplication);
+      if (!launched) await launchUrl(url, mode: LaunchMode.externalApplication);
     } catch (e) {
       _showErrorSnackBar('Could not launch maps application.');
     }
@@ -396,17 +352,11 @@ class _LocationViewState extends State<LocationView> {
 
   Color getPlaceColor(dynamic place) {
     final types = place['types'];
-    if (types is List && types.contains('property')) return _tenantPrimary;
+    if (types is List && types.contains('property')) return _primary;
     final name = (place['name'] ?? '').toString().toLowerCase();
-    if (name.contains('school') || name.contains('university')) {
-      return const Color(0xFFF59E0B);
-    }
-    if (name.contains('hospital') || name.contains('clinic')) {
-      return const Color(0xFFEF4444);
-    }
-    if (name.contains('police') || name.contains('security')) {
-      return _tenantPrimary;
-    }
+    if (name.contains('school') || name.contains('university')) return const Color(0xFFF59E0B);
+    if (name.contains('hospital') || name.contains('clinic')) return const Color(0xFFEF4444);
+    if (name.contains('police') || name.contains('security')) return _primary;
     return const Color(0xFF6B7280);
   }
 
@@ -415,24 +365,10 @@ class _LocationViewState extends State<LocationView> {
     if (place['geometry'] != null && _currentLocation != null) {
       final pLat = place['geometry']['location']['lat'];
       final pLng = place['geometry']['location']['lng'];
-      double dist = Geolocator.distanceBetween(
-          _currentLocation!.latitude, _currentLocation!.longitude, pLat, pLng);
+      double dist = Geolocator.distanceBetween(_currentLocation!.latitude, _currentLocation!.longitude, pLat, pLng);
       return '${(dist / 1000).toStringAsFixed(1)} km';
     }
     return 'N/A';
-  }
-
-  Widget _buildPlaceAvatar(dynamic place) {
-    final imageSource = (place['avatar'] ?? place['image'])?.toString();
-    if (imageSource != null && imageSource.isNotEmpty) {
-      return buildPropertyImage(imageSource,
-          width: 44, height: 44, fit: BoxFit.cover);
-    }
-    return Container(
-      color: const Color(0xFFF3F4F6),
-      child: Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill),
-          color: const Color(0xFF9CA3AF), size: 20),
-    );
   }
 
   // ─────────────────────────────────────────────
@@ -441,369 +377,281 @@ class _LocationViewState extends State<LocationView> {
 
   @override
   Widget build(BuildContext context) {
-    final location = _currentLocation ?? _activePropertyLocation;
-
-    if (location == null) {
-      return Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: widget.onClose,
-          ),
-          title: const Text('Location unavailable'),
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.location_off_outlined, size: 48),
-                const SizedBox(height: 12),
-                const Text('This property does not have a valid map location.'),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: _initializeLocation,
-                  child: const Text('Try again'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
+      backgroundColor: _bg,
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
           // 1. FULL SCREEN MAP
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: location,
-              initialZoom: 14.5,
-              interactionOptions: const InteractionOptions(
-                flags: InteractiveFlag.drag | InteractiveFlag.pinchZoom,
+          if (_mapReady)
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: _activePropertyLocation ?? _currentLocation ?? const LatLng(-1.2921, 36.8219),
+                initialZoom: 14.5,
+                interactionOptions: const InteractionOptions(flags: InteractiveFlag.drag | InteractiveFlag.pinchZoom),
               ),
-            ),
-            children: [
-              TileLayer(
-                urlTemplate:
-                    'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
-                userAgentPackageName: 'com.rashoti.staynest',
-              ),
-              MarkerLayer(
-                markers: [
-                  // Map properties with valid lat/lng OR active properties with geocoded lat/lng
-                  ..._allProperties
-                      .where((prop) =>
-                          (prop.lat != 0 && prop.lng != 0) ||
-                          (prop.id == _activeProperty?.id &&
-                              _activePropertyLocation != null))
-                      .map((prop) {
-                    final isActive = _activeProperty?.id == prop.id;
-                    final point = (isActive && _activePropertyLocation != null)
-                        ? _activePropertyLocation!
-                        : LatLng(prop.lat, prop.lng);
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
+                  subdomains: const ['a', 'b', 'c', 'd'],
+                  userAgentPackageName: 'com.rashoti.staynest',
+                ),
+                MarkerLayer(
+                  markers: [
+                    ..._allProperties
+                        .where((prop) => (prop.lat != 0 && prop.lng != 0) || (prop.id == _activeProperty?.id && _activePropertyLocation != null))
+                        .map((prop) {
+                      final isActive = _activeProperty?.id == prop.id;
+                      final point = (isActive && _activePropertyLocation != null) ? _activePropertyLocation! : LatLng(prop.lat, prop.lng);
 
-                    return Marker(
-                      point: point,
-                      width: 180,
-                      height: 56,
-                      // Removed standard tooltip wrapper so custom touch target works perfectly
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() => _activeProperty = prop);
-                          _activePropertyLocation = point;
-                          _mapController.move(
-                              point, _mapController.camera.zoom);
-                          _showPropertyDrawer(context, prop);
-                        },
-                        child:
-                            _PropertyMarker(property: prop, isActive: isActive),
+                      return Marker(
+                        point: point,
+                        width: 100, // Adjusted width for cleaner pill shape
+                        height: 40,
+                        alignment: Alignment.topCenter,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _activeProperty = prop);
+                            _activePropertyLocation = point;
+                            _mapController.move(point, _mapController.camera.zoom);
+                            _showPropertyDrawer(context, prop);
+                          },
+                          child: _PropertyMarker(property: prop, isActive: isActive),
+                        ),
+                      );
+                    }),
+                    if (_currentLocation != null)
+                      Marker(
+                        point: _currentLocation!,
+                        width: 32,
+                        height: 32,
+                        child: const _MapPin(),
                       ),
-                    );
-                  }),
-                  if (_currentLocation != null)
-                    Marker(
-                      point: _currentLocation!,
-                      width: 32,
-                      height: 32,
-                      child: const _MapPin(), // Clean pulsing dot, no cone
-                    ),
+                  ],
+                ),
+              ],
+            )
+          else
+            const Center(child: CircularProgressIndicator(color: _primary)),
+
+          // 2. CLEAN FLOATING HEADER
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 16,
+            left: 24,
+            right: 24,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              decoration: BoxDecoration(
+                color: _surface,
+                borderRadius: BorderRadius.circular(32), // Pill shape
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 4))
                 ],
               ),
-            ],
-          ),
-
-          // 2. GLASS HEADER
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: ClipRRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                child: Container(
-                  padding: EdgeInsets.only(
-                    top: MediaQuery.of(context).padding.top + 12,
-                    bottom: 16,
-                    left: 20,
-                    right: 20,
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: widget.onClose,
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(color: _bg, shape: BoxShape.circle),
+                      child: const Icon(PhosphorIconsRegular.caretLeft, size: 20, color: _dark),
+                    ),
                   ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.6),
-                    border: Border(
-                        bottom:
-                            BorderSide(color: Colors.white.withOpacity(0.5))),
-                  ),
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: widget.onClose,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 10)
-                            ],
-                          ),
-                          child: const Icon(Icons.arrow_back_ios_new_rounded,
-                              size: 20, color: _textDark),
-                        ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Map View',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: _dark,
                       ),
-                      const SizedBox(width: 16),
-                      Text(
-                        'Map View',
-                        style: GoogleFonts.poppins(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: _textDark,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
 
-          // 3. FLOATING GLASS BOTTOM PANEL
+          // 3. FLOATING SOLID BOTTOM PANEL
           Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(32)),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.75),
-                    border: Border(
-                        top: BorderSide(
-                            color: Colors.white.withOpacity(0.8), width: 1.5)),
+            bottom: 24,
+            left: 24,
+            right: 24,
+            child: Container(
+              decoration: BoxDecoration(
+                color: _surface,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 30, offset: const Offset(0, 10))
+                ],
+              ),
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Location Info
+                  Text(
+                    _locationTitle,
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: _dark,
+                    ),
                   ),
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+                  const SizedBox(height: 4),
+                  Text(
+                    _locationSubtitle,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: _grey,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Nearby Places Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Location Info
                       Text(
-                        _locationTitle,
+                        'Nearby Places',
                         style: GoogleFonts.poppins(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: _textDark,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: _dark,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _locationSubtitle,
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          color: const Color(0xFF6B7280),
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Nearby Places Header
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Nearby Places',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: _textDark,
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () => fetchNearbyPlaces(),
-                            child: Icon(PhosphorIcons.arrowsClockwise(),
-                                color: _tenantPrimary, size: 20),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Nearby Places List
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        child: _fetchingLocation || _loadingPlaces
-                            ? const Padding(
-                                padding: EdgeInsets.all(20),
-                                child: Center(
-                                    child: CircularProgressIndicator(
-                                        color: _tenantPrimary)),
-                              )
-                            : nearbyPlaces.isEmpty
-                                ? Padding(
-                                    padding: const EdgeInsets.all(20),
-                                    child: Center(
-                                      child: Text('No nearby places found.',
-                                          style: GoogleFonts.poppins(
-                                              color: Colors.grey)),
-                                    ),
-                                  )
-                                : SizedBox(
-                                    height:
-                                        140, // Constrain height to make it scrollable/sleek
-                                    child: ListView.builder(
-                                      physics: const BouncingScrollPhysics(),
-                                      padding: EdgeInsets.zero,
-                                      itemCount: nearbyPlaces.length,
-                                      itemBuilder: (context, index) {
-                                        final place = nearbyPlaces[index];
-                                        final Color iconColor =
-                                            getPlaceColor(place);
-                                        return InkWell(
-                                          onTap: () {
-                                            final propertyId =
-                                                place['property_id'];
-                                            final pLat = place['geometry']
-                                                ['location']['lat'];
-                                            final pLng = place['geometry']
-                                                ['location']['lng'];
-
-                                            _mapController.move(
-                                                LatLng(pLat, pLng), 15.5);
-
-                                            if (propertyId != null) {
-                                              try {
-                                                final prop = _allProperties
-                                                    .firstWhere((p) =>
-                                                        p.id ==
-                                                        propertyId.toString());
-                                                setState(() =>
-                                                    _activeProperty = prop);
-                                                _showPropertyDrawer(
-                                                    context, prop);
-                                              } catch (_) {}
-                                            }
-                                          },
-                                          child: Padding(
-                                            padding: const EdgeInsets.only(
-                                                bottom: 16),
-                                            child: Row(
-                                              children: [
-                                                Container(
-                                                  width: 40,
-                                                  height: 40,
-                                                  decoration: BoxDecoration(
-                                                    shape: BoxShape.circle,
-                                                    border: Border.all(
-                                                        color: iconColor,
-                                                        width: 2),
-                                                  ),
-                                                  child: ClipOval(
-                                                      child: _buildPlaceAvatar(
-                                                          place)),
-                                                ),
-                                                const SizedBox(width: 16),
-                                                Expanded(
-                                                  child: Text(
-                                                    place['name'] ?? 'Unknown',
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: GoogleFonts.poppins(
-                                                      fontSize: 14.5,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: _textDark,
-                                                    ),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 12),
-                                                Text(
-                                                  getDistance(place),
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: _textLight,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                      ),
-
-                      const SizedBox(height: 16),
-                      // Actions
-                      ElevatedButton(
-                        onPressed: widget.onGetDirections ??
-                            () {
-                              final targetLoc = _activePropertyLocation ??
-                                  (nearbyPlaces.isNotEmpty
-                                      ? LatLng(
-                                          nearbyPlaces.first['geometry']
-                                              ['location']['lat'],
-                                          nearbyPlaces.first['geometry']
-                                              ['location']['lng'])
-                                      : null);
-                              if (targetLoc != null) {
-                                _openDirections(
-                                    targetLoc.latitude, targetLoc.longitude);
-                              } else {
-                                _showErrorSnackBar('No destination available.');
-                              }
-                            },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _tenantPrimary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                          elevation: 0,
-                          minimumSize: const Size(double.infinity, 54),
-                        ),
-                        child: Text(
-                          'Get Directions',
-                          style: GoogleFonts.poppins(
-                              fontSize: 16, fontWeight: FontWeight.w700),
-                        ),
+                      GestureDetector(
+                        onTap: () => fetchNearbyPlaces(),
+                        child: const Icon(PhosphorIconsRegular.arrowsClockwise, color: _primary, size: 20),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 16),
+
+                  // Nearby Places List
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: _fetchingLocation || _loadingPlaces
+                        ? const Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Center(child: CircularProgressIndicator(color: _primary)),
+                          )
+                        : nearbyPlaces.isEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Center(
+                                  child: Text('No nearby places found.', style: GoogleFonts.poppins(color: _grey)),
+                                ),
+                              )
+                            : SizedBox(
+                                height: 120, // Constrain height for sleekness
+                                child: ListView.builder(
+                                  physics: const BouncingScrollPhysics(),
+                                  padding: EdgeInsets.zero,
+                                  itemCount: nearbyPlaces.length,
+                                  itemBuilder: (context, index) {
+                                    final place = nearbyPlaces[index];
+                                    final Color iconColor = getPlaceColor(place);
+                                    
+                                    return GestureDetector(
+                                      onTap: () {
+                                        final propertyId = place['property_id'];
+                                        final pLat = place['geometry']['location']['lat'];
+                                        final pLng = place['geometry']['location']['lng'];
+
+                                        _mapController.move(LatLng(pLat, pLng), 15.5);
+
+                                        if (propertyId != null) {
+                                          try {
+                                            final prop = _allProperties.firstWhere((p) => p.id == propertyId.toString());
+                                            setState(() => _activeProperty = prop);
+                                            _showPropertyDrawer(context, prop);
+                                          } catch (_) {}
+                                        }
+                                      },
+                                      behavior: HitTestBehavior.opaque,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(bottom: 16),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 36,
+                                              height: 36,
+                                              decoration: BoxDecoration(
+                                                color: iconColor.withOpacity(0.1),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(PhosphorIconsFill.mapPin, color: iconColor, size: 16),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                place['name'] ?? 'Unknown',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: _dark,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Text(
+                                              getDistance(place),
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: _grey,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                  ),
+
+                  const SizedBox(height: 16),
+                  // Action Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: widget.onGetDirections ??
+                          () {
+                            final targetLoc = _activePropertyLocation ??
+                                (nearbyPlaces.isNotEmpty
+                                    ? LatLng(nearbyPlaces.first['geometry']['location']['lat'], nearbyPlaces.first['geometry']['location']['lng'])
+                                    : null);
+                            if (targetLoc != null) {
+                              _openDirections(targetLoc.latitude, targetLoc.longitude);
+                            } else {
+                              _showErrorSnackBar('No destination available.');
+                            }
+                          },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        'Get Directions',
+                        style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -829,15 +677,14 @@ class _LocationViewState extends State<LocationView> {
 }
 
 // ─────────────────────────────────────────────
-// AIRBNB STYLE DRAWER (Glass Upgraded)
+// AIRBNB STYLE DRAWER
 // ─────────────────────────────────────────────
 
 class _PropertyDrawer extends StatefulWidget {
   final Property property;
   final VoidCallback onGetDirections;
 
-  const _PropertyDrawer(
-      {required this.property, required this.onGetDirections});
+  const _PropertyDrawer({required this.property, required this.onGetDirections});
 
   @override
   State<_PropertyDrawer> createState() => _PropertyDrawerState();
@@ -851,204 +698,146 @@ class _PropertyDrawerState extends State<_PropertyDrawer> {
     final prop = widget.property;
     final images = (prop.images.isNotEmpty) ? prop.images : [prop.image];
 
-    return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeOutCubic,
-      tween: Tween(begin: 1.0, end: 0.0),
-      builder: (context, value, child) {
-        return Transform.translate(
-            offset: Offset(0, value * 100), child: child);
-      },
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.85),
-              border: Border(
-                  top: BorderSide(
-                      color: Colors.white.withOpacity(0.9), width: 1.5)),
-            ),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+    return Container(
+      decoration: const BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image Carousel with rounded top corners
+            SizedBox(
+              height: 260,
+              child: Stack(
                 children: [
-                  // Image Carousel
-                  SizedBox(
-                    height: 280,
-                    child: Stack(
-                      children: [
-                        PageView.builder(
-                          itemCount: images.length,
-                          onPageChanged: (idx) =>
-                              setState(() => _currentImageIndex = idx),
-                          itemBuilder: (context, index) {
-                            return buildPropertyImage(images[index],
-                                width: double.infinity,
-                                height: 280,
-                                fit: BoxFit.cover);
-                          },
-                        ),
-                        if (images.length > 1)
-                          Positioned(
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            height: 60,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.transparent,
-                                    Colors.black.withOpacity(0.5)
-                                  ],
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                ),
-                              ),
-                            ),
-                          ),
-                        Positioned(
-                          top: 12,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Container(
-                              width: 48,
-                              height: 5,
-                              decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.9),
-                                  borderRadius: BorderRadius.circular(10)),
-                            ),
-                          ),
-                        ),
-                        if (images.length > 1)
-                          Positioned(
-                            bottom: 16,
-                            left: 0,
-                            right: 0,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: List.generate(
-                                images.length,
-                                (index) => AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  margin:
-                                      const EdgeInsets.symmetric(horizontal: 4),
-                                  width: _currentImageIndex == index ? 16 : 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: _currentImageIndex == index
-                                        ? Colors.white
-                                        : Colors.white.withOpacity(0.5),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                    child: PageView.builder(
+                      itemCount: images.length,
+                      onPageChanged: (idx) => setState(() => _currentImageIndex = idx),
+                      itemBuilder: (context, index) {
+                        return buildPropertyImage(images[index], width: double.infinity, height: 260, fit: BoxFit.cover);
+                      },
                     ),
                   ),
-                  const SizedBox(height: 24),
-
-                  // Details
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                prop.name,
-                                style: GoogleFonts.poppins(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.black,
-                                    height: 1.2),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Row(
-                              children: [
-                                const Icon(Icons.star_rounded,
-                                    color: Color(0xFFFBBF24), size: 20),
-                                const SizedBox(width: 4),
-                                Text('${prop.rating}',
-                                    style: GoogleFonts.poppins(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.black)),
-                              ],
-                            )
-                          ],
+                  // Dark gradient at bottom of image for pagination dots visibility
+                  Positioned(
+                    bottom: 0, left: 0, right: 0, height: 80,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.transparent, Colors.black.withOpacity(0.6)],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          prop.location,
-                          style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              color: const Color(0xFF6B7280),
-                              fontWeight: FontWeight.w500),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Price & Actions
-                        Row(
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Ksh. ${prop.price}',
-                                  style: GoogleFonts.poppins(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w900,
-                                      color: const Color(0xFF3F37C9)),
-                                ),
-                                Text('per month',
-                                    style: GoogleFonts.poppins(
-                                        fontSize: 13,
-                                        color: const Color(0xFF6B7280),
-                                        fontWeight: FontWeight.w500)),
-                              ],
-                            ),
-                            const SizedBox(width: 24),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: widget.onGetDirections,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF3F37C9),
-                                  foregroundColor: Colors.white,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 18),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                child: Text('Directions',
-                                    style: GoogleFonts.poppins(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700)),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(
-                            height: 20), // Extra spacing for safe area
-                      ],
+                      ),
                     ),
                   ),
+                  // Bottom sheet handle
+                  Positioned(
+                    top: 12, left: 0, right: 0,
+                    child: Center(
+                      child: Container(
+                        width: 48, height: 5,
+                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                  // Pagination dots
+                  if (images.length > 1)
+                    Positioned(
+                      bottom: 16, left: 0, right: 0,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(
+                          images.length,
+                          (index) => AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: _currentImageIndex == index ? 16 : 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: _currentImageIndex == index ? Colors.white : Colors.white.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
-          ),
+            const SizedBox(height: 24),
+
+            // Details
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          prop.name,
+                          style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Row(
+                        children: [
+                          const Icon(PhosphorIconsFill.star, color: Color(0xFFF59E0B), size: 16),
+                          const SizedBox(width: 4),
+                          Text('${prop.rating}', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700, color: _dark)),
+                        ],
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    prop.location,
+                    style: GoogleFonts.poppins(fontSize: 14, color: _grey, fontWeight: FontWeight.w400),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Price & Actions
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Ksh. ${prop.price}',
+                            style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w800, color: _dark),
+                          ),
+                          Text('/month', style: GoogleFonts.poppins(fontSize: 12, color: _grey, fontWeight: FontWeight.w500)),
+                        ],
+                      ),
+                      const SizedBox(width: 24),
+                      ElevatedButton(
+                        onPressed: widget.onGetDirections,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                          elevation: 0,
+                        ),
+                        child: Text('Directions', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24), 
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1056,7 +845,7 @@ class _PropertyDrawerState extends State<_PropertyDrawer> {
 }
 
 // ─────────────────────────────────────────────
-// PROPERTY MARKER
+// PROPERTY MARKER (Airbnb Style Pill)
 // ─────────────────────────────────────────────
 
 class _PropertyMarker extends StatelessWidget {
@@ -1065,71 +854,45 @@ class _PropertyMarker extends StatelessWidget {
 
   const _PropertyMarker({required this.property, required this.isActive});
 
+  String _formatPrice(num price) {
+    final value = price.toDouble();
+    if (value >= 1000) return '${(value / 1000).toStringAsFixed(0)}k';
+    return value.toStringAsFixed(0);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          width: 180,
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: isActive ? Colors.black : Colors.white.withOpacity(0.9),
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-                color: isActive ? Colors.black : Colors.white, width: 1.5),
-            boxShadow: const [
-              BoxShadow(
-                  color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
+            color: isActive ? _dark : _surface,
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(color: isActive ? _dark : _grey.withOpacity(0.2), width: 1.5),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4)),
             ],
           ),
-          child: Row(
-            children: [
-              ClipOval(
-                child: buildPropertyImage(property.image,
-                    width: 28, height: 28, fit: BoxFit.cover),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      property.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: isActive ? Colors.white : Colors.black,
-                      ),
-                    ),
-                    Text(
-                      'Ksh.${property.price}/m',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color:
-                            isActive ? Colors.white70 : const Color(0xFF3F37C9),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          child: Text(
+            'Ksh ${_formatPrice(property.price)}',
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: isActive ? Colors.white : _dark,
+            ),
           ),
         ),
+        // Small triangle pointing down
         if (isActive)
           Container(
             width: 10,
             height: 6,
             decoration: const BoxDecoration(
               border: Border(
-                top: BorderSide(color: Colors.black, width: 6),
+                top: BorderSide(color: _dark, width: 6),
                 left: BorderSide(color: Colors.transparent, width: 5),
                 right: BorderSide(color: Colors.transparent, width: 5),
               ),
@@ -1141,7 +904,7 @@ class _PropertyMarker extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-// MAP PIN (CURRENT LOCATION - Clean Dot)
+// MAP PIN (CURRENT LOCATION)
 // ─────────────────────────────────────────────
 
 class _MapPin extends StatefulWidget {
@@ -1179,35 +942,28 @@ class _MapPinState extends State<_MapPin> with SingleTickerProviderStateMixin {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Pulsing rings
         AnimatedBuilder(
           animation: _pulseAnim,
           builder: (context, _) {
             return Container(
-              width: 16 + (_pulseAnim.value * 40),
-              height: 16 + (_pulseAnim.value * 40),
+              width: 16 + (_pulseAnim.value * 32),
+              height: 16 + (_pulseAnim.value * 32),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF3F37C9)
-                    .withOpacity((1.0 - _pulseAnim.value) * 0.5),
+                color: _primary.withOpacity((1.0 - _pulseAnim.value) * 0.4),
               ),
             );
           },
         ),
-        // Inner solid dot
         Container(
-          width: 16,
-          height: 16,
+          width: 14,
+          height: 14,
           decoration: BoxDecoration(
-            color: const Color(0xFF3F37C9),
+            color: _primary,
             shape: BoxShape.circle,
             border: Border.all(color: Colors.white, width: 2.5),
             boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF3F37C9).withOpacity(0.4),
-                blurRadius: 6,
-                spreadRadius: 1,
-              ),
+              BoxShadow(color: _primary.withOpacity(0.4), blurRadius: 4, spreadRadius: 1),
             ],
           ),
         ),

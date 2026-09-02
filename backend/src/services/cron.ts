@@ -166,26 +166,26 @@ async function sendWeeklyPerformanceDigest() {
          u.name    AS landlord_name,
          u.email   AS landlord_email,
          (
-           SELECT COUNT(a.id)
-           FROM analytics a
-           JOIN properties p2 ON p2.id = a.property_id
-           WHERE p2.user_id = u.id AND a.event_type = 'view' AND a.event_time > now() - INTERVAL '7 days'
+           SELECT COUNT(e.id)
+           FROM engagement_events e
+           JOIN properties p2 ON p2.id = e.property_id
+           WHERE p2.landlord_id = u.id AND e.event_type = 'property_view' AND e.created_at > now() - INTERVAL '7 days'
          ) AS views,
          (
            SELECT COUNT(b.id)
            FROM bookings b
            JOIN properties p2 ON p2.id = b.property_id
-           WHERE p2.user_id = u.id AND b.created_at > now() - INTERVAL '7 days'
+           WHERE p2.landlord_id = u.id AND b.created_at > now() - INTERVAL '7 days'
          ) AS new_bookings,
          (
            SELECT COALESCE(SUM(b.total_price), 0)
            FROM bookings b
            JOIN properties p2 ON p2.id = b.property_id
-           WHERE p2.user_id = u.id AND b.status = 'confirmed' AND b.created_at > now() - INTERVAL '7 days'
+           WHERE p2.landlord_id = u.id AND b.status = 'confirmed' AND b.created_at > now() - INTERVAL '7 days'
          ) AS revenue
        FROM users u
-       WHERE EXISTS (SELECT 1 FROM properties p WHERE p.user_id = u.id)`,
-      []
+       WHERE EXISTS (SELECT 1 FROM properties p WHERE p.landlord_id = u.id)`,
+      [],
     );
 
     for (const row of res.rows) {

@@ -268,7 +268,11 @@ router.post('/:id/view', requireAuth, async (req, res) => {
         return res.status(401).json({ error: 'Unauthorized' });
     try {
         await query(`INSERT INTO recently_viewed (user_id, property_id, viewed_at) VALUES ($1, $2, NOW()) ON CONFLICT (user_id, property_id) DO UPDATE SET viewed_at = NOW()`, [userId, propertyId]);
-        await query(`INSERT INTO analytics (property_id, event_type, user_id, event_time) VALUES ($1, 'view', $2, NOW())`, [propertyId, userId]);
+        // Property views are already tracked by the analytics pipeline using the
+        // engagement_events + property_unique_views tables. Recording a legacy row in
+        // the removed `analytics` table causes runtime failures on migrated databases.
+        await query(`INSERT INTO engagement_events (user_id, property_id, event_type, metadata, created_at)
+       VALUES ($1, $2, 'property_view', '{"source":"recently_viewed"}', NOW())`, [userId, propertyId]);
         return res.json({ data: { success: true } });
     }
     catch (err) {

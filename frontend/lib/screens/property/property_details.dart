@@ -54,6 +54,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   bool _loadingReviews = true;
   String? _eligibleBookingId;
   bool _hasReviewed = false;
+  bool _hasActiveBooking = false;
 
   // ─── Computed getters — single source of truth for rating & count ──────────
   double get _avgRating => _reviews.isEmpty
@@ -82,6 +83,46 @@ class _PropertyDetailsState extends State<PropertyDetails> {
 
     _fetchReviews();
     _initializePropertyVideo();
+    _checkActiveBooking();
+  }
+
+  Future<void> _checkActiveBooking() async {
+    try {
+      final bookings = await BookingService.fetchBookings(isLandlord: false);
+      final now = DateTime.now();
+
+      final hasActive = bookings.any((booking) {
+        if ((booking['property_id'] ?? '').toString() != widget.property.id) {
+          return false;
+        }
+
+        final status = (booking['status'] ?? '').toString().toLowerCase();
+        if (status != 'confirmed') {
+          return false;
+        }
+
+        final checkIn = booking['check_in_date'] ?? booking['checkInDate'];
+        final checkOut = booking['check_out_date'] ?? booking['checkOutDate'];
+
+        if (checkIn == null || checkOut == null) {
+          return true;
+        }
+
+        final start = DateTime.tryParse(checkIn.toString());
+        final end = DateTime.tryParse(checkOut.toString());
+        if (start == null || end == null) {
+          return true;
+        }
+
+        return !now.isBefore(start) && now.isBefore(end.add(const Duration(days: 1)));
+      });
+
+      if (mounted) {
+        setState(() => _hasActiveBooking = hasActive);
+      }
+    } catch (e) {
+      debugPrint('Error checking active booking: $e');
+    }
   }
 
   Future<void> _initializePropertyVideo() async {
@@ -682,13 +723,40 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              Text(
-                                'Exact location provided after booking.',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: textLight,
+                              if (_hasActiveBooking)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      onPressed: widget.onViewLocation,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: tenantPrimary,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(vertical: 14),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                      icon: Icon(PhosphorIcons.mapPin(PhosphorIconsStyle.fill), size: 18),
+                                      label: Text(
+                                        'Open location',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              else
+                                Text(
+                                  'Exact location provided after booking.',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: textLight,
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                         ),
