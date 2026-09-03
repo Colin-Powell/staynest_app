@@ -1,11 +1,16 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config.js';
+import { emailQueue } from './emailQueue.js';
+import { cache } from './cache.js';
 const smtpConfigured = Boolean(env.smtpHost && env.smtpUser && env.smtpPass);
 const transporter = smtpConfigured
     ? nodemailer.createTransport({
         host: env.smtpHost,
         port: env.smtpPort,
         secure: env.smtpPort === 465,
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
         auth: {
             user: env.smtpUser,
             pass: env.smtpPass,
@@ -13,7 +18,10 @@ const transporter = smtpConfigured
     })
     : null;
 const OTP_TTL_MS = 10 * 60 * 1000;
-const otpStore = new Map();
+const OTP_TTL_SECONDS = OTP_TTL_MS / 1000;
+function otpKey(email) {
+    return `otp:${email.trim().toLowerCase()}`;
+}
 function ensureTransporter() {
     if (!transporter) {
         console.warn('SMTP is not configured; skipping email send. Set SMTP_HOST, SMTP_USER, and SMTP_PASS to enable email delivery.');
@@ -21,9 +29,10 @@ function ensureTransporter() {
     }
     return true;
 }
-export function createOtp(email) {
+export async function createOtp(email) {
     const normalizedEmail = email.trim().toLowerCase();
-    const existing = otpStore.get(normalizedEmail);
+    const existingRaw = await cache.get(otpKey(normalizedEmail));
+    const existing = existingRaw ? JSON.parse(existingRaw) : null;
     if (existing && Date.now() < existing.expiresAt) {
         const error = new Error('A verification code is already active. Please wait until it expires before requesting another code.');
         error.statusCode = 429;
@@ -32,22 +41,43 @@ export function createOtp(email) {
     }
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + OTP_TTL_MS;
-    otpStore.set(normalizedEmail, { code, expiresAt });
+    const reserved = await cache.setIfAbsent(otpKey(normalizedEmail), JSON.stringify({ code, expiresAt }), OTP_TTL_SECONDS);
+    if (!reserved) {
+        const activeRaw = await cache.get(otpKey(normalizedEmail));
+        const active = activeRaw ? JSON.parse(activeRaw) : null;
+        const error = new Error('A verification code is already active. Please wait until it expires before requesting another code.');
+        error.statusCode = 429;
+        error.retryAfterSeconds = active
+            ? Math.ceil((active.expiresAt - Date.now()) / 1000)
+            : OTP_TTL_SECONDS;
+        throw error;
+    }
     return { code, expiresAt };
 }
-export function verifyOtp(email, code) {
+export async function verifyOtp(email, code) {
     const normalizedEmail = email.trim().toLowerCase();
-    const record = otpStore.get(normalizedEmail);
+    const raw = await cache.get(otpKey(normalizedEmail));
+    const record = raw ? JSON.parse(raw) : null;
     if (!record)
         return false;
     if (Date.now() > record.expiresAt) {
-        otpStore.delete(normalizedEmail);
+        await cache.del(otpKey(normalizedEmail));
         return false;
     }
     const isValid = record.code === code.trim();
     if (isValid)
-        otpStore.delete(normalizedEmail);
+        await cache.del(otpKey(normalizedEmail));
     return isValid;
+}
+export async function queueOtpEmail(to, code) {
+    const normalizedEmail = to.trim().toLowerCase();
+    await emailQueue.add('otp-email', { to: normalizedEmail, code }, {
+        jobId: `otp-${normalizedEmail}-${code}`,
+        attempts: 4,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: { age: 15 * 60, count: 1000 },
+        removeOnFail: { age: 24 * 60 * 60, count: 5000 },
+    });
 }
 export async function sendOtpEmail(to, code = '000000') {
     if (!ensureTransporter())

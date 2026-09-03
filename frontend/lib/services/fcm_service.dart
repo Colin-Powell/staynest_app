@@ -58,11 +58,12 @@ class FCMService {
       );
 
       // 1. Request Permissions (iOS/Android 13+)
-      await _messaging.requestPermission(
+      final settings = await _messaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
       );
+      debugPrint('[FCM] authorization=${settings.authorizationStatus}');
 
       // 2. Setup Local Notifications for Foreground
       const androidInit = AndroidInitializationSettings(

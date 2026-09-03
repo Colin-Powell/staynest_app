@@ -10,16 +10,51 @@ import 'package:property_app/screens/home/cache_engine.dart';
 
 class PropertyService {
   // ==========================================
-  // DRAFTS (Persistent Backend)
+  // DRAFTS (Backend with account-scoped offline recovery)
   // ==========================================
-  Future<Map<String, dynamic>> saveDraft(Map<String, dynamic> payload, {String? draftId}) async {
+  String get _localDraftKey =>
+      'staynest.local_draft.${AppSession.currentUserId ?? AppSession.currentUserEmail ?? 'anonymous'}';
+
+  Future<void> _cacheDraft(Map<String, dynamic> payload,
+      {String? draftId}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = <String, dynamic>{
+      ...payload,
+      if (draftId != null) 'id': draftId,
+      '_cachedAt': DateTime.now().toIso8601String(),
+    };
+    await prefs.setString(_localDraftKey, jsonEncode(data));
+  }
+
+  Future<Map<String, dynamic>?> _readCachedDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_localDraftKey);
+    if (raw == null) return null;
+    try {
+      final data = jsonDecode(raw);
+      return data is Map ? Map<String, dynamic>.from(data) : null;
+    } catch (_) {
+      await prefs.remove(_localDraftKey);
+      return null;
+    }
+  }
+
+  Future<void> _clearCachedDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_localDraftKey);
+  }
+
+  Future<Map<String, dynamic>> saveDraft(Map<String, dynamic> payload,
+      {String? draftId}) async {
     final token = AppSession.apiToken;
     if (token == null) throw Exception('Not authenticated');
 
-    final uri = draftId != null 
+    await _cacheDraft(payload, draftId: draftId);
+
+    final uri = draftId != null
         ? Uri.parse('$baseUrl/drafts/$draftId')
         : Uri.parse('$baseUrl/drafts');
-        
+
     final response = await (draftId != null ? http.put : http.post)(
       uri,
       headers: {
@@ -30,7 +65,9 @@ class PropertyService {
     );
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return jsonDecode(response.body)['data'];
+      final data = Map<String, dynamic>.from(jsonDecode(response.body)['data']);
+      await _cacheDraft(data, draftId: data['id']?.toString() ?? draftId);
+      return data;
     } else {
       throw Exception('Failed to save draft: ${response.statusCode}');
     }
@@ -40,33 +77,48 @@ class PropertyService {
     final token = AppSession.apiToken;
     if (token == null) throw Exception('Not authenticated');
 
-    final response = await http.get(
-      Uri.parse('$baseUrl/drafts'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/drafts'), headers: {
+        'Authorization': 'Bearer $token'
+      }).timeout(const Duration(seconds: 12));
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body)['data'] ?? [];
+        if (data.isNotEmpty) return data.cast<Map<String, dynamic>>();
 
-    if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body)['data'] ?? [];
-      return data.cast<Map<String, dynamic>>();
-    } else {
-      throw Exception('Failed to fetch drafts');
+        final cached = await _readCachedDraft();
+        if (cached != null) {
+          final cachedId = cached['id']?.toString();
+          final payload = Map<String, dynamic>.from(cached)
+            ..remove('id')
+            ..remove('_cachedAt');
+          try {
+            await saveDraft(payload, draftId: cachedId);
+          } catch (_) {
+            // Keep returning the local draft if the connection is still unavailable.
+          }
+          return [cached];
+        }
+      }
+    } catch (_) {
+      // Fall back to the account-scoped local copy when offline.
     }
+
+    final cached = await _readCachedDraft();
+    return cached == null ? [] : [cached];
   }
 
   Future<void> deleteDraft(String draftId) async {
     final token = AppSession.apiToken;
     if (token == null) throw Exception('Not authenticated');
 
-    final response = await http.delete(
-      Uri.parse('$baseUrl/drafts/$draftId'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final response = await http.delete(Uri.parse('$baseUrl/drafts/$draftId'),
+        headers: {'Authorization': 'Bearer $token'});
 
     if (response.statusCode >= 300) {
       throw Exception('Failed to delete draft');
     }
+    await _clearCachedDraft();
   }
-
 
   static final PropertyService instance = PropertyService._internal();
   PropertyService._internal();
@@ -169,30 +221,34 @@ class PropertyService {
 
     try {
       final cacheKey = CacheKeys.propertyDetail(id);
-      final rawData = await CacheEngine.instance.getOrFetch<Map<String, dynamic>>(
-        key: cacheKey,
-        ttl: CacheTTL.details,
-        networkFetcher: () async {
-          final uri = Uri.parse('$baseUrl/properties/$id');
-          final headers = <String, String>{'Content-Type': 'application/json'};
-          final token = AppSession.apiToken;
-          if (token?.isNotEmpty == true) {
-            headers['Authorization'] = 'Bearer $token';
-          }
+      final rawData =
+          await CacheEngine.instance.getOrFetch<Map<String, dynamic>>(
+              key: cacheKey,
+              ttl: CacheTTL.details,
+              networkFetcher: () async {
+                final uri = Uri.parse('$baseUrl/properties/$id');
+                final headers = <String, String>{
+                  'Content-Type': 'application/json'
+                };
+                final token = AppSession.apiToken;
+                if (token?.isNotEmpty == true) {
+                  headers['Authorization'] = 'Bearer $token';
+                }
 
-          final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 30));
+                final res = await http
+                    .get(uri, headers: headers)
+                    .timeout(const Duration(seconds: 30));
 
-          if (res.statusCode == 200) {
-            final data = json.decode(res.body) as Map<String, dynamic>;
-            final payload = data['data'] as Map<String, dynamic>?;
-            if (payload != null) {
-              return payload;
-            }
-          }
-          throw Exception('Failed to load property');
-        }
-      );
-      
+                if (res.statusCode == 200) {
+                  final data = json.decode(res.body) as Map<String, dynamic>;
+                  final payload = data['data'] as Map<String, dynamic>?;
+                  if (payload != null) {
+                    return payload;
+                  }
+                }
+                throw Exception('Failed to load property');
+              });
+
       return mapApiProperty(rawData);
     } catch (e) {
       // ignore: avoid_print

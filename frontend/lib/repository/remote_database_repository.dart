@@ -92,7 +92,9 @@ class RemoteDatabaseRepository {
   Future<List<Map<String, dynamic>>> loadPropertiesForUser(
       String userId) async {
     final response = await apiClient.get(
-      Uri.parse('${AppSession.apiBaseUrl}/properties/me'),
+      Uri.parse('${AppSession.apiBaseUrl}/properties').replace(
+        queryParameters: {'landlordId': userId},
+      ),
     );
     return _decodeListData(response);
   }

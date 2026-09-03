@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 typedef GeocodingSuggestion = ({
   String displayName,
+  String? secondaryName,
   double lat,
   double lng,
   String? country,
@@ -22,6 +23,16 @@ String? _value(Map<String, dynamic> address, String key) {
   return value == null || value.isEmpty ? null : value;
 }
 
+String? _joinParts(Iterable<String?> values) {
+  final parts = <String>[];
+  for (final value in values) {
+    if (value != null && value.isNotEmpty && !parts.contains(value)) {
+      parts.add(value);
+    }
+  }
+  return parts.isEmpty ? null : parts.join(', ');
+}
+
 GeocodingSuggestion? _parseSuggestion(Map<String, dynamic> item) {
   final displayName = item['display_name']?.toString() ?? '';
   final lat = double.tryParse(item['lat']?.toString() ?? '');
@@ -32,25 +43,45 @@ GeocodingSuggestion? _parseSuggestion(Map<String, dynamic> item) {
       : <String, dynamic>{};
   if (displayName.isEmpty || lat == null || lng == null) return null;
 
-  // Kenya's OSM data uses both administrative and place-specific keys.
+  final country = _value(address, 'country');
+  final county = _value(address, 'state') ?? _value(address, 'county');
+  final subCounty = _value(address, 'county') ??
+      _value(address, 'state_district') ??
+      _value(address, 'municipality') ??
+      _value(address, 'city_district');
+  final town = _value(address, 'town') ??
+      _value(address, 'city') ??
+      _value(address, 'municipality');
+  final neighborhood = _value(address, 'suburb') ??
+      _value(address, 'neighbourhood') ??
+      _value(address, 'quarter');
+  final estateOrVillage =
+      _value(address, 'residential') ?? _value(address, 'village');
+  final road = _value(address, 'road');
+  final landmark = _value(address, 'amenity') ??
+      _value(address, 'tourism') ??
+      _value(address, 'shop');
+
   return (
     displayName: displayName,
+    secondaryName: _joinParts([
+      landmark,
+      road,
+      neighborhood ?? estateOrVillage,
+      town,
+      county,
+    ]),
     lat: lat,
     lng: lng,
-    country: _value(address, 'country'),
-    county: _value(address, 'state') ?? _value(address, 'county'),
-    subCounty: _value(address, 'state_district') ?? _value(address, 'county'),
-    ward: _value(address, 'city') ?? _value(address, 'city_district'),
-    town: _value(address, 'town') ??
-        _value(address, 'city') ??
-        _value(address, 'municipality'),
-    neighborhood: _value(address, 'suburb') ?? _value(address, 'quarter'),
-    estateOrVillage:
-        _value(address, 'residential') ?? _value(address, 'village'),
-    road: _value(address, 'road'),
-    landmark: _value(address, 'amenity') ??
-        _value(address, 'tourism') ??
-        _value(address, 'shop'),
+    country: country,
+    county: county,
+    subCounty: subCounty,
+    ward: _value(address, 'city_district') ?? _value(address, 'locality'),
+    town: town,
+    neighborhood: neighborhood,
+    estateOrVillage: estateOrVillage,
+    road: road,
+    landmark: landmark,
   );
 }
 
@@ -82,8 +113,18 @@ GeocodingSuggestion? _parsePhotonFeature(Map<String, dynamic> feature) {
   ].whereType<String>().toSet().join(', ');
   if (displayName.isEmpty) return null;
 
+  final neighborhood = _value(values, 'suburb') ?? _value(values, 'quarter');
+  final estateOrVillage =
+      _value(values, 'village') ?? _value(values, 'residential');
+
   return (
     displayName: displayName,
+    secondaryName: _joinParts([
+      street,
+      neighborhood ?? estateOrVillage,
+      city,
+      state,
+    ]),
     lat: latitude,
     lng: longitude,
     country: country,
@@ -91,8 +132,8 @@ GeocodingSuggestion? _parsePhotonFeature(Map<String, dynamic> feature) {
     subCounty: _value(values, 'county') ?? _value(values, 'district'),
     ward: _value(values, 'locality'),
     town: city,
-    neighborhood: _value(values, 'suburb') ?? _value(values, 'quarter'),
-    estateOrVillage: _value(values, 'village') ?? _value(values, 'residential'),
+    neighborhood: neighborhood,
+    estateOrVillage: estateOrVillage,
     road: street,
     landmark: null,
   );
@@ -100,6 +141,11 @@ GeocodingSuggestion? _parsePhotonFeature(Map<String, dynamic> feature) {
 
 String _normalizeToken(String value) =>
     value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+
+bool _isPlusCode(String value) =>
+    RegExp(r'^[23456789CFGHJMPQRVWX]{2,8}\+[23456789CFGHJMPQRVWX]{2,}$',
+            caseSensitive: false)
+        .hasMatch(value.trim().split(RegExp(r'\s+')).first.replaceAll(',', ''));
 
 int _matchScore(GeocodingSuggestion suggestion, List<String> tokens) {
   final haystack = _normalizeToken([
@@ -115,13 +161,19 @@ int _matchScore(GeocodingSuggestion suggestion, List<String> tokens) {
   return tokens.where((token) => haystack.contains(token)).length;
 }
 
-Future<List<GeocodingSuggestion>> _searchNominatim(String query) async {
+Future<List<GeocodingSuggestion>> _searchNominatim(String query,
+    {double? nearLat, double? nearLng}) async {
+  final viewbox = nearLat != null && nearLng != null
+      ? '${nearLng - 0.35},${nearLat + 0.35},${nearLng + 0.35},${nearLat - 0.35}'
+      : null;
   final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
     'format': 'jsonv2',
     'q': query,
     'limit': '5',
     'addressdetails': '1',
     'countrycodes': 'ke',
+    if (viewbox != null) 'viewbox': viewbox,
+    if (viewbox != null) 'bounded': '0',
   });
   final response = await http.get(uri, headers: {
     'User-Agent': 'StayNest/1.0 (location search)',
@@ -137,10 +189,14 @@ Future<List<GeocodingSuggestion>> _searchNominatim(String query) async {
       .toList();
 }
 
-Future<List<GeocodingSuggestion>> _searchPhoton(String query) async {
+Future<List<GeocodingSuggestion>> _searchPhoton(String query,
+    {double? nearLat, double? nearLng}) async {
   final uri = Uri.https('photon.komoot.io', '/api/', {
     'q': '$query Kenya',
     'limit': '8',
+    if (nearLat != null) 'lat': nearLat.toString(),
+    if (nearLng != null) 'lon': nearLng.toString(),
+    if (nearLat != null && nearLng != null) 'zoom': '12',
   });
   final response = await http.get(uri, headers: {
     'User-Agent': 'StayNest/1.0 (location search)',
@@ -157,7 +213,8 @@ Future<List<GeocodingSuggestion>> _searchPhoton(String query) async {
       .toList();
 }
 
-Future<List<GeocodingSuggestion>> searchAddressSuggestions(String query) async {
+Future<List<GeocodingSuggestion>> searchAddressSuggestions(String query,
+    {double? nearLat, double? nearLng}) async {
   final trimmedQuery = query.trim();
   if (trimmedQuery.length < 3) return [];
 
@@ -166,10 +223,15 @@ Future<List<GeocodingSuggestion>> searchAddressSuggestions(String query) async {
         .split(' ')
         .where((token) => token.length >= 2 && token != 'kenya')
         .toList();
-    final nominatimResults = await _searchNominatim(trimmedQuery);
-    final photonResults = nominatimResults.isNotEmpty
-        ? <GeocodingSuggestion>[]
-        : await _searchPhoton(trimmedQuery);
+    final isPlusCode = _isPlusCode(trimmedQuery);
+    final searchQuery =
+        isPlusCode && !trimmedQuery.toLowerCase().contains('kenya')
+            ? '$trimmedQuery, Kenya'
+            : trimmedQuery;
+    final nominatimResults =
+        await _searchNominatim(searchQuery, nearLat: nearLat, nearLng: nearLng);
+    final photonResults =
+        await _searchPhoton(searchQuery, nearLat: nearLat, nearLng: nearLng);
     final combined = [...nominatimResults, ...photonResults];
     final unique = <String, GeocodingSuggestion>{};
     for (final suggestion in combined) {

@@ -60,6 +60,7 @@ Property mapApiProperty(Map<String, dynamic> json) {
     businessDescription: json['landlord_business_description']?.toString(),
     memberSince: json['landlord_member_since']?.toString(),
     propertyCount: _toInt(json['landlord_property_count']),
+    responseTimeSeconds: _toDouble(json['landlord_response_time_seconds']),
   );
 
   // Backend `/properties` returns `review_count` and `average_rating`.

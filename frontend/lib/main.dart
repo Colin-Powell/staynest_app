@@ -37,7 +37,7 @@ import 'screens/super_admin/super_admin_login.dart';
 import 'package:property_app/firebase_options.dart';
 import 'utils/responsive_layout.dart';
 
-void _initializeFirebaseAsync() async {
+Future<void> _initializeFirebaseAsync() async {
   try {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(
@@ -82,9 +82,6 @@ Future<void> main() async {
 
   // GoogleFonts.config.allowRuntimeFetching = false;
 
-  // Defer firebase init so it doesn't block startup
-  _initializeFirebaseAsync();
-
   try {
     await dotenv.load(fileName: 'config.env');
   } on FileNotFoundError {
@@ -96,6 +93,8 @@ Future<void> main() async {
   await AppSession.restoreSession();
   await AppSession.initializeAppInfo();
 
+  // Restore the account before registering its device token.
+  await _initializeFirebaseAsync();
   if (AppSession.currentUserId != null) {
     AuthService.instance.syncFCMToken();
   }

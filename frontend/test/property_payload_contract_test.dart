@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:property_app/models/property.dart';
+import 'package:property_app/utils/property_mapper.dart';
 
 void main() {
   test(
       'Property.fromJson normalizes api payload where name and image are provided',
       () {
-    final property = Property.fromJson({
+    final property = mapApiProperty({
       'id': 'prop_123',
       'name': 'Harbor View Apartment',
       'image': 'https://cdn.example.com/property/cover.jpg',
@@ -22,6 +22,8 @@ void main() {
       'landlord_name': 'Jane Doe',
       'landlord_avatar': 'https://cdn.example.com/avatar.jpg',
       'landlord_verified': true,
+      'landlord_property_count': 3,
+      'landlord_response_time_seconds': '7200',
       'average_rating': 4.7,
       'review_count': 42,
     });
@@ -30,5 +32,7 @@ void main() {
     expect(property.image, 'https://cdn.example.com/property/cover.jpg');
     expect(property.location, 'Nairobi');
     expect(property.agent.name, 'Jane Doe');
+    expect(property.agent.propertyCount, 3);
+    expect(property.agent.responseTimeSeconds, 7200);
   });
 }

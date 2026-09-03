@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
 import { env } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
-import { verifyOtp, createOtp, sendOtpEmail } from '../services/email.js';
+import { verifyOtp, createOtp, queueOtpEmail } from '../services/email.js';
 
 const router = Router();
 const ADMIN_ACCESS_TOKEN_TTL = '24h';
@@ -77,8 +77,9 @@ router.post('/register', async (req, res, next) => {
 
     // Generate and send OTP for verification
     try {
-      const otpInfo = createOtp(created.email);
-      await sendOtpEmail(created.email, otpInfo.code);
+      const otpInfo = await createOtp(created.email);
+      await queueOtpEmail(created.email, otpInfo.code);
+      console.info(`OTP email queued for ${created.email}`);
     } catch (err) {
       console.error('Failed to send OTP during registration:', err);
     }
@@ -153,7 +154,7 @@ router.post('/verify', requireAuth, async (req, res, next) => {
     }
 
     const normalizedCode = code.trim();
-    if (!verifyOtp(req.auth!.email, normalizedCode)) {
+    if (!(await verifyOtp(req.auth!.email, normalizedCode))) {
       return res.status(400).json({ error: 'Invalid verification code.' });
     }
 

@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "npm run migrate && node dist/index.js",
+    "start:email-worker": "node dist/workers/emailWorker.js",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "lint": "eslint . --ext .ts",

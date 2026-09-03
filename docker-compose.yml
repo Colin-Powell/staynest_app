@@ -1,6 +1,11 @@
 version: '3.9'
 
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+
   db:
     image: postgres:15
     environment:
@@ -24,11 +29,13 @@ services:
       STORAGE_PATH: uploads
       RATE_LIMIT_WINDOW_MS: 900000
       RATE_LIMIT_MAX: 120
+      REDIS_URL: redis://redis:6379
     volumes:
       - ./backend:/usr/src/app
       - ./backend/uploads:/usr/src/app/uploads
     depends_on:
       - db
+      - redis
     ports:
       - '8080:8080'
     command: npm run dev

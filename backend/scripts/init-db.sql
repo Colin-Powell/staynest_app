@@ -426,6 +426,17 @@ CREATE TABLE IF NOT EXISTS property_drafts (
 CREATE INDEX IF NOT EXISTS idx_property_drafts_landlord ON property_drafts(landlord_id, updated_at DESC);
 ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS video_url text;
 
+-- Keep older production draft tables compatible with structured listing locations.
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS country text;
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS county text;
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS sub_county text;
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS ward text;
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS town text;
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS neighborhood text;
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS estate_village text;
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS road text;
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS landmark text;
+
 
 
 CREATE TABLE IF NOT EXISTS recently_viewed (

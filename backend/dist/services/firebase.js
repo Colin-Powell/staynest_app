@@ -70,6 +70,13 @@ export async function sendPushToUser(userId, title, body, data) {
         const messageId = await getMessaging().send({
             token: user.fcm_token,
             notification: { title, body },
+            android: {
+                priority: 'high',
+                notification: {
+                    channelId: 'high_importance_channel',
+                    sound: 'default',
+                },
+            },
             data,
         });
         console.log(`[Push] FCM sent userId=${userId} messageId=${messageId}`);

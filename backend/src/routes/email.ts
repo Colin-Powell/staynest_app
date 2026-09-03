@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db.js';
-import { createOtp, sendOtpEmail, sendAlertEmail, verifyOtp } from '../services/email.js';
+import { createOtp, queueOtpEmail, sendAlertEmail, verifyOtp } from '../services/email.js';
 import { requireAuth } from '../middleware/auth.js';
 
 import rateLimit from 'express-rate-limit';
@@ -26,7 +26,7 @@ router.post('/send-otp', otpRateLimiter, async (req, res, next) => {
     let code: string;
     let expiresAt: number;
     try {
-      const otp = createOtp(email);
+      const otp = await createOtp(email);
       code = otp.code;
       expiresAt = otp.expiresAt;
     } catch (error) {
@@ -42,11 +42,8 @@ router.post('/send-otp', otpRateLimiter, async (req, res, next) => {
       }
       throw error;
     }
-    try {
-      await sendOtpEmail(email, code);
-    } catch (sendErr) {
-      console.warn('Failed to send OTP email (SMTP might be blocked):', sendErr);
-    }
+    await queueOtpEmail(email, code);
+    console.info(`OTP email queued for ${email}`);
     return res.json({ data: { sent: true, expiresAt } });
   } catch (err) {
     next(err);
@@ -61,7 +58,7 @@ router.post('/verify-otp', async (req, res, next) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    if (!verifyOtp(normalizedEmail, code)) {
+    if (!(await verifyOtp(normalizedEmail, code))) {
       return res.status(403).json({ error: 'Invalid verification code.' });
     }
 

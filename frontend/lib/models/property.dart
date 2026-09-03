@@ -70,6 +70,7 @@ class Agent {
   final String? businessDescription;
   final String? memberSince;
   final int propertyCount;
+  final double? responseTimeSeconds;
 
   const Agent({
     required this.userId,
@@ -81,6 +82,7 @@ class Agent {
     this.businessDescription,
     this.memberSince,
     this.propertyCount = 0,
+    this.responseTimeSeconds,
   });
 }
 

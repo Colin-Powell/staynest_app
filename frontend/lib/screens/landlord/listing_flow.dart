@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 // Your project imports
@@ -27,6 +29,16 @@ const _grey = Color(0xFF9CA3AF);
 const _greyLight = Color(0xFFF3F4F6);
 const _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 const _surface = Colors.white;
+
+String? _joinLocationParts(Iterable<String?> values) {
+  final parts = <String>[];
+  for (final value in values) {
+    if (value != null && value.isNotEmpty && !parts.contains(value)) {
+      parts.add(value);
+    }
+  }
+  return parts.isEmpty ? null : parts.join(', ');
+}
 
 class PickedPhoto {
   final File file;
@@ -100,6 +112,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
   double? _selectedLongitude;
   String? _selectedLocationLabel;
   GeocodingSuggestion? _selectedLocation;
+  double? _locationBiasLatitude;
+  double? _locationBiasLongitude;
 
   // --- Step 3: Amenities ---
   final Set<String> _selectedAttributes = {};
@@ -164,10 +178,18 @@ class _AddListingFlowState extends State<AddListingFlow> {
       _rentPrice.text = existing['price']?.toString() ?? '';
       _selectedLatitude = (existing['lat'] as num?)?.toDouble();
       _selectedLongitude = (existing['lng'] as num?)?.toDouble();
+      _locationBiasLatitude = _selectedLatitude;
+      _locationBiasLongitude = _selectedLongitude;
       _selectedLocationLabel = _locationSearch.text;
       if (_selectedLatitude != null && _selectedLongitude != null) {
         _selectedLocation = (
           displayName: _locationSearch.text,
+          secondaryName: _joinLocationParts([
+            existing['road']?.toString(),
+            existing['neighborhood']?.toString(),
+            existing['town']?.toString(),
+            existing['county']?.toString(),
+          ]),
           lat: _selectedLatitude!,
           lng: _selectedLongitude!,
           country: existing['country']?.toString() ?? _selectedCountry,
@@ -241,8 +263,16 @@ class _AddListingFlowState extends State<AddListingFlow> {
         if (data['lng'] != null)
           _selectedLongitude = (data['lng'] as num).toDouble();
         if (_selectedLatitude != null && _selectedLongitude != null) {
+          _locationBiasLatitude = _selectedLatitude;
+          _locationBiasLongitude = _selectedLongitude;
           _selectedLocation = (
             displayName: _locationSearch.text,
+            secondaryName: _joinLocationParts([
+              data['road']?.toString(),
+              data['neighborhood']?.toString(),
+              data['town']?.toString(),
+              data['county']?.toString(),
+            ]),
             lat: _selectedLatitude!,
             lng: _selectedLongitude!,
             country: data['country']?.toString() ?? _selectedCountry,
@@ -290,6 +320,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   }
 
   Future<void> _saveDraft({bool showConfirmation = true}) async {
+    var savedRemotely = true;
     try {
       final payload = {
         'category': _propertyType,
@@ -325,11 +356,17 @@ class _AddListingFlowState extends State<AddListingFlow> {
           await PropertyService.instance.saveDraft(payload, draftId: _draftId);
       if (data['id'] != null) _draftId = data['id'].toString();
     } catch (e) {
+      savedRemotely = false;
       debugPrint('Failed to save draft $e');
     }
     if (mounted && showConfirmation) {
-      ModalUtils.showSuccess(context, "Draft Saved!",
-          "Your progress has been safely tucked away. You can resume anytime.");
+      ModalUtils.showSuccess(
+        context,
+        savedRemotely ? "Draft Saved!" : "Draft Saved Offline",
+        savedRemotely
+            ? "Your progress has been safely tucked away. You can resume anytime."
+            : "Your progress is stored on this device and will be available here until it syncs online.",
+      );
     }
   }
 
@@ -353,8 +390,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
     }
 
     _locationSearchTimer = Timer(const Duration(milliseconds: 450), () async {
-      final suggestions =
-          await searchAddressSuggestions('${value.trim()}, $_selectedCountry');
+      final suggestions = await searchAddressSuggestions(
+        '${value.trim()}, $_selectedCountry',
+        nearLat: _locationBiasLatitude,
+        nearLng: _locationBiasLongitude,
+      );
       if (!mounted || request != _locationSearchRequest) return;
       setState(() => _locationSuggestions = suggestions);
     });
@@ -367,6 +407,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
           TextSelection.collapsed(offset: _locationSearch.text.length);
       _selectedLatitude = suggestion.lat;
       _selectedLongitude = suggestion.lng;
+      _locationBiasLatitude = suggestion.lat;
+      _locationBiasLongitude = suggestion.lng;
       _selectedLocation = suggestion;
       _selectedCity = suggestion.town ?? suggestion.county ?? _selectedCountry;
       _selectedLocationLabel = suggestion.displayName.trim();
@@ -916,6 +958,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
             _locationSearch.text = locationStr;
             _selectedLatitude = lat;
             _selectedLongitude = lng;
+            _locationBiasLatitude = lat;
+            _locationBiasLongitude = lng;
             _selectedLocation = location;
             _selectedCity =
                 location?.town ?? location?.county ?? _selectedCountry;
@@ -2230,6 +2274,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
   double? _lng;
   String? _error;
   GeocodingSuggestion? _location;
+  bool _isResolvingTap = false;
 
   @override
   void initState() {
@@ -2272,6 +2317,21 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
     }
   }
 
+  Future<void> _selectMapPoint(LatLng point) async {
+    setState(() => _isResolvingTap = true);
+    final location =
+        await reverseGeocodeSuggestion(point.latitude, point.longitude);
+    if (!mounted) return;
+    setState(() {
+      _lat = point.latitude;
+      _lng = point.longitude;
+      _location = location;
+      _locationName = location?.displayName ??
+          '${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}';
+      _isResolvingTap = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -2299,14 +2359,53 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                   style: GoogleFonts.poppins(
                       fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Image.asset('assets/images/mapsheet.webp',
-                    height: 160, fit: BoxFit.contain, width: double.infinity),
+            if (_lat != null && _lng != null)
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: SizedBox(
+                    height: 220,
+                    child: Stack(
+                      children: [
+                        FlutterMap(
+                          options: MapOptions(
+                            initialCenter: LatLng(_lat!, _lng!),
+                            initialZoom: 15,
+                            onTap: (_, point) => _selectMapPoint(point),
+                          ),
+                          children: [
+                            TileLayer(
+                              urlTemplate:
+                                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                              userAgentPackageName: 'com.staynest.property_app',
+                            ),
+                            MarkerLayer(
+                              markers: [
+                                Marker(
+                                  point: LatLng(_lat!, _lng!),
+                                  width: 44,
+                                  height: 44,
+                                  child: const Icon(PhosphorIconsFill.mapPin,
+                                      color: _green, size: 42),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        if (_isResolvingTap)
+                          const ColoredBox(
+                            color: Color(0x66FFFFFF),
+                            child: Center(
+                                child:
+                                    CircularProgressIndicator(color: _green)),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: _isLoading
@@ -2333,11 +2432,26 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                                   color: _green, size: 20),
                               const SizedBox(width: 12),
                               Expanded(
-                                  child: Text(_locationName ?? '',
+                                  child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(_locationName ?? '',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                       style: GoogleFonts.poppins(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w500,
-                                          color: _dark))),
+                                          color: _dark)),
+                                  if (_location?.secondaryName != null) ...[
+                                    const SizedBox(height: 3),
+                                    Text(_location!.secondaryName!,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 12, color: _grey)),
+                                  ],
+                                ],
+                              )),
                             ],
                           ),
                         ),

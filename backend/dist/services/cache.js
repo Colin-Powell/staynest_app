@@ -15,12 +15,14 @@ class RedisCache {
             console.log('[Redis] Connected to Cache');
             this.isConnected = true;
         });
-        this.client.connect().catch(console.error);
+        this.connectionPromise = this.client.connect().then(() => undefined);
+        this.connectionPromise.catch(console.error);
     }
     async get(key) {
-        if (!this.isConnected)
-            return null;
         try {
+            await this.connectionPromise;
+            if (!this.isConnected)
+                return null;
             return await this.client.get(key);
         }
         catch {
@@ -28,19 +30,33 @@ class RedisCache {
         }
     }
     async set(key, value, ttlSeconds) {
-        if (!this.isConnected)
-            return;
         try {
+            await this.connectionPromise;
+            if (!this.isConnected)
+                return;
             await this.client.set(key, value, { EX: ttlSeconds });
         }
         catch {
             // ignore
         }
     }
-    async del(pattern) {
-        if (!this.isConnected)
-            return;
+    async setIfAbsent(key, value, ttlSeconds) {
         try {
+            await this.connectionPromise;
+            if (!this.isConnected)
+                return false;
+            const result = await this.client.set(key, value, { EX: ttlSeconds, NX: true });
+            return result === 'OK';
+        }
+        catch {
+            return false;
+        }
+    }
+    async del(pattern) {
+        try {
+            await this.connectionPromise;
+            if (!this.isConnected)
+                return;
             const keys = await this.client.keys(pattern);
             if (keys.length > 0) {
                 await this.client.del(keys);
@@ -65,6 +81,12 @@ class MemoryCache {
     }
     async set(key, value, ttlSeconds) {
         this.cache.set(key, value, { ttl: ttlSeconds * 1000 });
+    }
+    async setIfAbsent(key, value, ttlSeconds) {
+        if (this.cache.has(key))
+            return false;
+        this.cache.set(key, value, { ttl: ttlSeconds * 1000 });
+        return true;
     }
     async del(pattern) {
         const regex = new RegExp('^' + pattern.replace('*', '.*') + '$');

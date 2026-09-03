@@ -108,7 +108,15 @@ const PROPERTY_SELECT = `p.id,
               u.business_description AS landlord_business_description,
               p.average_rating,
               p.review_count,
-              u.created_at AS landlord_member_since`;
+              u.created_at AS landlord_member_since,
+              (SELECT COUNT(*)::int
+                 FROM properties landlord_properties
+                WHERE landlord_properties.landlord_id = u.id
+                  AND COALESCE(landlord_properties.status, 'pending_review') = 'approved') AS landlord_property_count,
+              (SELECT AVG(EXTRACT(EPOCH FROM (b.updated_at - b.created_at)))
+                 FROM bookings b
+                WHERE b.landlord_id = u.id
+                  AND b.status IN ('confirmed', 'rejected')) AS landlord_response_time_seconds`;
 
 router.get('/', routeCache(300), async (req: Request, res: Response, next: NextFunction) => {
   try {

@@ -8,6 +8,7 @@ dotenv.config();
 export interface ICache {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, ttlSeconds: number): Promise<void>;
+  setIfAbsent(key: string, value: string, ttlSeconds: number): Promise<boolean>;
   del(pattern: string): Promise<void>;
 }
 
@@ -15,6 +16,7 @@ export interface ICache {
 class RedisCache implements ICache {
   private client: ReturnType<typeof createClient>;
   private isConnected = false;
+  private connectionPromise: Promise<void>;
 
   constructor(url: string) {
     this.client = createClient({ url });
@@ -29,12 +31,14 @@ class RedisCache implements ICache {
       this.isConnected = true;
     });
 
-    this.client.connect().catch(console.error);
+    this.connectionPromise = this.client.connect().then(() => undefined);
+    this.connectionPromise.catch(console.error);
   }
 
   async get(key: string): Promise<string | null> {
-    if (!this.isConnected) return null;
     try {
+      await this.connectionPromise;
+      if (!this.isConnected) return null;
       return await this.client.get(key);
     } catch {
       return null;
@@ -42,17 +46,30 @@ class RedisCache implements ICache {
   }
 
   async set(key: string, value: string, ttlSeconds: number): Promise<void> {
-    if (!this.isConnected) return;
     try {
+      await this.connectionPromise;
+      if (!this.isConnected) return;
       await this.client.set(key, value, { EX: ttlSeconds });
     } catch {
       // ignore
     }
   }
 
-  async del(pattern: string): Promise<void> {
-    if (!this.isConnected) return;
+  async setIfAbsent(key: string, value: string, ttlSeconds: number): Promise<boolean> {
     try {
+      await this.connectionPromise;
+      if (!this.isConnected) return false;
+      const result = await this.client.set(key, value, { EX: ttlSeconds, NX: true });
+      return result === 'OK';
+    } catch {
+      return false;
+    }
+  }
+
+  async del(pattern: string): Promise<void> {
+    try {
+      await this.connectionPromise;
+      if (!this.isConnected) return;
       const keys = await this.client.keys(pattern);
       if (keys.length > 0) {
         await this.client.del(keys);
@@ -81,6 +98,12 @@ class MemoryCache implements ICache {
 
   async set(key: string, value: string, ttlSeconds: number): Promise<void> {
     this.cache.set(key, value, { ttl: ttlSeconds * 1000 });
+  }
+
+  async setIfAbsent(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+    if (this.cache.has(key)) return false;
+    this.cache.set(key, value, { ttl: ttlSeconds * 1000 });
+    return true;
   }
 
   async del(pattern: string): Promise<void> {

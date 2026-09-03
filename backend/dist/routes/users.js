@@ -78,7 +78,15 @@ router.get('/me', requireAuth, async (req, res, next) => {
 router.get('/:id', routeCache(3600), async (req, res, next) => {
     try {
         const { id } = req.params;
-        const result = await query(`SELECT id, name, email, phone, avatar, role, verified, created_at, business_name, business_type, business_description, tax_id, years_in_business
+        const result = await query(`SELECT id, name, email, phone, avatar, role, verified, created_at, business_name, business_type, business_description, tax_id, years_in_business,
+              (SELECT COUNT(*)::int
+                 FROM properties p
+                WHERE p.landlord_id = users.id
+                  AND COALESCE(p.status, 'pending_review') = 'approved') AS property_count,
+              (SELECT AVG(EXTRACT(EPOCH FROM (b.updated_at - b.created_at)))
+                 FROM bookings b
+                WHERE b.landlord_id = users.id
+                  AND b.status IN ('confirmed', 'rejected')) AS response_time_seconds
        FROM users WHERE id = $1`, [id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'User not found' });

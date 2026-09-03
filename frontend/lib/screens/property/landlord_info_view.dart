@@ -143,8 +143,33 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
         'This landlord has not added a business description yet.';
   }
 
-  int get _propertyCount =>
-      _landlordProfile?['property_count'] as int? ?? _landlordProperties.length;
+  int get _propertyCount {
+    final payloadCount = _landlordProfile?['property_count'] ??
+      _landlordProfile?['landlord_property_count'] ??
+      widget.property?.agent.propertyCount;
+    return _toInt(payloadCount, fallback: _landlordProperties.length);
+  }
+
+  String get _responseTime {
+    final responseSeconds = _landlordProfile?['response_time_seconds'] ??
+      _landlordProfile?['landlord_response_time_seconds'] ??
+      widget.property?.agent.responseTimeSeconds;
+    final seconds = _toDouble(responseSeconds);
+    if (seconds == null || seconds < 0) return '—';
+    if (seconds < 3600) return '${(seconds / 60).round()}m';
+    if (seconds < 86400) return '${(seconds / 3600).round()}h';
+    return '${(seconds / 86400).round()}d';
+  }
+
+  int _toInt(dynamic value, {required int fallback}) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+
+  double? _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
+  }
 
   String get _memberSince {
     final created = _landlordProfile?['created_at']?.toString() ??
@@ -643,7 +668,7 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          const _StatItem(label: 'Response', value: '—'),
+          _StatItem(label: 'Response', value: _responseTime),
           Container(width: 1, height: 32, color: _grey.withOpacity(0.2)),
           _StatItem(label: 'Properties', value: '$_propertyCount'),
           Container(width: 1, height: 32, color: _grey.withOpacity(0.2)),
