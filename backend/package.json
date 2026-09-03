@@ -5,7 +5,7 @@
   "description": "staynest API backend for property listings, auth, bookings, favorites and storage.",
   "type": "module",
   "scripts": {
-    "start": "node dist/index.js",
+    "start": "npm run migrate && node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "lint": "eslint . --ext .ts",
