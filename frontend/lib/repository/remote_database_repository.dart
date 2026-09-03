@@ -184,7 +184,8 @@ class RemoteDatabaseRepository {
         body: {'eventType': 'property_save', 'propertyId': propertyId},
       );
     } catch (_) {}
-    AnalyticsService.logListingInteraction(AnalyticsEvents.listingSave, listingId: propertyId);
+    AnalyticsService.logListingInteraction(AnalyticsEvents.listingSave,
+        listingId: propertyId);
   }
 
   Future<void> removeFavoriteForUser({

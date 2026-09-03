@@ -75,16 +75,12 @@ router.post('/register', async (req, res, next) => {
       { expiresIn: '30d' },
     );
 
-    // Generate and send OTP for verification
-    try {
-      const otpInfo = await createOtp(created.email);
-      await queueOtpEmail(created.email, otpInfo.code);
-      console.info(`OTP email queued for ${created.email}`);
-    } catch (err) {
-      console.error('Failed to send OTP during registration:', err);
-    }
+    // Generate and queue the OTP before confirming registration.
+    const otpInfo = await createOtp(created.email);
+    await queueOtpEmail(created.email, otpInfo.code);
+    console.info(`OTP email queued for ${created.email}`);
 
-    return res.status(201).json({ data: { token: accessToken, accessToken, refreshToken, user: created } });
+    return res.status(201).json({ data: { token: accessToken, accessToken, refreshToken, user: created, otpSent: true } });
   } catch (error) {
     next(error);
   }

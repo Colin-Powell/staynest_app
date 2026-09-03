@@ -31,10 +31,8 @@ function otpKey(email: string) {
 
 function ensureTransporter() {
   if (!transporter) {
-    console.warn('SMTP is not configured; skipping email send. Set SMTP_HOST, SMTP_USER, and SMTP_PASS to enable email delivery.');
-    return false;
+    throw new Error('SMTP is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS to enable email delivery.');
   }
-  return true;
 }
 
 export async function createOtp(email: string) {
@@ -98,7 +96,7 @@ export async function queueOtpEmail(to: string, code: string) {
 }
 
 export async function sendOtpEmail(to: string, code = '000000') {
-  if (!ensureTransporter()) return null;
+  ensureTransporter();
 
   const subject = 'StayNest: Welcome to your new home!';
   const text = `Hi there,\n\nWelcome to StayNest! We are thrilled to have you on board.\n\nTo finish setting up your profile, please enter the following 6-digit confirmation number in the app:\n\n${code}\n\nIf you did not sign up for an account, please disregard this email. The confirmation number will automatically expire shortly.\n\nWarm regards,\nThe StayNest Team`;
@@ -120,7 +118,7 @@ export async function sendOtpEmail(to: string, code = '000000') {
 }
 
 export async function sendAlertEmail(to: string, subject: string, text: string, html?: string) {
-  if (!ensureTransporter()) return null;
+  ensureTransporter();
 
   return transporter!.sendMail({
     from: env.emailFrom || env.smtpUser,

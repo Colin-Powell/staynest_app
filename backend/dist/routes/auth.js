@@ -43,16 +43,11 @@ router.post('/register', async (req, res, next) => {
             verified: created.verified,
         }, env.jwtSecret, { expiresIn: accessTokenTtlForRole(created.role) });
         const refreshToken = jwt.sign({ id: created.id }, env.jwtSecret, { expiresIn: '30d' });
-        // Generate and send OTP for verification
-        try {
-            const otpInfo = await createOtp(created.email);
-            await queueOtpEmail(created.email, otpInfo.code);
-            console.info(`OTP email queued for ${created.email}`);
-        }
-        catch (err) {
-            console.error('Failed to send OTP during registration:', err);
-        }
-        return res.status(201).json({ data: { token: accessToken, accessToken, refreshToken, user: created } });
+        // Generate and queue the OTP before confirming registration.
+        const otpInfo = await createOtp(created.email);
+        await queueOtpEmail(created.email, otpInfo.code);
+        console.info(`OTP email queued for ${created.email}`);
+        return res.status(201).json({ data: { token: accessToken, accessToken, refreshToken, user: created, otpSent: true } });
     }
     catch (error) {
         next(error);

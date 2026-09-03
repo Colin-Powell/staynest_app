@@ -145,15 +145,15 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
 
   int get _propertyCount {
     final payloadCount = _landlordProfile?['property_count'] ??
-      _landlordProfile?['landlord_property_count'] ??
-      widget.property?.agent.propertyCount;
+        _landlordProfile?['landlord_property_count'] ??
+        widget.property?.agent.propertyCount;
     return _toInt(payloadCount, fallback: _landlordProperties.length);
   }
 
   String get _responseTime {
     final responseSeconds = _landlordProfile?['response_time_seconds'] ??
-      _landlordProfile?['landlord_response_time_seconds'] ??
-      widget.property?.agent.responseTimeSeconds;
+        _landlordProfile?['landlord_response_time_seconds'] ??
+        widget.property?.agent.responseTimeSeconds;
     final seconds = _toDouble(responseSeconds);
     if (seconds == null || seconds < 0) return '—';
     if (seconds < 3600) return '${(seconds / 60).round()}m';
@@ -177,7 +177,20 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
     if (created == null || created.isEmpty) return '—';
     final date = DateTime.tryParse(created);
     if (date == null) return '—';
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
     return '${months[date.month - 1]} ${date.year}';
   }
 
@@ -233,7 +246,8 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                   ),
                 );
               },
-              child: _showProperties ? _buildPropertiesView() : _buildInfoView(),
+              child:
+                  _showProperties ? _buildPropertiesView() : _buildInfoView(),
             ),
           ],
         ),
@@ -255,7 +269,8 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 120),
+                padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).padding.bottom + 120),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -270,7 +285,10 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                             color: _surface,
                             borderRadius: BorderRadius.circular(24),
                             boxShadow: [
-                              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                              BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4)),
                             ],
                           ),
                           child: Column(
@@ -278,8 +296,10 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                               _buildLandlordProfile(),
                               const SizedBox(height: 24),
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 24),
-                                child: Divider(color: _grey.withOpacity(0.2), height: 1),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 24),
+                                child: Divider(
+                                    color: _grey.withOpacity(0.2), height: 1),
                               ),
                               const SizedBox(height: 20),
                               _buildStatsRow(),
@@ -300,7 +320,10 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                             color: _surface,
                             borderRadius: BorderRadius.circular(24),
                             boxShadow: [
-                              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                              BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4)),
                             ],
                           ),
                           child: _buildAboutSectionContent(),
@@ -320,7 +343,10 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                               color: _surface,
                               borderRadius: BorderRadius.circular(24),
                               boxShadow: [
-                                BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                                BoxShadow(
+                                    color: Colors.black.withOpacity(0.04),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4)),
                               ],
                             ),
                             child: _buildDocumentsSectionContent(),
@@ -425,7 +451,8 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                   ),
                   if (_isVerified) ...[
                     const SizedBox(width: 6),
-                    const Icon(PhosphorIconsFill.sealCheck, color: _green, size: 20),
+                    const Icon(PhosphorIconsFill.sealCheck,
+                        color: _green, size: 20),
                   ]
                 ],
               ),
@@ -457,7 +484,8 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).padding.bottom + 20),
+          padding: EdgeInsets.fromLTRB(
+              24, 20, 24, MediaQuery.of(context).padding.bottom + 20),
           decoration: BoxDecoration(
             color: _surface.withOpacity(0.85),
             border: Border(top: BorderSide(color: _grey.withOpacity(0.1))),
@@ -466,17 +494,21 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
             width: double.infinity,
             height: 56,
             child: ElevatedButton(
-              onPressed: (_landlordProperties.isEmpty || _hasAuthIssue) ? null : _toggleProperties,
+              onPressed: (_landlordProperties.isEmpty || _hasAuthIssue)
+                  ? null
+                  : _toggleProperties,
               style: ElevatedButton.styleFrom(
                 backgroundColor: _primaryText,
                 disabledBackgroundColor: _grey.withOpacity(0.2),
                 foregroundColor: Colors.white,
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(32)),
               ),
               child: Text(
                 'View all Properties',
-                style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600),
+                style: GoogleFonts.poppins(
+                    fontSize: 16, fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -532,7 +564,10 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
         color: _surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Row(
@@ -566,7 +601,8 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(PhosphorIconsRegular.mapPin, size: 14, color: _grey),
+                      const Icon(PhosphorIconsRegular.mapPin,
+                          size: 14, color: _grey),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
@@ -611,7 +647,8 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
                       ),
                       Row(
                         children: [
-                          const Icon(PhosphorIconsFill.star, size: 12, color: Color(0xFFF59E0B)),
+                          const Icon(PhosphorIconsFill.star,
+                              size: 12, color: Color(0xFFF59E0B)),
                           const SizedBox(width: 4),
                           Text(
                             prop.rating.toStringAsFixed(1),
@@ -642,7 +679,8 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
           GestureDetector(
             onTap: onBack,
             behavior: HitTestBehavior.opaque,
-            child: const Icon(PhosphorIconsRegular.caretLeft, size: 24, color: _dark),
+            child: const Icon(PhosphorIconsRegular.caretLeft,
+                size: 24, color: _dark),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -685,10 +723,7 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
         Text(
           'About',
           style: GoogleFonts.poppins(
-            fontSize: 18, 
-            fontWeight: FontWeight.w700, 
-            color: _dark
-          ),
+              fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
         ),
         const SizedBox(height: 12),
         Text(
@@ -710,10 +745,7 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
         Text(
           'Verified Documents',
           style: GoogleFonts.poppins(
-            fontSize: 18, 
-            fontWeight: FontWeight.w700, 
-            color: _dark
-          ),
+              fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
         ),
         const SizedBox(height: 16),
         ...List.generate(_documents.length, (i) {
@@ -721,7 +753,8 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
             padding: const EdgeInsets.only(bottom: 16),
             child: Row(
               children: [
-                const Icon(PhosphorIconsFill.checkCircle, color: _green, size: 22),
+                const Icon(PhosphorIconsFill.checkCircle,
+                    color: _green, size: 22),
                 const SizedBox(width: 12),
                 Text(
                   _documents[i],

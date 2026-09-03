@@ -64,6 +64,17 @@ class _OtpViewState extends State<OtpView>
 
     _emailAddress = AppSession.currentUserEmail?.trim() ?? '';
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _emailAddress.isEmpty) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Verification code sent. Check your email.'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Color(0xFF16A34A),
+        ),
+      );
+    });
+
     AnalyticsService.logAuthEvent(AnalyticsEvents.otpScreenViewed,
         method: 'email');
 
