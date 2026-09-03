@@ -13,6 +13,14 @@ export const emailWorker = new Worker(
   { connection, concurrency: 3 },
 );
 
+emailWorker.on('ready', () => {
+  console.info('[EmailWorker] Connected to Redis and ready for jobs.');
+});
+
+emailWorker.on('error', (error) => {
+  console.error('[EmailWorker] Worker error:', error);
+});
+
 emailWorker.on('completed', (job) => {
   console.info(`[EmailWorker] Job ${job.id} completed successfully.`);
 });

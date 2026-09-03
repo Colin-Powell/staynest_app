@@ -67,13 +67,7 @@ class _OtpViewState extends State<OtpView>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _emailAddress.isEmpty) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Verification code sent. Check your email.'),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Color(0xFF16A34A),
-        ),
-      );
+      _requestOtpOnEntry();
     });
 
     AnalyticsService.logAuthEvent(AnalyticsEvents.otpScreenViewed,
@@ -216,6 +210,13 @@ class _OtpViewState extends State<OtpView>
     } finally {
       if (mounted) setState(() => _isSendingCode = false);
     }
+  }
+
+  Future<void> _requestOtpOnEntry() async {
+    final sent = await _requestOtpCode();
+    if (!mounted || sent) return;
+    // A 429 means the registration/login code is still active; it is safe to
+    // continue using that code and avoids sending a duplicate email.
   }
 
   Future<void> _verify(String code) async {

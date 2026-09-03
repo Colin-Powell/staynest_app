@@ -17,6 +17,7 @@ const otpRateLimiter = rateLimit({
 router.post('/send-otp', otpRateLimiter, async (req, res, next) => {
     try {
         const { email } = req.body;
+        console.info(`[OTP] send request received for ${email ? email.trim().toLowerCase() : '(missing email)'}`);
         if (!email)
             return res.status(400).json({ error: 'Email is required.' });
         let code;
@@ -40,7 +41,7 @@ router.post('/send-otp', otpRateLimiter, async (req, res, next) => {
             throw error;
         }
         await queueOtpEmail(email, code);
-        console.info(`OTP email queued for ${email}`);
+        console.info(`[OTP] email queued for ${email.trim().toLowerCase()}`);
         return res.json({ data: { sent: true, expiresAt } });
     }
     catch (err) {
@@ -54,6 +55,7 @@ router.post('/verify-otp', async (req, res, next) => {
             return res.status(400).json({ error: 'Email and code are required.' });
         }
         const normalizedEmail = email.trim().toLowerCase();
+        console.info(`[OTP] verification attempt for ${normalizedEmail}`);
         if (!(await verifyOtp(normalizedEmail, code))) {
             return res.status(403).json({ error: 'Invalid verification code.' });
         }

@@ -72,6 +72,7 @@ export async function revokeOtp(email) {
 }
 export async function queueOtpEmail(to, code) {
     const normalizedEmail = to.trim().toLowerCase();
+    console.info(`[OTP] adding email job for ${normalizedEmail}`);
     await emailQueue.add('otp-email', { to: normalizedEmail, code }, {
         jobId: `otp-${normalizedEmail}-${code}`,
         attempts: 4,
