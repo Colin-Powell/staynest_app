@@ -310,7 +310,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'landmark': _selectedLocation?.landmark,
         'lat': _selectedLatitude,
         'lng': _selectedLongitude,
-        'price': _rentPrice.text.trim(),
+        'price': _rentPrice.text.trim().isEmpty ? null : _rentPrice.text.trim(),
         'photos': _pickedPhotos
             .where((photo) => photo.url != null && photo.url!.isNotEmpty)
             .map((photo) => photo.url)
@@ -353,8 +353,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
     }
 
     _locationSearchTimer = Timer(const Duration(milliseconds: 450), () async {
-        final suggestions = await searchAddressSuggestions(
-          '${value.trim()}, $_selectedCountry');
+      final suggestions =
+          await searchAddressSuggestions('${value.trim()}, $_selectedCountry');
       if (!mounted || request != _locationSearchRequest) return;
       setState(() => _locationSuggestions = suggestions);
     });
@@ -503,8 +503,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
       if (uploadedUrls.isEmpty) throw Exception('No photos uploaded');
 
       final resolvedAddress = _locationSearch.text.trim();
-        final location = _selectedLocation;
-        final derivedCity = location?.town ??
+      final location = _selectedLocation;
+      final derivedCity = location?.town ??
           location?.county ??
           _selectedCity ??
           _selectedCountry;
@@ -903,7 +903,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
             _selectedLatitude = lat;
             _selectedLongitude = lng;
             _selectedLocation = location;
-            _selectedCity = location?.town ?? location?.county ?? _selectedCountry;
+            _selectedCity =
+                location?.town ?? location?.county ?? _selectedCountry;
             _selectedLocationLabel = locationStr;
             _neighborhood.text = locationStr.split(',').first.trim();
             _locationSuggestions = [];
@@ -2199,8 +2200,8 @@ class ModalUtils {
 }
 
 class _LocationPickerSheet extends StatefulWidget {
-    final void Function(String address, double lat, double lng,
-      GeocodingSuggestion? location)
+  final void Function(
+          String address, double lat, double lng, GeocodingSuggestion? location)
       onLocationSelected;
   const _LocationPickerSheet({required this.onLocationSelected});
 
@@ -2235,16 +2236,16 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
 
       final position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
-        final location = await reverseGeocodeSuggestion(
-          position.latitude, position.longitude);
+      final location =
+          await reverseGeocodeSuggestion(position.latitude, position.longitude);
 
       if (mounted) {
         setState(() {
           _lat = position.latitude;
           _lng = position.longitude;
-            _locationName = location?.displayName ??
+          _locationName = location?.displayName ??
               '${position.latitude}, ${position.longitude}';
-              _location = location;
+          _location = location;
           _isLoading = false;
         });
       }
@@ -2336,7 +2337,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                     ? null
                     : () {
                         widget.onLocationSelected(
-                          _locationName!, _lat!, _lng!, _location);
+                            _locationName!, _lat!, _lng!, _location);
                         Navigator.pop(context);
                       },
                 style: ElevatedButton.styleFrom(

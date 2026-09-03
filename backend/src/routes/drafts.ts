@@ -4,6 +4,13 @@ import { requireAuth, authorize } from '../middleware/auth.js';
 
 const router = Router();
 
+function nullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 // GET all drafts for landlord
 router.get('/', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -40,7 +47,7 @@ router.post('/', requireAuth, authorize('landlord', 'host'), async (req: Request
         (landlord_id, title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, bedrooms, bathrooms, area, amenities, lat, lng, photos, video_url)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
        RETURNING *`,
-      [req.auth?.id, title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, bedrooms, bathrooms, area, JSON.stringify(amenities || []), lat, lng, JSON.stringify(photos || []), video_url || null]
+      [req.auth?.id, title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, nullableNumber(price), nullableNumber(bedrooms), nullableNumber(bathrooms), nullableNumber(area), JSON.stringify(amenities || []), nullableNumber(lat), nullableNumber(lng), JSON.stringify(photos || []), video_url || null]
     );
     res.status(201).json({ data: result.rows[0] });
   } catch (error) {
@@ -59,7 +66,7 @@ router.put('/:id', requireAuth, authorize('landlord', 'host'), async (req: Reque
         photos = $22, video_url = $23, updated_at = now()
              WHERE id = $24 AND landlord_id = $25
        RETURNING *`,
-      [title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, bedrooms, bathrooms, area, JSON.stringify(amenities || []), lat, lng, JSON.stringify(photos || []), video_url || null, req.params.id, req.auth?.id]
+      [title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, nullableNumber(price), nullableNumber(bedrooms), nullableNumber(bathrooms), nullableNumber(area), JSON.stringify(amenities || []), nullableNumber(lat), nullableNumber(lng), JSON.stringify(photos || []), video_url || null, req.params.id, req.auth?.id]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: 'Draft not found.' });
     res.json({ data: result.rows[0] });

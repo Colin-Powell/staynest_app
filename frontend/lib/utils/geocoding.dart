@@ -41,11 +41,16 @@ GeocodingSuggestion? _parseSuggestion(Map<String, dynamic> item) {
     county: _value(address, 'state') ?? _value(address, 'county'),
     subCounty: _value(address, 'state_district') ?? _value(address, 'county'),
     ward: _value(address, 'city') ?? _value(address, 'city_district'),
-    town: _value(address, 'town') ?? _value(address, 'city') ?? _value(address, 'municipality'),
+    town: _value(address, 'town') ??
+        _value(address, 'city') ??
+        _value(address, 'municipality'),
     neighborhood: _value(address, 'suburb') ?? _value(address, 'quarter'),
-    estateOrVillage: _value(address, 'residential') ?? _value(address, 'village'),
+    estateOrVillage:
+        _value(address, 'residential') ?? _value(address, 'village'),
     road: _value(address, 'road'),
-    landmark: _value(address, 'amenity') ?? _value(address, 'tourism') ?? _value(address, 'shop'),
+    landmark: _value(address, 'amenity') ??
+        _value(address, 'tourism') ??
+        _value(address, 'shop'),
   );
 }
 
@@ -107,6 +112,7 @@ Future<({double lat, double lng})?> geocodeAddress(String query) async {
     return null;
   }
 }
+
 Future<String?> reverseGeocode(double lat, double lng) async {
   final suggestion = await reverseGeocodeSuggestion(lat, lng);
   return suggestion?.displayName;
