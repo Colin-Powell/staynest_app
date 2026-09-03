@@ -50,6 +50,15 @@ CREATE TABLE IF NOT EXISTS properties (
   address text,
   lat numeric,
   lng numeric,
+  country text,
+  county text,
+  sub_county text,
+  ward text,
+  town text,
+  neighborhood text,
+  estate_village text,
+  road text,
+  landmark text,
   landlord_id uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   average_rating numeric DEFAULT 0,
@@ -67,6 +76,15 @@ ALTER TABLE properties ADD COLUMN IF NOT EXISTS address text;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS average_rating numeric DEFAULT 0;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS review_count integer DEFAULT 0;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS status text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS country text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS county text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS sub_county text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS ward text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS town text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS neighborhood text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS estate_village text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS road text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS landmark text;
 UPDATE properties SET status = 'pending_review' WHERE status IS NULL OR status = 'available';
 ALTER TABLE properties ALTER COLUMN status SET DEFAULT 'pending_review';
 ALTER TABLE properties ALTER COLUMN status SET NOT NULL;
@@ -380,6 +398,15 @@ CREATE TABLE IF NOT EXISTS property_drafts (
   category text,
   city text,
   address text,
+  country text,
+  county text,
+  sub_county text,
+  ward text,
+  town text,
+  neighborhood text,
+  estate_village text,
+  road text,
+  landmark text,
   price numeric,
   bedrooms integer,
   bathrooms integer,

@@ -90,7 +90,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
   // --- Step 2: Location ---
   final String _selectedCountry = 'Kenya';
-  String? _selectedCity = 'Nairobi';
+  String? _selectedCity;
   final _neighborhood = TextEditingController();
   final _locationSearch = TextEditingController();
   Timer? _locationSearchTimer;
@@ -99,6 +99,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   double? _selectedLatitude;
   double? _selectedLongitude;
   String? _selectedLocationLabel;
+  GeocodingSuggestion? _selectedLocation;
 
   // --- Step 3: Amenities ---
   final Set<String> _selectedAttributes = {};
@@ -164,6 +165,22 @@ class _AddListingFlowState extends State<AddListingFlow> {
       _selectedLatitude = (existing['lat'] as num?)?.toDouble();
       _selectedLongitude = (existing['lng'] as num?)?.toDouble();
       _selectedLocationLabel = _locationSearch.text;
+      if (_selectedLatitude != null && _selectedLongitude != null) {
+        _selectedLocation = (
+          displayName: _locationSearch.text,
+          lat: _selectedLatitude!,
+          lng: _selectedLongitude!,
+          country: existing['country']?.toString() ?? _selectedCountry,
+          county: existing['county']?.toString(),
+          subCounty: existing['sub_county']?.toString(),
+          ward: existing['ward']?.toString(),
+          town: existing['town']?.toString(),
+          neighborhood: existing['neighborhood']?.toString(),
+          estateOrVillage: existing['estate_village']?.toString(),
+          road: existing['road']?.toString(),
+          landmark: existing['landmark']?.toString(),
+        );
+      }
 
       final existingImages = existing['images'];
       if (existingImages is List) {
@@ -216,13 +233,29 @@ class _AddListingFlowState extends State<AddListingFlow> {
         _description.text = data['description'] ?? '';
         _bedrooms = data['bedrooms'] ?? 1;
         _bathrooms = data['bathrooms'] ?? 1;
-        _selectedCity = data['city'] ?? 'Dubai';
+        _selectedCity = data['city'] ?? 'Kenya';
         _neighborhood.text = data['address'] ?? '';
         _locationSearch.text = data['address'] ?? '';
         if (data['lat'] != null)
           _selectedLatitude = (data['lat'] as num).toDouble();
         if (data['lng'] != null)
           _selectedLongitude = (data['lng'] as num).toDouble();
+        if (_selectedLatitude != null && _selectedLongitude != null) {
+          _selectedLocation = (
+            displayName: _locationSearch.text,
+            lat: _selectedLatitude!,
+            lng: _selectedLongitude!,
+            country: data['country']?.toString() ?? _selectedCountry,
+            county: data['county']?.toString(),
+            subCounty: data['sub_county']?.toString(),
+            ward: data['ward']?.toString(),
+            town: data['town']?.toString(),
+            neighborhood: data['neighborhood']?.toString(),
+            estateOrVillage: data['estate_village']?.toString(),
+            road: data['road']?.toString(),
+            landmark: data['landmark']?.toString(),
+          );
+        }
         _rentPrice.text = data['price']?.toString() ?? '';
         final draftPhotos = data['photos'];
         if (draftPhotos is List) {
@@ -266,6 +299,15 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'bathrooms': _bathrooms,
         'city': _selectedCity,
         'address': _neighborhood.text.trim(),
+        'country': _selectedLocation?.country ?? _selectedCountry,
+        'county': _selectedLocation?.county,
+        'sub_county': _selectedLocation?.subCounty,
+        'ward': _selectedLocation?.ward,
+        'town': _selectedLocation?.town,
+        'neighborhood': _selectedLocation?.neighborhood,
+        'estate_village': _selectedLocation?.estateOrVillage,
+        'road': _selectedLocation?.road,
+        'landmark': _selectedLocation?.landmark,
         'lat': _selectedLatitude,
         'lng': _selectedLongitude,
         'price': _rentPrice.text.trim(),
@@ -311,8 +353,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
     }
 
     _locationSearchTimer = Timer(const Duration(milliseconds: 450), () async {
-      final suggestions = await searchAddressSuggestions(
-          '${value.trim()}, ${_selectedCity ?? ''}, ${_selectedCountry ?? ''}');
+        final suggestions = await searchAddressSuggestions(
+          '${value.trim()}, $_selectedCountry');
       if (!mounted || request != _locationSearchRequest) return;
       setState(() => _locationSuggestions = suggestions);
     });
@@ -325,6 +367,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
           TextSelection.collapsed(offset: _locationSearch.text.length);
       _selectedLatitude = suggestion.lat;
       _selectedLongitude = suggestion.lng;
+      _selectedLocation = suggestion;
+      _selectedCity = suggestion.town ?? suggestion.county ?? _selectedCountry;
       _selectedLocationLabel = suggestion.displayName.trim();
       _neighborhood.text = suggestion.displayName.split(',').first.trim();
       _locationSuggestions = [];
@@ -459,10 +503,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
       if (uploadedUrls.isEmpty) throw Exception('No photos uploaded');
 
       final resolvedAddress = _locationSearch.text.trim();
-      final addressParts = resolvedAddress.split(',');
-      final derivedCity = addressParts.length > 1
-          ? addressParts[addressParts.length - 2].trim()
-          : resolvedAddress;
+        final location = _selectedLocation;
+        final derivedCity = location?.town ??
+          location?.county ??
+          _selectedCity ??
+          _selectedCountry;
 
       if (_selectedLatitude == null || _selectedLongitude == null) {
         throw Exception(
@@ -481,6 +526,15 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'category': _propertyType,
         'city': derivedCity,
         'address': resolvedAddress,
+        'country': location?.country ?? _selectedCountry,
+        'county': location?.county,
+        'sub_county': location?.subCounty,
+        'ward': location?.ward,
+        'town': location?.town,
+        'neighborhood': location?.neighborhood,
+        'estate_village': location?.estateOrVillage,
+        'road': location?.road,
+        'landmark': location?.landmark,
         'price': _rentPrice.text.trim(),
         'bedrooms': _bedrooms,
         'bathrooms': _bathrooms,
@@ -843,11 +897,13 @@ class _AddListingFlowState extends State<AddListingFlow> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _LocationPickerSheet(
-        onLocationSelected: (locationStr, lat, lng) {
+        onLocationSelected: (locationStr, lat, lng, location) {
           setState(() {
             _locationSearch.text = locationStr;
             _selectedLatitude = lat;
             _selectedLongitude = lng;
+            _selectedLocation = location;
+            _selectedCity = location?.town ?? location?.county ?? _selectedCountry;
             _selectedLocationLabel = locationStr;
             _neighborhood.text = locationStr.split(',').first.trim();
             _locationSuggestions = [];
@@ -2143,7 +2199,8 @@ class ModalUtils {
 }
 
 class _LocationPickerSheet extends StatefulWidget {
-  final void Function(String address, double lat, double lng)
+    final void Function(String address, double lat, double lng,
+      GeocodingSuggestion? location)
       onLocationSelected;
   const _LocationPickerSheet({required this.onLocationSelected});
 
@@ -2157,6 +2214,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
   double? _lat;
   double? _lng;
   String? _error;
+  GeocodingSuggestion? _location;
 
   @override
   void initState() {
@@ -2177,15 +2235,16 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
 
       final position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
-      final address =
-          await reverseGeocode(position.latitude, position.longitude);
+        final location = await reverseGeocodeSuggestion(
+          position.latitude, position.longitude);
 
       if (mounted) {
         setState(() {
           _lat = position.latitude;
           _lng = position.longitude;
-          _locationName =
-              address ?? '${position.latitude}, ${position.longitude}';
+            _locationName = location?.displayName ??
+              '${position.latitude}, ${position.longitude}';
+              _location = location;
           _isLoading = false;
         });
       }
@@ -2276,7 +2335,8 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                 onPressed: (_isLoading || _error != null)
                     ? null
                     : () {
-                        widget.onLocationSelected(_locationName!, _lat!, _lng!);
+                        widget.onLocationSelected(
+                          _locationName!, _lat!, _lng!, _location);
                         Navigator.pop(context);
                       },
                 style: ElevatedButton.styleFrom(

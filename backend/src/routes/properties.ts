@@ -78,6 +78,15 @@ const PROPERTY_SELECT = `p.id,
               p.category,
               p.city,
               p.address,
+              p.country,
+              p.county,
+              p.sub_county,
+              p.ward,
+              p.town,
+              p.neighborhood,
+              p.estate_village,
+              p.road,
+              p.landmark,
               p.price,
               p.bedrooms,
               p.bathrooms,
@@ -772,6 +781,15 @@ function createPropertyInsertArgs(body: Record<string, unknown>) {
     category,
     city,
     address,
+    country,
+    county,
+    sub_county,
+    ward,
+    town,
+    neighborhood,
+    estate_village,
+    road,
+    landmark,
     price,
     bedrooms,
     bathrooms,
@@ -793,6 +811,15 @@ function createPropertyInsertArgs(body: Record<string, unknown>) {
     category,
     city,
     typeof address === 'string' ? address : null,
+    typeof country === 'string' ? country : null,
+    typeof county === 'string' ? county : null,
+    typeof sub_county === 'string' ? sub_county : null,
+    typeof ward === 'string' ? ward : null,
+    typeof town === 'string' ? town : null,
+    typeof neighborhood === 'string' ? neighborhood : null,
+    typeof estate_village === 'string' ? estate_village : null,
+    typeof road === 'string' ? road : null,
+    typeof landmark === 'string' ? landmark : null,
     Number(price),
     Number(bedrooms),
     Number(bathrooms),
@@ -870,9 +897,9 @@ async function handleCreateProperty(req: Request, res: Response, next: NextFunct
     );
 
     const result = await query(
-      `INSERT INTO properties (title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, landlord_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13::jsonb, $14, $15, $16, $17)
-       RETURNING id, title, description, category, city, address, price, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, status`,
+      `INSERT INTO properties (title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, landlord_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20::jsonb, $21, $22::jsonb, $23, $24, $25, $26)
+       RETURNING id, title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, status`,
       insertArgs,
     );
 
@@ -912,7 +939,7 @@ router.post('/from-listing', requireAuth, authorize('landlord', 'host'), async (
 
 router.put('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const fields = ['title', 'description', 'category', 'city', 'address', 'price', 'bedrooms', 'bathrooms', 'area', 'image_url', 'images', 'video_url', 'amenities', 'lat', 'lng'];
+    const fields = ['title', 'description', 'category', 'city', 'address', 'country', 'county', 'sub_county', 'ward', 'town', 'neighborhood', 'estate_village', 'road', 'landmark', 'price', 'bedrooms', 'bathrooms', 'area', 'image_url', 'images', 'video_url', 'amenities', 'lat', 'lng'];
     const updates: string[] = [];
     const values: unknown[] = [];
     for (const field of fields) {
