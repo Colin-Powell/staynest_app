@@ -912,6 +912,13 @@ async function handleCreateProperty(req: Request, res: Response, next: NextFunct
 
     const property = result.rows[0];
 
+    await query(
+      `INSERT INTO property_analytics (property_id)
+       VALUES ($1)
+       ON CONFLICT (property_id) DO NOTHING`,
+      [property.id],
+    );
+
     // Notify the landlord that their listing was submitted
     const notificationSent = await sendPushToUser(
       userId!,

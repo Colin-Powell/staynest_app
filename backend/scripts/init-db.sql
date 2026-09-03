@@ -266,6 +266,10 @@ CREATE TABLE IF NOT EXISTS property_analytics (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+INSERT INTO property_analytics (property_id)
+SELECT id FROM properties
+ON CONFLICT (property_id) DO NOTHING;
+
 -- 3. User Behavioral Profiles
 CREATE TABLE IF NOT EXISTS user_engagement_profiles (
   user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

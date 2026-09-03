@@ -23,4 +23,23 @@ router.get('/relevant', requireAuth, async (_req: Request, res: Response) => {
   }
 });
 
+router.get('/me', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `SELECT pc.*, p.title, p.image_url
+       FROM promotion_campaigns pc
+       JOIN properties p ON p.id = pc.property_id
+       WHERE pc.landlord_id = $1
+         AND pc.active = true
+         AND pc.end_date > NOW()
+       ORDER BY pc.end_date ASC`,
+      [req.auth?.id],
+    );
+    return res.json({ data: result.rows });
+  } catch (err) {
+    console.error('[Promotions] Failed to fetch landlord promotions:', err);
+    return res.status(500).json({ error: 'Failed to fetch promotions.' });
+  }
+});
+
 export default router;
