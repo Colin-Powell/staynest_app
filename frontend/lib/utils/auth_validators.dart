@@ -1,7 +1,8 @@
 class AuthValidators {
-  static final RegExp _namePattern = RegExp(r"^[\p{L}][\p{L} .'-]{1,79}$", unicode: true);
+  static final RegExp _namePattern =
+      RegExp(r"^[\p{L}][\p{L} .'-]{1,79}$", unicode: true);
   static final RegExp _emailPattern = RegExp(
-    r'^[A-Z0-9.!#$%&\'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$',
+    r"^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$",
     caseSensitive: false,
   );
   static final RegExp _phonePattern = RegExp(r'^(?:\+254|0)(?:7|1)\d{8}$');

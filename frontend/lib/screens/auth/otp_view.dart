@@ -11,6 +11,7 @@ import 'package:property_app/services/verification_api.dart';
 import 'package:property_app/widgets/otp_input.dart';
 import 'package:property_app/utils/otp_parser.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
+import 'package:property_app/utils/auth_validators.dart';
 
 class OtpView extends StatefulWidget {
   const OtpView({super.key});
@@ -370,6 +371,97 @@ class _OtpViewState extends State<OtpView>
     }
   }
 
+  Future<void> _leaveVerification() async {
+    final email = _emailAddress;
+    try {
+      if (email.isNotEmpty) {
+        await RemoteDatabaseRepository().revokeOtp(email);
+      }
+    } catch (_) {
+      // The local session is still cleared if the revoke request fails.
+    }
+    if (!mounted) return;
+    await AppSession.reset();
+    if (mounted)
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+  }
+
+  Future<void> _changeEmail() async {
+    final controller = TextEditingController(text: _emailAddress);
+    final newEmail = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Change email'),
+        content: TextFormField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.emailAddress,
+          validator: AuthValidators.email,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          decoration: const InputDecoration(labelText: 'Email address'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (AuthValidators.email(controller.text) != null) return;
+              Navigator.pop(dialogContext, controller.text.trim());
+            },
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (newEmail == null || !mounted || newEmail == _emailAddress) return;
+
+    setState(() => _isSendingCode = true);
+    try {
+      final result = await RemoteDatabaseRepository().changeEmail(newEmail);
+      final user = result?['user'];
+      if (user is Map) {
+        AppSession.updateCurrentUser(Map<String, dynamic>.from(user));
+        await AppSession.persistSession();
+      }
+      if (!mounted) return;
+      setState(() {
+        _emailAddress = newEmail;
+        _currentCode = '';
+        _hasError = false;
+        _expireSeconds = 600;
+      });
+      _otpInputKey.currentState?.clear();
+      _startResendTimer();
+      _expireTimer?.cancel();
+      _expireTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        if (_expireSeconds > 0) {
+          setState(() => _expireSeconds--);
+        } else {
+          timer.cancel();
+          _handleExpiration();
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('New verification code sent.')),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_getFriendlyErrorMessage(error))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSendingCode = false);
+    }
+  }
+
   String _formatTime(int seconds) {
     int m = seconds ~/ 60;
     int s = seconds % 60;
@@ -388,10 +480,13 @@ class _OtpViewState extends State<OtpView>
             children: [
               const SizedBox(height: 20),
               GestureDetector(
-                onTap: () {
-                  ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
-                  Navigator.maybePop(context);
-                },
+                onTap: _isVerifying
+                    ? null
+                    : () {
+                        ScaffoldMessenger.of(context)
+                            .hideCurrentMaterialBanner();
+                        _leaveVerification();
+                      },
                 child: const Icon(Icons.arrow_back, size: 28, color: _text),
               ),
               const SizedBox(height: 36),
@@ -421,6 +516,19 @@ class _OtpViewState extends State<OtpView>
                   fontWeight: FontWeight.w700,
                   color: _text,
                 ),
+              ),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: _isSendingCode ? null : _changeEmail,
+                    child: const Text('Change email'),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _isVerifying ? null : _leaveVerification,
+                    child: const Text('Cancel verification'),
+                  ),
+                ],
               ),
               const SizedBox(height: 40),
               AnimatedBuilder(

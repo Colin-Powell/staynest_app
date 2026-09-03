@@ -8,6 +8,7 @@ import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/utils/api_result.dart';
+import 'package:property_app/utils/auth_validators.dart';
 
 class RegisterView extends StatefulWidget {
   final Future<void> Function()? onGoogleSignIn;
@@ -243,30 +244,21 @@ class _RegisterViewState extends State<RegisterView>
                           controller: _nameController,
                           label: 'Full Name',
                           keyboardType: TextInputType.name,
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Enter your full name'
-                              : null,
+                          validator: AuthValidators.name,
                         ),
                         const SizedBox(height: 16),
                         _InputField(
                           controller: _emailController,
                           label: 'Email Address',
                           keyboardType: TextInputType.emailAddress,
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty)
-                              return 'Enter your email';
-                            if (!v.contains('@')) return 'Enter a valid email';
-                            return null;
-                          },
+                          validator: AuthValidators.email,
                         ),
                         const SizedBox(height: 16),
                         _InputField(
                           controller: _phoneController,
                           label: 'Phone Number',
                           keyboardType: TextInputType.phone,
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Enter your phone number'
-                              : null,
+                          validator: AuthValidators.phone,
                         ),
                         const SizedBox(height: 16),
                         _InputField(
@@ -286,9 +278,7 @@ class _RegisterViewState extends State<RegisterView>
                               color: _textLight,
                             ),
                           ),
-                          validator: (v) => (v == null || v.length < 6)
-                              ? 'Password must be at least 6 characters'
-                              : null,
+                          validator: AuthValidators.password,
                         ),
                       ],
                     ),

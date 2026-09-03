@@ -80,6 +80,10 @@ export async function verifyOtp(email: string, code: string) {
   return isValid;
 }
 
+export async function revokeOtp(email: string) {
+  await cache.del(otpKey(email));
+}
+
 export async function queueOtpEmail(to: string, code: string) {
   const normalizedEmail = to.trim().toLowerCase();
   await emailQueue.add(

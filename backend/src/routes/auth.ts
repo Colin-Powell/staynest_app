@@ -4,11 +4,15 @@ import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
 import { env } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
-import { verifyOtp, createOtp, queueOtpEmail } from '../services/email.js';
+import { verifyOtp, createOtp, queueOtpEmail, revokeOtp } from '../services/email.js';
 
 const router = Router();
 const ADMIN_ACCESS_TOKEN_TTL = '24h';
 const DEFAULT_ACCESS_TOKEN_TTL = '15m';
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const NAME_PATTERN = /^[\p{L}][\p{L} .'-]{1,79}$/u;
+const PHONE_PATTERN = /^(?:\+254|0)(?:7|1)\d{8}$/;
+const PASSWORD_PATTERN = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,128}$/;
 
 const accessTokenTtlForRole = (role: string | undefined) => {
   const normalizedRole = role?.toLowerCase();
@@ -36,6 +40,19 @@ router.post('/register', async (req, res, next) => {
 
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedPhone = phone.trim();
+
+    if (!NAME_PATTERN.test(name.trim())) {
+      return res.status(400).json({ error: 'Enter a valid full name.' });
+    }
+    if (normalizedEmail.length > 254 || !EMAIL_PATTERN.test(normalizedEmail)) {
+      return res.status(400).json({ error: 'Enter a valid email address.' });
+    }
+    if (!PHONE_PATTERN.test(normalizedPhone.replace(/[\s()-]/g, ''))) {
+      return res.status(400).json({ error: 'Enter a valid Kenyan phone number.' });
+    }
+    if (!PASSWORD_PATTERN.test(password)) {
+      return res.status(400).json({ error: 'Password must be 8-128 characters and include upper, lower, number and special character.' });
+    }
 
     const exists = await query('SELECT id FROM users WHERE email = $1 LIMIT 1', [normalizedEmail]);
     if ((exists.rowCount ?? 0) > 0) {
@@ -81,6 +98,39 @@ router.post('/register', async (req, res, next) => {
     console.info(`OTP email queued for ${created.email}`);
 
     return res.status(201).json({ data: { token: accessToken, accessToken, refreshToken, user: created, otpSent: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/change-email', requireAuth, async (req, res, next) => {
+  try {
+    const email = req.body?.email?.toString().trim().toLowerCase();
+    if (!email || email.length > 254 || !EMAIL_PATTERN.test(email)) {
+      return res.status(400).json({ error: 'Enter a valid email address.' });
+    }
+    if (email === req.auth!.email.trim().toLowerCase()) {
+      return res.status(400).json({ error: 'Enter a different email address.' });
+    }
+
+    const exists = await query('SELECT id FROM users WHERE email = $1 LIMIT 1', [email]);
+    if ((exists.rowCount ?? 0) > 0) {
+      return res.status(409).json({ error: 'Email already registered.' });
+    }
+
+    const updated = await query(
+      `UPDATE users SET email = $1, verified = false WHERE id = $2
+       RETURNING id, name, email, phone, avatar, role, verified`,
+      [email, req.auth!.id],
+    );
+    if ((updated.rowCount ?? 0) === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    await revokeOtp(req.auth!.email);
+    const otp = await createOtp(email);
+    await queueOtpEmail(email, otp.code);
+    return res.json({ data: { user: updated.rows[0], otpSent: true } });
   } catch (error) {
     next(error);
   }

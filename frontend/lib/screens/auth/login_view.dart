@@ -8,6 +8,7 @@ import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/services/api_client.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
+import 'package:property_app/utils/auth_validators.dart';
 
 class LoginView extends StatefulWidget {
   final VoidCallback onLogin;
@@ -319,11 +320,7 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                               controller: _emailCtrl,
                               label: 'Email Address',
                               keyboardType: TextInputType.emailAddress,
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty)
-                                  return 'Enter your email';
-                                return null;
-                              },
+                              validator: AuthValidators.email,
                             ),
                             const SizedBox(height: 16),
                             _InputField(

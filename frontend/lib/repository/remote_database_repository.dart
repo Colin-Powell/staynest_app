@@ -443,6 +443,31 @@ class RemoteDatabaseRepository {
     return data is Map<String, dynamic> ? data : decoded;
   }
 
+  Future<Map<String, dynamic>?> revokeOtp(String email) async {
+    final response = await apiClient.post(
+      Uri.parse('${AppSession.apiBaseUrl}/email/revoke-otp'),
+      body: {'email': email},
+    );
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final data = decoded['data'];
+    return data is Map<String, dynamic> ? data : decoded;
+  }
+
+  Future<Map<String, dynamic>?> changeEmail(String email) async {
+    final response = await apiClient.post(
+      Uri.parse('${AppSession.apiBaseUrl}/auth/change-email'),
+      body: {'email': email},
+    );
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final data = decoded['data'];
+    final result = data is Map<String, dynamic> ? data : decoded;
+    if (result['user'] is Map) {
+      final user = Map<String, dynamic>.from(result['user'] as Map);
+      return {...result, ...user};
+    }
+    return result;
+  }
+
   Future<Map<String, dynamic>?> verifyOtpCode(String email, String code) async {
     final response = await apiClient.post(
       Uri.parse('${AppSession.apiBaseUrl}/email/verify-otp'),

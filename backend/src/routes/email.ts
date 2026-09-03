@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db.js';
-import { createOtp, queueOtpEmail, sendAlertEmail, verifyOtp } from '../services/email.js';
+import { createOtp, queueOtpEmail, revokeOtp, sendAlertEmail, verifyOtp } from '../services/email.js';
 import { requireAuth } from '../middleware/auth.js';
 
 import rateLimit from 'express-rate-limit';
@@ -72,6 +72,19 @@ router.post('/verify-otp', async (req, res, next) => {
     }
 
     return res.json({ data: { user: result.rows[0], verified: true } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/revoke-otp', requireAuth, async (req, res, next) => {
+  try {
+    const email = req.body?.email?.toString().trim().toLowerCase();
+    if (!email || email !== req.auth!.email.trim().toLowerCase()) {
+      return res.status(403).json({ error: 'You can only revoke your own verification code.' });
+    }
+    await revokeOtp(email);
+    return res.json({ data: { revoked: true } });
   } catch (err) {
     next(err);
   }
