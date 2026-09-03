@@ -459,7 +459,19 @@ class _AddListingFlowState extends State<AddListingFlow> {
   }
 
   Future<void> _publishListing() async {
-    final verificationStatus = await VerificationApi.getVerificationStatus();
+    if (_submitting) return;
+    setState(() => _submitting = true);
+
+    Map<String, dynamic>? verificationStatus;
+    try {
+      verificationStatus = await VerificationApi.getVerificationStatus();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ModalUtils.showError(
+          context, 'Verification Check Failed', ApiResult.mapError(error));
+      return;
+    }
     final normalizedStatus =
         verificationStatus?['status']?.toString().toLowerCase() ??
             'not_started';
@@ -468,24 +480,26 @@ class _AddListingFlowState extends State<AddListingFlow> {
     if (!isApproved || AppSession.currentUserVerified != true) {
       await _saveDraft(showConfirmation: false);
       if (!mounted) return;
+      setState(() => _submitting = false);
       _showVerificationDialog();
       return;
     }
 
     if (_pickedPhotos.isEmpty) {
+      setState(() => _submitting = false);
       ModalUtils.showError(context, "Photos Required",
           "Please add at least one photo of your amazing property.");
       return;
     }
 
     if (AppSession.apiToken == null) {
+      setState(() => _submitting = false);
       ModalUtils.showError(context, "Session Expired",
           "Please log out and log back in, then try again.");
       return;
     }
 
     setState(() {
-      _submitting = true;
       _isUploadingImages = true;
       _uploadProgress = 1.0;
     });

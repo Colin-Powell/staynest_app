@@ -710,7 +710,8 @@ async function handleCreateProperty(req, res, next, logRouteName) {
         clearCachePattern('/api/properties');
         const property = result.rows[0];
         // Notify the landlord that their listing was submitted
-        await sendPushToUser(userId, 'Listing Submitted ??', `Your property "${property.title}" has been successfully submitted and is pending admin review.`, { type: 'property_submitted', propertyId: property.id });
+        const notificationSent = await sendPushToUser(userId, 'Listing Submitted ??', `Your property "${property.title}" has been successfully submitted and is pending admin review.`, { type: 'property_submitted', propertyId: property.id });
+        console.log(`[PropertyCreateFromListing] submission notification userId=${userId} sent=${notificationSent} propertyId=${property.id}`);
         res.status(201).json({ data: property });
     }
     catch (error) {

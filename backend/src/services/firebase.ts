@@ -39,38 +39,56 @@ export async function sendPushToUser(
   data?: Record<string, string>
 ): Promise<boolean> {
   try {
+    console.log(`[Push] requested userId=${userId} title=${JSON.stringify(title)}`);
     // Always save to database for the in-app notifications tab, EVEN IF Firebase is disabled
     try {
       await query(
         `INSERT INTO notifications (user_id, title, body, data) VALUES ($1, $2, $3, $4)`,
         [userId, title, body, data ? JSON.stringify(data) : null]
       );
+      console.log(`[Push] in-app notification saved userId=${userId}`);
     } catch (dbErr) {
       console.error(`Failed to save notification to DB for user ${userId}:`, dbErr);
     }
 
     // If Firebase isn't initialized, we gracefully stop here but return true because in-app alerts worked
-    if (getApps().length === 0) return true;
+    if (getApps().length === 0) {
+      console.warn(`[Push] Firebase unavailable; in-app notification only userId=${userId}`);
+      return true;
+    }
 
     const userRes = await query('SELECT fcm_token, settings FROM users WHERE id = $1', [userId]);
     const user = userRes.rows[0];
 
-    if (!user) return false;
+    if (!user) {
+      console.warn(`[Push] user not found userId=${userId}`);
+      return false;
+    }
 
     // Skip actual push if no token
-    if (!user.fcm_token) return true;
+    if (!user.fcm_token) {
+      console.warn(`[Push] no FCM token; in-app notification only userId=${userId}`);
+      return true;
+    }
 
     // Check if the user has opted out of push notifications
     if (user.settings && typeof user.settings === 'object') {
-      const settings = user.settings as { push?: boolean };
-      if (settings.push === false) return true;
+      const settings = user.settings as {
+        push?: boolean;
+        notifications?: { push_messages?: boolean };
+      };
+      if (settings.push === false || settings.notifications?.push_messages === false) {
+        console.log(`[Push] disabled by user settings userId=${userId}`);
+        return true;
+      }
     }
 
-    await getMessaging().send({
+    const messageId = await getMessaging().send({
       token: user.fcm_token,
       notification: { title, body },
       data,
     });
+    console.log(`[Push] FCM sent userId=${userId} messageId=${messageId}`);
     return true;
   } catch (error) {
     console.error(`Failed to send push to user ${userId}:`, error);

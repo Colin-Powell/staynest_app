@@ -338,19 +338,21 @@ router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (r
 
     // Notify the landlord
     if (status === 'approved') {
-      await sendPushToUser(
+      const notificationSent = await sendPushToUser(
         property.landlord_id,
         'Property Approved! ??',
         `Your listing "${property.title}" has been approved and is now live on StayNest.`,
         { type: 'property_status', propertyId: id, status: 'approved' }
       );
+      console.log(`[AdminPropertyStatus] approval notification userId=${property.landlord_id} sent=${notificationSent} propertyId=${id}`);
     } else if (status === 'rejected') {
-      await sendPushToUser(
+      const notificationSent = await sendPushToUser(
         property.landlord_id,
         'Property Requires Revision',
         `Your listing "${property.title}" requires some changes before it can be published.`,
         { type: 'property_status', propertyId: id, status: 'rejected' }
       );
+      console.log(`[AdminPropertyStatus] rejection notification userId=${property.landlord_id} sent=${notificationSent} propertyId=${id}`);
     }
 
     res.json({
