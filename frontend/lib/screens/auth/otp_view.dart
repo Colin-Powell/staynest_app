@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/api_client.dart';
@@ -12,6 +13,13 @@ import 'package:property_app/widgets/otp_input.dart';
 import 'package:property_app/utils/otp_parser.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/utils/auth_validators.dart';
+
+// ─── Design System Constants ──────────────────────────────────────────────────
+const Color _bg = Color(0xFFFAFAFA);
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF9CA3AF);
+const Color _surface = Colors.white;
+const Color _primary = Color(0xFF3F37C9); // Tenant Blue Theme
 
 class OtpView extends StatefulWidget {
   const OtpView({super.key});
@@ -22,10 +30,6 @@ class OtpView extends StatefulWidget {
 
 class _OtpViewState extends State<OtpView>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  static const _primary = Color(0xFF3D36E8);
-  static const _border = Color(0xFFE4E6EF);
-  static const _text = Color(0xFF14162C);
-  static const _hint = Color(0xFF9395A5);
 
   final GlobalKey<OtpInputState> _otpInputKey = GlobalKey<OtpInputState>();
 
@@ -60,8 +64,7 @@ class _OtpViewState extends State<OtpView>
       TweenSequenceItem(tween: Tween(begin: 10, end: -8), weight: 2),
       TweenSequenceItem(tween: Tween(begin: -8, end: 8), weight: 2),
       TweenSequenceItem(tween: Tween(begin: 8, end: 0), weight: 1),
-    ]).animate(
-        CurvedAnimation(parent: _shakeController, curve: Curves.easeInOut));
+    ]).animate(CurvedAnimation(parent: _shakeController, curve: Curves.easeInOut));
 
     _emailAddress = AppSession.currentUserEmail?.trim() ?? '';
 
@@ -70,8 +73,7 @@ class _OtpViewState extends State<OtpView>
       _requestOtpOnEntry();
     });
 
-    AnalyticsService.logAuthEvent(AnalyticsEvents.otpScreenViewed,
-        method: 'email');
+    AnalyticsService.logAuthEvent(AnalyticsEvents.otpScreenViewed, method: 'email');
 
     _resendSeconds = 600;
     _expireSeconds = 600;
@@ -111,33 +113,34 @@ class _OtpViewState extends State<OtpView>
   }
 
   void _showClipboardSuggestion(String otp) {
-    ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
-    ScaffoldMessenger.of(context).showMaterialBanner(
-      MaterialBanner(
-        content: Text(
-          'Use copied code $otp?',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: _dark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(24),
+        content: Row(
+          children: [
+            const Icon(PhosphorIconsRegular.clipboardText, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Use copied code $otp?',
+                style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
         ),
-        leading: const Icon(Icons.paste, color: _primary),
-        backgroundColor: Colors.white,
-        actions: [
-          TextButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
-            },
-            child: const Text('DISMISS', style: TextStyle(color: _hint)),
-          ),
-          TextButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
-              _wasAutofilled = true;
-              AnalyticsService.logAuthEvent(AnalyticsEvents.otpAutofillUsed,
-                  method: 'clipboard');
-              _otpInputKey.currentState?.setCode(otp);
-            },
-            child: const Text('USE CODE', style: TextStyle(color: _primary)),
-          ),
-        ],
+        action: SnackBarAction(
+          label: 'Use Code',
+          textColor: _primary,
+          onPressed: () {
+            _wasAutofilled = true;
+            AnalyticsService.logAuthEvent(AnalyticsEvents.otpAutofillUsed, method: 'clipboard');
+            _otpInputKey.currentState?.setCode(otp);
+          },
+        ),
       ),
     );
   }
@@ -161,10 +164,11 @@ class _OtpViewState extends State<OtpView>
   void _handleExpiration() {
     setState(() => _hasError = true);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('This code has expired. Request a new code to continue.'),
+      SnackBar(
+        content: Text('This code has expired. Request a new code to continue.', style: GoogleFonts.poppins()),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: Color(0xFFE53935),
+        backgroundColor: const Color(0xFFEF4444),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -187,10 +191,11 @@ class _OtpViewState extends State<OtpView>
       await repository.sendOtpToEmail(_emailAddress);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('A verification code was sent to your email.'),
+          SnackBar(
+            content: Text('A verification code was sent to your email.', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: Color(0xFF16A34A),
+            backgroundColor: const Color(0xFF10B981),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }
@@ -200,9 +205,10 @@ class _OtpViewState extends State<OtpView>
         final message = _getFriendlyErrorMessage(error);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(message),
+            content: Text(message, style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: Color(0xFFE53935),
+            backgroundColor: const Color(0xFFEF4444),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }
@@ -215,8 +221,6 @@ class _OtpViewState extends State<OtpView>
   Future<void> _requestOtpOnEntry() async {
     final sent = await _requestOtpCode();
     if (!mounted || sent) return;
-    // A 429 means the registration/login code is still active; it is safe to
-    // continue using that code and avoids sending a duplicate email.
   }
 
   Future<void> _verify(String code) async {
@@ -232,8 +236,7 @@ class _OtpViewState extends State<OtpView>
 
     try {
       final repository = RemoteDatabaseRepository();
-      final result = await repository.verifyPhoneCode(
-          code); // actually verifying email code but backend API uses same endpoint or name
+      final result = await repository.verifyPhoneCode(code); 
 
       if (result == null || result['error'] != null) {
         throw Exception(result?['error']?.toString() ?? 'Verification failed.');
@@ -243,35 +246,28 @@ class _OtpViewState extends State<OtpView>
           result['user']?['verified'] == true ||
           result['user'] != null) {
         AppSession.emailVerified = true;
-        AppSession.currentUserVerified =
-            result['user']?['verified'] == true || result['verified'] == true;
+        AppSession.currentUserVerified = result['user']?['verified'] == true || result['verified'] == true;
         if (result['user'] != null) {
           AppSession.updateCurrentUser(result['user']);
         }
         await AppSession.persistSession();
-        AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationSuccess,
-            method: _wasAutofilled ? 'autofill' : 'manual');
+        AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationSuccess, method: _wasAutofilled ? 'autofill' : 'manual');
       } else {
         throw Exception('Verification was not successful.');
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
       if (AppSession.isLandlord) {
         try {
           final status = await VerificationApi.getVerificationStatus();
-          final isApproved =
-              status?['status']?.toString().toLowerCase() == 'approved';
-          final target = isApproved || AppSession.currentUserVerified
-              ? '/landlord'
-              : '/verification_center';
+          final isApproved = status?['status']?.toString().toLowerCase() == 'approved';
+          final target = isApproved || AppSession.currentUserVerified ? '/landlord' : '/verification_center';
           if (!mounted) return;
           Navigator.pushReplacementNamed(context, target);
         } catch (_) {
-          final fallback = AppSession.currentUserVerified
-              ? '/landlord'
-              : '/verification_center';
+          final fallback = AppSession.currentUserVerified ? '/landlord' : '/verification_center';
           if (!mounted) return;
           Navigator.pushReplacementNamed(context, fallback);
         }
@@ -283,16 +279,16 @@ class _OtpViewState extends State<OtpView>
       setState(() => _hasError = true);
       _shakeController.forward(from: 0);
 
-      AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationFailed,
-          method: _wasAutofilled ? 'autofill' : 'manual');
+      AnalyticsService.logAuthEvent(AnalyticsEvents.otpVerificationFailed, method: _wasAutofilled ? 'autofill' : 'manual');
 
       if (mounted) {
         final message = _getFriendlyErrorMessage(error);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(message),
+            content: Text(message, style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFE53935),
+            backgroundColor: const Color(0xFFEF4444),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }
@@ -300,32 +296,24 @@ class _OtpViewState extends State<OtpView>
       if (mounted) {
         setState(() {
           _isVerifying = false;
-          _wasAutofilled = false; // reset
+          _wasAutofilled = false; 
         });
       }
     }
   }
 
   String _getFriendlyErrorMessage(Object error) {
-    if (error is TimeoutException)
-      return 'The connection is taking too long. Please try again.';
-    if (error is SocketException ||
-        error.toString().contains('SocketException') ||
-        error.toString().contains('Connection refused')) {
+    if (error is TimeoutException) return 'The connection is taking too long. Please try again.';
+    if (error is SocketException || error.toString().contains('SocketException') || error.toString().contains('Connection refused')) {
       return 'We can\'t reach our servers. Please check your internet connection.';
     }
     if (error is ApiException) {
       switch (error.statusCode) {
-        case 400:
-          return 'That code isn\'t correct. Please check the code and try again.';
-        case 401:
-          return 'Your session has expired. Please log in again.';
-        case 403:
-          return 'This code has expired. Request a new code to continue.';
+        case 400: return 'That code isn\'t correct. Please check the code and try again.';
+        case 401: return 'Your session has expired. Please log in again.';
+        case 403: return 'This code has expired. Request a new code to continue.';
         case 429:
-          final retryAfter = error.responseBody is Map
-              ? error.responseBody['retryAfterSeconds']
-              : null;
+          final retryAfter = error.responseBody is Map ? error.responseBody['retryAfterSeconds'] : null;
           final seconds = int.tryParse(retryAfter?.toString() ?? '');
           if (seconds != null && seconds > 0) {
             final minutes = (seconds / 60).ceil();
@@ -333,9 +321,7 @@ class _OtpViewState extends State<OtpView>
           }
           return 'A verification code is already active. Please wait before requesting another.';
         default:
-          if (error.statusCode >= 500) {
-            return 'We couldn\'t verify your code. Check your connection and try again.';
-          }
+          if (error.statusCode >= 500) return 'We couldn\'t verify your code. Check your connection and try again.';
       }
     }
     return 'Verification failed. Please try again.';
@@ -346,8 +332,7 @@ class _OtpViewState extends State<OtpView>
     _otpInputKey.currentState?.clear();
     setState(() => _hasError = false);
 
-    AnalyticsService.logAuthEvent(AnalyticsEvents.otpResendRequested,
-        method: 'email');
+    AnalyticsService.logAuthEvent(AnalyticsEvents.otpResendRequested, method: 'email');
 
     final sent = await _requestOtpCode();
     if (sent && mounted) {
@@ -378,44 +363,77 @@ class _OtpViewState extends State<OtpView>
       if (email.isNotEmpty) {
         await RemoteDatabaseRepository().revokeOtp(email);
       }
-    } catch (_) {
-      // The local session is still cleared if the revoke request fails.
-    }
+    } catch (_) {}
     if (!mounted) return;
     await AppSession.reset();
-    if (mounted)
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+    if (mounted) Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
   }
 
   Future<void> _changeEmail() async {
     final controller = TextEditingController(text: _emailAddress);
+    
     final newEmail = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Change email'),
-        content: TextFormField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.emailAddress,
-          validator: AuthValidators.email,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-          decoration: const InputDecoration(labelText: 'Email address'),
+        backgroundColor: _surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Change Email', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
+            const SizedBox(height: 8),
+            Text('Enter your new email address below.', style: GoogleFonts.poppins(fontSize: 14, color: _grey)),
+            const SizedBox(height: 24),
+            TextFormField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.emailAddress,
+              validator: AuthValidators.email,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              style: GoogleFonts.poppins(fontSize: 14, color: _dark, fontWeight: FontWeight.w500),
+              decoration: InputDecoration(
+                hintText: 'Email address',
+                hintStyle: GoogleFonts.poppins(color: _grey, fontSize: 14),
+                filled: true,
+                fillColor: _bg,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _primary)),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: Text('Cancel', style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      if (AuthValidators.email(controller.text) != null) return;
+                      Navigator.pop(dialogContext, controller.text.trim());
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primary,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text('Update', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            )
+          ]
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (AuthValidators.email(controller.text) != null) return;
-              Navigator.pop(dialogContext, controller.text.trim());
-            },
-            child: const Text('Continue'),
-          ),
-        ],
       ),
     );
+    
     controller.dispose();
     if (newEmail == null || !mounted || newEmail == _emailAddress) return;
 
@@ -450,12 +468,22 @@ class _OtpViewState extends State<OtpView>
         }
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('New verification code sent.')),
+        SnackBar(
+          content: Text('New verification code sent.', style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF10B981),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_getFriendlyErrorMessage(error))),
+          SnackBar(
+            content: Text(_getFriendlyErrorMessage(error), style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFFEF4444),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
         );
       }
     } finally {
@@ -472,66 +500,83 @@ class _OtpViewState extends State<OtpView>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _bg,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+              
+              // ─── Header & Back Button ───
               GestureDetector(
-                onTap: _isVerifying
-                    ? null
-                    : () {
-                        ScaffoldMessenger.of(context)
-                            .hideCurrentMaterialBanner();
-                        _leaveVerification();
-                      },
-                child: const Icon(Icons.arrow_back, size: 28, color: _text),
+                onTap: _isVerifying ? null : _leaveVerification,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _surface, 
+                    shape: BoxShape.circle, 
+                    border: Border.all(color: _grey.withOpacity(0.2)),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))]
+                  ),
+                  child: const Icon(PhosphorIconsRegular.caretLeft, size: 20, color: _dark),
+                ),
               ),
-              const SizedBox(height: 36),
+              const SizedBox(height: 32),
+              
               Text(
                 'Verify your email',
                 style: GoogleFonts.poppins(
-                  fontSize: 34,
-                  fontWeight: FontWeight.w800,
-                  color: _text,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Code sent to:',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  color: _hint,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w700,
+                  color: _dark,
+                  letterSpacing: -1.0,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                _emailAddress.isNotEmpty ? _emailAddress : 'your email',
+                'Please enter the 6-digit verification code sent to your email address.',
                 style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: _text,
+                  fontSize: 15,
+                  color: _grey,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
-              Row(
-                children: [
-                  TextButton(
-                    onPressed: _isSendingCode ? null : _changeEmail,
-                    child: const Text('Change email'),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: _isVerifying ? null : _leaveVerification,
-                    child: const Text('Cancel verification'),
-                  ),
-                ],
+              const SizedBox(height: 24),
+
+              // ─── Email Pill with Edit ───
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: _surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _grey.withOpacity(0.2)),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(PhosphorIconsRegular.envelopeSimple, color: _grey, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _emailAddress.isNotEmpty ? _emailAddress : 'Loading email...',
+                        style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w600, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _isSendingCode ? null : _changeEmail,
+                      child: Text('Edit', style: GoogleFonts.poppins(color: _primary, fontWeight: FontWeight.w600, fontSize: 14)),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 40),
+              
+              const SizedBox(height: 48),
+
+              // ─── OTP Input ───
               AnimatedBuilder(
                 animation: _shakeAnimation,
                 builder: (context, child) {
@@ -551,53 +596,53 @@ class _OtpViewState extends State<OtpView>
                   );
                 },
               ),
-              const SizedBox(height: 24),
-              Center(
-                child: Text(
-                  'Code expires in ${_formatTime(_expireSeconds)}',
-                  style: GoogleFonts.poppins(
-                    color: _expireSeconds < 60 ? Colors.red : _hint,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
+              
+              const SizedBox(height: 32),
+
+              // ─── Timers & Resend ───
               Center(
                 child: Column(
                   children: [
                     Text(
-                      'Didn\'t receive the code?',
+                      'Code expires in ${_formatTime(_expireSeconds)}',
                       style: GoogleFonts.poppins(
-                        color: _text,
-                        fontSize: 15,
+                        color: _expireSeconds < 60 ? const Color(0xFFEF4444) : _grey,
+                        fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    TextButton(
-                      onPressed: (_resendSeconds == 0 && !_isSendingCode)
-                          ? _onResend
-                          : null,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        minimumSize: const Size(1, 1),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text(
-                        _resendSeconds > 0
-                            ? 'Resend in ${_resendSeconds}s'
-                            : 'Send code',
-                        style: GoogleFonts.poppins(
-                          color: _resendSeconds > 0 ? _hint : _primary,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Didn\'t receive the code? ',
+                          style: GoogleFonts.poppins(
+                            color: _dark,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
+                        GestureDetector(
+                          onTap: (_resendSeconds == 0 && !_isSendingCode) ? _onResend : null,
+                          child: Text(
+                            _resendSeconds > 0 ? 'Wait ${_resendSeconds}s' : 'Resend',
+                            style: GoogleFonts.poppins(
+                              color: _resendSeconds > 0 ? _grey : _primary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
+              
               const Spacer(),
+
+              // ─── Actions ───
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -605,32 +650,44 @@ class _OtpViewState extends State<OtpView>
                   onPressed: _isVerifying ? null : () => _verify(_currentCode),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                    disabledBackgroundColor: _grey.withOpacity(0.2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)), // Modern Pill
                     elevation: 0,
                   ),
                   child: _isVerifying
                       ? const SizedBox(
                           width: 24,
                           height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
                         )
                       : Text(
-                          'Verify',
+                          'Verify Account',
                           style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                 ),
               ),
-              const SizedBox(height: 24),
+              
+              const SizedBox(height: 16),
+              
+              // Subtle Cancel Action
+              Center(
+                child: TextButton(
+                  onPressed: _isVerifying ? null : _leaveVerification,
+                  child: Text(
+                    'Cancel Verification',
+                    style: GoogleFonts.poppins(
+                      color: _grey,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
             ],
           ),
         ),

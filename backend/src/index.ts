@@ -1,8 +1,9 @@
-﻿import app from './app.js';
+import app from './app.js';
 import { env } from './config.js';
 import { startCronJobs } from './services/cron.js';
 import './services/queue.js';
 import './workers/mediaWorker.js';
+import './workers/emailWorker.js';
 
 async function startServer() {
   // Use an explicit HTTP server so we can attach Socket.IO
