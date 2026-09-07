@@ -467,6 +467,8 @@ router.patch('/:id/status', requireAuth, authorize('landlord', 'host'), async (r
             return res.status(404).json({ error: 'Property not found or access denied.' });
         }
         console.log(`[PropertyStatusUpdate] Successfully updated property ${propertyId}`);
+        clearCachePattern('properties.');
+        clearCachePattern('/api/properties');
         res.json({ data: normalizePropertyRow(result.rows[0]) });
     }
     catch (error) {

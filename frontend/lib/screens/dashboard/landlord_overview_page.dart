@@ -59,7 +59,7 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
       if (!OnboardingPrefs.hasSeen('landlordOverviewSeen')) {
         OnboardingBottomSheet.show(
           context: context,
-          imagePath: 'assets/images/home_onboarding.png',
+          imagePath: 'assets/images/dashboard.webp',
           title: 'Welcome to your Dashboard',
           subtitle:
               'Track your total views, manage properties, and monitor your occupancy rate all in one place.',

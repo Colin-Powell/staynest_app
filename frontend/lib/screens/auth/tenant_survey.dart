@@ -70,8 +70,20 @@ class _TenantSurveyViewState extends State<TenantSurveyView> {
 
     int householdSize = int.tryParse((_selectedHousehold ?? '1').replaceAll('+', '')) ?? 1;
 
+    int? budgetMin;
+    int? budgetMax;
+    if (_selectedBudgetTier == 'budget') {
+      budgetMax = 10000;
+    } else if (_selectedBudgetTier == 'mid') {
+      budgetMin = 10000;
+      budgetMax = 25000;
+    } else if (_selectedBudgetTier == 'premium') {
+      budgetMin = 25000;
+    }
+
     final profile = {
-      'budget_tier': _selectedBudgetTier,
+      'budget_min': budgetMin,
+      'budget_max': budgetMax,
       'status': (_selectedStatus ?? 'student').toLowerCase(),
       'household_size': householdSize,
       'pets': _selectedPets == 'Yes',

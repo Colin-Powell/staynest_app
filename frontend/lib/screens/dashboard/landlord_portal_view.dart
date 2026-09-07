@@ -5,9 +5,9 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:shimmer/shimmer.dart';
 
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/session/onboarding_prefs.dart';
 import 'package:property_app/services/verification_api.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
-import 'package:property_app/theme.dart';
 
 import 'landlord_bookings_page.dart';
 import 'landlord_messages_page.dart';
@@ -36,7 +36,6 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   bool _isChatOpen = false;
   Map<String, dynamic>? _verificationStatus;
   bool _isLoadingStatus = true;
-  bool _wasVerifiedBefore = false;
   bool _isRefreshing = false;
 
   @override
@@ -59,18 +58,16 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
       final isCurrentlyApproved = status?['status']?.toString().toLowerCase() == 'approved';
 
       if (mounted) {
-        if (isCurrentlyApproved && !_wasVerifiedBefore) {
-          _wasVerifiedBefore = true;
+        // Show modal only once ever using persistent onboarding prefs
+        if (isCurrentlyApproved && !OnboardingPrefs.hasSeen('landlordVerifiedCongrats')) {
           await _refreshUserData();
           _showVerificationSuccessModal();
+          OnboardingPrefs.markAsSeen('landlordVerifiedCongrats');
         }
 
         setState(() {
           _verificationStatus = status;
           _isLoadingStatus = false;
-          if (isCurrentlyApproved) {
-            _wasVerifiedBefore = true;
-          }
         });
       }
     } catch (_) {
@@ -114,109 +111,61 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: _surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        contentPadding: EdgeInsets.zero,
-        content: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  color: StayNestColors.primaryLight, 
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  PhosphorIconsFill.shieldCheck, 
-                  size: 64, 
-                  color: StayNestColors.primary,
-                ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Replaced generic icon with the requested asset
+            Image.asset(
+              'assets/images/congrats.webp',
+              height: 140,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Congratulations!',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your landlord account has been fully verified and approved.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.5),
+            ),
+            const SizedBox(height: 32),
+            Container(
+              decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(16)),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _buildSuccessFeature(PhosphorIconsFill.buildings, 'Add Properties', 'List properties and manage your portfolio'),
+                  const SizedBox(height: 16),
+                  _buildSuccessFeature(PhosphorIconsFill.usersThree, 'Manage Tenants', 'Screen and communicate with prospects'),
+                  const SizedBox(height: 16),
+                  _buildSuccessFeature(PhosphorIconsFill.eye, 'Higher Visibility', 'Get featured in premium search results'),
+                ],
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Congratulations!',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 24, 
-                  fontWeight: FontWeight.w700, 
-                  color: AppColors.gray900, 
-                  letterSpacing: -0.5,
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(_);
+                  setState(() => _selectedNav = 'Dashboard');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _green,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                  elevation: 0,
                 ),
+                child: Text('Get Started', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Your landlord account has been fully verified and approved.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 15, 
-                  color: AppColors.gray500, 
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 32),
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.gray50, 
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.gray100),
-                ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    _buildSuccessFeature(
-                      PhosphorIconsFill.buildings, 
-                      'Add Properties', 
-                      'List properties and manage your portfolio'
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Divider(height: 1, color: AppColors.gray100),
-                    ),
-                    _buildSuccessFeature(
-                      PhosphorIconsFill.usersThree, 
-                      'Manage Tenants', 
-                      'Screen and communicate with prospects'
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Divider(height: 1, color: AppColors.gray100),
-                    ),
-                    _buildSuccessFeature(
-                      PhosphorIconsFill.eye, 
-                      'Higher Visibility', 
-                      'Get featured in premium search results'
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(_);
-                    setState(() => _selectedNav = 'Dashboard');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: StayNestColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    'Get Started', 
-                    style: GoogleFonts.inter(
-                      fontSize: 16, 
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -226,36 +175,15 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.gray100),
-          ),
-          child: Icon(icon, size: 20, color: StayNestColors.primary),
-        ),
+        Icon(icon, size: 20, color: _green),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title, 
-                style: GoogleFonts.inter(
-                  fontSize: 14, 
-                  fontWeight: FontWeight.w600, 
-                  color: AppColors.gray900,
-                ),
-              ),
+              Text(title, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: _dark)),
               const SizedBox(height: 2),
-              Text(
-                subtitle, 
-                style: GoogleFonts.inter(
-                  fontSize: 13, 
-                  color: AppColors.gray500,
-                ),
-              ),
+              Text(subtitle, style: GoogleFonts.poppins(fontSize: 12, color: _grey)),
             ],
           ),
         ),
@@ -263,11 +191,11 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
     );
   }
 
-  // ─── State Getters ─────────────────────────────────────────────────────────────
+  // ─── State Getters ───────────────────────────────────────────────────────────
 
   bool get _isLandlordRole => AppSession.isLandlord;
 
-  // ─── Page Routing ──────────────────────────────────────────────────────────────
+  // ─── Page Routing ────────────────────────────────────────────────────────────
 
   Widget _getLegacyPage() {
     switch (_selectedNav) {

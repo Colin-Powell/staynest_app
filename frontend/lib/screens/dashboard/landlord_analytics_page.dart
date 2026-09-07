@@ -56,7 +56,7 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
       if (!OnboardingPrefs.hasSeen('landlordAnalyticsSeen')) {
         OnboardingBottomSheet.show(
           context: context,
-          imagePath: 'assets/images/home_onboarding.png',
+          imagePath: 'assets/images/graph.webp',
           title: 'Insights & Analytics',
           subtitle: 'Dive deep into your portfolio performance, see engagement rates, and track conversion funnel metrics.',
           ctaText: 'View Insights',

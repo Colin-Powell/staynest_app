@@ -2,13 +2,13 @@ import 'package:property_app/services/api_client.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/screens/home/cache_engine.dart';
 
-
 class PropertiesApi {
   static Future<void> recordPropertyView(String propertyId) async {
     try {
       final client = _client();
       await client.postJson('/properties/$propertyId/view');
-      await client.postJson('/analytics/track', body: {'eventType': 'property_view', 'propertyId': propertyId});
+      await client.postJson('/analytics/track',
+          body: {'eventType': 'property_view', 'propertyId': propertyId});
       // Invalidate the cache so the home screen reflects the new view immediately
       await CacheEngine.instance.invalidate('props_recently_viewed');
     } catch (e) {
@@ -17,7 +17,8 @@ class PropertiesApi {
   }
 
   /// Boost a property
-  static Future<Map<String, dynamic>> boostProperty(String propertyId, String packageType) async {
+  static Future<Map<String, dynamic>> boostProperty(
+      String propertyId, String packageType) async {
     final client = _client();
     final response = await client.postJson('/promotions/boost', body: {
       'property_id': propertyId,
@@ -27,7 +28,7 @@ class PropertiesApi {
   }
 
   /// Get active promotions for landlord
-  
+
   static Future<List<Map<String, dynamic>>> getRelevantPromotions() async {
     try {
       final client = _client();
@@ -81,7 +82,7 @@ class PropertiesApi {
       networkFetcher: () async {
         final client = _client();
         final response = await client.getJson('/properties/$propertyId');
-        return response['data'] as Map<String, dynamic>;
+        return Map<String, dynamic>.from(response['data'] as Map);
       },
     );
   }
@@ -108,7 +109,8 @@ class PropertiesApi {
       ttl: CacheTTL.listings,
       networkFetcher: () async {
         final client = _client();
-        final response = await client.getJson('/properties', queryParams: params.isNotEmpty ? params : null);
+        final response = await client.getJson('/properties',
+            queryParams: params.isNotEmpty ? params : null);
         final data = response['data'] as List<dynamic>? ?? [];
         return data.cast<Map<String, dynamic>>();
       },
@@ -136,6 +138,7 @@ class PropertiesApi {
     );
     await CacheEngine.instance.invalidate(CacheKeys.propertyDetail(propertyId));
     await CacheEngine.instance.invalidate('landlord_props_me');
+    await CacheEngine.instance.invalidate(CacheKeys.propertyList);
     return response['data'] as Map<String, dynamic>;
   }
 
@@ -147,7 +150,6 @@ class PropertiesApi {
     await CacheEngine.instance.invalidate('landlord_props_me');
   }
 
-  
   /// Fetch recently viewed properties for the current tenant.
   static Future<List<Map<String, dynamic>>> getRecentlyViewed() async {
     return CacheEngine.instance.getOrFetch<List<Map<String, dynamic>>>(

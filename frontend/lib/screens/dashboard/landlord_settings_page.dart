@@ -35,7 +35,8 @@ class LandlordSettingsPage extends StatelessWidget {
           const end = Offset.zero;
           const curve = Curves.easeOutCubic;
 
-          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+          var tween =
+              Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
           var offsetAnimation = animation.drive(tween);
 
           return SlideTransition(
@@ -51,7 +52,7 @@ class LandlordSettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = AppSession.currentUser;
-    
+
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
@@ -65,7 +66,8 @@ class LandlordSettingsPage extends StatelessWidget {
               // --- HEADER ---
               Row(
                 children: [
-                  const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 28), // Or hide if it's a main tab
+                  const Icon(PhosphorIconsRegular.caretLeft,
+                      color: _dark, size: 28), // Or hide if it's a main tab
                   const SizedBox(width: 16),
                   Text(
                     'Settings',
@@ -87,7 +89,10 @@ class LandlordSettingsPage extends StatelessWidget {
                   color: _surface,
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+                    BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4)),
                   ],
                   border: Border.all(color: _grey.withOpacity(0.1)),
                 ),
@@ -142,7 +147,8 @@ class LandlordSettingsPage extends StatelessWidget {
                         color: _green.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(PhosphorIconsRegular.pencilSimple, color: _green, size: 20),
+                      child: const Icon(PhosphorIconsRegular.pencilSimple,
+                          color: _green, size: 20),
                     )
                   ],
                 ),
@@ -164,7 +170,8 @@ class LandlordSettingsPage extends StatelessWidget {
                 _buildSettingRow(
                   title: 'Performance & Insights',
                   icon: PhosphorIconsRegular.trendUp,
-                  onTap: () => _navigateTo(context, const LandlordAnalyticsPage()),
+                  onTap: () =>
+                      _navigateTo(context, const LandlordAnalyticsPage()),
                 ),
                 _buildDivider(),
                 _buildSettingRow(
@@ -202,7 +209,8 @@ class LandlordSettingsPage extends StatelessWidget {
                 _buildSettingRow(
                   title: 'Notification Settings',
                   icon: PhosphorIconsRegular.bell,
-                  onTap: () => _navigateTo(context, const NotificationSettingsPage()),
+                  onTap: () =>
+                      _navigateTo(context, const NotificationSettingsPage()),
                 ),
                 _buildDivider(),
                 _buildSettingRow(
@@ -214,7 +222,8 @@ class LandlordSettingsPage extends StatelessWidget {
                 _buildSettingRow(
                   title: 'Two-Factor Authentication',
                   icon: PhosphorIconsRegular.shieldCheck,
-                  trailingText: (user['settings']?['two_factor'] ?? false) ? 'On' : 'Off',
+                  trailingText:
+                      (user['settings']?['two_factor'] ?? false) ? 'On' : 'Off',
                   onTap: () => _navigateTo(context, const TwoFactorAuthPage()),
                 ),
               ]),
@@ -235,13 +244,21 @@ class LandlordSettingsPage extends StatelessWidget {
                 _buildSettingRow(
                   title: 'Help & Support',
                   icon: PhosphorIconsRegular.question,
-                  onTap: () => _navigateTo(context, HelpSupportView(onBack: () => Navigator.pop(context))),
+                  onTap: () => _navigateTo(context,
+                      HelpSupportView(onBack: () => Navigator.pop(context))),
                 ),
                 _buildDivider(),
                 _buildSettingRow(
                   title: 'Privacy Policy',
                   icon: PhosphorIconsRegular.fileText,
                   onTap: () => _navigateTo(context, const PrivacyPolicyPage()),
+                ),
+                _buildDivider(),
+                _buildSettingRow(
+                  title: 'App Version',
+                  icon: PhosphorIconsRegular.info,
+                  trailingText: 'v${AppSession.currentAppVersion}',
+                  onTap: () {},
                 ),
               ]),
               const SizedBox(height: 32),
@@ -250,21 +267,31 @@ class LandlordSettingsPage extends StatelessWidget {
               GestureDetector(
                 onTap: () {
                   AppSession.logout();
-                  Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/login', (route) => false);
+                  Navigator.of(context, rootNavigator: true)
+                      .pushNamedAndRemoveUntil('/login', (route) => false);
                 },
                 behavior: HitTestBehavior.opaque,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
                   decoration: BoxDecoration(
                     color: _surface,
                     borderRadius: BorderRadius.circular(24),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
-                    border: Border.all(color: const Color(0xFFFCA5A5).withOpacity(0.3)), // Subtle red border
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4))
+                    ],
+                    border: Border.all(
+                        color: const Color(0xFFFCA5A5)
+                            .withOpacity(0.3)), // Subtle red border
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(PhosphorIconsRegular.signOut, color: Color(0xFFEF4444), size: 24),
+                      const Icon(PhosphorIconsRegular.signOut,
+                          color: Color(0xFFEF4444), size: 24),
                       const SizedBox(width: 12),
                       Text(
                         'Logout',
@@ -290,7 +317,12 @@ class LandlordSettingsPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
         border: Border.all(color: _grey.withOpacity(0.1)),
       ),
       child: Column(children: children),
@@ -393,7 +425,8 @@ class SettingsPageLayout extends StatelessWidget {
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     behavior: HitTestBehavior.opaque,
-                    child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 28),
+                    child: const Icon(PhosphorIconsRegular.caretLeft,
+                        color: _dark, size: 28),
                   ),
                   const SizedBox(width: 16),
                   Text(
@@ -440,14 +473,19 @@ Widget _buildTextField(String label,
         TextFormField(
           controller: controller,
           obscureText: isPassword,
-          style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w500, color: _dark),
+          style: GoogleFonts.poppins(
+              fontSize: 15, fontWeight: FontWeight.w500, color: _dark),
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: GoogleFonts.poppins(color: _grey, fontSize: 14, fontWeight: FontWeight.w400),
-            prefixIcon: prefixIcon != null ? Icon(prefixIcon, color: _grey, size: 22) : null,
+            hintStyle: GoogleFonts.poppins(
+                color: _grey, fontSize: 14, fontWeight: FontWeight.w400),
+            prefixIcon: prefixIcon != null
+                ? Icon(prefixIcon, color: _grey, size: 22)
+                : null,
             filled: true,
             fillColor: _surface,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(color: _grey.withOpacity(0.2)),
@@ -468,13 +506,18 @@ Widget _buildTextField(String label,
 }
 
 // Shared UI helper for Save Buttons
-Widget _buildSaveButton(BuildContext context, {String text = "Save Changes", VoidCallback? onPressed}) {
+Widget _buildSaveButton(BuildContext context,
+    {String text = "Save Changes", VoidCallback? onPressed}) {
   return Container(
-    padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
+    padding: EdgeInsets.fromLTRB(
+        24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
     decoration: BoxDecoration(
       color: _surface,
       boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, -4)),
+        BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, -4)),
       ],
     ),
     child: ElevatedButton(
@@ -482,15 +525,21 @@ Widget _buildSaveButton(BuildContext context, {String text = "Save Changes", Voi
       style: ElevatedButton.styleFrom(
         backgroundColor: _green,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)), // Pill shape
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(32)), // Pill shape
         padding: const EdgeInsets.symmetric(vertical: 16),
         minimumSize: const Size(double.infinity, 56),
       ),
-      child: onPressed == null && text != "Save Changes" && text != "Update Password" && text != "Save Bank Details"
+      child: onPressed == null &&
+              text != "Save Changes" &&
+              text != "Update Password" &&
+              text != "Save Bank Details"
           ? const SizedBox(
               height: 22,
               width: 22,
-              child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+              child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
             )
           : Text(
               text,
@@ -556,7 +605,8 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
   Future<void> _pickImage() async {
     try {
       final picker = ImagePicker();
-      final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+      final image =
+          await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
       if (image == null) return;
       setState(() => _selectedImage = File(image.path));
     } catch (e) {
@@ -570,7 +620,8 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
     final phone = _phoneController.text.trim();
 
     if (name.isEmpty || email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Name and email are required.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Name and email are required.')));
       return;
     }
 
@@ -593,11 +644,13 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
       await AppSession.persistSession();
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated successfully')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile updated successfully')));
       Navigator.pop(context);
     } catch (err) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiResult.mapError(err))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(ApiResult.mapError(err))));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -605,9 +658,11 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
 
   Widget _buildAvatar() {
     if (_selectedImage != null) {
-      return Image.file(_selectedImage!, width: 110, height: 110, fit: BoxFit.cover);
+      return Image.file(_selectedImage!,
+          width: 110, height: 110, fit: BoxFit.cover);
     }
-    return AppSession.buildAvatar(AppSession.displayAvatar, width: 110, height: 110, fit: BoxFit.cover);
+    return AppSession.buildAvatar(AppSession.displayAvatar,
+        width: 110, height: 110, fit: BoxFit.cover);
   }
 
   @override
@@ -635,8 +690,14 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                     height: 110,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: _grey.withOpacity(0.2), width: 2),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, 5))],
+                      border:
+                          Border.all(color: _grey.withOpacity(0.2), width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 15,
+                            offset: const Offset(0, 5))
+                      ],
                     ),
                     child: ClipOval(child: _buildAvatar()),
                   ),
@@ -650,16 +711,23 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                       shape: BoxShape.circle,
                       border: Border.all(color: _surface, width: 3),
                     ),
-                    child: const Icon(PhosphorIconsRegular.camera, color: Colors.white, size: 18),
+                    child: const Icon(PhosphorIconsRegular.camera,
+                        color: Colors.white, size: 18),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 40),
-            _buildTextField('Full Name', controller: _nameController, prefixIcon: PhosphorIconsRegular.user),
-            _buildTextField('Email Address', controller: _emailController, prefixIcon: PhosphorIconsRegular.envelopeSimple),
-            _buildTextField('Phone Number', controller: _phoneController, prefixIcon: PhosphorIconsRegular.phone),
-            const SizedBox(height: 40), 
+            _buildTextField('Full Name',
+                controller: _nameController,
+                prefixIcon: PhosphorIconsRegular.user),
+            _buildTextField('Email Address',
+                controller: _emailController,
+                prefixIcon: PhosphorIconsRegular.envelopeSimple),
+            _buildTextField('Phone Number',
+                controller: _phoneController,
+                prefixIcon: PhosphorIconsRegular.phone),
+            const SizedBox(height: 40),
           ],
         ),
       ),
@@ -688,10 +756,16 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
     super.initState();
     final user = AppSession.currentUser;
     final business = (user['businessInfo'] as Map?) ?? user;
-    _companyController = TextEditingController(text: (business['companyName'] ?? business['businessName'])?.toString() ?? '');
-    _regNumberController = TextEditingController(text: business['registrationNumber']?.toString() ?? '');
-    _addressController = TextEditingController(text: business['address']?.toString() ?? '');
-    _tinController = TextEditingController(text: (business['tin'] ?? business['taxId'])?.toString() ?? '');
+    _companyController = TextEditingController(
+        text:
+            (business['companyName'] ?? business['businessName'])?.toString() ??
+                '');
+    _regNumberController = TextEditingController(
+        text: business['registrationNumber']?.toString() ?? '');
+    _addressController =
+        TextEditingController(text: business['address']?.toString() ?? '');
+    _tinController = TextEditingController(
+        text: (business['tin'] ?? business['taxId'])?.toString() ?? '');
   }
 
   @override
@@ -716,11 +790,13 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
       AppSession.updateCurrentUser(updatedUser);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Business info updated successfully')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Business info updated successfully')));
       Navigator.pop(context);
     } catch (err) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiResult.mapError(err))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(ApiResult.mapError(err))));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -740,10 +816,22 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
         child: Column(
           children: [
-            _buildTextField('Company / Agency Name', controller: _companyController, hintText: 'StayNest Properties LLC', prefixIcon: PhosphorIconsRegular.buildings),
-            _buildTextField('Business Registration Number', controller: _regNumberController, hintText: 'RC-123456789', prefixIcon: PhosphorIconsRegular.fileText),
-            _buildTextField('Business Address', controller: _addressController, hintText: '123 Real Estate Ave', prefixIcon: PhosphorIconsRegular.mapPin),
-            _buildTextField('Tax Identification Number (TIN)', controller: _tinController, hintText: 'XXX-XX-XXXX', prefixIcon: PhosphorIconsRegular.receipt),
+            _buildTextField('Company / Agency Name',
+                controller: _companyController,
+                hintText: 'StayNest Properties LLC',
+                prefixIcon: PhosphorIconsRegular.buildings),
+            _buildTextField('Business Registration Number',
+                controller: _regNumberController,
+                hintText: 'RC-123456789',
+                prefixIcon: PhosphorIconsRegular.fileText),
+            _buildTextField('Business Address',
+                controller: _addressController,
+                hintText: '123 Real Estate Ave',
+                prefixIcon: PhosphorIconsRegular.mapPin),
+            _buildTextField('Tax Identification Number (TIN)',
+                controller: _tinController,
+                hintText: 'XXX-XX-XXXX',
+                prefixIcon: PhosphorIconsRegular.receipt),
             const SizedBox(height: 40),
           ],
         ),
@@ -757,7 +845,8 @@ class NotificationSettingsPage extends StatefulWidget {
   const NotificationSettingsPage({super.key});
 
   @override
-  State<NotificationSettingsPage> createState() => _NotificationSettingsPageState();
+  State<NotificationSettingsPage> createState() =>
+      _NotificationSettingsPageState();
 }
 
 class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
@@ -798,11 +887,14 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       });
       AppSession.updateCurrentUser(updated);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Notification settings updated')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Notification settings updated')));
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -822,15 +914,29 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
         children: [
           _buildSectionHeader('Email Notifications'),
-          _buildSwitchTile('New Bookings', 'Get notified when a new booking is made', emailNewBooking, (v) => setState(() => emailNewBooking = v)),
-          _buildSwitchTile('New Messages', 'Get notified of new tenant messages', emailMessages, (v) => setState(() => emailMessages = v)),
+          _buildSwitchTile(
+              'New Bookings',
+              'Get notified when a new booking is made',
+              emailNewBooking,
+              (v) => setState(() => emailNewBooking = v)),
+          _buildSwitchTile(
+              'New Messages',
+              'Get notified of new tenant messages',
+              emailMessages,
+              (v) => setState(() => emailMessages = v)),
           const SizedBox(height: 16),
           _buildSectionHeader('Push Notifications'),
-          _buildSwitchTile('New Bookings', 'Push alerts for new bookings', pushNewBooking, (v) => setState(() => pushNewBooking = v)),
-          _buildSwitchTile('New Messages', 'Push alerts for new messages', pushMessages, (v) => setState(() => pushMessages = v)),
+          _buildSwitchTile('New Bookings', 'Push alerts for new bookings',
+              pushNewBooking, (v) => setState(() => pushNewBooking = v)),
+          _buildSwitchTile('New Messages', 'Push alerts for new messages',
+              pushMessages, (v) => setState(() => pushMessages = v)),
           const SizedBox(height: 16),
           _buildSectionHeader('SMS Notifications'),
-          _buildSwitchTile('Critical Alerts', 'Important account or booking updates via SMS', smsAlerts, (v) => setState(() => smsAlerts = v)),
+          _buildSwitchTile(
+              'Critical Alerts',
+              'Important account or booking updates via SMS',
+              smsAlerts,
+              (v) => setState(() => smsAlerts = v)),
           const SizedBox(height: 40),
         ],
       ),
@@ -852,7 +958,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     );
   }
 
-  Widget _buildSwitchTile(String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
+  Widget _buildSwitchTile(
+      String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -860,7 +967,12 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         color: _surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _grey.withOpacity(0.1)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
       ),
       child: Row(
         children: [
@@ -870,7 +982,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
               children: [
                 Text(
                   title,
-                  style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: _dark),
+                  style: GoogleFonts.poppins(
+                      fontSize: 15, fontWeight: FontWeight.w600, color: _dark),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -934,11 +1047,14 @@ class _BankDetailsPageState extends State<BankDetailsPage> {
       });
       AppSession.updateCurrentUser(updated);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bank details updated')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Bank details updated')));
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -967,22 +1083,38 @@ class _BankDetailsPageState extends State<BankDetailsPage> {
               ),
               child: Row(
                 children: [
-                  const Icon(PhosphorIconsRegular.info, color: _green, size: 24),
+                  const Icon(PhosphorIconsRegular.info,
+                      color: _green, size: 24),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(
                       'These details will be used to process your rental payouts.',
-                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: _dark),
+                      style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: _dark),
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 32),
-            _buildTextField('Bank Name', controller: _bankNameController, hintText: 'e.g. Chase Bank', prefixIcon: PhosphorIconsRegular.bank),
-            _buildTextField('Account Holder Name', controller: _holderController, hintText: 'Jomison Real Estate', prefixIcon: PhosphorIconsRegular.user),
-            _buildTextField('Account Number', controller: _accountController, hintText: '1234567890', prefixIcon: PhosphorIconsRegular.hash),
-            _buildTextField('Routing Number', controller: _routingController, hintText: '098765432', prefixIcon: PhosphorIconsRegular.cornersIn),
+            _buildTextField('Bank Name',
+                controller: _bankNameController,
+                hintText: 'e.g. Chase Bank',
+                prefixIcon: PhosphorIconsRegular.bank),
+            _buildTextField('Account Holder Name',
+                controller: _holderController,
+                hintText: 'Jomison Real Estate',
+                prefixIcon: PhosphorIconsRegular.user),
+            _buildTextField('Account Number',
+                controller: _accountController,
+                hintText: '1234567890',
+                prefixIcon: PhosphorIconsRegular.hash),
+            _buildTextField('Routing Number',
+                controller: _routingController,
+                hintText: '098765432',
+                prefixIcon: PhosphorIconsRegular.cornersIn),
             const SizedBox(height: 40),
           ],
         ),
@@ -1008,28 +1140,47 @@ class PrivacyPolicyPage extends StatelessWidget {
             color: _surface,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: _grey.withOpacity(0.1)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4))
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Data Collection & Usage', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
+              Text('Data Collection & Usage',
+                  style: GoogleFonts.poppins(
+                      fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
               const SizedBox(height: 12),
               Text(
                 'We collect information to provide better services to all our users. Information collected includes your name, email address, phone number, and properties managed.\n\nYour data is securely stored and never shared with third parties without your explicit consent.',
-                style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.6, fontWeight: FontWeight.w400),
+                style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: _grey,
+                    height: 1.6,
+                    fontWeight: FontWeight.w400),
               ),
               const SizedBox(height: 32),
-              Text('Your Rights', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
+              Text('Your Rights',
+                  style: GoogleFonts.poppins(
+                      fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
               const SizedBox(height: 12),
               Text(
                 'You have the right to request access to the data we hold about you. You can also request deletion of your account and associated data at any time from the account settings.',
-                style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.6, fontWeight: FontWeight.w400),
+                style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: _grey,
+                    height: 1.6,
+                    fontWeight: FontWeight.w400),
               ),
               const SizedBox(height: 32),
               Divider(color: _grey.withOpacity(0.2)),
               const SizedBox(height: 16),
-              Text('Last updated: October 2024', style: GoogleFonts.poppins(fontSize: 12, fontStyle: FontStyle.italic, color: _grey)),
+              Text('Last updated: October 2024',
+                  style: GoogleFonts.poppins(
+                      fontSize: 12, fontStyle: FontStyle.italic, color: _grey)),
             ],
           ),
         ),
@@ -1062,21 +1213,27 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
   Future<void> _handleUpdate() async {
     if (_newController.text != _confirmController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Passwords do not match')));
       return;
     }
 
     setState(() => _isUpdating = true);
-    final res = await UserService.changePassword(_currentController.text, _newController.text);
+    final res = await UserService.changePassword(
+        _currentController.text, _newController.text);
 
     if (mounted) {
       setState(() => _isUpdating = false);
       if (res['ok'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password updated successfully')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Password updated successfully')));
         Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text((res['error'] != null) ? ApiResult.mapError(res['error']) : (res['error'] ?? 'Failed to update password'))),
+          SnackBar(
+              content: Text((res['error'] != null)
+                  ? ApiResult.mapError(res['error'])
+                  : (res['error'] ?? 'Failed to update password'))),
         );
       }
     }
@@ -1096,10 +1253,19 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
         child: Column(
           children: [
-            _buildTextField('Current Password', controller: _currentController, isPassword: true, prefixIcon: PhosphorIconsRegular.lock),
+            _buildTextField('Current Password',
+                controller: _currentController,
+                isPassword: true,
+                prefixIcon: PhosphorIconsRegular.lock),
             const SizedBox(height: 8),
-            _buildTextField('New Password', controller: _newController, isPassword: true, prefixIcon: PhosphorIconsRegular.lockKey),
-            _buildTextField('Confirm New Password', controller: _confirmController, isPassword: true, prefixIcon: PhosphorIconsRegular.lockKey),
+            _buildTextField('New Password',
+                controller: _newController,
+                isPassword: true,
+                prefixIcon: PhosphorIconsRegular.lockKey),
+            _buildTextField('Confirm New Password',
+                controller: _confirmController,
+                isPassword: true,
+                prefixIcon: PhosphorIconsRegular.lockKey),
             const SizedBox(height: 40),
           ],
         ),
@@ -1145,7 +1311,8 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
       if (mounted) {
         final message = ApiResult.mapError(err);
         setState(() => is2faEnabled = !value); // revert on failure
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -1167,14 +1334,21 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
                 color: _surface,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: _grey.withOpacity(0.1)),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4))
+                ],
               ),
               child: Column(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: is2faEnabled ? _green.withOpacity(0.1) : _grey.withOpacity(0.1),
+                      color: is2faEnabled
+                          ? _green.withOpacity(0.1)
+                          : _grey.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -1185,19 +1359,26 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    is2faEnabled ? '2FA is currently Enabled' : '2FA is currently Disabled',
-                    style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
+                    is2faEnabled
+                        ? '2FA is currently Enabled'
+                        : '2FA is currently Disabled',
+                    style: GoogleFonts.poppins(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: _dark),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'Two-factor authentication adds an extra layer of security to your account by requiring more than just a password to log in.',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.6),
+                    style: GoogleFonts.poppins(
+                        fontSize: 14, color: _grey, height: 1.6),
                   ),
                   const SizedBox(height: 40),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 16),
                     decoration: BoxDecoration(
                       color: _bg,
                       borderRadius: BorderRadius.circular(20),
@@ -1206,9 +1387,17 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Enable 2FA', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: _dark)),
+                        Text('Enable 2FA',
+                            style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _dark)),
                         _isSaving
-                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: _green))
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2.5, color: _green))
                             : CupertinoSwitch(
                                 value: is2faEnabled,
                                 activeTrackColor: _green,

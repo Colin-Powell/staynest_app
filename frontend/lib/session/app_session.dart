@@ -48,6 +48,7 @@ class AppSession {
   static String? currentUserAvatar;
   static bool currentUserVerified = false;
   static bool emailVerified = false;
+  static bool isGuest = false;
   static String? referralCode;
   static double walletBalance = 0.0;
 
@@ -363,6 +364,7 @@ class AppSession {
 
   static Future<void> reset() async {
     currentRole = 'tenant';
+    isGuest = false;
     currentUserId = null;
     currentUserName = null;
     currentUserEmail = null;

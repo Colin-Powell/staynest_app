@@ -15,13 +15,13 @@ class SuperAdminSettingsPage extends StatefulWidget {
 class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
   bool _loading = true;
   bool _saving = false;
-  
+
   // General
   bool _requireManualKyc = true;
   bool _autoApproveListings = false;
   String _globalFee = '10%';
   String _defaultCurrency = 'Ksh.';
-  
+
   // Security
   bool _enforce2FA = true;
   bool _maintenanceMode = false;
@@ -40,7 +40,8 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
         setState(() {
           if (settings['general'] != null) {
             _requireManualKyc = settings['general']['requireManualKyc'] ?? true;
-            _autoApproveListings = settings['general']['autoApproveListings'] ?? false;
+            _autoApproveListings =
+                settings['general']['autoApproveListings'] ?? false;
             _globalFee = '${settings['general']['globalFee'] ?? 10}%';
             _defaultCurrency = settings['general']['defaultCurrency'] ?? 'Ksh.';
           }
@@ -57,7 +58,7 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
       }
     }
   }
-  
+
   Future<void> _saveSettings() async {
     setState(() => _saving = true);
     try {
@@ -72,11 +73,13 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
         'maintenanceMode': _maintenanceMode,
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved successfully.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Settings saved successfully.')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error saving: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -109,27 +112,37 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
                 const SizedBox(height: 8),
                 Text(
                     'Manage system configurations, moderation thresholds, and security policies.',
-                    style: GoogleFonts.inter(fontSize: 14, color: AppColors.gray500)),
+                    style: GoogleFonts.inter(
+                        fontSize: 14, color: AppColors.gray500)),
               ],
             ),
-            ElevatedButton.icon(
-              onPressed: _saving ? null : _saveSettings,
-              icon: _saving 
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : Icon(PhosphorIcons.floppyDisk(), size: 18),
-              label: const Text('Save Changes'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.gray900,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 0, maxWidth: 180),
+              child: ElevatedButton.icon(
+                onPressed: _saving ? null : _saveSettings,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : Icon(PhosphorIcons.floppyDisk(), size: 18),
+                label:
+                    const Text('Save Changes', overflow: TextOverflow.ellipsis),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.gray900,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
               ),
             )
           ],
         ),
         const SizedBox(height: 32),
-        
         if (isDesktop)
           IntrinsicHeight(
             child: Row(
@@ -137,7 +150,8 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
               children: [
                 Expanded(child: _buildGeneralSettings()),
                 const SizedBox(width: 24),
-                Expanded(child: Column(
+                Expanded(
+                    child: Column(
                   children: [
                     _buildSecuritySettings(),
                     const SizedBox(height: 24),
@@ -172,27 +186,27 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
       icon: PhosphorIcons.slidersHorizontal(),
       children: [
         _SettingsToggle(
-          title: 'Require manual KYC review', 
-          subtitle: 'All new landlords must be manually verified', 
+          title: 'Require manual KYC review',
+          subtitle: 'All new landlords must be manually verified',
           value: _requireManualKyc,
           onChanged: (v) => setState(() => _requireManualKyc = v),
         ),
         _SettingsToggle(
-          title: 'Auto-approve listings', 
-          subtitle: 'Listings by verified landlords bypass review', 
+          title: 'Auto-approve listings',
+          subtitle: 'Listings by verified landlords bypass review',
           value: _autoApproveListings,
           onChanged: (v) => setState(() => _autoApproveListings = v),
         ),
         _SettingsDropdown(
-          title: 'Global platform fee', 
-          subtitle: 'Percentage cut from all bookings', 
+          title: 'Global platform fee',
+          subtitle: 'Percentage cut from all bookings',
           value: _globalFee,
           items: const ['5%', '10%', '15%', '20%'],
           onChanged: (v) => setState(() => _globalFee = v!),
         ),
         _SettingsDropdown(
-          title: 'Default currency', 
-          subtitle: 'Used for reporting and dashboard stats', 
+          title: 'Default currency',
+          subtitle: 'Used for reporting and dashboard stats',
           value: _defaultCurrency,
           items: const ['Ksh.', 'USD', 'EUR'],
           onChanged: (v) => setState(() => _defaultCurrency = v!),
@@ -207,14 +221,14 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
       icon: PhosphorIcons.shieldCheck(),
       children: [
         _SettingsToggle(
-          title: 'Enforce 2FA for Admins', 
-          subtitle: 'Require multi-factor auth for this dashboard', 
+          title: 'Enforce 2FA for Admins',
+          subtitle: 'Require multi-factor auth for this dashboard',
           value: _enforce2FA,
           onChanged: (v) => setState(() => _enforce2FA = v),
         ),
         _SettingsToggle(
-          title: 'Enable Maintenance Mode', 
-          subtitle: 'Blocks tenant/landlord API access', 
+          title: 'Enable Maintenance Mode',
+          subtitle: 'Blocks tenant/landlord API access',
           value: _maintenanceMode,
           onChanged: (v) => setState(() => _maintenanceMode = v),
         ),
@@ -249,13 +263,21 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
         children: [
           Row(
             children: [
-              Icon(PhosphorIcons.warning(), color: StayNestColors.error, size: 20),
+              Icon(PhosphorIcons.warning(),
+                  color: StayNestColors.error, size: 20),
               const SizedBox(width: 12),
-              Text('Danger Zone', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: StayNestColors.error)),
+              Text('Danger Zone',
+                  style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: StayNestColors.error)),
             ],
           ),
           const SizedBox(height: 16),
-          Text('Actions here can result in permanent data loss or platform downtime.', style: GoogleFonts.inter(fontSize: 13, color: StayNestColors.error)),
+          Text(
+              'Actions here can result in permanent data loss or platform downtime.',
+              style:
+                  GoogleFonts.inter(fontSize: 13, color: StayNestColors.error)),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () {},
@@ -277,7 +299,8 @@ class _SettingsSection extends StatelessWidget {
   final IconData icon;
   final List<Widget> children;
 
-  const _SettingsSection({required this.title, required this.icon, required this.children});
+  const _SettingsSection(
+      {required this.title, required this.icon, required this.children});
 
   @override
   Widget build(BuildContext context) {
@@ -295,7 +318,11 @@ class _SettingsSection extends StatelessWidget {
             children: [
               Icon(icon, size: 20, color: AppColors.gray900),
               const SizedBox(width: 12),
-              Text(title, style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.gray900)),
+              Text(title,
+                  style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.gray900)),
             ],
           ),
           const SizedBox(height: 24),
@@ -312,7 +339,11 @@ class _SettingsToggle extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
 
-  const _SettingsToggle({required this.title, required this.subtitle, required this.value, required this.onChanged});
+  const _SettingsToggle(
+      {required this.title,
+      required this.subtitle,
+      required this.value,
+      required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -325,9 +356,15 @@ class _SettingsToggle extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.gray900)),
+                Text(title,
+                    style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.gray900)),
                 const SizedBox(height: 4),
-                Text(subtitle, style: GoogleFonts.inter(fontSize: 13, color: AppColors.gray500)),
+                Text(subtitle,
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: AppColors.gray500)),
               ],
             ),
           ),
@@ -352,7 +389,12 @@ class _SettingsDropdown extends StatelessWidget {
   final List<String> items;
   final ValueChanged<String?> onChanged;
 
-  const _SettingsDropdown({required this.title, required this.subtitle, required this.value, required this.items, required this.onChanged});
+  const _SettingsDropdown(
+      {required this.title,
+      required this.subtitle,
+      required this.value,
+      required this.items,
+      required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -365,9 +407,15 @@ class _SettingsDropdown extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.gray900)),
+                Text(title,
+                    style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.gray900)),
                 const SizedBox(height: 4),
-                Text(subtitle, style: GoogleFonts.inter(fontSize: 13, color: AppColors.gray500)),
+                Text(subtitle,
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: AppColors.gray500)),
               ],
             ),
           ),
@@ -381,9 +429,15 @@ class _SettingsDropdown extends StatelessWidget {
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: value,
-                icon: Icon(PhosphorIcons.caretDown(), size: 14, color: AppColors.gray500),
-                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.gray900),
-                items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
+                icon: Icon(PhosphorIcons.caretDown(),
+                    size: 14, color: AppColors.gray500),
+                style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.gray900),
+                items: items
+                    .map((i) => DropdownMenuItem(value: i, child: Text(i)))
+                    .toList(),
                 onChanged: onChanged,
               ),
             ),

@@ -561,6 +561,8 @@ router.patch('/:id/status', requireAuth, authorize('landlord', 'host'), async (r
     }
 
     console.log(`[PropertyStatusUpdate] Successfully updated property ${propertyId}`);
+    clearCachePattern('properties.');
+    clearCachePattern('/api/properties');
     res.json({ data: normalizePropertyRow(result.rows[0] as Record<string, unknown>) });
   } catch (error) {
     const propertyId = req.params.id;

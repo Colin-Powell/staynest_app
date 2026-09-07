@@ -104,51 +104,57 @@ class _SuperAdminUsersPageState extends State<SuperAdminUsersPage> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('User Management',
-                      style: GoogleFonts.inter(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.gray900,
-                          letterSpacing: -0.5)),
-                  const SizedBox(height: 6),
-                  Text(
-                      'Review accounts, manage KYC, and enforce platform policies.',
-                      style: GoogleFonts.inter(
-                          fontSize: 14, color: AppColors.gray500)),
-                ],
-              ),
-              Container(
-                width: 320,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.zero,
-                  border: Border.all(color: StayNestColors.outlineLight),
+          child: LayoutBuilder(builder: (context, constraints) {
+            final compact = constraints.maxWidth < 720;
+            return Flex(
+              direction: compact ? Axis.vertical : Axis.horizontal,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('User Management',
+                        style: GoogleFonts.inter(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.gray900,
+                            letterSpacing: -0.5)),
+                    const SizedBox(height: 6),
+                    Text(
+                        'Review accounts, manage KYC, and enforce platform policies.',
+                        style: GoogleFonts.inter(
+                            fontSize: 14, color: AppColors.gray500)),
+                  ],
                 ),
-                child: TextField(
-                  onChanged: (val) => setState(() => _searchQuery = val),
-                  style:
-                      GoogleFonts.inter(fontSize: 13, color: AppColors.gray900),
-                  decoration: InputDecoration(
-                    hintText: 'Search name, email, or role...',
-                    hintStyle: GoogleFonts.inter(
-                        fontSize: 13, color: AppColors.gray400),
-                    prefixIcon: Icon(PhosphorIcons.magnifyingGlass(),
-                        size: 16, color: AppColors.gray500),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                if (compact) const SizedBox(height: 16),
+                Container(
+                  width: compact ? double.infinity : 320,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.zero,
+                    border: Border.all(color: StayNestColors.outlineLight),
+                  ),
+                  child: TextField(
+                    onChanged: (val) => setState(() => _searchQuery = val),
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: AppColors.gray900),
+                    decoration: InputDecoration(
+                      hintText: 'Search name, email, or role...',
+                      hintStyle: GoogleFonts.inter(
+                          fontSize: 13, color: AppColors.gray400),
+                      prefixIcon: Icon(PhosphorIcons.magnifyingGlass(),
+                          size: 16, color: AppColors.gray500),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            );
+          }),
         ),
         Expanded(
           child: _loading
@@ -219,167 +225,187 @@ class _SuperAdminUsersPageState extends State<SuperAdminUsersPage> {
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // User Avatar Placeholder
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: AppColors.gray100,
-                border: Border.all(color: StayNestColors.outlineLight),
-                shape: BoxShape.circle,
-              ),
-              clipBehavior: Clip.hardEdge,
-              child: avatar.isNotEmpty
-                  ? buildPropertyImage(avatar, fit: BoxFit.cover, errorPlaceholder: Center(
-                      child: Text(
-                        name.isNotEmpty ? name[0].toUpperCase() : '?',
-                        style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.gray500),
-                      ),
-                    ))
-                  : Center(
-                      child: Text(
-                        name.isNotEmpty ? name[0].toUpperCase() : '?',
-                        style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w600, color: AppColors.gray500),
-                      ),
-                    ),
-            ),
-            const SizedBox(width: 24),
-
-            // User Information & Metadata
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(name,
-                                  style: GoogleFonts.inter(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.gray900)),
-                              const SizedBox(width: 12),
-                              _buildRoleBadge(role),
-                            ],
+        child: LayoutBuilder(builder: (context, constraints) {
+          final compact = constraints.maxWidth < 680;
+          return Flex(
+            direction: compact ? Axis.vertical : Axis.horizontal,
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // User Avatar Placeholder
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AppColors.gray100,
+                  border: Border.all(color: StayNestColors.outlineLight),
+                  shape: BoxShape.circle,
+                ),
+                clipBehavior: Clip.hardEdge,
+                child: avatar.isNotEmpty
+                    ? buildPropertyImage(avatar,
+                        fit: BoxFit.cover,
+                        errorPlaceholder: Center(
+                          child: Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            style: GoogleFonts.inter(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.gray500),
                           ),
-                          const SizedBox(height: 6),
-                          Text(email,
-                              style: GoogleFonts.inter(
-                                  fontSize: 13, color: AppColors.gray500)),
-                        ],
-                      ),
-
-                      // Status Badges
-                      Row(
-                        children: [
-                          _buildStateBadge(
-                              isVerified ? 'VERIFIED KYC' : 'UNVERIFIED',
-                              isVerified),
-                          const SizedBox(width: 8),
-                          if (isSuspended) _buildStateBadge('SUSPENDED', false),
-                        ],
-                      )
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-                  const Divider(height: 1, color: StayNestColors.outlineLight),
-                  const SizedBox(height: 16),
-
-                  // Metadata Grid
-                  Wrap(
-                    spacing: 24,
-                    runSpacing: 16,
-                    children: [
-                      _buildMetaItem(
-                          'Phone Number', phone, PhosphorIcons.phone()),
-                      _buildMetaItem('Registered On', joinDate,
-                          PhosphorIcons.calendarBlank()),
-                      _buildMetaItem(
-                          'Properties',
-                          role == 'LANDLORD'
-                              ? '$propertyCount total / $activePropertyCount active'
-                              : 'N/A',
-                          PhosphorIcons.buildingApartment()),
-                      _buildMetaItem(
-                          'Bookings',
-                          '$landlordBookings landlord / $tenantBookings tenant',
-                          PhosphorIcons.calendarCheck()),
-                      _buildMetaItem(
-                          'Revenue',
-                          SuperAdminService.formatCurrency(revenue),
-                          PhosphorIcons.wallet()),
-                      _buildMetaItem(
-                          'Last Active', lastActive, PhosphorIcons.clock()),
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Action Buttons
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      // Suspend / Reactivate Action
-                      OutlinedButton(
-                        onPressed: isProcessing
-                            ? null
-                            : () => _handleUserAction(id, 'status',
-                                isSuspended ? 'active' : 'suspended'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.gray900,
-                          side: const BorderSide(color: AppColors.gray400),
-                          shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.zero),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 16),
+                        ))
+                    : Center(
+                        child: Text(
+                          name.isNotEmpty ? name[0].toUpperCase() : '?',
+                          style: GoogleFonts.inter(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.gray500),
                         ),
-                        child: Text(isSuspended
-                            ? 'Reactivate User'
-                            : 'Suspend Account'),
                       ),
-                      const SizedBox(width: 12),
-
-                      // Verify / Revoke KYC Action
-                      ElevatedButton(
-                        onPressed: isProcessing
-                            ? null
-                            : () =>
-                                _handleUserAction(id, 'verified', !isVerified),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.gray900,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.zero),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 16),
-                        ),
-                        child: isProcessing
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white))
-                            : Text(isVerified
-                                ? 'Revoke Verification'
-                                : 'Verify KYC Documents'),
-                      ),
-                    ],
-                  ),
-                ],
               ),
-            ),
-          ],
-        ),
+              SizedBox(width: compact ? 0 : 24, height: compact ? 16 : 0),
+
+              // User Information & Metadata
+              Flexible(
+                fit: FlexFit.loose,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 8,
+                              children: [
+                                Text(name,
+                                    style: GoogleFonts.inter(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.gray900)),
+                                const SizedBox(width: 12),
+                                _buildRoleBadge(role),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(email,
+                                style: GoogleFonts.inter(
+                                    fontSize: 13, color: AppColors.gray500)),
+                          ],
+                        ),
+
+                        // Status Badges
+                        Row(
+                          children: [
+                            _buildStateBadge(
+                                isVerified ? 'VERIFIED KYC' : 'UNVERIFIED',
+                                isVerified),
+                            const SizedBox(width: 8),
+                            if (isSuspended)
+                              _buildStateBadge('SUSPENDED', false),
+                          ],
+                        )
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+                    const Divider(
+                        height: 1, color: StayNestColors.outlineLight),
+                    const SizedBox(height: 16),
+
+                    // Metadata Grid
+                    Wrap(
+                      spacing: 24,
+                      runSpacing: 16,
+                      children: [
+                        _buildMetaItem(
+                            'Phone Number', phone, PhosphorIcons.phone()),
+                        _buildMetaItem('Registered On', joinDate,
+                            PhosphorIcons.calendarBlank()),
+                        _buildMetaItem(
+                            'Properties',
+                            role == 'LANDLORD'
+                                ? '$propertyCount total / $activePropertyCount active'
+                                : 'N/A',
+                            PhosphorIcons.buildingApartment()),
+                        _buildMetaItem(
+                            'Bookings',
+                            '$landlordBookings landlord / $tenantBookings tenant',
+                            PhosphorIcons.calendarCheck()),
+                        _buildMetaItem(
+                            'Revenue',
+                            SuperAdminService.formatCurrency(revenue),
+                            PhosphorIcons.wallet()),
+                        _buildMetaItem(
+                            'Last Active', lastActive, PhosphorIcons.clock()),
+                      ],
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Action Buttons
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        // Suspend / Reactivate Action
+                        OutlinedButton(
+                          onPressed: isProcessing
+                              ? null
+                              : () => _handleUserAction(id, 'status',
+                                  isSuspended ? 'active' : 'suspended'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.gray900,
+                            side: const BorderSide(color: AppColors.gray400),
+                            shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.zero),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 16),
+                          ),
+                          child: Text(isSuspended
+                              ? 'Reactivate User'
+                              : 'Suspend Account'),
+                        ),
+                        const SizedBox(width: 12),
+
+                        // Verify / Revoke KYC Action
+                        ElevatedButton(
+                          onPressed: isProcessing
+                              ? null
+                              : () => _handleUserAction(
+                                  id, 'verified', !isVerified),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.gray900,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.zero),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 16),
+                          ),
+                          child: isProcessing
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : Text(isVerified
+                                  ? 'Revoke Verification'
+                                  : 'Verify KYC Documents'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }),
       ),
     );
   }

@@ -31,6 +31,10 @@ class _PropertyCardState extends State<PropertyCard> {
   bool get _isSaved => AppSession.isSaved(widget.property.id);
 
   Future<void> _toggleSave() async {
+    if (AppSession.isGuest) {
+      await _showLoginPrompt();
+      return;
+    }
     final wasSaved = _isSaved;
 
     // Optimistic UI
@@ -63,6 +67,31 @@ class _PropertyCardState extends State<PropertyCard> {
     }
   }
 
+  Future<void> _showLoginPrompt() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Login required'),
+        content: const Text('Log in to save properties to your account.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              AppSession.isGuest = false;
+              Navigator.pop(dialogContext);
+              Navigator.pushReplacementNamed(context, '/login');
+            },
+            icon: const Icon(Icons.login),
+            label: const Text('Log in'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final property = widget.property;
@@ -70,7 +99,9 @@ class _PropertyCardState extends State<PropertyCard> {
       onTap: widget.onTap,
       child: Container(
         width: widget.isHorizontal ? widget.width : double.infinity,
-        margin: EdgeInsets.only(right: widget.isHorizontal ? 20 : 0, bottom: widget.isGrid ? 0 : (widget.isHorizontal ? 0 : 24)),
+        margin: EdgeInsets.only(
+            right: widget.isHorizontal ? 20 : 0,
+            bottom: widget.isGrid ? 0 : (widget.isHorizontal ? 0 : 24)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -93,9 +124,11 @@ class _PropertyCardState extends State<PropertyCard> {
                                   imageUrl: widget.property.image,
                                   fit: BoxFit.cover,
                                   errorWidget: (context, url, error) =>
-                                      const Icon(Icons.broken_image, color: AppColors.gray400),
+                                      const Icon(Icons.broken_image,
+                                          color: AppColors.gray400),
                                 )
-                              : const Icon(Icons.image, color: AppColors.gray400),
+                              : const Icon(Icons.image,
+                                  color: AppColors.gray400),
                         ),
                       ),
                       // Badges
@@ -120,11 +153,17 @@ class _PropertyCardState extends State<PropertyCard> {
                             child: Center(
                               child: AnimatedSwitcher(
                                 duration: const Duration(milliseconds: 250),
-                                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                                transitionBuilder: (child, animation) =>
+                                    ScaleTransition(
+                                        scale: animation, child: child),
                                 child: Icon(
-                                  _isSaved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                  _isSaved
+                                      ? Icons.favorite_rounded
+                                      : Icons.favorite_border_rounded,
                                   key: ValueKey(_isSaved),
-                                  color: _isSaved ? const Color(0xFFEF4444) : Colors.white,
+                                  color: _isSaved
+                                      ? const Color(0xFFEF4444)
+                                      : Colors.white,
                                   size: 22,
                                 ),
                               ),
@@ -137,65 +176,72 @@ class _PropertyCardState extends State<PropertyCard> {
                 ),
               )
             else
-            Container(
-              height: widget.isHorizontal ? widget.width * 0.9 : 320,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                color: AppColors.gray100,
-              ),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: property.image.isNotEmpty
-                          ? CachedNetworkImage(
-                              imageUrl: property.image,
-                              fit: BoxFit.cover,
-                              errorWidget: (context, url, error) =>
-                                  const Icon(Icons.broken_image, color: AppColors.gray400),
-                            )
-                          : const Icon(Icons.image, color: AppColors.gray400),
+              Container(
+                height: widget.isHorizontal ? widget.width * 0.9 : 320,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  color: AppColors.gray100,
+                ),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: property.image.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: property.image,
+                                fit: BoxFit.cover,
+                                errorWidget: (context, url, error) =>
+                                    const Icon(Icons.broken_image,
+                                        color: AppColors.gray400),
+                              )
+                            : const Icon(Icons.image, color: AppColors.gray400),
+                      ),
                     ),
-                  ),
-                  // Badges
-                  Positioned(
-                    top: 16,
-                    left: 16,
-                    child: _buildBadge(),
-                  ),
-                  // Heart (wired to save/unsave)
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: GestureDetector(
-                      onTap: _toggleSave,
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.25),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                            child: Icon(
-                              _isSaved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                              key: ValueKey(_isSaved),
-                              color: _isSaved ? const Color(0xFFEF4444) : Colors.white,
-                              size: 22,
+                    // Badges
+                    Positioned(
+                      top: 16,
+                      left: 16,
+                      child: _buildBadge(),
+                    ),
+                    // Heart (wired to save/unsave)
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: GestureDetector(
+                        onTap: _toggleSave,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.25),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 250),
+                              transitionBuilder: (child, animation) =>
+                                  ScaleTransition(
+                                      scale: animation, child: child),
+                              child: Icon(
+                                _isSaved
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
+                                key: ValueKey(_isSaved),
+                                color: _isSaved
+                                    ? const Color(0xFFEF4444)
+                                    : Colors.white,
+                                size: 22,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
             const SizedBox(height: 12),
             // Details
             Row(
@@ -216,10 +262,13 @@ class _PropertyCardState extends State<PropertyCard> {
                 ),
                 Row(
                   children: [
-                    const Icon(Icons.star_rounded, size: 18, color: AppColors.gray900),
+                    const Icon(Icons.star_rounded,
+                        size: 18, color: AppColors.gray900),
                     const SizedBox(width: 4),
                     Text(
-                      property.rating > 0 ? property.rating.toStringAsFixed(1) : "New",
+                      property.rating > 0
+                          ? property.rating.toStringAsFixed(1)
+                          : "New",
                       style: GoogleFonts.poppins(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -281,24 +330,24 @@ class _PropertyCardState extends State<PropertyCard> {
 
   Widget _buildHighlights(List<String> amenities) {
     if (amenities.isEmpty) return const SizedBox.shrink();
-    
+
     // Convert to attributes
     final attrs = amenities
         .map((id) => PropertyTaxonomy.getAttributeById(id))
         .where((a) => a != null)
         .cast<PropertyAttribute>()
         .toList();
-        
+
     // Sort so that popular items are first
     attrs.sort((a, b) {
       if (a.isPopular && !b.isPopular) return -1;
       if (!a.isPopular && b.isPopular) return 1;
       return 0;
     });
-    
+
     final display = attrs.take(3).map((a) => a.label).join(' • ');
     if (display.isEmpty) return const SizedBox.shrink();
-    
+
     return Text(
       display,
       style: GoogleFonts.poppins(

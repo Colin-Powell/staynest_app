@@ -76,7 +76,9 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
   }
 
   Future<void> _loadVideo() async {
-    if (_videoController != null || _videoLoading || widget.videoUrl?.trim().isNotEmpty != true) {
+    if (_videoController != null ||
+        _videoLoading ||
+        widget.videoUrl?.trim().isNotEmpty != true) {
       return;
     }
     setState(() {
@@ -86,7 +88,9 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
 
     final controller = VideoPlayerController.networkUrl(
       Uri.parse(resolvePropertyVideoUrl(widget.videoUrl!)),
-      httpHeaders: AppSession.apiToken == null ? const {} : {'Authorization': 'Bearer ${AppSession.apiToken}'},
+      httpHeaders: AppSession.apiToken == null
+          ? const {}
+          : {'Authorization': 'Bearer ${AppSession.apiToken}'},
     );
 
     try {
@@ -113,7 +117,9 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
     }
   }
 
-  List<String> get _photos => widget.photos != null && widget.photos!.isNotEmpty ? widget.photos! : const [];
+  List<String> get _photos => widget.photos != null && widget.photos!.isNotEmpty
+      ? widget.photos!
+      : const [];
 
   void _openFullscreen(int startIndex) {
     Navigator.of(context).push(
@@ -124,7 +130,8 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
           images: _photos,
           initialIndex: startIndex,
         ),
-        transitionsBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
+        transitionsBuilder: (_, animation, __, child) =>
+            FadeTransition(opacity: animation, child: child),
       ),
     );
   }
@@ -146,7 +153,8 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
                   GestureDetector(
                     onTap: widget.onClose,
                     behavior: HitTestBehavior.opaque,
-                    child: const Icon(PhosphorIconsRegular.caretLeft, size: 28, color: _dark),
+                    child: const Icon(PhosphorIconsRegular.caretLeft,
+                        size: 28, color: _dark),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -162,11 +170,17 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
                   ),
                   if (_photos.isNotEmpty && _pageIndex == 0)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: _grey.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                          color: _grey.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16)),
                       child: Text(
                         '${_photos.length} Photo${_photos.length == 1 ? '' : 's'}',
-                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: _dark),
+                        style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _dark),
                       ),
                     ),
                 ],
@@ -204,7 +218,8 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
                         tab,
                         style: GoogleFonts.poppins(
                           fontSize: 14,
-                          fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                          fontWeight:
+                              active ? FontWeight.w600 : FontWeight.w500,
                           color: active ? Colors.white : _dark,
                         ),
                       ),
@@ -225,11 +240,14 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
                 physics: const BouncingScrollPhysics(),
                 itemBuilder: (context, index) {
                   final tab = _tabs[index];
-                  if (tab == 'Videos') return _buildVideoPage(key: const ValueKey('Videos'));
-                  if (_comingSoonTabs.contains(tab)) return _buildComingSoon(tab, key: ValueKey('Soon-$tab'));
-                  
+                  if (tab == 'Videos')
+                    return _buildVideoPage(key: const ValueKey('Videos'));
+                  if (_comingSoonTabs.contains(tab))
+                    return _buildComingSoon(tab, key: ValueKey('Soon-$tab'));
+
                   return _photos.isEmpty
-                      ? _buildEmptyState(PhosphorIconsRegular.image, 'No photos available.')
+                      ? _buildEmptyState(
+                          PhosphorIconsRegular.image, 'No photos available.')
                       : _buildGrid(_photos, key: ValueKey('Photos-$index'));
                 },
               ),
@@ -243,12 +261,16 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
   // ─── Video Player UI ───
   Widget _buildVideoPage({Key? key}) {
     if (widget.videoUrl?.trim().isNotEmpty != true) {
-      return _buildEmptyState(PhosphorIconsRegular.videoCameraSlash, 'No property video available.');
+      return _buildEmptyState(PhosphorIconsRegular.videoCameraSlash,
+          'No property video available.');
     }
     if (_videoError != null) {
-      return _buildEmptyState(PhosphorIconsRegular.warningCircle, _videoError!, isError: true);
+      return _buildEmptyState(PhosphorIconsRegular.warningCircle, _videoError!,
+          isError: true);
     }
-    if (_videoLoading || _videoController == null || !_videoController!.value.isInitialized) {
+    if (_videoLoading ||
+        _videoController == null ||
+        !_videoController!.value.isInitialized) {
       return const Center(child: CircularProgressIndicator(color: _dark));
     }
 
@@ -261,7 +283,12 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
           decoration: BoxDecoration(
             color: _surface,
             borderRadius: BorderRadius.circular(24),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 10))],
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10))
+            ],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
@@ -271,12 +298,14 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
                 alignment: Alignment.center,
                 children: [
                   VideoPlayer(controller),
-                  
+
                   // Play/Pause Overlay
                   GestureDetector(
                     onTap: () {
                       setState(() {
-                        controller.value.isPlaying ? controller.pause() : controller.play();
+                        controller.value.isPlaying
+                            ? controller.pause()
+                            : controller.play();
                       });
                     },
                     behavior: HitTestBehavior.opaque,
@@ -290,8 +319,11 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
                         child: Center(
                           child: Container(
                             padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
-                            child: const Icon(PhosphorIconsFill.play, color: Colors.white, size: 48),
+                            decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                shape: BoxShape.circle),
+                            child: const Icon(PhosphorIconsFill.play,
+                                color: Colors.white, size: 48),
                           ),
                         ),
                       ),
@@ -300,7 +332,9 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
 
                   // Progress Indicator
                   Positioned(
-                    left: 0, right: 0, bottom: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
                     child: VideoProgressIndicator(
                       controller,
                       allowScrubbing: true,
@@ -315,20 +349,26 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
 
                   // Volume Toggle
                   Positioned(
-                    top: 16, right: 16,
+                    top: 16,
+                    right: 16,
                     child: GestureDetector(
                       onTap: () {
                         setState(() {
-                          controller.value.volume > 0 ? controller.setVolume(0.0) : controller.setVolume(1.0);
+                          controller.value.volume > 0
+                              ? controller.setVolume(0.0)
+                              : controller.setVolume(1.0);
                         });
                       },
                       child: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
+                        decoration: BoxDecoration(
+                            color: Colors.black45, shape: BoxShape.circle),
                         child: Icon(
-                          controller.value.volume > 0 ? PhosphorIconsFill.speakerHigh : PhosphorIconsFill.speakerSlash,
-                          color: Colors.white, size: 20
-                        ),
+                            controller.value.volume > 0
+                                ? PhosphorIconsFill.speakerHigh
+                                : PhosphorIconsFill.speakerSlash,
+                            color: Colors.white,
+                            size: 20),
                       ),
                     ),
                   ),
@@ -361,7 +401,12 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
             tag: 'gallery_image_$index',
             child: Container(
               decoration: BoxDecoration(
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4))
+                ],
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
@@ -399,7 +444,8 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
     return _buildEmptyState(icon, message, key: key);
   }
 
-  Widget _buildEmptyState(IconData icon, String message, {Key? key, bool isError = false}) {
+  Widget _buildEmptyState(IconData icon, String message,
+      {Key? key, bool isError = false}) {
     return Center(
       key: key,
       child: Padding(
@@ -409,8 +455,13 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
           children: [
             Container(
               padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(color: isError ? const Color(0xFFFEF2F2) : _grey.withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(icon, size: 48, color: isError ? const Color(0xFFEF4444) : _grey),
+              decoration: BoxDecoration(
+                  color: isError
+                      ? const Color(0xFFFEF2F2)
+                      : _grey.withOpacity(0.1),
+                  shape: BoxShape.circle),
+              child: Icon(icon,
+                  size: 48, color: isError ? const Color(0xFFEF4444) : _grey),
             ),
             const SizedBox(height: 24),
             Text(
@@ -444,7 +495,8 @@ class _FullscreenImageViewer extends StatefulWidget {
   State<_FullscreenImageViewer> createState() => _FullscreenImageViewerState();
 }
 
-class _FullscreenImageViewerState extends State<_FullscreenImageViewer> with SingleTickerProviderStateMixin {
+class _FullscreenImageViewerState extends State<_FullscreenImageViewer>
+    with SingleTickerProviderStateMixin {
   late final PageController _controller;
   late int _current;
   bool _showUI = true;
@@ -506,18 +558,20 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer> with Sin
           ),
 
           // ── Top bar: close + counter ──
-          FadeTransition(
-            opacity: _uiAnim,
-            child: Positioned(
-              top: safeTop + 16,
-              left: 24,
-              right: 24,
+          Positioned(
+            top: safeTop + 16,
+            left: 24,
+            right: 24,
+            child: FadeTransition(
+              opacity: _uiAnim,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _GlassCircleButton(icon: PhosphorIconsRegular.x, onTap: _close),
+                  _GlassCircleButton(
+                      icon: PhosphorIconsRegular.x, onTap: _close),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(20),
@@ -539,9 +593,9 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer> with Sin
 
           // ── Side nav arrows (vertically centred on screen) ──
           if (widget.images.length > 1)
-            FadeTransition(
-              opacity: _uiAnim,
-              child: Positioned.fill(
+            Positioned.fill(
+              child: FadeTransition(
+                opacity: _uiAnim,
                 child: Align(
                   alignment: Alignment.center,
                   child: Padding(
@@ -555,17 +609,22 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer> with Sin
                           child: _GlassCircleButton(
                             icon: PhosphorIconsRegular.caretLeft,
                             onTap: _current > 0
-                                ? () => _controller.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic)
+                                ? () => _controller.previousPage(
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeOutCubic)
                                 : () {},
                           ),
                         ),
                         AnimatedOpacity(
-                          opacity: _current < widget.images.length - 1 ? 1.0 : 0.0,
+                          opacity:
+                              _current < widget.images.length - 1 ? 1.0 : 0.0,
                           duration: const Duration(milliseconds: 200),
                           child: _GlassCircleButton(
                             icon: PhosphorIconsRegular.caretRight,
                             onTap: _current < widget.images.length - 1
-                                ? () => _controller.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic)
+                                ? () => _controller.nextPage(
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeOutCubic)
                                 : () {},
                           ),
                         ),
@@ -599,7 +658,9 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer> with Sin
                             width: active ? 24 : 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: active ? Colors.white : Colors.white.withOpacity(0.3),
+                              color: active
+                                  ? Colors.white
+                                  : Colors.white.withOpacity(0.3),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           );
@@ -655,11 +716,13 @@ class _ZoomableImageState extends State<_ZoomableImage> {
         transformationController: _transformationController,
         minScale: 1.0,
         maxScale: 4.0,
+        constrained: true,
         child: Center(
-          child: buildPropertyImage(
-            widget.url,
-            width: double.infinity,
-            fit: BoxFit.contain, // Maintain image ratio in fullscreen
+          child: SizedBox.expand(
+            child: buildPropertyImage(
+              widget.url,
+              fit: BoxFit.contain,
+            ),
           ),
         ),
       ),

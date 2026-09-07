@@ -60,7 +60,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
       if (!OnboardingPrefs.hasSeen('landlordBookingsSeen')) {
         OnboardingBottomSheet.show(
           context: context,
-          imagePath: 'assets/images/home_onboarding.png',
+          imagePath: 'assets/images/booking.webp',
           title: 'Booking Requests',
           subtitle: 'Review tenant applications, approve bookings, and manage your reservation calendar.',
           ctaText: 'View Bookings',

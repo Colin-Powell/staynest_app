@@ -8,54 +8,69 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class VersionService {
   static const String _lastPromptKey = 'last_update_prompt_time';
+  static const String _lastPromptedVersionKey = 'last_prompted_update_version';
+  static bool _isChecking = false;
+  static bool _isPromptVisible = false;
 
   static Future<void> checkVersion(BuildContext context) async {
+    if (_isChecking || _isPromptVisible) return;
+    _isChecking = true;
+
     try {
       await AppSession.initializeAppInfo();
       final prefs = await SharedPreferences.getInstance();
-      final lastPromptStr = prefs.getString(_lastPromptKey);
 
-      if (lastPromptStr != null) {
-        final lastPromptTime = DateTime.tryParse(lastPromptStr);
-        if (lastPromptTime != null) {
-          final diff = DateTime.now().difference(lastPromptTime);
-          if (diff.inHours < 24) {
-            // Silenced for 24 hours
-            return;
-          }
-        }
-      }
-
-      final response =
-          await http.get(Uri.parse('${AppSession.apiBaseUrl}/version'));
+      final response = await http
+          .get(Uri.parse('${AppSession.apiBaseUrl}/version'))
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final String latestVersion = data['latestVersion'] ?? '1.0.0';
-        final String updateUrl =
-            data['updateUrl'] ?? 'https://staynest.top/update.html';
+        final decoded = jsonDecode(response.body);
+        if (decoded is! Map<String, dynamic>) return;
+
+        final latestVersion = decoded['latestVersion']?.toString().trim();
+        if (latestVersion == null || latestVersion.isEmpty) return;
+        final String updateUrl = decoded['updateUrl']?.toString() ??
+            'https://staynest.top/update.html';
         const bool forceUpdate = false; // Overridden to always allow skipping
 
-        // Simple string comparison for versions (assumes semantic versioning like 1.0.1)
         if (_isUpdateAvailable(AppSession.currentAppVersion, latestVersion)) {
-          // Save the current time so we don't prompt again for 24 hours
-          await prefs.setString(
-              _lastPromptKey, DateTime.now().toIso8601String());
-          if (context.mounted) {
-            _showUpgradePrompt(context, updateUrl, forceUpdate);
+          final lastPromptedVersion = prefs.getString(_lastPromptedVersionKey);
+          final lastPromptStr = prefs.getString(_lastPromptKey);
+          final lastPromptTime =
+              lastPromptStr == null ? null : DateTime.tryParse(lastPromptStr);
+          final wasPromptedRecently = lastPromptedVersion == latestVersion &&
+              lastPromptTime != null &&
+              DateTime.now().difference(lastPromptTime).inHours < 24;
+
+          if (!wasPromptedRecently) {
+            if (!context.mounted) return;
+            await prefs.setString(
+                _lastPromptKey, DateTime.now().toIso8601String());
+            await prefs.setString(_lastPromptedVersionKey, latestVersion);
+            if (!context.mounted) return;
+            _isPromptVisible = true;
+            try {
+              await _showUpgradePrompt(context, updateUrl, forceUpdate);
+            } finally {
+              _isPromptVisible = false;
+            }
           }
         }
       }
     } catch (e) {
       debugPrint('Version check failed: $e');
+    } finally {
+      _isChecking = false;
     }
   }
 
   static bool _isUpdateAvailable(String current, String latest) {
-    final v1 = current.split('.').map((s) => int.tryParse(s) ?? 0).toList();
-    final v2 = latest.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+    final v1 = _parseVersion(current);
+    final v2 = _parseVersion(latest);
 
-    for (int i = 0; i < 3; i++) {
+    final length = v1.length > v2.length ? v1.length : v2.length;
+    for (int i = 0; i < length; i++) {
       final c = i < v1.length ? v1[i] : 0;
       final l = i < v2.length ? v2[i] : 0;
       if (l > c) return true;
@@ -64,9 +79,25 @@ class VersionService {
     return false;
   }
 
-  static void _showUpgradePrompt(BuildContext context, String url, bool force) {
-    showModalBottomSheet(
+  static List<int> _parseVersion(String version) {
+    return version
+        .trim()
+        .replaceFirst(RegExp(r'^[vV]'), '')
+        .split('+')
+        .first
+        .split('-')
+        .first
+        .split('.')
+        .map((part) => int.tryParse(part) ?? 0)
+        .toList();
+  }
+
+  static Future<void> _showUpgradePrompt(
+      BuildContext context, String url, bool force) {
+    return showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
       isDismissible: !force,
       enableDrag: !force,
       backgroundColor: Colors.white,

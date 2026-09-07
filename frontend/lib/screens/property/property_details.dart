@@ -171,6 +171,31 @@ class _PropertyDetailsState extends State<PropertyDetails> {
     }
   }
 
+  void _showLoginPrompt(String message) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Login required'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              AppSession.isGuest = false;
+              Navigator.pop(dialogContext);
+              Navigator.pushReplacementNamed(context, '/login');
+            },
+            icon: const Icon(Icons.login),
+            label: const Text('Log in'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -833,6 +858,10 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () {
+                        if (AppSession.isGuest) {
+                          _showLoginPrompt('Log in to message the landlord.');
+                          return;
+                        }
                         if (widget.onMessage != null) {
                           widget.onMessage!(
                             widget.property.agent.userId,
@@ -870,14 +899,20 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => BookingView(
-                            propertyId: widget.property.id,
+                      onPressed: () {
+                        if (AppSession.isGuest) {
+                          _showLoginPrompt('Log in to book a property visit.');
+                          return;
+                        }
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BookingView(
+                              propertyId: widget.property.id,
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: tenantPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 16),

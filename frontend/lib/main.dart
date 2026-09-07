@@ -32,6 +32,7 @@ import 'services/socket_service.dart';
 import 'services/fcm_service.dart';
 import 'services/auth_service.dart'; // Import AuthService
 import 'services/verification_api.dart';
+import 'services/version_service.dart';
 import 'screens/super_admin/super_admin_shell.dart';
 import 'screens/super_admin/super_admin_login.dart';
 import 'package:property_app/firebase_options.dart';
@@ -129,6 +130,12 @@ class _PropertyAppState extends State<PropertyApp> {
     super.initState();
     _role = AppSession.currentRole;
     AppSession.currentRoleNotifier.addListener(_handleRoleChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navigatorContext = navigatorKey.currentState?.overlay?.context;
+      if (navigatorContext != null) {
+        VersionService.checkVersion(navigatorContext);
+      }
+    });
   }
 
   @override
@@ -307,6 +314,7 @@ class _PropertyAppState extends State<PropertyApp> {
         '/privacy': (context) => const PrivacyPolicyView(),
         '/otp': (context) => const OtpView(),
         '/home': (context) => const AppShell(),
+        '/explore': (context) => const AppShell(),
         '/landlord': (context) => LandlordPortalView(
               onAddProperty: () =>
                   Navigator.pushNamed(context, '/list_property'),
@@ -565,6 +573,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    if (AppSession.isGuest) return;
     try {
       SocketService.instance
           .connect(url: AppSession.apiBaseUrl, token: AppSession.apiToken);
@@ -596,6 +605,47 @@ class _AppShellState extends State<AppShell> {
       // Removed resetSessionImpressions
     }
     setState(() => _screen = s);
+  }
+
+  void _openLogin() {
+    AppSession.isGuest = false;
+    Navigator.pushReplacementNamed(context, '/login');
+  }
+
+  Widget _buildGuestLoginPrompt(String title, IconData icon) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 56, color: AppColors.primary),
+              const SizedBox(height: 20),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                    fontSize: 22, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Log in to use this feature and access your account.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _openLogin,
+                icon: const Icon(Icons.login),
+                label: const Text('Log in'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _openFilter() {
@@ -805,11 +855,19 @@ class _AppShellState extends State<AppShell> {
           onFiltersChanged: (f) => setState(() => _activeFilters = f),
         );
       case _AppScreen.saved:
+        if (AppSession.isGuest) {
+          return _buildGuestLoginPrompt(
+              'Your saved properties', Icons.bookmark_border);
+        }
         return SavedView(
           key: const ValueKey('saved'),
           onSelectProperty: (property) => _openProperty(property),
         );
       case _AppScreen.messages:
+        if (AppSession.isGuest) {
+          return _buildGuestLoginPrompt(
+              'Your messages', Icons.chat_bubble_outline_rounded);
+        }
         return MessagesViewScreen(
           key: const ValueKey('messages'),
           onSelectChat: _openChat,
@@ -820,6 +878,9 @@ class _AppShellState extends State<AppShell> {
           },
         );
       case _AppScreen.profile:
+        if (AppSession.isGuest) {
+          return _buildGuestLoginPrompt('Your profile', Icons.person_outline);
+        }
         return ProfileView(
           key: const ValueKey('profile'),
           onBack: () => _goTo(_AppScreen.home),

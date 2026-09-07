@@ -43,7 +43,7 @@ class _SearchViewState extends State<SearchView> {
   String query = '';
   final TextEditingController _searchController = TextEditingController();
 
-  final String _sortBy = 'recommended'; 
+  final String _sortBy = 'recommended';
   Map<String, dynamic> _activeFilters = {};
 
   final _propertyService = PropertyService.instance;
@@ -55,7 +55,8 @@ class _SearchViewState extends State<SearchView> {
   void initState() {
     super.initState();
     _activeFilters = Map.from(widget.activeFilters ?? {});
-    if (_activeFilters['propertyType'] != null && _activeFilters['propertyType'].toString().isNotEmpty) {
+    if (_activeFilters['propertyType'] != null &&
+        _activeFilters['propertyType'].toString().isNotEmpty) {
       query = _activeFilters['propertyType'].toString();
       _searchController.text = query;
       _activeFilters.remove('propertyType');
@@ -72,7 +73,8 @@ class _SearchViewState extends State<SearchView> {
     if (widget.activeFilters != oldWidget.activeFilters) {
       setState(() {
         _activeFilters = Map.from(widget.activeFilters ?? {});
-        if (_activeFilters['propertyType'] != null && _activeFilters['propertyType'].toString().isNotEmpty) {
+        if (_activeFilters['propertyType'] != null &&
+            _activeFilters['propertyType'].toString().isNotEmpty) {
           query = _activeFilters['propertyType'].toString();
           _searchController.text = query;
           _activeFilters.remove('propertyType');
@@ -118,6 +120,31 @@ class _SearchViewState extends State<SearchView> {
   }
 
   Future<void> _toggleSave(String propertyId) async {
+    if (AppSession.isGuest) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Login required'),
+          content: const Text('Log in to save properties to your account.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                AppSession.isGuest = false;
+                Navigator.pop(dialogContext);
+                Navigator.pushReplacementNamed(context, '/login');
+              },
+              icon: const Icon(Icons.login),
+              label: const Text('Log in'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final isCurrentlySaved = AppSession.isSaved(propertyId);
     if (AppSession.currentUserId != null && AppSession.apiToken != null) {
       final repository = RemoteDatabaseRepository();
@@ -134,7 +161,8 @@ class _SearchViewState extends State<SearchView> {
             propertyId: propertyId,
           );
           AppSession.savedPropertyIds.add(propertyId);
-          AnalyticsService.logListingInteraction(AnalyticsEvents.listingSave, listingId: propertyId);
+          AnalyticsService.logListingInteraction(AnalyticsEvents.listingSave,
+              listingId: propertyId);
         }
         return;
       } catch (_) {
@@ -168,13 +196,19 @@ class _SearchViewState extends State<SearchView> {
       final mostReviews = _activeFilters['mostReviews'] == true;
 
       if (minPrice != null) {
-        final min = (minPrice is num) ? minPrice.toInt() : int.tryParse(minPrice.toString());
-        if (min != null) filtered = filtered.where((p) => p.price >= min).toList();
+        final min = (minPrice is num)
+            ? minPrice.toInt()
+            : int.tryParse(minPrice.toString());
+        if (min != null)
+          filtered = filtered.where((p) => p.price >= min).toList();
       }
 
       if (maxPrice != null) {
-        final max = (maxPrice is num) ? maxPrice.toInt() : int.tryParse(maxPrice.toString());
-        if (max != null) filtered = filtered.where((p) => p.price <= max).toList();
+        final max = (maxPrice is num)
+            ? maxPrice.toInt()
+            : int.tryParse(maxPrice.toString());
+        if (max != null)
+          filtered = filtered.where((p) => p.price <= max).toList();
       }
 
       if (propertyType != null) {
@@ -183,7 +217,8 @@ class _SearchViewState extends State<SearchView> {
           filtered = filtered.where((p) {
             final cat = p.category.toLowerCase().trim();
             final normalizedType = selectedType.toLowerCase().trim();
-            bool categoryMatches = cat.isNotEmpty && (cat == normalizedType || cat.contains(normalizedType));
+            bool categoryMatches = cat.isNotEmpty &&
+                (cat == normalizedType || cat.contains(normalizedType));
 
             bool bedsMatches = false;
             final beds = p.features.beds;
@@ -204,10 +239,14 @@ class _SearchViewState extends State<SearchView> {
       }
 
       if (amenities is List && amenities.isNotEmpty) {
-        final selectedAmenities = amenities.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+        final selectedAmenities = amenities
+            .map((e) => e.toString().trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
         if (selectedAmenities.isNotEmpty) {
           filtered = filtered.where((p) {
-            final propAmenities = p.amenities.map((a) => a.toLowerCase().trim()).toSet();
+            final propAmenities =
+                p.amenities.map((a) => a.toLowerCase().trim()).toSet();
             for (final a in selectedAmenities) {
               if (!propAmenities.contains(a.toLowerCase())) return false;
             }
@@ -217,11 +256,19 @@ class _SearchViewState extends State<SearchView> {
       }
 
       if (filterBeds != null && filterBeds is int && filterBeds > 0) {
-        filtered = filtered.where((p) => filterBeds >= 5 ? p.features.beds >= 5 : p.features.beds == filterBeds).toList();
+        filtered = filtered
+            .where((p) => filterBeds >= 5
+                ? p.features.beds >= 5
+                : p.features.beds == filterBeds)
+            .toList();
       }
 
       if (filterBaths != null && filterBaths is int && filterBaths > 0) {
-        filtered = filtered.where((p) => filterBaths >= 5 ? p.features.baths >= 5 : p.features.baths == filterBaths).toList();
+        filtered = filtered
+            .where((p) => filterBaths >= 5
+                ? p.features.baths >= 5
+                : p.features.baths == filterBaths)
+            .toList();
       }
 
       if (landlordAvailability == 'Superhost') {
@@ -276,12 +323,14 @@ class _SearchViewState extends State<SearchView> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(PhosphorIconsRegular.magnifyingGlassMinus, size: 64, color: _grey),
+            const Icon(PhosphorIconsRegular.magnifyingGlassMinus,
+                size: 64, color: _grey),
             const SizedBox(height: 20),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark),
+              style: GoogleFonts.poppins(
+                  fontSize: 20, fontWeight: FontWeight.w700, color: _dark),
             ),
             const SizedBox(height: 8),
             Text(
@@ -327,13 +376,23 @@ class _SearchViewState extends State<SearchView> {
             Shimmer.fromColors(
               baseColor: Colors.grey.shade200,
               highlightColor: Colors.grey.shade100,
-              child: Container(height: 14, width: double.infinity, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+              child: Container(
+                  height: 14,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4))),
             ),
             const SizedBox(height: 8),
             Shimmer.fromColors(
               baseColor: Colors.grey.shade200,
               highlightColor: Colors.grey.shade100,
-              child: Container(height: 12, width: 80, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+              child: Container(
+                  height: 12,
+                  width: 80,
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4))),
             ),
           ],
         );
@@ -358,7 +417,9 @@ class _SearchViewState extends State<SearchView> {
         key: Key('search_impression_${property.id}'),
         onVisibilityChanged: (info) {
           if (info.visibleFraction > 0.5) {
-            AnalyticsService.logListingInteraction(AnalyticsEvents.listingImpression, listingId: property.id);
+            AnalyticsService.logListingInteraction(
+                AnalyticsEvents.listingImpression,
+                listingId: property.id);
           }
         },
         child: GestureDetector(
@@ -371,7 +432,7 @@ class _SearchViewState extends State<SearchView> {
               Stack(
                 children: [
                   AspectRatio(
-                    aspectRatio: 1, 
+                    aspectRatio: 1,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: buildPropertyImage(
@@ -390,7 +451,9 @@ class _SearchViewState extends State<SearchView> {
                         _toggleSave(property.id).then((_) => setState(() {}));
                       },
                       child: Icon(
-                        isSaved ? PhosphorIconsFill.heart : PhosphorIconsRegular.heart,
+                        isSaved
+                            ? PhosphorIconsFill.heart
+                            : PhosphorIconsRegular.heart,
                         size: 24,
                         color: isSaved ? const Color(0xFFEC4899) : Colors.white,
                         shadows: [
@@ -407,7 +470,7 @@ class _SearchViewState extends State<SearchView> {
                 ],
               ),
               const SizedBox(height: 12),
-              
+
               // 2. Tighter Details Section (Scaled for 2 columns)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -428,7 +491,8 @@ class _SearchViewState extends State<SearchView> {
                   if (property.reviews > 0)
                     Row(
                       children: [
-                        const Icon(PhosphorIconsFill.star, size: 12, color: _dark),
+                        const Icon(PhosphorIconsFill.star,
+                            size: 12, color: _dark),
                         const SizedBox(width: 4),
                         Text(
                           property.rating.toStringAsFixed(1),
@@ -472,7 +536,7 @@ class _SearchViewState extends State<SearchView> {
                     style: GoogleFonts.poppins(
                       fontSize: 13,
                       fontWeight: FontWeight.w400,
-                      color: _dark, 
+                      color: _dark,
                     ),
                   ),
                 ],
@@ -501,7 +565,7 @@ class _SearchViewState extends State<SearchView> {
                     'Search',
                     style: GoogleFonts.poppins(
                       fontSize: 32,
-                      fontWeight: FontWeight.w700, 
+                      fontWeight: FontWeight.w700,
                       color: _dark,
                       letterSpacing: -1.0,
                     ),
@@ -524,7 +588,8 @@ class _SearchViewState extends State<SearchView> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(32), // Pill shape
@@ -540,7 +605,8 @@ class _SearchViewState extends State<SearchView> {
                       children: [
                         const Padding(
                           padding: EdgeInsets.only(left: 16),
-                          child: Icon(PhosphorIconsRegular.magnifyingGlass, size: 22, color: _dark),
+                          child: Icon(PhosphorIconsRegular.magnifyingGlass,
+                              size: 22, color: _dark),
                         ),
                         Expanded(
                           child: TextField(
@@ -563,7 +629,8 @@ class _SearchViewState extends State<SearchView> {
                               enabledBorder: InputBorder.none,
                               focusedBorder: InputBorder.none,
                               isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 15),
                             ),
                           ),
                         ),
@@ -576,15 +643,20 @@ class _SearchViewState extends State<SearchView> {
                             },
                             child: const Padding(
                               padding: EdgeInsets.symmetric(horizontal: 8),
-                              child: Icon(PhosphorIconsFill.xCircle, color: _grey, size: 20),
+                              child: Icon(PhosphorIconsFill.xCircle,
+                                  color: _grey, size: 20),
                             ),
                           ),
-                        Container(width: 1, height: 24, color: _grey.withOpacity(0.2)),
+                        Container(
+                            width: 1,
+                            height: 24,
+                            color: _grey.withOpacity(0.2)),
                         GestureDetector(
                           onTap: widget.onOpenFilters,
                           child: const Padding(
                             padding: EdgeInsets.only(right: 16, left: 14),
-                            child: Icon(PhosphorIconsRegular.faders, size: 22, color: _dark),
+                            child: Icon(PhosphorIconsRegular.faders,
+                                size: 22, color: _dark),
                           ),
                         ),
                       ],
@@ -602,16 +674,22 @@ class _SearchViewState extends State<SearchView> {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(PhosphorIconsRegular.warningCircle, size: 48, color: Color(0xFFEF4444)),
+                                  const Icon(PhosphorIconsRegular.warningCircle,
+                                      size: 48, color: Color(0xFFEF4444)),
                                   const SizedBox(height: 16),
                                   Text(
                                     'Failed to load properties',
-                                    style: GoogleFonts.poppins(color: _dark, fontWeight: FontWeight.w600, fontSize: 16),
+                                    style: GoogleFonts.poppins(
+                                        color: _dark,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 16),
                                   ),
                                   const SizedBox(height: 8),
                                   TextButton(
                                     onPressed: _load,
-                                    child: Text('Retry', style: GoogleFonts.poppins(color: _primaryText)),
+                                    child: Text('Retry',
+                                        style: GoogleFonts.poppins(
+                                            color: _primaryText)),
                                   )
                                 ],
                               ),
@@ -620,22 +698,26 @@ class _SearchViewState extends State<SearchView> {
                               ? _buildEmptyState()
                               : GridView.builder(
                                   physics: const BouncingScrollPhysics(),
-                                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
-                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(24, 0, 24, 120),
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: 2,
                                     crossAxisSpacing: 16,
                                     mainAxisSpacing: 24,
-                                    mainAxisExtent: 260, // Exact height prevents grid overflows
+                                    mainAxisExtent:
+                                        260, // Exact height prevents grid overflows
                                   ),
                                   itemCount: results.length,
                                   itemBuilder: (context, index) {
-                                    return _buildGridCard(results[index], index);
+                                    return _buildGridCard(
+                                        results[index], index);
                                   },
                                 ),
                 ),
               ],
             ),
-            
+
             // REVERTED ORIGINAL MAP FLOATING BUTTON
             Positioned(
               bottom: MediaQuery.of(context).padding.bottom + 92,
@@ -653,7 +735,8 @@ class _SearchViewState extends State<SearchView> {
                             builder: (_) => MapViewScreen(
                               onBack: () => Navigator.pop(context),
                               onFilter: () {
-                                if (widget.onOpenFilters != null) widget.onOpenFilters!();
+                                if (widget.onOpenFilters != null)
+                                  widget.onOpenFilters!();
                               },
                               onSelectProperty: widget.onSelectProperty,
                               properties: results,
@@ -663,15 +746,19 @@ class _SearchViewState extends State<SearchView> {
                         );
                       },
                       icon: const Icon(Icons.map_rounded, size: 20),
-                      label: const Text('Map', style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.2)),
+                      label: const Text('Map',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700, letterSpacing: 0.2)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF111827),
                         foregroundColor: Colors.white,
                         elevation: 8,
                         shadowColor: Colors.black45,
                         minimumSize: Size.zero,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30)),
                       ),
                     ),
                   ],

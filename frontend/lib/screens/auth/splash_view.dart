@@ -100,16 +100,19 @@ class _SplashViewState extends State<SplashView> {
     Navigator.pushReplacementNamed(context, '/home');
   }
 
-
   // ─── Navigation helpers ─────────────────────
   void _onGetStarted(BuildContext context) =>
       Navigator.pushReplacementNamed(context, '/onboarding');
 
-  void _onLogin(BuildContext context) =>
-      Navigator.pushReplacementNamed(context, '/login');
+  void _onLogin(BuildContext context) {
+    AppSession.isGuest = false;
+    Navigator.pushReplacementNamed(context, '/login');
+  }
 
-  void _onExploreGuest(BuildContext context) =>
-      Navigator.pushReplacementNamed(context, '/explore');
+  void _onExploreGuest(BuildContext context) {
+    AppSession.isGuest = true;
+    Navigator.pushReplacementNamed(context, '/explore');
+  }
 
   @override
   Widget build(BuildContext context) {

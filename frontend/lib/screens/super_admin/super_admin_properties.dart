@@ -132,60 +132,66 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Property Moderation',
-                      style: GoogleFonts.inter(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.gray900,
-                          letterSpacing: -0.5)),
-                  const SizedBox(height: 6),
-                  Text('Review full listing metadata and manage inventory.',
-                      style: GoogleFonts.inter(
-                          fontSize: 14, color: AppColors.gray500)),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      _buildTab('Pending', 'pending_review'),
-                      const SizedBox(width: 8),
-                      _buildTab('Approved', 'approved'),
-                      const SizedBox(width: 8),
-                      _buildTab('Rejected', 'rejected'),
-                    ],
-                  ),
-                ],
-              ),
-              Container(
-                width: 320,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.zero,
-                  border: Border.all(color: StayNestColors.outlineLight),
+          child: LayoutBuilder(builder: (context, constraints) {
+            final compact = constraints.maxWidth < 720;
+            return Flex(
+              direction: compact ? Axis.vertical : Axis.horizontal,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Property Moderation',
+                        style: GoogleFonts.inter(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.gray900,
+                            letterSpacing: -0.5)),
+                    const SizedBox(height: 6),
+                    Text('Review full listing metadata and manage inventory.',
+                        style: GoogleFonts.inter(
+                            fontSize: 14, color: AppColors.gray500)),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildTab('Pending', 'pending_review'),
+                        _buildTab('Approved', 'approved'),
+                        _buildTab('Rejected', 'rejected'),
+                      ],
+                    ),
+                  ],
                 ),
-                child: TextField(
-                  onChanged: (val) => setState(() => _searchQuery = val),
-                  style:
-                      GoogleFonts.inter(fontSize: 13, color: AppColors.gray900),
-                  decoration: InputDecoration(
-                    hintText: 'Search title, city, or address...',
-                    hintStyle: GoogleFonts.inter(
-                        fontSize: 13, color: AppColors.gray400),
-                    prefixIcon: Icon(PhosphorIcons.magnifyingGlass(),
-                        size: 16, color: AppColors.gray500),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                if (compact) const SizedBox(height: 16),
+                Container(
+                  width: compact ? double.infinity : 320,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.zero,
+                    border: Border.all(color: StayNestColors.outlineLight),
+                  ),
+                  child: TextField(
+                    onChanged: (val) => setState(() => _searchQuery = val),
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: AppColors.gray900),
+                    decoration: InputDecoration(
+                      hintText: 'Search title, city, or address...',
+                      hintStyle: GoogleFonts.inter(
+                          fontSize: 13, color: AppColors.gray400),
+                      prefixIcon: Icon(PhosphorIcons.magnifyingGlass(),
+                          size: 16, color: AppColors.gray500),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            );
+          }),
         ),
         Expanded(
           child: _loading
@@ -267,7 +273,7 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
         if (decoded is List) images = decoded;
       } catch (_) {}
     }
-    
+
     final imageUrl = (images.isNotEmpty
             ? images.first.toString()
             : property['image_url']?.toString()) ??
@@ -285,143 +291,153 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Property Image Thumbnail
-            Container(
-              width: 180,
-              height: 180,
-              decoration: BoxDecoration(
-                color: AppColors.gray100,
-                border: Border.all(color: StayNestColors.outlineLight),
-              ),
-              child: imageUrl.isNotEmpty
-                  ? buildPropertyImage(imageUrl, fit: BoxFit.cover)
-                  : Center(
-                      child: Icon(PhosphorIcons.image(),
-                          size: 32, color: AppColors.gray400),
-                    ),
-            ),
-            const SizedBox(width: 24),
-
-            // Property Metadata
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header Row: Title & Status
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(title,
-                                style: GoogleFonts.inter(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.gray900)),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(PhosphorIcons.mapPin(),
-                                    size: 14, color: AppColors.gray500),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text('$address, $city',
-                                      style: GoogleFonts.inter(
-                                          fontSize: 13,
-                                          color: AppColors.gray500)),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final compact = constraints.maxWidth < 680;
+          return Flex(
+            direction: compact ? Axis.vertical : Axis.horizontal,
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Property Image Thumbnail
+              Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  color: AppColors.gray100,
+                  border: Border.all(color: StayNestColors.outlineLight),
+                ),
+                child: imageUrl.isNotEmpty
+                    ? buildPropertyImage(imageUrl, fit: BoxFit.cover)
+                    : Center(
+                        child: Icon(PhosphorIcons.image(),
+                            size: 32, color: AppColors.gray400),
                       ),
-                      _buildStatusBadge(status),
-                    ],
-                  ),
+              ),
+              SizedBox(width: compact ? 0 : 24, height: compact ? 16 : 0),
 
-                  const SizedBox(height: 16),
-                  const Divider(height: 1, color: StayNestColors.outlineLight),
-                  const SizedBox(height: 16),
-
-                  // Metadata Grid (Extracted from Listing Flow fields)
-                  Wrap(
-                    spacing: 32,
-                    runSpacing: 16,
-                    children: [
-                      _buildMetaItem('Rent Price', 'KSh $price /mo'),
-                      _buildMetaItem(
-                          'Layout', '$category • $beds Bed • $baths Bath'),
-                      _buildMetaItem('Images', imageCount),
-                      _buildMetaItem('Bookings', bookingCount),
-                      _buildMetaItem('Revenue', 'KSh $totalRevenue'),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Text Details
-                  _buildTextRow('Amenities:', amenitiesDisplay),
-                  const SizedBox(height: 6),
-                  _buildTextRow('Description:', description, maxLines: 2),
-                  const SizedBox(height: 6),
-                  _buildTextRow('Landlord:', '$landlordName • $landlordEmail'),
-
-                  // Action Buttons (Only if pending)
-                  if (status == 'pending_review' || status == 'pending') ...[
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+              // Property Metadata
+              Flexible(
+                fit: FlexFit.loose,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header Row: Title & Status
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
                       children: [
-                        OutlinedButton(
-                          onPressed: isProcessing
-                              ? null
-                              : () => _handleDecision(id, 'rejected'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.gray900,
-                            side: const BorderSide(color: AppColors.gray400),
-                            shape: const RoundedRectangleBorder(
-                                borderRadius: BorderRadius.zero),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 16),
+                        SizedBox(
+                          width: compact ? double.infinity : 400,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(title,
+                                  style: GoogleFonts.inter(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.gray900)),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(PhosphorIcons.mapPin(),
+                                      size: 14, color: AppColors.gray500),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text('$address, $city',
+                                        style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                            color: AppColors.gray500)),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                          child: const Text('Reject Listing'),
                         ),
-                        const SizedBox(width: 12),
-                        ElevatedButton(
-                          onPressed: isProcessing
-                              ? null
-                              : () => _handleDecision(id, 'approved'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.gray900,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: const RoundedRectangleBorder(
-                                borderRadius: BorderRadius.zero),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 16),
-                          ),
-                          child: isProcessing
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white))
-                              : const Text('Approve Listing'),
-                        ),
+                        _buildStatusBadge(status),
                       ],
                     ),
+
+                    const SizedBox(height: 16),
+                    const Divider(
+                        height: 1, color: StayNestColors.outlineLight),
+                    const SizedBox(height: 16),
+
+                    // Metadata Grid (Extracted from Listing Flow fields)
+                    Wrap(
+                      spacing: 32,
+                      runSpacing: 16,
+                      children: [
+                        _buildMetaItem('Rent Price', 'KSh $price /mo'),
+                        _buildMetaItem(
+                            'Layout', '$category • $beds Bed • $baths Bath'),
+                        _buildMetaItem('Images', imageCount),
+                        _buildMetaItem('Bookings', bookingCount),
+                        _buildMetaItem('Revenue', 'KSh $totalRevenue'),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Text Details
+                    _buildTextRow('Amenities:', amenitiesDisplay),
+                    const SizedBox(height: 6),
+                    _buildTextRow('Description:', description, maxLines: 2),
+                    const SizedBox(height: 6),
+                    _buildTextRow(
+                        'Landlord:', '$landlordName • $landlordEmail'),
+
+                    // Action Buttons (Only if pending)
+                    if (status == 'pending_review' || status == 'pending') ...[
+                      const SizedBox(height: 24),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          OutlinedButton(
+                            onPressed: isProcessing
+                                ? null
+                                : () => _handleDecision(id, 'rejected'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.gray900,
+                              side: const BorderSide(color: AppColors.gray400),
+                              shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.zero),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 16),
+                            ),
+                            child: const Text('Reject Listing'),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton(
+                            onPressed: isProcessing
+                                ? null
+                                : () => _handleDecision(id, 'approved'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.gray900,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.zero),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 16),
+                            ),
+                            child: isProcessing
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: Colors.white))
+                                : const Text('Approve Listing'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          );
+        }),
       ),
     );
   }
