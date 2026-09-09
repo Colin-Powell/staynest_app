@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS locations (
 );
 
 CREATE INDEX IF NOT EXISTS locations_normalized_name_idx ON locations (normalized_name);
+CREATE UNIQUE INDEX IF NOT EXISTS locations_name_type_uidx ON locations (normalized_name, type);
 CREATE INDEX IF NOT EXISTS locations_type_idx ON locations (type);
 CREATE INDEX IF NOT EXISTS locations_county_town_idx ON locations (county, town);
 CREATE INDEX IF NOT EXISTS locations_coordinates_idx ON locations (latitude, longitude);

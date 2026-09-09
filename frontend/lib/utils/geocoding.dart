@@ -157,6 +157,62 @@ bool _isPlusCode(String value) =>
             caseSensitive: false)
         .hasMatch(value.trim().split(RegExp(r'\s+')).first.replaceAll(',', ''));
 
+GeocodingSuggestion? _parseCoordinateInput(String value) {
+  final match = RegExp(
+    r'^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$',
+  ).firstMatch(value);
+  if (match == null) return null;
+
+  final lat = double.tryParse(match.group(1)!);
+  final lng = double.tryParse(match.group(2)!);
+  if (lat == null ||
+      lng == null ||
+      lat < -90 ||
+      lat > 90 ||
+      lng < -180 ||
+      lng > 180) {
+    return null;
+  }
+
+  return (
+    locationId: null,
+    type: 'coordinates',
+    aliases: const [],
+    displayName: '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}',
+    secondaryName: 'Exact coordinates',
+    lat: lat,
+    lng: lng,
+    country: null,
+    county: null,
+    subCounty: null,
+    ward: null,
+    town: null,
+    neighborhood: null,
+    estateOrVillage: null,
+    road: null,
+    landmark: null,
+  );
+}
+
+GeocodingSuggestion _unresolvedAddress(String value) => (
+      locationId: null,
+      type: _isPlusCode(value) ? 'plusCode' : 'address',
+      aliases: const [],
+      displayName: value,
+      secondaryName: 'Address only - choose a map point for exact coordinates',
+      lat: null,
+      lng: null,
+      country: value.toLowerCase().contains('kenya') ? 'Kenya' : null,
+      county: null,
+      subCounty: null,
+      ward: null,
+      town: null,
+      neighborhood: null,
+      estateOrVillage: null,
+      road: null,
+      landmark: null,
+    );
+
 int _matchScore(GeocodingSuggestion suggestion, List<String> tokens) {
   final haystack = _normalizeToken([
     suggestion.displayName,
@@ -167,6 +223,9 @@ int _matchScore(GeocodingSuggestion suggestion, List<String> tokens) {
     suggestion.neighborhood,
     suggestion.estateOrVillage,
     suggestion.road,
+    suggestion.landmark,
+    suggestion.type,
+    ...suggestion.aliases,
   ].whereType<String>().join(' '));
   return tokens.where((token) => haystack.contains(token)).length;
 }
@@ -228,6 +287,15 @@ Future<List<GeocodingSuggestion>> searchAddressSuggestions(String query,
   final trimmedQuery = query.trim();
   if (trimmedQuery.length < 3) return [];
 
+  final coordinateInput = _parseCoordinateInput(trimmedQuery);
+  if (coordinateInput != null) {
+    final resolved = await reverseGeocodeSuggestion(
+      coordinateInput.lat!,
+      coordinateInput.lng!,
+    );
+    return [resolved ?? coordinateInput];
+  }
+
   try {
     final tokens = _normalizeToken(trimmedQuery)
         .split(' ')
@@ -243,6 +311,9 @@ Future<List<GeocodingSuggestion>> searchAddressSuggestions(String query,
       nearLat: nearLat,
       nearLng: nearLng,
     );
+    if (localResults.isNotEmpty) return localResults.take(5).toList();
+    if (isPlusCode) return [_unresolvedAddress(trimmedQuery)];
+
     final nominatimResults =
         await _searchNominatim(searchQuery, nearLat: nearLat, nearLng: nearLng);
     final photonResults =
@@ -259,7 +330,12 @@ Future<List<GeocodingSuggestion>> searchAddressSuggestions(String query,
     final ranked = unique.values.toList()
       ..sort(
           (a, b) => _matchScore(b, tokens).compareTo(_matchScore(a, tokens)));
-    return ranked.take(5).toList();
+    if (ranked.isNotEmpty) return ranked.take(5).toList();
+
+    // Some local plus codes and informal addresses are absent from public
+    // geocoders. Keep the user's address instead of silently dropping it;
+    // the map picker can supply exact coordinates afterward.
+    return [_unresolvedAddress(trimmedQuery)];
   } catch (_) {
     return [];
   }
