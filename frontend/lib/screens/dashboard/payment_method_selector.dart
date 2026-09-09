@@ -114,8 +114,8 @@ class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
         style: FilledButton.styleFrom(
           backgroundColor: _green,
           padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
     );
@@ -406,9 +406,7 @@ class _MpesaPhoneEntrySheetState extends State<_MpesaPhoneEntrySheet> {
             children: [
               Text('Use another M-Pesa number',
                   style: GoogleFonts.poppins(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: _dark)),
+                      fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _controller,

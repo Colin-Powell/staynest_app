@@ -306,38 +306,38 @@ class _MpesaPaymentModalState extends State<MpesaPaymentModal> {
                                 RegExp(r'[0-9+ ]')),
                           ],
                           decoration: InputDecoration(
-                          hintText: '0701 234 567 (or 254701234567)',
-                          hintStyle: GoogleFonts.poppins(
-                            color: _grey.withOpacity(0.6),
-                          ),
-                          prefixIcon: Icon(
-                            PhosphorIcons.phone(),
-                            color: _grey.withOpacity(0.6),
-                            size: 20,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: _grey.withOpacity(0.2),
+                            hintText: '0701 234 567 (or 254701234567)',
+                            hintStyle: GoogleFonts.poppins(
+                              color: _grey.withOpacity(0.6),
                             ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: _grey.withOpacity(0.2),
+                            prefixIcon: Icon(
+                              PhosphorIcons.phone(),
+                              color: _grey.withOpacity(0.6),
+                              size: 20,
                             ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: _green,
-                              width: 2,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: _grey.withOpacity(0.2),
+                              ),
                             ),
-                          ),
-                          filled: true,
-                          fillColor: Colors.grey.shade50,
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 16),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: _grey.withOpacity(0.2),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: _green,
+                                width: 2,
+                              ),
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 16),
                           ),
                           style: GoogleFonts.poppins(
                             fontSize: 14,
