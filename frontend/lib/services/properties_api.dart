@@ -1,6 +1,7 @@
 import 'package:property_app/services/api_client.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/screens/home/cache_engine.dart';
+import 'package:uuid/uuid.dart';
 
 class PropertiesApi {
   static Future<void> recordPropertyView(String propertyId) async {
@@ -10,7 +11,8 @@ class PropertiesApi {
       await client.postJson('/analytics/track',
           body: {'eventType': 'property_view', 'propertyId': propertyId});
       // Invalidate the cache so the home screen reflects the new view immediately
-      await CacheEngine.instance.invalidate('props_recently_viewed');
+      await CacheEngine.instance.invalidate(
+          'props_recently_viewed_${AppSession.currentUserId ?? 'guest'}');
     } catch (e) {
       // Silently fail for analytics
     }
@@ -18,13 +20,56 @@ class PropertiesApi {
 
   /// Boost a property
   static Future<Map<String, dynamic>> boostProperty(
-      String propertyId, String packageType) async {
+      String propertyId, String packageType,
+      {String? idempotencyKey}) async {
     final client = _client();
     final response = await client.postJson('/promotions/boost', body: {
       'property_id': propertyId,
       'package_type': packageType,
+      'idempotency_key': idempotencyKey ?? const Uuid().v4(),
     });
     return response['data'] ?? {};
+  }
+
+  /// Initiate M-Pesa payment for boost
+  static Future<Map<String, dynamic>> initiatePayment({
+    required String propertyId,
+    required String packageType,
+    required String phone,
+    String paymentMethod = 'mpesa',
+  }) async {
+    final client = _client();
+    final response = await client.postJson('/payments/boost-initiate', body: {
+      'propertyId': propertyId,
+      'packageType': packageType,
+      'phone': phone,
+      'paymentMethod': paymentMethod,
+    });
+    return response;
+  }
+
+  /// Get payment transaction status
+  static Future<Map<String, dynamic>> getPaymentStatus(
+      String transactionId) async {
+    try {
+      final client = _client();
+      final response = await client.getJson('/payments/status/$transactionId');
+      return response;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Get payment history for user
+  static Future<List<Map<String, dynamic>>> getPaymentHistory() async {
+    try {
+      final client = _client();
+      final response = await client.getJson('/payments/history');
+      final data = response['data'] as List<dynamic>? ?? [];
+      return data.cast<Map<String, dynamic>>();
+    } catch (e) {
+      return [];
+    }
   }
 
   /// Get active promotions for landlord
@@ -153,7 +198,7 @@ class PropertiesApi {
   /// Fetch recently viewed properties for the current tenant.
   static Future<List<Map<String, dynamic>>> getRecentlyViewed() async {
     return CacheEngine.instance.getOrFetch<List<Map<String, dynamic>>>(
-      key: 'props_recently_viewed',
+      key: 'props_recently_viewed_${AppSession.currentUserId ?? 'guest'}',
       ttl: CacheTTL.listings,
       networkFetcher: () async {
         final client = _client();
@@ -179,7 +224,7 @@ class PropertiesApi {
   /// Fetch recommendations for the current tenant.
   static Future<List<Map<String, dynamic>>> getRecommendations() async {
     return CacheEngine.instance.getOrFetch<List<Map<String, dynamic>>>(
-      key: 'props_recommendations',
+      key: 'props_recommendations_${AppSession.currentUserId ?? 'guest'}',
       ttl: CacheTTL.listings,
       networkFetcher: () async {
         final client = _client();

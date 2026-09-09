@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -8,6 +9,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/user_service.dart';
 import 'package:property_app/services/avatar_service.dart';
+import 'package:property_app/services/landlord_payment_methods_service.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/screens/help_support_view.dart';
 import 'package:property_app/utils/api_result.dart';
@@ -181,9 +183,10 @@ class LandlordSettingsPage extends StatelessWidget {
                 ),
                 _buildDivider(),
                 _buildSettingRow(
-                  title: 'Bank Details',
-                  icon: PhosphorIconsRegular.bank,
-                  onTap: () => _navigateTo(context, const BankDetailsPage()),
+                  title: 'Payment Details',
+                  icon: PhosphorIconsRegular.wallet,
+                  onTap: () =>
+                      _navigateTo(context, const PaymentDetailsPage()),
                 ),
               ]),
               const SizedBox(height: 32),
@@ -1004,120 +1007,313 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   }
 }
 
-// --- 4. BANK DETAILS PAGE ---
-class BankDetailsPage extends StatefulWidget {
-  const BankDetailsPage({super.key});
+// --- 4. PAYMENT DETAILS PAGE ---
+class PaymentDetailsPage extends StatefulWidget {
+  const PaymentDetailsPage({super.key});
 
   @override
-  State<BankDetailsPage> createState() => _BankDetailsPageState();
+  State<PaymentDetailsPage> createState() => _PaymentDetailsPageState();
 }
 
-class _BankDetailsPageState extends State<BankDetailsPage> {
-  final _bankNameController = TextEditingController();
-  final _holderController = TextEditingController();
-  final _accountController = TextEditingController();
-  final _routingController = TextEditingController();
-  bool _isSaving = false;
+class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
+  List<LandlordPaymentMethod> _methods = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    final user = AppSession.currentUser;
-    final bank = user['settings']?['bank_details'] ?? {};
-    _bankNameController.text = bank['bank_name'] ?? '';
-    _holderController.text = bank['account_holder'] ?? '';
-    _accountController.text = bank['account_number'] ?? '';
-    _routingController.text = bank['routing_number'] ?? '';
+    _loadMethods();
   }
 
-  Future<void> _handleSave() async {
-    setState(() => _isSaving = true);
+  Future<void> _loadMethods() async {
+    setState(() => _isLoading = true);
+    final methods = await LandlordPaymentMethodsService.getPaymentMethods();
+    if (!mounted) return;
+    setState(() {
+      _methods = methods.where((method) => method.type == 'mpesa').toList();
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _setDefault(LandlordPaymentMethod method) async {
     try {
-      final repo = RemoteDatabaseRepository();
-      final updated = await repo.updateCurrentUser(update: {
-        'settings': {
-          ...(AppSession.currentUser['settings'] ?? {}),
-          'bank_details': {
-            'bank_name': _bankNameController.text.trim(),
-            'account_holder': _holderController.text.trim(),
-            'account_number': _accountController.text.trim(),
-            'routing_number': _routingController.text.trim(),
-          }
-        }
-      });
-      AppSession.updateCurrentUser(updated);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Bank details updated')));
-        Navigator.pop(context);
-      }
+      await LandlordPaymentMethodsService.setDefault(method.id);
+      await _loadMethods();
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ApiResult.mapError(e))),
+      );
+    }
+  }
+
+  Future<void> _removeMethod(LandlordPaymentMethod method) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove payment method?'),
+        content: Text('Remove ${method.typeLabel} ending in ${method.maskedAccount}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Remove', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await LandlordPaymentMethodsService.deleteMethod(method.id);
+      await _loadMethods();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ApiResult.mapError(e))),
+      );
+    }
+  }
+
+  Future<void> _showAddMpesaSheet() async {
+    final phoneController =
+        TextEditingController(text: AppSession.displayPhone);
+    final formKey = GlobalKey<FormState>();
+    final phone = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: _surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          24,
+          20,
+          24,
+          MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: _grey.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text('Add M-Pesa Number',
+                style: GoogleFonts.poppins(
+                    fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
+            const SizedBox(height: 16),
+            Form(
+              key: formKey,
+              child: TextFormField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
+                ],
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Enter your M-Pesa phone number';
+                  }
+                  if (!LandlordPaymentMethodsService.isValidMpesaPhone(value)) {
+                    return 'Use 07..., 01..., or +254... format';
+                  }
+                  return null;
+                },
+                decoration: InputDecoration(
+                  labelText: 'Phone number',
+                  hintText: '+254712345678',
+                  prefixIcon: const Icon(PhosphorIconsRegular.phone),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: FilledButton(
+                onPressed: () {
+                  final value = phoneController.text.trim();
+                  if (formKey.currentState?.validate() ?? false) {
+                    Navigator.pop(
+                      sheetContext,
+                      LandlordPaymentMethodsService.normalizeMpesaPhone(value),
+                    );
+                  }
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: _green,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Add M-Pesa Number'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    phoneController.dispose();
+    if (phone == null || !mounted) return;
+
+    try {
+      await LandlordPaymentMethodsService.addMpesaMethod(
+        phone: phone,
+        isDefault: _methods.isEmpty,
+      );
+      await _loadMethods();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ApiResult.mapError(e))),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return SettingsPageLayout(
-      title: 'Bank Details',
-      bottomNavigationBar: _buildSaveButton(
-        context,
-        text: _isSaving ? "Saving..." : "Save Bank Details",
-        onPressed: _isSaving ? null : _handleSave,
-      ),
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _green.withOpacity(0.2)),
-              ),
-              child: Row(
+      title: 'Payment Details',
+      child: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: _green))
+          : RefreshIndicator(
+              onRefresh: _loadMethods,
+              color: _green,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
                 children: [
-                  const Icon(PhosphorIconsRegular.info,
-                      color: _green, size: 24),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      'These details will be used to process your rental payouts.',
-                      style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: _dark),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _green.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(PhosphorIconsRegular.info,
+                            color: _green, size: 24),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Text(
+                            'Use a saved M-Pesa number to pay for listing boosts.',
+                            style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: _dark),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  if (_methods.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 36),
+                      child: Center(
+                        child: Text('No M-Pesa payment methods yet.',
+                            style: GoogleFonts.poppins(color: _grey)),
+                      ),
+                    )
+                  else
+                    ..._methods.map(_buildMethodCard),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: FilledButton.icon(
+                      onPressed: _showAddMpesaSheet,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Add M-Pesa Number'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _green,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 32),
-            _buildTextField('Bank Name',
-                controller: _bankNameController,
-                hintText: 'e.g. Chase Bank',
-                prefixIcon: PhosphorIconsRegular.bank),
-            _buildTextField('Account Holder Name',
-                controller: _holderController,
-                hintText: 'Jomison Real Estate',
-                prefixIcon: PhosphorIconsRegular.user),
-            _buildTextField('Account Number',
-                controller: _accountController,
-                hintText: '1234567890',
-                prefixIcon: PhosphorIconsRegular.hash),
-            _buildTextField('Routing Number',
-                controller: _routingController,
-                hintText: '098765432',
-                prefixIcon: PhosphorIconsRegular.cornersIn),
-            const SizedBox(height: 40),
-          ],
-        ),
+    );
+  }
+
+  Widget _buildMethodCard(LandlordPaymentMethod method) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _green, width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('M-PESA',
+                  style: GoogleFonts.poppins(
+                      color: _green, fontWeight: FontWeight.w800, fontSize: 18)),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'default') _setDefault(method);
+                  if (value == 'remove') _removeMethod(method);
+                },
+                itemBuilder: (_) => [
+                  if (!method.isDefault)
+                    const PopupMenuItem(
+                        value: 'default', child: Text('Set as Default')),
+                  const PopupMenuItem(
+                    value: 'remove',
+                    child: Text('Remove', style: TextStyle(color: Colors.red)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(method.maskedAccount,
+                  style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: _grey)),
+              if (method.isDefault)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                  decoration: BoxDecoration(
+                      color: _green,
+                      borderRadius: BorderRadius.circular(20)),
+                  child: const Text('Default',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12)),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -637,12 +637,12 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer>
 
           // ── Bottom: dot indicators ──
           if (widget.images.length > 1)
-            FadeTransition(
-              opacity: _uiAnim,
-              child: Positioned(
-                bottom: safeBottom + 32,
-                left: 0,
-                right: 0,
+            Positioned(
+              bottom: safeBottom + 32,
+              left: 0,
+              right: 0,
+              child: FadeTransition(
+                opacity: _uiAnim,
                 child: Center(
                   child: ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: screenW * 0.8),

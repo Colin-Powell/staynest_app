@@ -85,7 +85,7 @@ class _HomeViewState extends State<HomeView> {
       final categoriesData = await PropertiesApi.getCategories();
       Map<String, List<Property>> mapped = {};
 
-      // Fetch Recently Viewed and Promotions
+      // Add personalized layers before the public category collections.
       try {
         if (AppSession.currentUserId != null) {
           final recentData = await PropertiesApi.getRecentlyViewed();
@@ -93,9 +93,15 @@ class _HomeViewState extends State<HomeView> {
             mapped['Recently Viewed'] =
                 recentData.map((e) => mapApiProperty(e)).toList();
           }
+
+          final recommendations = await PropertiesApi.getRecommendations();
+          if (recommendations.isNotEmpty) {
+            mapped['Recommended For You'] =
+                recommendations.map((e) => mapApiProperty(e)).toList();
+          }
         }
       } catch (e) {
-        debugPrint('Error loading analytics layers: ');
+        debugPrint('Error loading personalized home layers: $e');
       }
 
       categoriesData.forEach((key, value) {
@@ -184,11 +190,29 @@ class _HomeViewState extends State<HomeView> {
                   ),
                 )
               else
-                ...filteredCollections.entries.map((entry) {
-                  return SliverToBoxAdapter(
-                    child: _buildHorizontalCollection(entry.key, entry.value),
-                  );
-                }),
+                ...() {
+                  final sliverWidgets = <Widget>[];
+                  bool promoAdded = false;
+
+                  for (int i = 0; i < filteredCollections.length; i++) {
+                    final entry = filteredCollections.entries.elementAt(i);
+
+                    // Add the horizontal collection
+                    sliverWidgets.add(
+                      SliverToBoxAdapter(
+                        child: _buildHorizontalCollection(entry.key, entry.value),
+                      ),
+                    );
+
+                    // Insert Promo Card after 'Recently Viewed', or after the 1st item if Recently Viewed doesn't exist
+                    if (entry.key == 'Recently Viewed' || (!filteredCollections.containsKey('Recently Viewed') && i == 0)) {
+                      sliverWidgets.add(SliverToBoxAdapter(child: _buildPromoCard()));
+                      promoAdded = true;
+                    }
+                  }
+                  
+                  return sliverWidgets;
+                }(),
               const SliverToBoxAdapter(child: SizedBox(height: 120)),
             ],
           ),
@@ -196,6 +220,94 @@ class _HomeViewState extends State<HomeView> {
       ),
     );
   }
+
+  // ─── PROMOTION CARD ─────────────────────────────────────────────────────────
+
+  Widget _buildPromoCard() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: _grey.withOpacity(0.15)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'REHANI',
+                    style: GoogleFonts.poppins(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: _dark,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Find affordable pre-loved essentials from students around you.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      color: _grey,
+                      height: 1.4,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _primaryText.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      'Coming Soon',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: _primaryText,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Image.asset(
+              'assets/images/rehani.png',
+              width: 90,
+              height: 90,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  color: _grey.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(PhosphorIconsRegular.shoppingBag, color: _grey, size: 32),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── UI BUILDERS ──────────────────────────────────────────────────────────
 
   Widget _buildCategoryPills() {
     final types = [

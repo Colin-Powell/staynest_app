@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:property_app/services/properties_api.dart';
+import 'mpesa_payment_modal.dart';
+import 'payment_method_selector.dart';
 
 // ─── Landlord Design System Constants ─────────────────────────────────────────
 const Color _dark = Color(0xFF111827);
@@ -33,42 +34,74 @@ class _BoostListingModalState extends State<BoostListingModal> {
   String? _errorMessage;
 
   Future<void> _handleBoost() async {
-    setState(() {
-      _isProcessing = true;
-      _errorMessage = null;
-    });
+    // Define boost packages
+    const packages = {
+      'basic': {'amount': 1500, 'description': 'Basic Boost (7 days)'},
+      'premium': {'amount': 2500, 'description': 'Premium Boost (14 days)'},
+      'elite': {'amount': 5000, 'description': 'Elite Boost (30 days)'},
+    };
 
-    try {
-      // Simulate payment delay
-      await Future.delayed(const Duration(seconds: 2));
-      await PropertiesApi.boostProperty(widget.propertyId, _selectedPackage);
-      if (mounted) {
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
+    final packageInfo = packages[_selectedPackage];
+    if (packageInfo == null) return;
+
+    // Show payment method selector first
+    final selectedMethod = await PaymentMethodSelector.show(
+      context,
+      propertyId: widget.propertyId,
+      packageType: _selectedPackage,
+      amount: packageInfo['amount'] as int,
+      description: packageInfo['description'] as String,
+    );
+
+    if (selectedMethod == null) return;
+
+    // Based on selected payment method, proceed with payment
+    if (selectedMethod.type == 'mpesa') {
+      if (!mounted) return;
+
+      // Close the package picker before opening the payment sheet.
+      final navigator = Navigator.of(context);
+      final messenger = ScaffoldMessenger.of(context);
+      navigator.pop();
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+
+      final success = await MpesaPaymentModal.show(
+        navigator.context,
+        propertyId: widget.propertyId,
+        packageType: _selectedPackage,
+        amount: packageInfo['amount'] as int,
+        description: packageInfo['description'] as String,
+        paymentMethod: selectedMethod,
+      );
+
+      if (success ?? false) {
+        messenger.showSnackBar(
           SnackBar(
             backgroundColor: _green,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            content: Text(
-              'Successfully boosted your listing!', 
-              style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)
-            ),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            content: Text('Successfully boosted your listing!',
+                style: GoogleFonts.poppins(
+                    color: Colors.white, fontWeight: FontWeight.w600)),
           ),
         );
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-          _errorMessage = 'Failed to apply boost. Please try again.';
-        });
-      }
+    } else if (selectedMethod.type == 'bank_transfer') {
+      // TODO: Implement bank transfer flow
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bank transfer payment coming soon'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
-  Widget _buildPackageCard(String id, String name, String days, String boost, String price, IconData icon) {
+  Widget _buildPackageCard(String id, String name, String days, String boost,
+      String price, IconData icon) {
     final isSelected = _selectedPackage == id;
-    
+
     return GestureDetector(
       onTap: () => setState(() => _selectedPackage = id),
       behavior: HitTestBehavior.opaque,
@@ -99,42 +132,35 @@ class _BoostListingModalState extends State<BoostListingModal> {
                 color: isSelected ? _green : _grey.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: isSelected ? Colors.white : _grey, size: 24),
+              child: Icon(icon,
+                  color: isSelected ? Colors.white : _grey, size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    name, 
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w700, 
-                      fontSize: 16, 
-                      color: _dark
-                    )
-                  ),
+                  Text(name,
+                      style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                          color: _dark)),
                   const SizedBox(height: 2),
-                  Text(
-                    '$days Days • +$boost Visibility', 
-                    style: GoogleFonts.poppins(
-                      color: _grey, 
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500
-                    )
-                  ),
+                  Text('$days Days • +$boost Visibility',
+                      style: GoogleFonts.poppins(
+                          color: _grey,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500)),
                 ],
               ),
             ),
-            Text(
-              price, 
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w800, 
-                fontSize: 16, 
-                color: isSelected ? _green : _dark,
-                letterSpacing: -0.5,
-              )
-            ),
+            Text(price,
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  color: isSelected ? _green : _dark,
+                  letterSpacing: -0.5,
+                )),
           ],
         ),
       ),
@@ -146,9 +172,11 @@ class _BoostListingModalState extends State<BoostListingModal> {
     return Container(
       decoration: const BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)), // Deeper pill-like curve
+        borderRadius: BorderRadius.vertical(
+            top: Radius.circular(32)), // Deeper pill-like curve
       ),
-      padding: const EdgeInsets.all(24).copyWith(bottom: MediaQuery.of(context).viewInsets.bottom + 32),
+      padding: const EdgeInsets.all(24)
+          .copyWith(bottom: MediaQuery.of(context).viewInsets.bottom + 32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,15 +198,13 @@ class _BoostListingModalState extends State<BoostListingModal> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Boost Your Listing', 
-                style: GoogleFonts.poppins(
-                  fontSize: 22, 
-                  fontWeight: FontWeight.w700, 
-                  color: _dark,
-                  letterSpacing: -0.5,
-                )
-              ),
+              Text('Boost Your Listing',
+                  style: GoogleFonts.poppins(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: _dark,
+                    letterSpacing: -0.5,
+                  )),
               GestureDetector(
                 onTap: () => Navigator.pop(context),
                 child: Container(
@@ -187,7 +213,8 @@ class _BoostListingModalState extends State<BoostListingModal> {
                     color: _grey.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(PhosphorIconsRegular.x, color: _dark, size: 20),
+                  child: const Icon(PhosphorIconsRegular.x,
+                      color: _dark, size: 20),
                 ),
               ),
             ],
@@ -200,9 +227,12 @@ class _BoostListingModalState extends State<BoostListingModal> {
           const SizedBox(height: 32),
 
           // ─── Packages ───
-          _buildPackageCard('basic', 'Basic Boost', '7', '50', 'Ksh 1,500', PhosphorIconsFill.rocketLaunch),
-          _buildPackageCard('premium', 'Premium Boost', '14', '150', 'Ksh 2,500', PhosphorIconsFill.fire),
-          _buildPackageCard('elite', 'Elite Boost', '30', '500', 'Ksh 5,000', PhosphorIconsFill.crown),
+          _buildPackageCard('basic', 'Basic Boost', '7', '50', 'Ksh 1,500',
+              PhosphorIconsFill.rocketLaunch),
+          _buildPackageCard('premium', 'Premium Boost', '14', '150',
+              'Ksh 2,500', PhosphorIconsFill.fire),
+          _buildPackageCard('elite', 'Elite Boost', '30', '500', 'Ksh 5,000',
+              PhosphorIconsFill.crown),
 
           // ─── Error Message ───
           if (_errorMessage != null) ...[
@@ -212,17 +242,20 @@ class _BoostListingModalState extends State<BoostListingModal> {
               decoration: BoxDecoration(
                 color: const Color(0xFFFEF2F2),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFCA5A5).withOpacity(0.5)),
+                border:
+                    Border.all(color: const Color(0xFFFCA5A5).withOpacity(0.5)),
               ),
               child: Row(
                 children: [
-                  const Icon(PhosphorIconsRegular.warningCircle, color: Color(0xFFEF4444), size: 20),
+                  const Icon(PhosphorIconsRegular.warningCircle,
+                      color: Color(0xFFEF4444), size: 20),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      _errorMessage!, 
-                      style: GoogleFonts.poppins(color: const Color(0xFF991B1B), fontSize: 13, fontWeight: FontWeight.w500)
-                    ),
+                    child: Text(_errorMessage!,
+                        style: GoogleFonts.poppins(
+                            color: const Color(0xFF991B1B),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500)),
                   ),
                 ],
               ),
@@ -241,14 +274,20 @@ class _BoostListingModalState extends State<BoostListingModal> {
                 backgroundColor: _green,
                 disabledBackgroundColor: _grey.withOpacity(0.2),
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)), // Modern Pill
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(32)), // Modern Pill
               ),
               child: _isProcessing
-                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                  : Text(
-                      'Confirm Payment', 
-                      style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)
-                    ),
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2.5))
+                  : Text('Confirm Payment',
+                      style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white)),
             ),
           ),
         ],

@@ -113,6 +113,26 @@ const PROPERTY_SELECT = `p.id,
                  FROM bookings b
                 WHERE b.landlord_id = u.id
                   AND b.status IN ('confirmed', 'rejected')) AS landlord_response_time_seconds`;
+const FEED_SCORE_SELECT = `
+              COALESCE(pa.engagement_score, 0)::float AS engagement_score,
+              COALESCE(pa.velocity_score, 0)::float AS velocity_score,
+              COALESCE(active_boost.total_boost, 0)::float AS boost_score,
+              (
+                COALESCE(pa.engagement_score, 0) +
+                COALESCE(pa.velocity_score, 0) +
+                COALESCE(active_boost.total_boost, 0) +
+                LEAST(10, GREATEST(0, 30 - EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 86400)) +
+                (LEAST(COALESCE(p.average_rating, 0), 5) * 2)
+              )::float AS feed_score`;
+const FEED_SCORE_JOIN = `
+       LEFT JOIN property_analytics pa ON pa.property_id = p.id
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(SUM(pc.boost_score), 0) AS total_boost
+         FROM promotion_campaigns pc
+         WHERE pc.property_id = p.id
+           AND pc.active = true
+           AND NOW() BETWEEN pc.start_date AND pc.end_date
+       ) active_boost ON true`;
 router.get('/', routeCache(300), async (req, res, next) => {
     try {
         const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
@@ -160,16 +180,18 @@ router.get('/', routeCache(300), async (req, res, next) => {
         ))
       )`);
         }
-        const orderClause = orderParts.length > 0 ? `${orderParts.join(', ')}, p.created_at DESC` : 'p.created_at DESC';
-        const result = await query(`SELECT ${PROPERTY_SELECT}
+        orderParts.push('feed_score DESC');
+        const orderClause = `${orderParts.join(', ')}, p.created_at DESC`;
+        const result = await query(`SELECT ${PROPERTY_SELECT}, ${FEED_SCORE_SELECT}
        FROM properties p
        LEFT JOIN users u ON u.id = p.landlord_id
+       ${FEED_SCORE_JOIN}
        ${whereClause}
        ORDER BY ${orderClause}
        LIMIT 50`, params);
         const rows = result.rows.map((row) => normalizePropertyRow(row));
         if (conditions.length === 0) {
-            await setCache(cacheKey, rows, 60000);
+            await setCache(cacheKey, rows, 60);
         }
         res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
         res.json({ data: rows });
@@ -242,15 +264,17 @@ router.get('/recommendations', async (req, res, next) => {
         }
         whereParts.push(`COALESCE(p.status, 'pending_review') = 'approved'`);
         const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
-        const orderClause = orderParts.length > 0 ? `${orderParts.join(', ')}, p.created_at DESC` : 'p.created_at DESC';
-        const result = await query(`SELECT ${PROPERTY_SELECT}
+        orderParts.push('feed_score DESC');
+        const orderClause = `${orderParts.join(', ')}, p.created_at DESC`;
+        const result = await query(`SELECT ${PROPERTY_SELECT}, ${FEED_SCORE_SELECT}
        FROM properties p
        LEFT JOIN users u ON u.id = p.landlord_id
+       ${FEED_SCORE_JOIN}
        ${whereClause}
        ORDER BY ${orderClause}
        LIMIT 12`, params);
         const rows = result.rows.map((row) => normalizePropertyRow(row));
-        await setCache(cacheKey, rows, 30000);
+        await setCache(cacheKey, rows, 30);
         res.json({ data: rows });
     }
     catch (error) {
@@ -324,26 +348,46 @@ router.get('/categories', async (_req, res, next) => {
         if (cached) {
             return res.json({ data: cached, cached: true });
         }
-        const result = await query(`SELECT category,
+        const result = await query(`SELECT p.category,
               json_agg(json_build_object(
-                'id', id,
-                'title', title,
-                'category', category,
-                'city', city,
-                'price', price,
-                'bedrooms', bedrooms,
-                'bathrooms', bathrooms,
-                'image_url', image_url
-              ) ORDER BY created_at DESC) AS items
-       FROM properties
-       WHERE COALESCE(status, 'pending_review') = 'approved'
-       GROUP BY category
-       ORDER BY category`);
+                'id', p.id,
+                'title', p.title,
+                'category', p.category,
+                'city', p.city,
+                'price', p.price,
+                'bedrooms', p.bedrooms,
+                'bathrooms', p.bathrooms,
+                'image_url', p.image_url,
+                'average_rating', p.average_rating,
+                'review_count', p.review_count,
+                'feed_score', scored.feed_score
+              ) ORDER BY scored.feed_score DESC, p.created_at DESC) AS items
+       FROM properties p
+       LEFT JOIN property_analytics pa ON pa.property_id = p.id
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(SUM(pc.boost_score), 0) AS total_boost
+         FROM promotion_campaigns pc
+         WHERE pc.property_id = p.id
+           AND pc.active = true
+           AND NOW() BETWEEN pc.start_date AND pc.end_date
+       ) active_boost ON true
+       CROSS JOIN LATERAL (
+         SELECT (
+           COALESCE(pa.engagement_score, 0) +
+           COALESCE(pa.velocity_score, 0) +
+           COALESCE(active_boost.total_boost, 0) +
+           LEAST(10, GREATEST(0, 30 - EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 86400)) +
+           (LEAST(COALESCE(p.average_rating, 0), 5) * 2)
+         )::float AS feed_score
+       ) scored
+       WHERE COALESCE(p.status, 'pending_review') = 'approved'
+       GROUP BY p.category
+       ORDER BY p.category`);
         const categories = result.rows.reduce((acc, row) => {
             acc[row.category] = row.items;
             return acc;
         }, {});
-        await setCache(cacheKey, categories, 60000);
+        await setCache(cacheKey, categories, 60);
         res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=30');
         res.json({ data: categories });
     }
@@ -387,14 +431,15 @@ router.get('/nearby', async (req, res, next) => {
         if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) {
             return res.status(400).json({ error: 'lat and lng are required and must be valid numbers.' });
         }
-        const result = await query(`SELECT ${PROPERTY_SELECT},
+        const result = await query(`SELECT ${PROPERTY_SELECT}, ${FEED_SCORE_SELECT},
               (6371 * acos(cos(radians($1)) * cos(radians(p.lat)) * cos(radians(p.lng) - radians($2)) + sin(radians($1)) * sin(radians(p.lat)))) AS distance
        FROM properties p
        LEFT JOIN users u ON u.id = p.landlord_id
+       ${FEED_SCORE_JOIN}
        WHERE p.lat IS NOT NULL AND p.lng IS NOT NULL
          AND COALESCE(p.status, 'pending_review') = 'approved'
          AND (6371 * acos(cos(radians($1)) * cos(radians(p.lat)) * cos(radians(p.lng) - radians($2)) + sin(radians($1)) * sin(radians(p.lat)))) <= $3
-       ORDER BY distance ASC
+      ORDER BY distance ASC, feed_score DESC
        LIMIT 50`, [lat, lng, radius]);
         const rows = result.rows.map((row) => normalizePropertyRow(row));
         res.json({ data: rows });

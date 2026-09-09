@@ -20,6 +20,8 @@ import analyticsRouter from './routes/analytics.js';
 import adminRouter from './routes/admin.js';
 import draftsRouter from './routes/drafts.js';
 import versionRouter from './routes/version.js';
+import paymentsRouter from './routes/payments.js';
+import landlordPaymentMethodsRouter from './routes/landlord_payment_methods.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { requireAuth } from './middleware/auth.js'; // Explicitly import requireAuth
@@ -41,6 +43,8 @@ app.use(apiRateLimiter);
 app.use('/api/auth', authRouter);
 app.use('/api/properties', propertiesRouter);
 app.use('/api/promotions', promotionsRouter);
+app.use('/api/payments', paymentsRouter);
+app.use('/api/landlord', landlordPaymentMethodsRouter);
 app.use('/api/drafts', draftsRouter);
 app.use('/api/version', versionRouter);
 app.use('/api/users', usersRouter);

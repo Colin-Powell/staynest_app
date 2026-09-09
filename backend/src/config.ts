@@ -64,4 +64,10 @@ export const env = {
   appUpdateUrl: process.env.APP_UPDATE_URL || 'https://staynest.top/update.html',
   forceUpdate: process.env.FORCE_UPDATE === 'true',
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  // M-Pesa Configuration
+  mpesaConsumerKey: process.env.MPESA_CONSUMER_KEY || '',
+  mpesaConsumerSecret: process.env.MPESA_CONSUMER_SECRET || '',
+  mpesaBusinessShortCode: process.env.MPESA_BUSINESS_SHORT_CODE || '174379',
+  mpesaPassKey: process.env.MPESA_PASS_KEY || 'bfb279f9aa9bdbcf158e97dd71a467cd',
+  apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:3000',
 };

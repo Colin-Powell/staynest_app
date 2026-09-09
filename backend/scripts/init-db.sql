@@ -303,13 +303,103 @@ CREATE TABLE IF NOT EXISTS promotion_campaigns (
   landlord_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   package_type text NOT NULL, -- basic, premium, elite
   boost_score integer DEFAULT 0,
+  amount numeric(10, 2) NOT NULL DEFAULT 0,
+  currency text NOT NULL DEFAULT 'KES',
+  idempotency_key text,
   start_date timestamptz NOT NULL,
   end_date timestamptz NOT NULL,
   active boolean DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_promotions_active ON promotion_campaigns(property_id) WHERE active = true;
+ALTER TABLE promotion_campaigns ADD COLUMN IF NOT EXISTS amount numeric(10, 2) NOT NULL DEFAULT 0;
+ALTER TABLE promotion_campaigns ADD COLUMN IF NOT EXISTS currency text NOT NULL DEFAULT 'KES';
+ALTER TABLE promotion_campaigns ADD COLUMN IF NOT EXISTS idempotency_key text;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'promotion_campaigns_package_type_chk'
+  ) THEN
+    ALTER TABLE promotion_campaigns
+      ADD CONSTRAINT promotion_campaigns_package_type_chk
+      CHECK (package_type IN ('basic', 'premium', 'elite'));
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'promotion_campaigns_dates_chk'
+  ) THEN
+    ALTER TABLE promotion_campaigns
+      ADD CONSTRAINT promotion_campaigns_dates_chk
+      CHECK (end_date > start_date);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'promotion_campaigns_boost_score_chk'
+  ) THEN
+    ALTER TABLE promotion_campaigns
+      ADD CONSTRAINT promotion_campaigns_boost_score_chk
+      CHECK (boost_score >= 0);
+  END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_promotions_idempotency
+  ON promotion_campaigns(landlord_id, idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_promotions_active_window
+  ON promotion_campaigns(property_id, start_date, end_date)
+  WHERE active = true;
+CREATE INDEX IF NOT EXISTS idx_promotions_landlord_active
+  ON promotion_campaigns(landlord_id, active, end_date DESC);
+
+-- Payment Status Tracking for Promotions and Bookings
+ALTER TABLE promotion_campaigns ADD COLUMN IF NOT EXISTS payment_status text DEFAULT 'pending'; -- pending | processing | completed | failed | refunded
+ALTER TABLE promotion_campaigns ADD COLUMN IF NOT EXISTS checkout_request_id text;
+ALTER TABLE promotion_campaigns ADD COLUMN IF NOT EXISTS mpesa_receipt_number text;
+ALTER TABLE promotion_campaigns ADD COLUMN IF NOT EXISTS payment_date timestamptz;
+ALTER TABLE promotion_campaigns ADD COLUMN IF NOT EXISTS payment_phone text;
+
+-- Index for payment status queries
+CREATE INDEX IF NOT EXISTS idx_promotions_payment_status ON promotion_campaigns(landlord_id, payment_status);
+
+-- Payment Transactions Table (Complete History)
+CREATE TABLE IF NOT EXISTS payment_transactions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  promotion_id uuid REFERENCES promotion_campaigns(id) ON DELETE CASCADE,
+  booking_id uuid REFERENCES bookings(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  transaction_type text NOT NULL, -- boost | booking | refund
+  amount numeric(10, 2) NOT NULL,
+  currency text DEFAULT 'KES',
+  payment_method text DEFAULT 'mpesa',
+  status text NOT NULL DEFAULT 'pending', -- pending | processing | completed | failed
+  checkout_request_id text UNIQUE,
+  mpesa_receipt_number text UNIQUE,
+  mpesa_transaction_id text,
+  error_message text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS idx_payment_transactions_user ON payment_transactions(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_transactions_status ON payment_transactions(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_transactions_checkout ON payment_transactions(checkout_request_id);
+CREATE INDEX IF NOT EXISTS idx_payment_transactions_receipt ON payment_transactions(mpesa_receipt_number);
+
+-- Landlord payment methods table
+CREATE TABLE IF NOT EXISTS landlord_payment_methods (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type text NOT NULL CHECK (type IN ('mpesa', 'bank_transfer', 'card')),
+  display_name text NOT NULL,
+  account_number text NOT NULL,
+  bank_name text,
+  account_holder text,
+  is_default boolean NOT NULL DEFAULT false,
+  last_used timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_landlord_payment_methods_user ON landlord_payment_methods(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_landlord_payment_methods_default ON landlord_payment_methods(user_id, is_default);
 
 -- 6. Unique View Tracking (Anti-Inflation)
 CREATE TABLE IF NOT EXISTS property_unique_views (

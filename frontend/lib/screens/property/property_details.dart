@@ -330,6 +330,24 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
+                              const SizedBox(height: 16),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: tenantPrimary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  'Ksh ${widget.property.price.toStringAsFixed(0)}/month',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: tenantPrimary,
+                                  ),
+                                ),
+                              ),
                               const SizedBox(height: 12),
                               GestureDetector(
                                 onTap: () {
