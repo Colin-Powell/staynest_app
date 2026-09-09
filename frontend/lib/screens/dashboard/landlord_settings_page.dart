@@ -185,8 +185,7 @@ class LandlordSettingsPage extends StatelessWidget {
                 _buildSettingRow(
                   title: 'Payment Details',
                   icon: PhosphorIconsRegular.wallet,
-                  onTap: () =>
-                      _navigateTo(context, const PaymentDetailsPage()),
+                  onTap: () => _navigateTo(context, const PaymentDetailsPage()),
                 ),
               ]),
               const SizedBox(height: 32),
@@ -1052,7 +1051,8 @@ class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Remove payment method?'),
-        content: Text('Remove ${method.typeLabel} ending in ${method.maskedAccount}?'),
+        content: Text(
+            'Remove ${method.typeLabel} ending in ${method.maskedAccount}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -1271,7 +1271,9 @@ class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
             children: [
               Text('M-PESA',
                   style: GoogleFonts.poppins(
-                      color: _green, fontWeight: FontWeight.w800, fontSize: 18)),
+                      color: _green,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18)),
               PopupMenuButton<String>(
                 onSelected: (value) {
                   if (value == 'default') _setDefault(method);
@@ -1295,16 +1297,13 @@ class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
             children: [
               Text(method.maskedAccount,
                   style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: _grey)),
+                      fontSize: 16, fontWeight: FontWeight.w700, color: _grey)),
               if (method.isDefault)
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                   decoration: BoxDecoration(
-                      color: _green,
-                      borderRadius: BorderRadius.circular(20)),
+                      color: _green, borderRadius: BorderRadius.circular(20)),
                   child: const Text('Default',
                       style: TextStyle(
                           color: Colors.white,

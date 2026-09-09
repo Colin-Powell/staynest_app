@@ -79,8 +79,8 @@ class _BoostListingModalState extends State<BoostListingModal> {
           SnackBar(
             backgroundColor: _green,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             content: Text('Successfully boosted your listing!',
                 style: GoogleFonts.poppins(
                     color: Colors.white, fontWeight: FontWeight.w600)),
