@@ -496,11 +496,13 @@ router.get('/nearby', async (req: Request, res: Response, next: NextFunction) =>
     const lat = typeof req.query.lat === 'string' ? Number(req.query.lat) : undefined;
     const lng = typeof req.query.lng === 'string' ? Number(req.query.lng) : undefined;
     const radius = typeof req.query.radius === 'string' ? Number(req.query.radius) : 5;
+    const category = typeof req.query.category === 'string' ? req.query.category.trim() : '';
 
     if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) {
       return res.status(400).json({ error: 'lat and lng are required and must be valid numbers.' });
     }
 
+    const categoryClause = category ? 'AND p.category = $4' : '';
     const result = await query(
       `SELECT ${PROPERTY_SELECT}, ${FEED_SCORE_SELECT},
               (6371 * acos(cos(radians($1)) * cos(radians(p.lat)) * cos(radians(p.lng) - radians($2)) + sin(radians($1)) * sin(radians(p.lat)))) AS distance
@@ -509,10 +511,11 @@ router.get('/nearby', async (req: Request, res: Response, next: NextFunction) =>
        ${FEED_SCORE_JOIN}
        WHERE p.lat IS NOT NULL AND p.lng IS NOT NULL
          AND COALESCE(p.status, 'pending_review') = 'approved'
+         ${categoryClause}
          AND (6371 * acos(cos(radians($1)) * cos(radians(p.lat)) * cos(radians(p.lng) - radians($2)) + sin(radians($1)) * sin(radians(p.lat)))) <= $3
       ORDER BY distance ASC, feed_score DESC
        LIMIT 50`,
-      [lat, lng, radius]
+      category ? [lat, lng, radius, category] : [lat, lng, radius]
     );
 
     const rows = result.rows.map((row) => normalizePropertyRow(row as Record<string, unknown>));

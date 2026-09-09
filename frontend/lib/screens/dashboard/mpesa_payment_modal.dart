@@ -459,6 +459,40 @@ class _MpesaPaymentModalState extends State<MpesaPaymentModal> {
                           color: _grey,
                         ),
                       ),
+                    ] else if (_step == 'confirming') ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 32),
+                        child: Column(
+                          children: [
+                            const SizedBox(
+                              width: 56,
+                              height: 56,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 4,
+                                valueColor: AlwaysStoppedAnimation(_green),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Starting payment...',
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: _dark,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Connecting to M-Pesa. Please wait.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: _grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ] else if (_step == 'pending') ...[
                       // Loading state
                       Container(

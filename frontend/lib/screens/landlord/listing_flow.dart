@@ -183,6 +183,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
       _selectedLocationLabel = _locationSearch.text;
       if (_selectedLatitude != null && _selectedLongitude != null) {
         _selectedLocation = (
+          locationId: null,
+          type: null,
+          aliases: const [],
           displayName: _locationSearch.text,
           secondaryName: _joinLocationParts([
             existing['road']?.toString(),
@@ -266,6 +269,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
           _locationBiasLatitude = _selectedLatitude;
           _locationBiasLongitude = _selectedLongitude;
           _selectedLocation = (
+            locationId: null,
+            type: null,
+            aliases: const [],
             displayName: _locationSearch.text,
             secondaryName: _joinLocationParts([
               data['road']?.toString(),
@@ -391,7 +397,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
     _locationSearchTimer = Timer(const Duration(milliseconds: 450), () async {
       final suggestions = await searchAddressSuggestions(
-        '${value.trim()}, $_selectedCountry',
+        value.trim(),
         nearLat: _locationBiasLatitude,
         nearLng: _locationBiasLongitude,
       );
@@ -1036,13 +1042,27 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 child: Column(
                   children: _locationSuggestions.map((suggestion) {
                     return ListTile(
-                      leading: const Icon(PhosphorIconsRegular.mapPin,
-                          color: _grey, size: 20),
+                      leading: Icon(_locationTypeIcon(suggestion.type),
+                          color: _green, size: 20),
                       title: Text(suggestion.displayName,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style:
                               GoogleFonts.poppins(fontSize: 14, color: _dark)),
+                      subtitle: suggestion.secondaryName == null &&
+                              suggestion.type == null
+                          ? null
+                          : Text(
+                              [
+                                if (suggestion.secondaryName != null)
+                                  suggestion.secondaryName!,
+                                if (suggestion.type != null)
+                                  _locationTypeLabel(suggestion.type!),
+                              ].join(' · '),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.poppins(
+                                  fontSize: 12, color: _grey)),
                       onTap: () => _selectLocation(suggestion),
                     );
                   }).toList(),
@@ -1128,6 +1148,30 @@ class _AddListingFlowState extends State<AddListingFlow> {
       ),
     );
   }
+
+  IconData _locationTypeIcon(String? type) {
+    switch (type) {
+      case 'hospital':
+        return PhosphorIconsRegular.hospital;
+      case 'campus':
+      case 'school':
+        return PhosphorIconsRegular.graduationCap;
+      case 'neighborhood':
+      case 'estate':
+      case 'village':
+        return PhosphorIconsRegular.buildings;
+      case 'road':
+        return PhosphorIconsRegular.mapPin;
+      default:
+        return PhosphorIconsRegular.mapPin;
+    }
+  }
+
+  String _locationTypeLabel(String type) => switch (type) {
+        'shoppingCentre' => 'Shopping centre',
+        'subCounty' => 'Sub-county',
+        _ => type[0].toUpperCase() + type.substring(1),
+      };
 
   // ==========================================
   // STEP 3: Amenities

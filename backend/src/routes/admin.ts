@@ -7,6 +7,94 @@ import { finalizeVerificationDecision } from './verifications.js';
 
 const router = Router();
 
+const defaultPlatformSettings: Record<string, Record<string, unknown>> = {
+  general: {
+    requireManualKyc: true,
+    autoApproveListings: false,
+    globalFee: 10,
+    defaultCurrency: 'Ksh.',
+  },
+  security: {
+    enforce2FA: true,
+    maintenanceMode: false,
+  },
+};
+
+const settingKeys = new Set(Object.keys(defaultPlatformSettings));
+
+const ensurePlatformSettings = async () => {
+  await query(`
+    CREATE TABLE IF NOT EXISTS platform_settings (
+      key VARCHAR(255) PRIMARY KEY,
+      value JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  for (const [key, value] of Object.entries(defaultPlatformSettings)) {
+    await query(
+      `INSERT INTO platform_settings (key, value)
+       VALUES ($1, $2::jsonb)
+       ON CONFLICT (key) DO NOTHING`,
+      [key, JSON.stringify(value)],
+    );
+  }
+};
+
+router.get('/settings', requireAuth, authorize('admin'), async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    await ensurePlatformSettings();
+    const result = await query('SELECT key, value FROM platform_settings ORDER BY key');
+    const settings = Object.fromEntries(result.rows.map((row) => [row.key, row.value]));
+    return res.json({ data: settings });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/settings/:key', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const key = req.params.key;
+    if (!settingKeys.has(key) || !req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return res.status(400).json({ error: 'Invalid platform settings payload.' });
+    }
+
+    const allowedFields = Object.keys(defaultPlatformSettings[key]);
+    const unknownFields = Object.keys(req.body).filter((field) => !allowedFields.includes(field));
+    if (unknownFields.length > 0) {
+      return res.status(400).json({ error: `Unsupported setting fields: ${unknownFields.join(', ')}` });
+    }
+
+    await ensurePlatformSettings();
+    const existing = await query('SELECT value FROM platform_settings WHERE key = $1', [key]);
+    const current = existing.rows[0]?.value ?? defaultPlatformSettings[key];
+    const value = { ...current, ...req.body };
+
+    if (key === 'general') {
+      if (typeof value.requireManualKyc !== 'boolean' || typeof value.autoApproveListings !== 'boolean' ||
+          typeof value.globalFee !== 'number' || value.globalFee < 0 || value.globalFee > 100 ||
+          typeof value.defaultCurrency !== 'string') {
+        return res.status(400).json({ error: 'Invalid general settings values.' });
+      }
+    }
+    if (key === 'security' &&
+        (typeof value.enforce2FA !== 'boolean' || typeof value.maintenanceMode !== 'boolean')) {
+      return res.status(400).json({ error: 'Invalid security settings values.' });
+    }
+
+    const result = await query(
+      `INSERT INTO platform_settings (key, value, updated_at)
+       VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+       RETURNING key, value, updated_at`,
+      [key, JSON.stringify(value)],
+    );
+    return res.json({ data: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /admin/users - List all users with metadata
 router.get('/users', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
   try {

@@ -18,7 +18,7 @@ async function run() {
   await pool.query(`
     INSERT INTO platform_settings (key, value)
     VALUES 
-      ('general', '{"requireManualKyc": true, "autoApproveListings": false, "globalFee": 10, "defaultCurrency": "KES"}'),
+      ('general', '{"requireManualKyc": true, "autoApproveListings": false, "globalFee": 10, "defaultCurrency": "Ksh."}'),
       ('security', '{"enforce2FA": true, "maintenanceMode": false}')
     ON CONFLICT (key) DO NOTHING;
   `);

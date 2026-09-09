@@ -1,4 +1,7 @@
-import 'package:property_app/services/api_client.dart';
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+import 'package:property_app/repository/http_json_client.dart';
 import 'package:property_app/session/app_session.dart';
 
 class LandlordPaymentMethod {
@@ -81,18 +84,24 @@ class LandlordPaymentMethodsService {
     return RegExp(r'^254[17]\d{8}$').hasMatch(normalized);
   }
 
-  static ApiClient _client() => ApiClient(
-        baseUrl: AppSession.apiBaseUrl,
-        defaultHeaders: AppSession.apiToken != null
-            ? {'Authorization': 'Bearer ${AppSession.apiToken!}'}
-            : null,
+  static final HttpJsonClient _client = HttpJsonClient();
+
+  static Uri _uri(String path) => Uri.parse(
+        '${AppSession.apiBaseUrl.replaceFirst(RegExp(r'/$'), '')}$path',
       );
+
+  static Map<String, dynamic> _decode(http.Response response) {
+    final decoded = jsonDecode(response.body);
+    return decoded is Map<String, dynamic>
+        ? decoded
+        : <String, dynamic>{'data': decoded};
+  }
 
   /// Get all payment methods for landlord
   static Future<List<LandlordPaymentMethod>> getPaymentMethods() async {
     try {
-      final client = _client();
-      final response = await client.getJson('/landlord/payment-methods');
+      final response =
+          _decode(await _client.get(_uri('/landlord/payment-methods')));
       final data = response['data'] as List<dynamic>? ?? [];
       return data
           .map((m) => LandlordPaymentMethod.fromJson(m as Map<String, dynamic>))
@@ -126,16 +135,17 @@ class LandlordPaymentMethodsService {
     }
 
     try {
-      final client = _client();
       final normalizedPhone = normalizeMpesaPhone(phone);
-      final response =
-          await client.postJson('/landlord/payment-methods', body: {
-        'type': 'mpesa',
-        'account_number': normalizedPhone,
-        'display_name':
-            'M-Pesa - ${normalizedPhone.substring(normalizedPhone.length - 4)}',
-        'is_default': isDefault,
-      });
+      final response = _decode(await _client.post(
+        _uri('/landlord/payment-methods'),
+        body: {
+          'type': 'mpesa',
+          'account_number': normalizedPhone,
+          'display_name':
+              'M-Pesa - ${normalizedPhone.substring(normalizedPhone.length - 4)}',
+          'is_default': isDefault,
+        },
+      ));
       return LandlordPaymentMethod.fromJson(
           response['data'] as Map<String, dynamic>);
     } catch (e) {
@@ -151,17 +161,18 @@ class LandlordPaymentMethodsService {
     required bool isDefault,
   }) async {
     try {
-      final client = _client();
-      final response =
-          await client.postJson('/landlord/payment-methods', body: {
-        'type': 'bank_transfer',
-        'bank_name': bankName,
-        'account_number': accountNumber,
-        'account_holder': accountHolder,
-        'display_name':
-            '$bankName - ${accountNumber.substring(accountNumber.length - 4)}',
-        'is_default': isDefault,
-      });
+      final response = _decode(await _client.post(
+        _uri('/landlord/payment-methods'),
+        body: {
+          'type': 'bank_transfer',
+          'bank_name': bankName,
+          'account_number': accountNumber,
+          'account_holder': accountHolder,
+          'display_name':
+              '$bankName - ${accountNumber.substring(accountNumber.length - 4)}',
+          'is_default': isDefault,
+        },
+      ));
       return LandlordPaymentMethod.fromJson(
           response['data'] as Map<String, dynamic>);
     } catch (e) {
@@ -172,8 +183,8 @@ class LandlordPaymentMethodsService {
   /// Set as default payment method
   static Future<void> setDefault(String methodId) async {
     try {
-      final client = _client();
-      await client.postJson('/landlord/payment-methods/$methodId/set-default');
+      await _client
+          .post(_uri('/landlord/payment-methods/$methodId/set-default'));
     } catch (e) {
       rethrow;
     }
@@ -182,8 +193,7 @@ class LandlordPaymentMethodsService {
   /// Delete payment method
   static Future<void> deleteMethod(String methodId) async {
     try {
-      final client = _client();
-      await client.deleteJson('/landlord/payment-methods/$methodId');
+      await _client.delete(_uri('/landlord/payment-methods/$methodId'));
     } catch (e) {
       rethrow;
     }

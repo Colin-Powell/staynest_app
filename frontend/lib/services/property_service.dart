@@ -191,13 +191,30 @@ class PropertyService {
     required double longitude,
     String? category,
     List<String>? recentSearches,
+    double radiusKm = 2,
   }) async {
-    return fetchProperties(
-      lat: latitude,
-      lng: longitude,
-      category: category,
-      history: recentSearches,
-    );
+    final queryParams = <String, String>{
+      'lat': latitude.toString(),
+      'lng': longitude.toString(),
+      'radius': radiusKm.toString(),
+      if (category != null && category.isNotEmpty) 'category': category,
+    };
+    final uri = Uri.parse('$baseUrl/properties/nearby')
+        .replace(queryParameters: queryParams);
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (AppSession.apiToken?.isNotEmpty == true) {
+      headers['Authorization'] = 'Bearer ${AppSession.apiToken}';
+    }
+    final response = await http
+        .get(uri, headers: headers)
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode != 200) {
+      throw Exception(
+          'Failed to fetch nearby properties: ${response.statusCode}');
+    }
+    final decoded = json.decode(response.body) as Map<String, dynamic>;
+    final rows = (decoded['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    return rows.map(mapApiProperty).toList();
   }
 
   /// Fetch recommendations (same as nearby for now)

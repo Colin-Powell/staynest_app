@@ -1,12 +1,16 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:property_app/session/app_session.dart';
 
 typedef GeocodingSuggestion = ({
+  String? locationId,
+  String? type,
+  List<String> aliases,
   String displayName,
   String? secondaryName,
-  double lat,
-  double lng,
+  double? lat,
+  double? lng,
   String? country,
   String? county,
   String? subCounty,
@@ -63,6 +67,9 @@ GeocodingSuggestion? _parseSuggestion(Map<String, dynamic> item) {
       _value(address, 'shop');
 
   return (
+    locationId: null,
+    type: null,
+    aliases: const [],
     displayName: displayName,
     secondaryName: _joinParts([
       landmark,
@@ -118,6 +125,9 @@ GeocodingSuggestion? _parsePhotonFeature(Map<String, dynamic> feature) {
       _value(values, 'village') ?? _value(values, 'residential');
 
   return (
+    locationId: null,
+    type: null,
+    aliases: const [],
     displayName: displayName,
     secondaryName: _joinParts([
       street,
@@ -228,21 +238,87 @@ Future<List<GeocodingSuggestion>> searchAddressSuggestions(String query,
         isPlusCode && !trimmedQuery.toLowerCase().contains('kenya')
             ? '$trimmedQuery, Kenya'
             : trimmedQuery;
+    final localResults = await _searchLocalLocations(
+      trimmedQuery,
+      nearLat: nearLat,
+      nearLng: nearLng,
+    );
     final nominatimResults =
         await _searchNominatim(searchQuery, nearLat: nearLat, nearLng: nearLng);
     final photonResults =
         await _searchPhoton(searchQuery, nearLat: nearLat, nearLng: nearLng);
-    final combined = [...nominatimResults, ...photonResults];
+    final combined = [...localResults, ...nominatimResults, ...photonResults];
     final unique = <String, GeocodingSuggestion>{};
     for (final suggestion in combined) {
-      final key =
-          '${suggestion.lat.toStringAsFixed(5)},${suggestion.lng.toStringAsFixed(5)}';
+      final key = suggestion.locationId ??
+          (suggestion.lat != null && suggestion.lng != null
+              ? '${suggestion.lat!.toStringAsFixed(5)},${suggestion.lng!.toStringAsFixed(5)}'
+              : '${_normalizeToken(suggestion.displayName)}|${suggestion.secondaryName ?? ''}');
       unique[key] = suggestion;
     }
     final ranked = unique.values.toList()
       ..sort(
           (a, b) => _matchScore(b, tokens).compareTo(_matchScore(a, tokens)));
     return ranked.take(5).toList();
+  } catch (_) {
+    return [];
+  }
+}
+
+GeocodingSuggestion? _parseLocalLocation(Map<String, dynamic> item) {
+  final name = item['name']?.toString().trim();
+  if (name == null || name.isEmpty) return null;
+  final aliases = (item['aliases'] as List<dynamic>? ?? [])
+      .map((value) => value.toString())
+      .toList();
+  final type = item['type']?.toString();
+  final town = item['town']?.toString();
+  final county = item['county']?.toString();
+  final secondary = _joinParts([
+    item['neighborhood']?.toString(),
+    town,
+    county,
+  ]);
+  return (
+    locationId: item['id']?.toString(),
+    type: type,
+    aliases: aliases,
+    displayName: name,
+    secondaryName: secondary,
+    lat: double.tryParse(item['latitude']?.toString() ?? ''),
+    lng: double.tryParse(item['longitude']?.toString() ?? ''),
+    country: item['country']?.toString(),
+    county: county,
+    subCounty: item['sub_county']?.toString(),
+    ward: item['ward']?.toString(),
+    town: town,
+    neighborhood: item['neighborhood']?.toString(),
+    estateOrVillage: item['estate_village']?.toString(),
+    road: item['road']?.toString(),
+    landmark: item['landmark']?.toString(),
+  );
+}
+
+Future<List<GeocodingSuggestion>> _searchLocalLocations(String query,
+    {double? nearLat, double? nearLng}) async {
+  try {
+    final uri = Uri.parse(
+      '${AppSession.apiBaseUrl.replaceFirst(RegExp(r'/$'), '')}/locations/search',
+    ).replace(queryParameters: {
+      'q': query,
+      if (nearLat != null) 'lat': nearLat.toString(),
+      if (nearLng != null) 'lng': nearLng.toString(),
+    });
+    final response = await http.get(uri).timeout(const Duration(seconds: 5));
+    if (response.statusCode != 200) return [];
+    final decoded = json.decode(response.body);
+    final data = decoded is Map ? decoded['data'] : null;
+    if (data is! List) return [];
+    return data
+        .whereType<Map>()
+        .map((item) => _parseLocalLocation(Map<String, dynamic>.from(item)))
+        .whereType<GeocodingSuggestion>()
+        .toList();
   } catch (_) {
     return [];
   }

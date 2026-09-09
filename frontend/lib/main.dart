@@ -230,6 +230,9 @@ class _PropertyAppState extends State<PropertyApp> {
                   return;
                 }
 
+                // Register every authenticated device before role-based routing.
+                await AuthService.instance.syncFCMToken();
+
                 if (AppSession.currentRole.toLowerCase() == 'admin') {
                   Navigator.pushReplacementNamed(context, '/super_admin');
                   return;
@@ -247,7 +250,6 @@ class _PropertyAppState extends State<PropertyApp> {
 
                 // Once modal is shown (or preferences already exist), go home.
                 Navigator.pushReplacementNamed(context, '/home');
-                AuthService.instance.syncFCMToken(); // Sync FCM token
               },
               onRegister: () => Navigator.pushNamed(context, '/register'),
               onGoogleSignIn: () async {
@@ -259,6 +261,8 @@ class _PropertyAppState extends State<PropertyApp> {
                     Navigator.pushReplacementNamed(context, '/otp');
                     return;
                   }
+
+                  await AuthService.instance.syncFCMToken();
 
                   if (AppSession.currentRole.toLowerCase() == 'admin') {
                     Navigator.pushReplacementNamed(context, '/super_admin');
@@ -272,7 +276,6 @@ class _PropertyAppState extends State<PropertyApp> {
                   }
                   await _enforceTenantPreferencesIfMissing(context);
                   Navigator.pushReplacementNamed(context, '/home');
-                  AuthService.instance.syncFCMToken();
                 }
               },
             ),
@@ -294,6 +297,8 @@ class _PropertyAppState extends State<PropertyApp> {
                     return;
                   }
 
+                  await AuthService.instance.syncFCMToken();
+
                   if (AppSession.currentRole.toLowerCase() == 'admin') {
                     Navigator.pushReplacementNamed(context, '/super_admin');
                     return;
@@ -306,7 +311,6 @@ class _PropertyAppState extends State<PropertyApp> {
                   }
                   await _enforceTenantPreferencesIfMissing(context);
                   Navigator.pushReplacementNamed(context, '/home');
-                  AuthService.instance.syncFCMToken();
                 }
               },
             ),

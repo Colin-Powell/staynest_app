@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -12,6 +13,7 @@ import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/utils/property_mapper.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
 import 'map_view.dart';
+import 'package:property_app/utils/geocoding.dart';
 
 // ─── Design System Constants ──────────────────────────────────────────────────
 const _bg = Color(0xFFFAFAFA);
@@ -42,6 +44,10 @@ class SearchView extends StatefulWidget {
 class _SearchViewState extends State<SearchView> {
   String query = '';
   final TextEditingController _searchController = TextEditingController();
+  Timer? _locationSearchTimer;
+  int _locationSearchRequest = 0;
+  List<GeocodingSuggestion> _locationSuggestions = [];
+  GeocodingSuggestion? _selectedLocation;
 
   final String _sortBy = 'recommended';
   Map<String, dynamic> _activeFilters = {};
@@ -88,8 +94,51 @@ class _SearchViewState extends State<SearchView> {
 
   @override
   void dispose() {
+    _locationSearchTimer?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _searchLocations(String value) {
+    _locationSearchTimer?.cancel();
+    final request = ++_locationSearchRequest;
+    if (value.trim().length < 3) {
+      setState(() => _locationSuggestions = []);
+      return;
+    }
+    _locationSearchTimer = Timer(const Duration(milliseconds: 450), () async {
+      final suggestions = await searchAddressSuggestions(value);
+      if (!mounted || request != _locationSearchRequest) return;
+      setState(() => _locationSuggestions = suggestions);
+    });
+  }
+
+  Future<void> _selectSearchLocation(GeocodingSuggestion suggestion) async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _selectedLocation = suggestion;
+      query = suggestion.displayName;
+      _searchController.text = suggestion.displayName;
+      _locationSuggestions = [];
+    });
+    if (suggestion.lat == null || suggestion.lng == null) return;
+
+    setState(() => _loading = true);
+    try {
+      final nearby = await _propertyService.fetchNearby(
+        latitude: suggestion.lat!,
+        longitude: suggestion.lng!,
+        radiusKm: 2,
+      );
+      if (!mounted) return;
+      setState(() {
+        _all = nearby;
+        _loading = false;
+        _hasError = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _load() async {
@@ -611,7 +660,13 @@ class _SearchViewState extends State<SearchView> {
                         Expanded(
                           child: TextField(
                             controller: _searchController,
-                            onChanged: (value) => setState(() => query = value),
+                            onChanged: (value) {
+                              setState(() {
+                                query = value;
+                                _selectedLocation = null;
+                              });
+                              _searchLocations(value);
+                            },
                             style: GoogleFonts.poppins(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
@@ -663,6 +718,36 @@ class _SearchViewState extends State<SearchView> {
                     ),
                   ),
                 ),
+                if (_locationSuggestions.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+                    child: Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      elevation: 3,
+                      child: Column(
+                        children: _locationSuggestions.map((suggestion) {
+                          return ListTile(
+                            leading: Icon(
+                              suggestion.type == 'hospital'
+                                  ? Icons.local_hospital_outlined
+                                  : suggestion.type == 'campus'
+                                      ? Icons.school_outlined
+                                      : Icons.location_on_outlined,
+                              color: _primaryText,
+                            ),
+                            title: Text(suggestion.displayName),
+                            subtitle: Text([
+                              if (suggestion.secondaryName != null)
+                                suggestion.secondaryName!,
+                              if (suggestion.type != null) suggestion.type!,
+                            ].join(' · ')),
+                            onTap: () => _selectSearchLocation(suggestion),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 24),
 
                 /// RESULTS (2-Column Grid View)
