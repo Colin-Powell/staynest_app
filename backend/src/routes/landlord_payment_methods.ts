@@ -13,6 +13,7 @@ const normalizePhone = (value: string) => {
 };
 
 const validatePhone = (phone: string) => {
+  if (!/^\+?[0-9][0-9\s]*$/.test(phone.trim())) return false;
   const normalized = normalizePhone(phone);
   return /^254[17]\d{8}$/.test(normalized);
 };

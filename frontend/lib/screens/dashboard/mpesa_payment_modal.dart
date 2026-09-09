@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/properties_api.dart';
@@ -67,6 +68,7 @@ class MpesaPaymentModal extends StatefulWidget {
 class _MpesaPaymentModalState extends State<MpesaPaymentModal> {
   String _step = 'phone'; // phone | confirming | pending | success | error
   String _phone = '';
+  bool _useAnotherPhone = false;
   String? _errorMessage;
   String? _successMessage;
   String? _checkoutRequestId;
@@ -80,9 +82,11 @@ class _MpesaPaymentModalState extends State<MpesaPaymentModal> {
   }
 
   Future<void> _initiatePayment() async {
-    final phone = widget.paymentMethod?.accountNumber ?? _phone;
+    final phone = (!_useAnotherPhone && widget.paymentMethod != null)
+        ? widget.paymentMethod!.accountNumber
+        : _phone;
 
-    if (phone.isEmpty || phone.length < 9) {
+    if (!LandlordPaymentMethodsService.isValidMpesaPhone(phone)) {
       setState(() => _errorMessage = 'Please enter a valid phone number');
       return;
     }
@@ -293,11 +297,15 @@ class _MpesaPaymentModalState extends State<MpesaPaymentModal> {
                       ),
                       const SizedBox(height: 24),
 
-                      // Phone input
-                      TextField(
-                        onChanged: (val) => setState(() => _phone = val),
-                        keyboardType: TextInputType.phone,
-                        decoration: InputDecoration(
+                      if (widget.paymentMethod == null || _useAnotherPhone)
+                        TextFormField(
+                          onChanged: (val) => setState(() => _phone = val),
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                                RegExp(r'[0-9+ ]')),
+                          ],
+                          decoration: InputDecoration(
                           hintText: '0701 234 567 (or 254701234567)',
                           hintStyle: GoogleFonts.poppins(
                             color: _grey.withOpacity(0.6),
@@ -330,12 +338,49 @@ class _MpesaPaymentModalState extends State<MpesaPaymentModal> {
                           fillColor: Colors.grey.shade50,
                           contentPadding:
                               const EdgeInsets.symmetric(horizontal: 16),
+                          ),
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: _dark,
+                          ),
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _grey.withOpacity(0.2)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.phone_android_rounded,
+                                  color: _green),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'M-Pesa ${widget.paymentMethod!.maskedAccount}',
+                                  style: GoogleFonts.poppins(
+                                      color: _dark,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          color: _dark,
+
+                      if (widget.paymentMethod != null && !_useAnotherPhone)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () => setState(() {
+                              _useAnotherPhone = true;
+                              _phone = '';
+                              _errorMessage = null;
+                            }),
+                            child: const Text('Use another phone number'),
+                          ),
                         ),
-                      ),
 
                       if (_errorMessage != null) ...[
                         const SizedBox(height: 12),

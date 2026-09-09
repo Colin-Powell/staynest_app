@@ -1079,9 +1079,6 @@ class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
   }
 
   Future<void> _showAddMpesaSheet() async {
-    final phoneController =
-        TextEditingController(text: AppSession.displayPhone);
-    final formKey = GlobalKey<FormState>();
     final phone = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -1090,85 +1087,8 @@ class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          24,
-          20,
-          24,
-          MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: _grey.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text('Add M-Pesa Number',
-                style: GoogleFonts.poppins(
-                    fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
-            const SizedBox(height: 16),
-            Form(
-              key: formKey,
-              child: TextFormField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
-                ],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Enter your M-Pesa phone number';
-                  }
-                  if (!LandlordPaymentMethodsService.isValidMpesaPhone(value)) {
-                    return 'Use 07..., 01..., or +254... format';
-                  }
-                  return null;
-                },
-                decoration: InputDecoration(
-                  labelText: 'Phone number',
-                  hintText: '+254712345678',
-                  prefixIcon: const Icon(PhosphorIconsRegular.phone),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: FilledButton(
-                onPressed: () {
-                  final value = phoneController.text.trim();
-                  if (formKey.currentState?.validate() ?? false) {
-                    Navigator.pop(
-                      sheetContext,
-                      LandlordPaymentMethodsService.normalizeMpesaPhone(value),
-                    );
-                  }
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: _green,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                child: const Text('Add M-Pesa Number'),
-              ),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) => const _AddMpesaMethodSheet(),
     );
-    phoneController.dispose();
     if (phone == null || !mounted) return;
 
     try {
@@ -1313,6 +1233,106 @@ class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AddMpesaMethodSheet extends StatefulWidget {
+  const _AddMpesaMethodSheet();
+
+  @override
+  State<_AddMpesaMethodSheet> createState() => _AddMpesaMethodSheetState();
+}
+
+class _AddMpesaMethodSheetState extends State<_AddMpesaMethodSheet> {
+  late final TextEditingController _phoneController =
+      TextEditingController(text: AppSession.displayPhone);
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final phone = LandlordPaymentMethodsService.normalizeMpesaPhone(
+        _phoneController.text.trim());
+    Navigator.pop(context, phone);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: _grey.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text('Add M-Pesa Number',
+                  style: GoogleFonts.poppins(
+                      fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
+                ],
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Enter your M-Pesa phone number';
+                  }
+                  if (!LandlordPaymentMethodsService.isValidMpesaPhone(value)) {
+                    return 'Use 07..., 01..., or +254... format';
+                  }
+                  return null;
+                },
+                decoration: InputDecoration(
+                  labelText: 'Phone number',
+                  hintText: '+254712345678',
+                  prefixIcon: const Icon(PhosphorIconsRegular.phone),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: FilledButton(
+                  onPressed: _submit,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _green,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('Add M-Pesa Number'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

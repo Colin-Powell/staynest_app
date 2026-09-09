@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/landlord_payment_methods_service.dart';
 
 // ─── Design System Constants ─────────────────────────────────────────
@@ -75,6 +75,50 @@ class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
         });
       }
     }
+  }
+
+  Future<LandlordPaymentMethod?> _enterPhoneNumber() async {
+    final phone = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: _surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const _MpesaPhoneEntrySheet(),
+    );
+    if (phone == null) return null;
+
+    return LandlordPaymentMethod(
+      id: '',
+      type: 'mpesa',
+      displayName: 'M-Pesa - ${phone.substring(phone.length - 4)}',
+      accountNumber: phone,
+      isDefault: false,
+      lastUsed: '',
+      createdAt: '',
+    );
+  }
+
+  Widget _buildUseAnotherPhoneButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        onPressed: () async {
+          final method = await _enterPhoneNumber();
+          if (method != null && mounted) Navigator.pop(context, method);
+        },
+        icon: const Icon(Icons.phone_android_rounded),
+        label: const Text('Use another phone number'),
+        style: FilledButton.styleFrom(
+          backgroundColor: _green,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+    );
   }
 
   Widget _buildMethodCard(LandlordPaymentMethod method) {
@@ -255,64 +299,39 @@ class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
                         ),
                       )
                     else if (_error != null)
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              PhosphorIcons.warningCircle(),
-                              color: Colors.red.shade700,
-                              size: 20,
+                      Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                _error!,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 13,
-                                  color: Colors.red.shade700,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                            child: Text(
+                              'Saved payment methods are unavailable. You can still pay with an M-Pesa number.',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: Colors.orange.shade900,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildUseAnotherPhoneButton(),
+                        ],
                       )
                     else if (_methods.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(vertical: 32),
-                        child: Center(
-                          child: Column(
-                            children: [
-                              Icon(
-                                PhosphorIcons.warning(),
-                                color: _grey,
-                                size: 48,
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'No payment methods found',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 16,
-                                  color: _grey,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Add a payment method to proceed',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 13,
-                                  color: _grey.withOpacity(0.7),
-                                ),
-                              ),
-                            ],
+                      Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            child: Text(
+                              'No saved M-Pesa number found.',
+                              style: GoogleFonts.poppins(color: _grey),
+                            ),
                           ),
-                        ),
+                          _buildUseAnotherPhoneButton(),
+                        ],
                       )
                     else
                       Column(
@@ -347,6 +366,92 @@ class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MpesaPhoneEntrySheet extends StatefulWidget {
+  const _MpesaPhoneEntrySheet();
+
+  @override
+  State<_MpesaPhoneEntrySheet> createState() => _MpesaPhoneEntrySheetState();
+}
+
+class _MpesaPhoneEntrySheetState extends State<_MpesaPhoneEntrySheet> {
+  late final TextEditingController _controller = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 200),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Use another M-Pesa number',
+                  style: GoogleFonts.poppins(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: _dark)),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _controller,
+                autofocus: true,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
+                ],
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Enter your M-Pesa phone number';
+                  }
+                  if (!LandlordPaymentMethodsService.isValidMpesaPhone(value)) {
+                    return 'Use 07..., 01..., or +254... format';
+                  }
+                  return null;
+                },
+                decoration: InputDecoration(
+                  labelText: 'Phone number',
+                  hintText: '+254712345678',
+                  prefixIcon: const Icon(Icons.phone_android_rounded),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton(
+                  onPressed: () {
+                    if (!(_formKey.currentState?.validate() ?? false)) return;
+                    Navigator.pop(
+                      context,
+                      LandlordPaymentMethodsService.normalizeMpesaPhone(
+                          _controller.text.trim()),
+                    );
+                  },
+                  style: FilledButton.styleFrom(backgroundColor: _green),
+                  child: const Text('Continue with this number'),
+                ),
+              ),
+            ],
           ),
         ),
       ),

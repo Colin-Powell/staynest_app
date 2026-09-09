@@ -75,6 +75,8 @@ class LandlordPaymentMethodsService {
   }
 
   static bool isValidMpesaPhone(String value) {
+    final raw = value.trim();
+    if (!RegExp(r'^\+?[0-9][0-9 ]*$').hasMatch(raw)) return false;
     final normalized = normalizeMpesaPhone(value);
     return RegExp(r'^254[17]\d{8}$').hasMatch(normalized);
   }
