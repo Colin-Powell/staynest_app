@@ -1,7 +1,7 @@
 # PowerShell script to migrate local database to Render production
 # Use the EXTERNAL hostname (removed the '-a' which is for internal Render network only)
 if (-not $env:DATABASE_URL) {
-    Write-Host "❌ ERROR: DATABASE_URL environment variable is not set." -ForegroundColor Red
+    Write-Host " ERROR: DATABASE_URL environment variable is not set." -ForegroundColor Red
     Write-Host "Please set DATABASE_URL (e.g., set DATABASE_URL=postgresql://user:pass@host/db) before running this script." -ForegroundColor Yellow
     exit 1
 }
@@ -15,7 +15,7 @@ Write-Host "[1/2] Executing schema on Render using Node..." -ForegroundColor Yel
 node backend/scripts/apply-schema.js
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Schema initialization failed." -ForegroundColor Red
+    Write-Host " Schema initialization failed." -ForegroundColor Red
     exit 1
 }
 

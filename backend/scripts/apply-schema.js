@@ -8,7 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 async function applySchema() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-    console.error('❌ DATABASE_URL environment variable is required');
+    console.error(' DATABASE_URL environment variable is required');
     process.exit(1);
   }
 
@@ -28,7 +28,7 @@ async function applySchema() {
     await pool.query(sql);
     console.log('✅ Schema applied successfully');
   } catch (err) {
-    console.error('❌ Failed to apply schema:', err.message);
+    console.error(' Failed to apply schema:', err.message);
     process.exit(1);
   } finally {
     await pool.end();

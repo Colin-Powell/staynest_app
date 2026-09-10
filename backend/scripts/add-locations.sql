@@ -22,6 +22,25 @@ CREATE TABLE IF NOT EXISTS locations (
 );
 
 CREATE INDEX IF NOT EXISTS locations_normalized_name_idx ON locations (normalized_name);
+DROP TABLE IF EXISTS location_dedup_map;
+CREATE TEMP TABLE location_dedup_map AS
+SELECT duplicate.id AS duplicate_id, keeper.id AS keeper_id
+FROM locations duplicate
+JOIN (
+  SELECT DISTINCT ON (normalized_name, type)
+    normalized_name, type, id
+  FROM locations
+  ORDER BY normalized_name, type, created_at, id
+) keeper ON keeper.normalized_name = duplicate.normalized_name
+         AND keeper.type = duplicate.type
+WHERE duplicate.id <> keeper.id;
+UPDATE locations child
+SET parent_id = mapping.keeper_id
+FROM location_dedup_map mapping
+WHERE child.parent_id = mapping.duplicate_id;
+DELETE FROM locations duplicate
+USING location_dedup_map mapping
+WHERE duplicate.id = mapping.duplicate_id;
 CREATE UNIQUE INDEX IF NOT EXISTS locations_name_type_uidx ON locations (normalized_name, type);
 CREATE INDEX IF NOT EXISTS locations_type_idx ON locations (type);
 CREATE INDEX IF NOT EXISTS locations_county_town_idx ON locations (county, town);
