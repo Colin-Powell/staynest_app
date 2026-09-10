@@ -54,7 +54,7 @@ class _ProfileViewState extends State<ProfileView>
       if (!OnboardingPrefs.hasSeen('profileSeen')) {
         OnboardingBottomSheet.show(
           context: context,
-          imagePath:'assets/images/profile_onboarding.png',
+          imagePath: 'assets/images/profile_onboarding.png',
           title: 'Make StayNest yours',
           subtitle: 'Manage your account, trips, and preferences.',
           ctaText: 'Set up profile',
@@ -284,6 +284,14 @@ class _ProfileViewState extends State<ProfileView>
                             label: 'Payment Methods',
                             onTap: () =>
                                 widget.onSetting?.call('Payment Methods'),
+                          ),
+                        ),
+                        _buildStaggered(
+                          index: 5,
+                          child: _MenuItem(
+                            icon: Icons.account_balance_wallet_outlined,
+                            label: 'Wallet',
+                            onTap: () => widget.onSetting?.call('Wallet'),
                           ),
                         ),
                         _buildStaggered(

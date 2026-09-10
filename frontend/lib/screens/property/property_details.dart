@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/models/property.dart';
@@ -847,12 +848,17 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                   ),
                   _NavButton(
                     icon: PhosphorIcons.shareNetwork(),
-                    onTap: () {
-                      AnalyticsService.logListingInteraction(
-                          AnalyticsEvents.listingShare,
-                          listingId: widget.property.id);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                          content: Text('Listing link copied to clipboard.')));
+                    onTap: () async {
+                      final link =
+                          'https://staynest.top/properties/${widget.property.id}';
+                      await Share.share(
+                          '${widget.property.name} on StayNest: $link');
+                      await AnalyticsService.trackPropertyShare(
+                          widget.property.id);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Listing shared.')));
+                      }
                     },
                   ),
                 ],

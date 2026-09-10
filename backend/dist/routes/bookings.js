@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { queueUserPush } from '../services/queue.js';
+import { settleReferralReward } from '../services/referral_service.js';
 const router = Router();
 // Create a new booking (tenant creates booking)
 router.post('/', requireAuth, async (req, res, next) => {
@@ -81,9 +82,12 @@ router.post('/', requireAuth, async (req, res, next) => {
 router.get('/tenant', requireAuth, async (req, res, next) => {
     try {
         // Auto-complete confirmed bookings that have passed their check-out date
-        await query(`UPDATE bookings 
+        const completed = await query(`UPDATE bookings 
        SET status = 'completed', updated_at = now() 
-       WHERE status = 'confirmed' AND check_out_date < CURRENT_DATE`, []);
+       WHERE status = 'confirmed' AND check_out_date < CURRENT_DATE
+       RETURNING id`, []);
+        for (const booking of completed.rows)
+            await settleReferralReward(booking.id);
         const result = await query(`SELECT b.id,
               b.property_id,
               b.check_in_date,
@@ -114,9 +118,12 @@ router.get('/tenant', requireAuth, async (req, res, next) => {
 router.get('/landlord', requireAuth, async (req, res, next) => {
     try {
         // Auto-complete confirmed bookings that have passed their check-out date
-        await query(`UPDATE bookings 
+        const completed = await query(`UPDATE bookings 
        SET status = 'completed', updated_at = now() 
-       WHERE status = 'confirmed' AND check_out_date < CURRENT_DATE`, []);
+       WHERE status = 'confirmed' AND check_out_date < CURRENT_DATE
+       RETURNING id`, []);
+        for (const booking of completed.rows)
+            await settleReferralReward(booking.id);
         const result = await query(`SELECT b.id,
               b.property_id,
               b.tenant_id,
@@ -255,9 +262,12 @@ router.patch('/:id/cancel', requireAuth, async (req, res, next) => {
 router.get('/:id', requireAuth, async (req, res, next) => {
     try {
         // Auto-complete this specific booking if check-out date has passed
-        await query(`UPDATE bookings 
+        const completed = await query(`UPDATE bookings 
        SET status = 'completed', updated_at = now() 
-       WHERE id = $1 AND status = 'confirmed' AND check_out_date < CURRENT_DATE`, [req.params.id]);
+       WHERE id = $1 AND status = 'confirmed' AND check_out_date < CURRENT_DATE
+       RETURNING id`, [req.params.id]);
+        for (const booking of completed.rows)
+            await settleReferralReward(booking.id);
         const bookingId = req.params.id;
         const result = await query(`SELECT b.id,
               b.property_id,

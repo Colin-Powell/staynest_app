@@ -1,6 +1,10 @@
 import pg from 'pg';
 
-const connectionString = 'postgresql://neondb_owner:npg_v6ldAQ0YaEFq@ep-gentle-sound-axy63ij5-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error('DATABASE_URL environment variable is required');
+}
 
 const pool = new pg.Pool({ 
   connectionString,
@@ -16,7 +20,15 @@ async function run() {
       ALTER TABLE users 
       ADD COLUMN IF NOT EXISTS referral_code VARCHAR(50) UNIQUE,
       ADD COLUMN IF NOT EXISTS referred_by UUID REFERENCES users(id),
-      ADD COLUMN IF NOT EXISTS wallet_balance NUMERIC(10, 2) DEFAULT 0.00;
+      ADD COLUMN IF NOT EXISTS wallet_balance NUMERIC(10, 2) NOT NULL DEFAULT 0.00;
+    `);
+
+    await pool.query(`
+      UPDATE users
+      SET referral_code = 'SN' || UPPER(REPLACE(id::text, '-', ''))
+      WHERE referral_code IS NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code
+        ON users(referral_code) WHERE referral_code IS NOT NULL;
     `);
 
     await pool.query(`
@@ -26,8 +38,22 @@ async function run() {
         amount NUMERIC(10, 2) NOT NULL,
         type VARCHAR(20) NOT NULL,
         description TEXT,
+        reference_type VARCHAR(40),
+        reference_id UUID,
+        idempotency_key VARCHAR(160) UNIQUE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    await pool.query(`
+      ALTER TABLE wallet_transactions
+      ADD COLUMN IF NOT EXISTS reference_type VARCHAR(40),
+      ADD COLUMN IF NOT EXISTS reference_id UUID,
+      ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(160);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_transactions_idempotency
+        ON wallet_transactions(idempotency_key) WHERE idempotency_key IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user_created
+        ON wallet_transactions(user_id, created_at DESC);
     `);
 
     console.log('Remote Database (Neon) updated successfully!');

@@ -477,6 +477,7 @@ class _PropertyAppState extends State<PropertyApp> {
         '/super_admin': (context) => const SuperAdminShell(),
         '/super_admin/login': (context) => const SuperAdminLoginView(),
         '/referral': (context) => const ReferralView(),
+        '/wallet': (context) => const WalletView(),
         '/reviews': (context) {
           final args = ModalRoute.of(context)!.settings.arguments
               as Map<String, dynamic>?;
@@ -898,6 +899,9 @@ class _AppShellState extends State<AppShell> {
                 break;
               case 'Payment Methods':
                 Navigator.pushNamed(context, '/payment_methods');
+                break;
+              case 'Wallet':
+                Navigator.pushNamed(context, '/wallet');
                 break;
               case 'Reviews':
                 Navigator.pushNamed(context, '/reviews');

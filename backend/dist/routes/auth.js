@@ -5,6 +5,7 @@ import { query } from '../db.js';
 import { env } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
 import { verifyOtp, createOtp, queueOtpEmail, revokeOtp } from '../services/email.js';
+import { randomBytes } from 'crypto';
 const router = Router();
 const ADMIN_ACCESS_TOKEN_TTL = '24h';
 const DEFAULT_ACCESS_TOKEN_TTL = '15m';
@@ -23,7 +24,7 @@ const accessTokenTtlForRole = (role) => {
 // Register new user
 router.post('/register', async (req, res, next) => {
     try {
-        const { name, email, password, phone, role } = req.body;
+        const { name, email, password, phone, role, referralCode } = req.body;
         if (!name || !email || !password || !phone) {
             return res.status(400).json({ error: 'Name, email, phone and password are required.' });
         }
@@ -46,11 +47,20 @@ router.post('/register', async (req, res, next) => {
             return res.status(409).json({ error: 'Email already registered.' });
         }
         const hash = await bcrypt.hash(password, 10);
+        let referredBy = null;
+        if (referralCode?.trim()) {
+            const referrer = await query('SELECT id FROM users WHERE referral_code = $1 LIMIT 1', [referralCode.trim().toUpperCase()]);
+            if ((referrer.rowCount ?? 0) === 0) {
+                return res.status(400).json({ error: 'Invalid referral code.' });
+            }
+            referredBy = referrer.rows[0].id;
+        }
+        const generatedReferralCode = `SN${randomBytes(5).toString('hex').toUpperCase()}`;
         const allowedRoles = ['tenant', 'landlord', 'host'];
         const userRole = (role && allowedRoles.includes(role.toLowerCase())) ? role.toLowerCase() : 'tenant';
-        const result = await query(`INSERT INTO users (name, email, phone, password_hash, role, verified)
-       VALUES ($1, $2, $3, $4, $5, false)
-       RETURNING id, name, email, phone, role, verified`, [name.trim(), normalizedEmail, normalizedPhone, hash, userRole]);
+        const result = await query(`INSERT INTO users (name, email, phone, password_hash, role, verified, referral_code, referred_by)
+       VALUES ($1, $2, $3, $4, $5, false, $6, $7)
+       RETURNING id, name, email, phone, role, verified, referral_code, wallet_balance`, [name.trim(), normalizedEmail, normalizedPhone, hash, userRole, generatedReferralCode, referredBy]);
         const created = result.rows[0];
         const accessToken = jwt.sign({
             id: created.id,

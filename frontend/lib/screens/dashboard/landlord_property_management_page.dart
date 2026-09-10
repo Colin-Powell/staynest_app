@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:shimmer/shimmer.dart';
@@ -404,11 +405,16 @@ class _LandlordPropertyManagementPageState
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: GestureDetector(
-                  onTap: () {
-                    AnalyticsService.trackPropertyShare(
-                        _property['id']?.toString() ?? '');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Listing link copied.')));
+                  onTap: () async {
+                    final propertyId = _property['id']?.toString() ?? '';
+                    final link = 'https://staynest.top/properties/$propertyId';
+                    await Share.share(
+                        '${_property['title'] ?? 'StayNest property'}: $link');
+                    await AnalyticsService.trackPropertyShare(propertyId);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Listing shared.')));
+                    }
                   },
                   child: Container(
                     padding: const EdgeInsets.all(10),

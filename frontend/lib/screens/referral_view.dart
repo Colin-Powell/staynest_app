@@ -9,6 +9,10 @@ class ReferralView extends StatelessWidget {
 
   // Original Logic: Preserved exactly as requested
   String get _referralCode {
+    if (AppSession.referralCode != null &&
+        AppSession.referralCode!.trim().isNotEmpty) {
+      return AppSession.referralCode!.trim().toUpperCase();
+    }
     final userId = AppSession.currentUserId ?? '';
     if (userId.length >= 6) {
       return userId.replaceAll('-', '').substring(0, 6).toUpperCase();
@@ -24,10 +28,10 @@ class ReferralView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final code = _referralCode;
-    
+
     // Theme colors extracted from your design
-    const backgroundColor = Color(0xFF162137); 
-    const accentBlue = Color(0xFF4B7FFF); 
+    const backgroundColor = Color(0xFF162137);
+    const accentBlue = Color(0xFF4B7FFF);
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -48,7 +52,7 @@ class ReferralView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 32),
-              
+
               // Subtitle (Using RichText to highlight 'Ksh 500' in blue)
               // Note: Corrected the typo in the design from "op to" to "up to"
               RichText(
@@ -70,7 +74,7 @@ class ReferralView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 40),
-              
+
               // SVG Illustration
               Expanded(
                 child: SvgPicture.asset(
@@ -79,7 +83,7 @@ class ReferralView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 40),
-              
+
               // White Referral Code Container
               Container(
                 width: double.infinity,
@@ -127,14 +131,14 @@ class ReferralView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Blue Invite Now Button
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
                   onPressed: () => Share.share(
-                      'Join StayNest with my referral code $code.'),
+                      'Join StayNest with my referral code $code. https://staynest.top/register?ref=$code'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: accentBlue,
                     foregroundColor: Colors.white,
@@ -153,7 +157,7 @@ class ReferralView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 32),
-              
+
               // Bottom Action Text
               GestureDetector(
                 onTap: () {

@@ -402,6 +402,7 @@ class RemoteDatabaseRepository {
     String password,
     String role, {
     Map<String, dynamic>? businessFields,
+    String? referralCode,
   }) async {
     final payload = <String, dynamic>{
       'name': name,
@@ -410,6 +411,9 @@ class RemoteDatabaseRepository {
       'password': password,
       'role': role,
     };
+    if (referralCode != null && referralCode.trim().isNotEmpty) {
+      payload['referralCode'] = referralCode.trim();
+    }
     if (businessFields != null) {
       payload.addAll(businessFields);
     }

@@ -34,6 +34,7 @@ class _RegisterViewState extends State<RegisterView>
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _referralController = TextEditingController();
 
   bool _obscurePassword = true;
   bool _isLoading = false;
@@ -75,6 +76,7 @@ class _RegisterViewState extends State<RegisterView>
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _referralController.dispose();
     _entranceCtrl.dispose();
     super.dispose();
   }
@@ -101,6 +103,7 @@ class _RegisterViewState extends State<RegisterView>
         email,
         password,
         AppSession.currentRole,
+        referralCode: _referralController.text,
         businessFields: _isLandlord
             ? {
                 'business_name': '$name Properties',
@@ -259,6 +262,13 @@ class _RegisterViewState extends State<RegisterView>
                           label: 'Phone Number',
                           keyboardType: TextInputType.phone,
                           validator: AuthValidators.phone,
+                        ),
+                        const SizedBox(height: 16),
+                        _InputField(
+                          controller: _referralController,
+                          label: 'Referral Code (Optional)',
+                          keyboardType: TextInputType.text,
+                          textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 16),
                         _InputField(

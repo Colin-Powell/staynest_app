@@ -23,6 +23,7 @@ import versionRouter from './routes/version.js';
 import paymentsRouter from './routes/payments.js';
 import landlordPaymentMethodsRouter from './routes/landlord_payment_methods.js';
 import locationsRouter from './routes/locations.js';
+import walletRouter from './routes/wallet.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { requireAuth } from './middleware/auth.js'; // Explicitly import requireAuth
@@ -42,6 +43,7 @@ app.use('/api/promotions', promotionsRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/landlord', landlordPaymentMethodsRouter);
 app.use('/api/locations', locationsRouter);
+app.use('/api/wallet', walletRouter);
 app.use('/api/drafts', draftsRouter);
 app.use('/api/version', versionRouter);
 app.use('/api/users', usersRouter);

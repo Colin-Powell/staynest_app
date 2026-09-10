@@ -74,6 +74,13 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS business_type text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS business_description text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS tax_id text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS years_in_business integer;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code varchar(50);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by uuid REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_balance numeric(10, 2) NOT NULL DEFAULT 0.00;
+UPDATE users
+SET referral_code = 'SN' || upper(replace(id::text, '-', ''))
+WHERE referral_code IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code) WHERE referral_code IS NOT NULL;
 
 
 CREATE TABLE IF NOT EXISTS wallet_transactions (
@@ -84,6 +91,13 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
   description TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS reference_type varchar(40);
+ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS reference_id uuid;
+ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS idempotency_key varchar(160);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_transactions_idempotency
+  ON wallet_transactions(idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user_created
+  ON wallet_transactions(user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS properties (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -4,6 +4,15 @@ import 'package:property_app/screens/home/cache_engine.dart';
 import 'package:uuid/uuid.dart';
 
 class PropertiesApi {
+  static Future<void> trackPropertyShare(String propertyId) async {
+    final client = _client();
+    await client.postJson('/analytics/track', body: {
+      'eventType': 'property_share',
+      'propertyId': propertyId,
+      'metadata': {'source': 'native_share'},
+    });
+  }
+
   static Future<void> recordPropertyView(String propertyId) async {
     try {
       final client = _client();

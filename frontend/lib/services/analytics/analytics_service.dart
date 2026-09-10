@@ -15,13 +15,13 @@ class AnalyticsEvents {
   static const String signUp = 'sign_up';
   static const String login = 'login';
   static const String logout = 'logout';
-  
+
   static const String screenView = 'screen_view';
-  
+
   static const String search = 'search';
   static const String filterApplied = 'filter_applied';
   static const String categorySelected = 'category_selected';
-  
+
   static const String listingImpression = 'listing_impression';
   static const String listingView = 'listing_view';
   static const String listingEngagement = 'listing_engagement';
@@ -30,7 +30,7 @@ class AnalyticsEvents {
   static const String listingShare = 'listing_share';
   static const String listingContact = 'listing_contact';
   static const String galleryInteraction = 'gallery_interaction';
-  
+
   static const String promotionImpression = 'promotion_impression';
   static const String promotionSelected = 'promotion_selected';
   static const String recentListingSelected = 'recent_listing_selected';
@@ -44,7 +44,7 @@ class AnalyticsParameters {
   static const String method = 'method';
   static const String screenName = 'screen_name';
   static const String screenClass = 'screen_class';
-  
+
   static const String searchTerm = 'search_term';
   static const String location = 'location';
   static const String propertyType = 'property_type';
@@ -52,13 +52,13 @@ class AnalyticsParameters {
   static const String maxPrice = 'max_price';
   static const String amenitiesCount = 'amenities_count';
   static const String resultCount = 'result_count';
-  
+
   static const String listingId = 'listing_id';
   static const String priceBand = 'price_band';
   static const String source = 'source';
   static const String position = 'position';
   static const String durationSeconds = 'duration_seconds';
-  
+
   static const String promotionId = 'promotion_id';
   static const String promotionType = 'promotion_type';
   static const String placement = 'placement';
@@ -83,7 +83,8 @@ class AnalyticsService {
     }
   }
 
-  static Future<void> logEvent(String name, [Map<String, Object?>? parameters]) async {
+  static Future<void> logEvent(String name,
+      [Map<String, Object?>? parameters]) async {
     try {
       final safeParams = <String, Object>{};
       parameters?.forEach((key, value) {
@@ -101,11 +102,13 @@ class AnalyticsService {
     }
   }
 
-  static Future<void> logAuthEvent(String eventName, {required String method}) async {
+  static Future<void> logAuthEvent(String eventName,
+      {required String method}) async {
     await logEvent(eventName, {AnalyticsParameters.method: method});
   }
 
-  static Future<void> logScreenView(String screenName, [String? screenClass]) async {
+  static Future<void> logScreenView(String screenName,
+      [String? screenClass]) async {
     try {
       await _analytics.logScreenView(
         screenName: screenName,
@@ -127,7 +130,7 @@ class AnalyticsService {
       AnalyticsParameters.propertyType: propertyType,
     });
   }
-  
+
   static Future<void> logListingInteraction(
     String eventName, {
     required String listingId,
@@ -140,7 +143,7 @@ class AnalyticsService {
     if (eventName == AnalyticsEvents.listingView) {
       PropertiesApi.recordPropertyView(listingId);
     }
-    
+
     await logEvent(eventName, {
       AnalyticsParameters.listingId: listingId,
       AnalyticsParameters.source: source,
@@ -151,7 +154,18 @@ class AnalyticsService {
     });
   }
 
-  static void trackPropertyShare(String s) {}
+  static Future<void> trackPropertyShare(String propertyId) async {
+    if (propertyId.isEmpty) return;
+    try {
+      await PropertiesApi.trackPropertyShare(propertyId);
+    } catch (e) {
+      debugPrint('Property share tracking failed: $e');
+    }
+    await logListingInteraction(
+      AnalyticsEvents.listingShare,
+      listingId: propertyId,
+    );
+  }
 
   static void trackPropertyView(String propertyId, {required String source}) {}
 }
