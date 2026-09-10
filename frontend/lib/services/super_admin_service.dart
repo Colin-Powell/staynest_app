@@ -112,4 +112,20 @@ class SuperAdminService {
   ) async {
     await _client.put(_uri('/admin/settings/$key'), body: value);
   }
+
+  static Future<List<Map<String, dynamic>>> fetchWithdrawals({
+    String status = 'pending',
+  }) async =>
+      _list(await _getJson('/admin/withdrawals', query: {'status': status}));
+
+  static Future<Map<String, dynamic>> approveWithdrawal(String id) async =>
+      _data(await _decode(
+          () => _client.patch(_uri('/admin/withdrawals/$id/approve'))));
+
+  static Future<Map<String, dynamic>> releaseWithdrawal(String id) async =>
+      _data(await _decode(
+          () => _client.post(_uri('/admin/withdrawals/$id/release'))));
+
+  static Future<List<Map<String, dynamic>>> fetchAuditLogs() async =>
+      _list(await _getJson('/admin/audit-logs'));
 }

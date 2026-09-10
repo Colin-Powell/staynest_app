@@ -12,6 +12,7 @@ const CONSUMER_SECRET = env.mpesaConsumerSecret || '';
 const BUSINESS_SHORT_CODE = env.mpesaBusinessShortCode || '174379'; // Test credentials
 const PASS_KEY = env.mpesaPassKey || 'bfb279f9aa9bdbcf158e97dd71a467cd'; // Test passkey
 const CALLBACK_URL = `${env.apiBaseUrl || 'http://localhost:3000'}/api/payments/mpesa-callback`;
+const B2C_CALLBACK_URL = `${env.apiBaseUrl || 'http://localhost:3000'}/api/payments/mpesa-b2c-callback`;
 
 interface STKPushParams {
   phone: string; // Mobile number (254XXXXXXXXX format)
@@ -195,6 +196,41 @@ export async function querySTKStatus(checkoutRequestId: string): Promise<any> {
   }
 }
 
+export async function initiateB2CPayout(params: {
+  phone: string;
+  amount: number;
+  reference: string;
+  remarks: string;
+}): Promise<{ conversationId: string; originatorConversationId: string }> {
+  if (!env.mpesaInitiatorName || !env.mpesaSecurityCredential || !env.mpesaB2cShortCode) {
+    throw new Error('M-Pesa B2C payout credentials are not configured.');
+  }
+  const accessToken = await getAccessToken();
+  const response = await axios.post(
+    `${DARAJA_BASE}/mpesa/b2c/v1/paymentrequest`,
+    {
+      InitiatorName: env.mpesaInitiatorName,
+      SecurityCredential: env.mpesaSecurityCredential,
+      CommandID: 'BusinessPayment',
+      Amount: Math.round(params.amount),
+      PartyA: env.mpesaB2cShortCode,
+      PartyB: params.phone,
+      Remarks: params.remarks.substring(0, 100),
+      Occasion: params.reference.substring(0, 50),
+      QueueTimeOutURL: `${B2C_CALLBACK_URL}/timeout`,
+      ResultURL: B2C_CALLBACK_URL,
+    },
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (response.data.ResponseCode !== '0') {
+    throw new Error(response.data.ResponseDescription || 'M-Pesa payout failed to submit.');
+  }
+  return {
+    conversationId: response.data.ConversationID,
+    originatorConversationId: response.data.OriginatorConversationID,
+  };
+}
+
 /**
  * Handle M-Pesa callback from Daraja
  * Verify and process payment result
@@ -256,6 +292,7 @@ export function verifyCallbackSignature(
 export default {
   initiateSTKPush,
   querySTKStatus,
+  initiateB2CPayout,
   parseCallback,
   verifyCallbackSignature,
 };

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:property_app/repository/http_json_client.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/services/api_client.dart';
 
 class LandlordPaymentMethod {
   final String id;
@@ -108,6 +109,7 @@ class LandlordPaymentMethodsService {
           .toList();
     } catch (e) {
       landlordPaymentMethodsDebugPrint('Error fetching payment methods: $e');
+      if (e is ApiException && e.statusCode == 401) rethrow;
       return [];
     }
   }

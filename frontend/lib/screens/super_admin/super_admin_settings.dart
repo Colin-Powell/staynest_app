@@ -25,11 +25,27 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
   // Security
   bool _enforce2FA = true;
   bool _maintenanceMode = false;
+  bool _logsLoading = true;
+  List<Map<String, dynamic>> _auditLogs = [];
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    _loadAuditLogs();
+  }
+
+  Future<void> _loadAuditLogs() async {
+    try {
+      final logs = await SuperAdminService.fetchAuditLogs();
+      if (mounted)
+        setState(() {
+          _auditLogs = logs;
+          _logsLoading = false;
+        });
+    } catch (_) {
+      if (mounted) setState(() => _logsLoading = false);
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -155,6 +171,8 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
                   children: [
                     _buildSecuritySettings(),
                     const SizedBox(height: 24),
+                    _buildLogMonitoring(),
+                    const SizedBox(height: 24),
                     _buildDangerZone(),
                   ],
                 )),
@@ -167,6 +185,8 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
               _buildGeneralSettings(),
               const SizedBox(height: 24),
               _buildSecuritySettings(),
+              const SizedBox(height: 24),
+              _buildLogMonitoring(),
               const SizedBox(height: 24),
               _buildDangerZone(),
             ],
@@ -246,6 +266,46 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildLogMonitoring() {
+    return _SettingsSection(
+      title: 'Finance & Security Activity',
+      icon: PhosphorIcons.listMagnifyingGlass(),
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Recent admin actions',
+                style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w600, color: AppColors.gray900)),
+            IconButton(
+                onPressed: _loadAuditLogs,
+                icon: Icon(PhosphorIcons.arrowsClockwise(), size: 18)),
+          ],
+        ),
+        if (_logsLoading)
+          const Padding(
+              padding: EdgeInsets.all(12), child: LinearProgressIndicator())
+        else if (_auditLogs.isEmpty)
+          Text('No audit events recorded yet.',
+              style: GoogleFonts.inter(color: AppColors.gray500))
+        else
+          ..._auditLogs.take(8).map((log) => ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(PhosphorIcons.shieldCheck(),
+                    size: 18, color: AppColors.gray500),
+                title: Text(log['action']?.toString() ?? 'Unknown action',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, fontWeight: FontWeight.w600)),
+                subtitle: Text(
+                    '${log['admin_name'] ?? 'System'} • ${log['created_at'] ?? ''}',
+                    style: GoogleFonts.inter(
+                        fontSize: 11, color: AppColors.gray500)),
+              )),
       ],
     );
   }

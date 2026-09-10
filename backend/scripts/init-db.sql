@@ -119,6 +119,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_transactions_idempotency
 CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user_created
   ON wallet_transactions(user_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS admin_audit_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  action varchar(80) NOT NULL,
+  entity_type varchar(60) NOT NULL,
+  entity_id uuid,
+  request_id varchar(120),
+  ip_address inet,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created
+  ON admin_audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_entity
+  ON admin_audit_logs(entity_type, entity_id, created_at DESC);
+
 
 CREATE TABLE IF NOT EXISTS properties (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -514,12 +530,26 @@ CREATE TABLE IF NOT EXISTS wallet_withdrawals (
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   payment_method_id uuid REFERENCES landlord_payment_methods(id) ON DELETE SET NULL,
   amount numeric(10, 2) NOT NULL CHECK (amount > 0),
+  destination_type varchar(20) NOT NULL DEFAULT 'payment_method',
+  destination_account varchar(32) NOT NULL,
   status varchar(20) NOT NULL DEFAULT 'pending',
   idempotency_key varchar(160) NOT NULL UNIQUE,
   failure_reason text,
+  approved_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  approved_at timestamptz,
+  released_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  provider_reference varchar(120),
+  released_at timestamptz,
   processed_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE wallet_withdrawals ADD COLUMN IF NOT EXISTS destination_type varchar(20) NOT NULL DEFAULT 'payment_method';
+ALTER TABLE wallet_withdrawals ADD COLUMN IF NOT EXISTS destination_account varchar(32);
+ALTER TABLE wallet_withdrawals ADD COLUMN IF NOT EXISTS approved_by uuid REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE wallet_withdrawals ADD COLUMN IF NOT EXISTS approved_at timestamptz;
+ALTER TABLE wallet_withdrawals ADD COLUMN IF NOT EXISTS released_by uuid REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE wallet_withdrawals ADD COLUMN IF NOT EXISTS provider_reference varchar(120);
+ALTER TABLE wallet_withdrawals ADD COLUMN IF NOT EXISTS released_at timestamptz;
 CREATE INDEX IF NOT EXISTS idx_wallet_withdrawals_user_created
   ON wallet_withdrawals(user_id, created_at DESC);
 

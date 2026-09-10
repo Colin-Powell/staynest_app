@@ -126,7 +126,7 @@ router.post('/mpesa-callback', async (req: Request, res: Response, next: NextFun
 
     // Find the payment transaction
     const txnResult = await query(
-      `SELECT id, promotion_id, user_id, amount, transaction_type FROM payment_transactions
+      `SELECT id, promotion_id, user_id, amount, status, transaction_type FROM payment_transactions
        WHERE checkout_request_id = $1 LIMIT 1`,
       [checkoutRequestId]
     );
@@ -137,6 +137,18 @@ router.post('/mpesa-callback', async (req: Request, res: Response, next: NextFun
     }
 
     const transaction = txnResult.rows[0];
+
+    if (transaction.status === 'completed') {
+      return res.json({ ResultCode: 0, ResultDesc: 'Already processed' });
+    }
+    if (result.success && result.amount != null && Number(result.amount) !== Number(transaction.amount)) {
+      await query(
+        `UPDATE payment_transactions SET status = 'failed', error_message = $1, completed_at = NOW()
+         WHERE id = $2 AND status <> 'completed'`,
+        ['Callback amount does not match transaction amount.', transaction.id],
+      );
+      return res.status(400).json({ error: 'Payment amount mismatch.' });
+    }
 
     await query('BEGIN');
     try {
@@ -229,6 +241,50 @@ router.post('/mpesa-callback', async (req: Request, res: Response, next: NextFun
     console.error('[Payment] Callback error:', err);
     next(err);
   }
+});
+
+router.post('/mpesa-b2c-callback', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = req.body?.Result;
+    const conversationId = result?.ConversationID;
+    const resultCode = Number(result?.ResultCode);
+    if (!conversationId || !Number.isFinite(resultCode)) {
+      return res.status(400).json({ error: 'Invalid B2C callback.' });
+    }
+    const withdrawal = await query(
+      `SELECT id, user_id, amount FROM wallet_withdrawals
+       WHERE provider_reference = $1 AND status = 'processing' FOR UPDATE`,
+      [conversationId],
+    );
+    if (withdrawal.rows.length === 0) return res.status(404).json({ error: 'Withdrawal not found.' });
+    const row = withdrawal.rows[0];
+    if (resultCode === 0) {
+      await query(
+        `UPDATE wallet_withdrawals SET status = 'paid', processed_at = NOW(), released_at = NOW()
+         WHERE id = $1`, [row.id],
+      );
+    } else {
+      await query('BEGIN');
+      try {
+        await query(
+          `UPDATE wallet_withdrawals SET status = 'failed', failure_reason = $1, processed_at = NOW()
+           WHERE id = $2`, [result.ResultDesc || 'M-Pesa payout failed.', row.id],
+        );
+        const refundEntry = await query(
+          `INSERT INTO wallet_transactions
+           (user_id, amount, type, description, reference_type, reference_id, idempotency_key)
+           VALUES ($1, $2, 'withdrawal_refund', 'Failed withdrawal returned to wallet', 'withdrawal', $3, $4)
+           ON CONFLICT (idempotency_key) DO NOTHING`,
+          [row.user_id, row.amount, row.id, `withdrawal-refund:${row.id}`],
+        );
+        if (refundEntry.rows.length > 0) {
+          await query('UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2', [row.amount, row.user_id]);
+        }
+        await query('COMMIT');
+      } catch (error) { await query('ROLLBACK'); throw error; }
+    }
+    res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
+  } catch (error) { next(error); }
 });
 
 /**

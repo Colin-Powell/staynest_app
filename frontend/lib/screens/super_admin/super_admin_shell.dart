@@ -9,6 +9,7 @@ import 'super_admin_properties.dart';
 import 'super_admin_users.dart';
 import 'super_admin_kyc.dart';
 import 'super_admin_settings.dart';
+import 'super_admin_withdrawals.dart';
 import 'super_admin_login.dart';
 
 class SuperAdminShell extends StatefulWidget {
@@ -28,6 +29,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
     _NavItem(label: 'KYC Reviews', icon: PhosphorIcons.shieldCheck()),
     _NavItem(label: 'Properties', icon: PhosphorIcons.buildingApartment()),
     _NavItem(label: 'Users', icon: PhosphorIcons.users()),
+    _NavItem(label: 'Withdrawals', icon: PhosphorIcons.wallet()),
     _NavItem(label: 'Settings', icon: PhosphorIcons.gearSix()),
   ];
 
@@ -36,6 +38,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
     SuperAdminKycPage(),
     SuperAdminPropertiesPage(),
     SuperAdminUsersPage(),
+    SuperAdminWithdrawalsPage(),
     SuperAdminSettingsPage(),
   ];
 
@@ -59,18 +62,23 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(PhosphorIcons.shieldSlash(), size: 48, color: AppColors.gray500),
+                Icon(PhosphorIcons.shieldSlash(),
+                    size: 48, color: AppColors.gray500),
                 const SizedBox(height: 24),
                 Text('Access Restricted',
                     style: GoogleFonts.inter(
-                        fontSize: 20, fontWeight: FontWeight.w500, color: AppColors.gray900)),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.gray900)),
                 const SizedBox(height: 8),
                 Text('Only super admins can access this area.',
                     style: GoogleFonts.inter(color: AppColors.gray500)),
                 const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: _handleLogout,
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.gray900, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.gray900,
+                      foregroundColor: Colors.white),
                   child: const Text('Logout'),
                 )
               ],
@@ -93,13 +101,15 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: const BoxDecoration(
               color: Colors.white,
-              border: Border(bottom: BorderSide(color: StayNestColors.outlineLight)),
+              border: Border(
+                  bottom: BorderSide(color: StayNestColors.outlineLight)),
             ),
             child: Row(
               children: [
                 if (isDesktop)
                   IconButton(
-                    icon: Icon(PhosphorIcons.list(), color: AppColors.gray700, size: 20),
+                    icon: Icon(PhosphorIcons.list(),
+                        color: AppColors.gray700, size: 20),
                     onPressed: () {
                       setState(() {
                         _isSidebarExpanded = !_isSidebarExpanded;
@@ -107,16 +117,21 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                     },
                   ),
                 if (isDesktop) const SizedBox(width: 8),
-                
+
                 // Logo & Brand
                 if (isDesktop) ...[
-                  Icon(PhosphorIcons.buildings(), color: AppColors.gray700, size: 24),
+                  Icon(PhosphorIcons.buildings(),
+                      color: AppColors.gray700, size: 24),
                   const SizedBox(width: 12),
-                  Text('StayNest Admin', style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.gray900)),
+                  Text('StayNest Admin',
+                      style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.gray900)),
                 ],
-                
+
                 const Spacer(),
-                
+
                 // Notification Bell (Now a Dropdown Popup)
                 Theme(
                   data: Theme.of(context).copyWith(
@@ -132,11 +147,13 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                     shape: Border.all(color: StayNestColors.outlineLight),
                     icon: Badge(
                       backgroundColor: StayNestColors.error,
-                      child: Icon(PhosphorIcons.bell(), color: AppColors.gray500, size: 20),
+                      child: Icon(PhosphorIcons.bell(),
+                          color: AppColors.gray500, size: 20),
                     ),
                     itemBuilder: (ctx) => [
                       PopupMenuItem(
-                        enabled: false, // Prevents closing when clicking the background
+                        enabled:
+                            false, // Prevents closing when clicking the background
                         padding: EdgeInsets.zero,
                         child: SizedBox(
                           width: 340,
@@ -146,37 +163,70 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                             children: [
                               // Popup Header
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 14),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text('Notifications', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.gray900)),
+                                    Text('Notifications',
+                                        style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.gray900)),
                                     InkWell(
                                       onTap: () {},
-                                      child: Text('Mark all read', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.gray500)),
+                                      child: Text('Mark all read',
+                                          style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              color: AppColors.gray500)),
                                     ),
                                   ],
                                 ),
                               ),
-                              const Divider(height: 1, color: StayNestColors.outlineLight),
-                              
+                              const Divider(
+                                  height: 1,
+                                  color: StayNestColors.outlineLight),
+
                               // Scrollable Notifications List
                               ConstrainedBox(
-                                constraints: const BoxConstraints(maxHeight: 380),
+                                constraints:
+                                    const BoxConstraints(maxHeight: 380),
                                 child: ListView(
                                   shrinkWrap: true,
                                   padding: EdgeInsets.zero,
                                   children: [
-                                    _NotificationItem(title: 'New KYC Document', time: '10 mins ago', icon: PhosphorIcons.shieldCheck(), unread: true),
-                                    _NotificationItem(title: 'Suspicious login attempt', time: '1 hour ago', icon: PhosphorIcons.warning(), iconColor: StayNestColors.error, unread: true),
-                                    _NotificationItem(title: 'Property Approved', time: '2 hours ago', icon: PhosphorIcons.checkCircle(), iconColor: AppColors.green600, unread: false),
-                                    _NotificationItem(title: 'Daily Report Generated', time: '1 day ago', icon: PhosphorIcons.fileText(), unread: false),
+                                    _NotificationItem(
+                                        title: 'New KYC Document',
+                                        time: '10 mins ago',
+                                        icon: PhosphorIcons.shieldCheck(),
+                                        unread: true),
+                                    _NotificationItem(
+                                        title: 'Suspicious login attempt',
+                                        time: '1 hour ago',
+                                        icon: PhosphorIcons.warning(),
+                                        iconColor: StayNestColors.error,
+                                        unread: true),
+                                    _NotificationItem(
+                                        title: 'Property Approved',
+                                        time: '2 hours ago',
+                                        icon: PhosphorIcons.checkCircle(),
+                                        iconColor: AppColors.green600,
+                                        unread: false),
+                                    _NotificationItem(
+                                        title: 'Daily Report Generated',
+                                        time: '1 day ago',
+                                        icon: PhosphorIcons.fileText(),
+                                        unread: false),
                                   ],
                                 ),
                               ),
-                              
-                              const Divider(height: 1, color: StayNestColors.outlineLight),
-                              
+
+                              const Divider(
+                                  height: 1,
+                                  color: StayNestColors.outlineLight),
+
                               // Footer Action
                               InkWell(
                                 onTap: () {
@@ -184,9 +234,14 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                                 },
                                 child: Container(
                                   width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
                                   child: Center(
-                                    child: Text('View all notifications', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.gray900)),
+                                    child: Text('View all notifications',
+                                        style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: AppColors.gray900)),
                                   ),
                                 ),
                               ),
@@ -197,9 +252,9 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(width: 12),
-                
+
                 // Admin Profile Dropdown
                 PopupMenuButton<String>(
                   onSelected: (val) {
@@ -211,12 +266,24 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                   itemBuilder: (ctx) => [
                     PopupMenuItem(
                       value: 'settings',
-                      child: Row(children: [Icon(PhosphorIcons.gear(), size: 16), const SizedBox(width: 12), Text('Account Settings', style: GoogleFonts.inter(fontSize: 14))]),
+                      child: Row(children: [
+                        Icon(PhosphorIcons.gear(), size: 16),
+                        const SizedBox(width: 12),
+                        Text('Account Settings',
+                            style: GoogleFonts.inter(fontSize: 14))
+                      ]),
                     ),
                     const PopupMenuDivider(),
                     PopupMenuItem(
                       value: 'logout',
-                      child: Row(children: [Icon(PhosphorIcons.signOut(), size: 16, color: StayNestColors.error), const SizedBox(width: 12), Text('Logout', style: GoogleFonts.inter(fontSize: 14, color: StayNestColors.error))]),
+                      child: Row(children: [
+                        Icon(PhosphorIcons.signOut(),
+                            size: 16, color: StayNestColors.error),
+                        const SizedBox(width: 12),
+                        Text('Logout',
+                            style: GoogleFonts.inter(
+                                fontSize: 14, color: StayNestColors.error))
+                      ]),
                     ),
                   ],
                   child: Row(
@@ -225,18 +292,27 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                         radius: 14,
                         backgroundColor: AppColors.gray100,
                         child: Text(
-                          (AppSession.currentUser!['name']).substring(0, 1).toUpperCase(),
-                          style: GoogleFonts.inter(color: AppColors.gray700, fontWeight: FontWeight.w500, fontSize: 12),
+                          (AppSession.currentUser!['name'])
+                              .substring(0, 1)
+                              .toUpperCase(),
+                          style: GoogleFonts.inter(
+                              color: AppColors.gray700,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 12),
                         ),
                       ),
                       if (isDesktop) ...[
                         const SizedBox(width: 8),
                         Text(
                           (AppSession.currentUser!['name']) ?? 'Admin',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w400, fontSize: 13, color: AppColors.gray700),
+                          style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w400,
+                              fontSize: 13,
+                              color: AppColors.gray700),
                         ),
                         const SizedBox(width: 4),
-                        Icon(PhosphorIcons.caretDown(), size: 14, color: AppColors.gray500),
+                        Icon(PhosphorIcons.caretDown(),
+                            size: 14, color: AppColors.gray500),
                       ]
                     ],
                   ),
@@ -245,7 +321,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
               ],
             ),
           ),
-          
+
           // Main Content
           Expanded(
             child: Row(
@@ -258,11 +334,20 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                     minWidth: 64,
                     selectedIndex: _selectedIndex,
                     indicatorColor: AppColors.gray100,
-                    onDestinationSelected: (index) => setState(() => _selectedIndex = index),
-                    unselectedLabelTextStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.gray500, fontWeight: FontWeight.w400),
-                    selectedLabelTextStyle: GoogleFonts.inter(fontSize: 13, color: AppColors.gray900, fontWeight: FontWeight.w500),
-                    unselectedIconTheme: const IconThemeData(color: AppColors.gray500, size: 20),
-                    selectedIconTheme: const IconThemeData(color: AppColors.gray900, size: 20),
+                    onDestinationSelected: (index) =>
+                        setState(() => _selectedIndex = index),
+                    unselectedLabelTextStyle: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppColors.gray500,
+                        fontWeight: FontWeight.w400),
+                    selectedLabelTextStyle: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: AppColors.gray900,
+                        fontWeight: FontWeight.w500),
+                    unselectedIconTheme:
+                        const IconThemeData(color: AppColors.gray500, size: 20),
+                    selectedIconTheme:
+                        const IconThemeData(color: AppColors.gray900, size: 20),
                     destinations: _navItems.map((item) {
                       return NavigationRailDestination(
                         icon: Icon(item.icon),
@@ -270,9 +355,11 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                       );
                     }).toList(),
                   ),
-                
-                if (isDesktop) const VerticalDivider(thickness: 1, width: 1, color: StayNestColors.outlineLight),
-                
+                if (isDesktop)
+                  const VerticalDivider(
+                      thickness: 1,
+                      width: 1,
+                      color: StayNestColors.outlineLight),
                 Expanded(
                   child: Container(
                     color: AppColors.gray50,
@@ -284,17 +371,19 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
           ),
         ],
       ),
-      bottomNavigationBar: isDesktop ? null : NavigationBar(
-        selectedIndex: _selectedIndex,
-        backgroundColor: Colors.white,
-        indicatorColor: AppColors.gray100,
-        onDestinationSelected: (index) =>
-            setState(() => _selectedIndex = index),
-        destinations: _navItems
-            .map((item) =>
-                NavigationDestination(icon: Icon(item.icon), label: item.label))
-            .toList(),
-      ),
+      bottomNavigationBar: isDesktop
+          ? null
+          : NavigationBar(
+              selectedIndex: _selectedIndex,
+              backgroundColor: Colors.white,
+              indicatorColor: AppColors.gray100,
+              onDestinationSelected: (index) =>
+                  setState(() => _selectedIndex = index),
+              destinations: _navItems
+                  .map((item) => NavigationDestination(
+                      icon: Icon(item.icon), label: item.label))
+                  .toList(),
+            ),
     );
   }
 }
@@ -306,7 +395,12 @@ class _NotificationItem extends StatelessWidget {
   final bool unread;
   final Color? iconColor;
 
-  const _NotificationItem({required this.title, required this.time, required this.icon, required this.unread, this.iconColor});
+  const _NotificationItem(
+      {required this.title,
+      required this.time,
+      required this.icon,
+      required this.unread,
+      this.iconColor});
 
   @override
   Widget build(BuildContext context) {
@@ -322,22 +416,38 @@ class _NotificationItem extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: (iconColor ?? AppColors.gray500).withValues(alpha: 0.1), shape: BoxShape.circle),
-              child: Icon(icon, size: 16, color: iconColor ?? AppColors.gray700),
+              decoration: BoxDecoration(
+                  color:
+                      (iconColor ?? AppColors.gray500).withValues(alpha: 0.1),
+                  shape: BoxShape.circle),
+              child:
+                  Icon(icon, size: 16, color: iconColor ?? AppColors.gray700),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: GoogleFonts.inter(fontSize: 13, fontWeight: unread ? FontWeight.w600 : FontWeight.w500, color: AppColors.gray900)),
+                  Text(title,
+                      style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight:
+                              unread ? FontWeight.w600 : FontWeight.w500,
+                          color: AppColors.gray900)),
                   const SizedBox(height: 4),
-                  Text(time, style: GoogleFonts.inter(fontSize: 11, color: AppColors.gray500)),
+                  Text(time,
+                      style: GoogleFonts.inter(
+                          fontSize: 11, color: AppColors.gray500)),
                 ],
               ),
             ),
             if (unread)
-              Container(width: 8, height: 8, margin: const EdgeInsets.only(top: 6), decoration: const BoxDecoration(color: AppColors.gray900, shape: BoxShape.circle)),
+              Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.only(top: 6),
+                  decoration: const BoxDecoration(
+                      color: AppColors.gray900, shape: BoxShape.circle)),
           ],
         ),
       ),

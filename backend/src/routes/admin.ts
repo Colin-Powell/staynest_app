@@ -4,8 +4,81 @@ import { requireAuth, authorize } from '../middleware/auth.js';
 import { cache } from '../services/cache.js';
 import { sendPushToUser } from '../services/firebase.js';
 import { finalizeVerificationDecision } from './verifications.js';
+import { pool } from '../db.js';
+import { initiateB2CPayout } from '../services/mpesa.js';
+import { recordAdminAudit } from '../services/audit_service.js';
 
 const router = Router();
+
+router.get('/withdrawals', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const status = String(req.query.status ?? 'pending');
+    const allowed = ['pending', 'approved', 'processing', 'paid', 'failed', 'rejected'];
+    if (!allowed.includes(status)) return res.status(400).json({ error: 'Invalid withdrawal status.' });
+    const result = await query(
+      `SELECT w.*, u.name AS user_name, u.email AS user_email, u.phone AS user_phone
+       FROM wallet_withdrawals w JOIN users u ON u.id = w.user_id
+       WHERE w.status = $1 ORDER BY w.created_at ASC LIMIT 100`, [status],
+    );
+    res.json({ data: result.rows });
+  } catch (error) { next(error); }
+});
+
+router.patch('/withdrawals/:id/approve', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await query(
+      `UPDATE wallet_withdrawals SET status = 'approved', approved_by = $1, approved_at = NOW()
+       WHERE id = $2 AND status = 'pending' RETURNING id, status`, [req.auth!.id, req.params.id],
+    );
+    if (result.rows.length === 0) return res.status(409).json({ error: 'Withdrawal is no longer pending.' });
+    await recordAdminAudit(req, 'withdrawal_approved', 'wallet_withdrawal', req.params.id);
+    res.json({ data: result.rows[0] });
+  } catch (error) { next(error); }
+});
+
+router.post('/withdrawals/:id/release', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `UPDATE wallet_withdrawals SET status = 'processing', released_by = $1
+       WHERE id = $2 AND status = 'approved'
+       RETURNING id, amount, destination_account`, [req.auth!.id, req.params.id],
+    );
+    if (result.rows.length === 0) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Withdrawal must be approved before release.' }); }
+    await client.query('COMMIT');
+    try {
+      const payout = await initiateB2CPayout({
+        phone: result.rows[0].destination_account,
+        amount: Number(result.rows[0].amount),
+        reference: result.rows[0].id,
+        remarks: 'StayNest wallet withdrawal',
+      });
+      await query(
+        `UPDATE wallet_withdrawals SET provider_reference = $1 WHERE id = $2`,
+        [payout.conversationId, result.rows[0].id],
+      );
+      await recordAdminAudit(req, 'withdrawal_released', 'wallet_withdrawal', req.params.id, { providerReference: payout.conversationId });
+      res.json({ data: { id: result.rows[0].id, status: 'processing', providerReference: payout.conversationId } });
+    } catch (error: any) {
+      await query(`UPDATE wallet_withdrawals SET status = 'approved', failure_reason = $1 WHERE id = $2`, [error.message, result.rows[0].id]);
+      next(error);
+    }
+  } catch (error) {
+    await client.query('ROLLBACK');
+    next(error);
+  } finally { client.release(); }
+});
+
+router.get('/audit-logs', requireAuth, authorize('admin'), async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await query(
+      `SELECT a.*, u.name AS admin_name FROM admin_audit_logs a
+       LEFT JOIN users u ON u.id = a.admin_id ORDER BY a.created_at DESC LIMIT 200`, [],
+    );
+    res.json({ data: result.rows });
+  } catch (error) { next(error); }
+});
 
 const defaultPlatformSettings: Record<string, Record<string, unknown>> = {
   general: {
@@ -89,6 +162,7 @@ router.put('/settings/:key', requireAuth, authorize('admin'), async (req: Reques
        RETURNING key, value, updated_at`,
       [key, JSON.stringify(value)],
     );
+    await recordAdminAudit(req, 'platform_setting_updated', 'platform_setting', null, { key, fields: Object.keys(req.body) });
     return res.json({ data: result.rows[0] });
   } catch (err) {
     next(err);

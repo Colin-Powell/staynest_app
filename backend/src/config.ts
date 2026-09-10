@@ -69,5 +69,8 @@ export const env = {
   mpesaConsumerSecret: process.env.MPESA_CONSUMER_SECRET || '',
   mpesaBusinessShortCode: process.env.MPESA_BUSINESS_SHORT_CODE || '174379',
   mpesaPassKey: process.env.MPESA_PASS_KEY || 'bfb279f9aa9bdbcf158e97dd71a467cd',
+  mpesaInitiatorName: process.env.MPESA_INITIATOR_NAME || '',
+  mpesaSecurityCredential: process.env.MPESA_SECURITY_CREDENTIAL || '',
+  mpesaB2cShortCode: process.env.MPESA_B2C_SHORT_CODE || process.env.MPESA_BUSINESS_SHORT_CODE || '',
   apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:3000',
 };

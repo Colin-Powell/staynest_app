@@ -5,6 +5,16 @@ import { requireAuth } from '../middleware/auth.js';
 import { initiateSTKPush } from '../services/mpesa.js';
 import { payBookingFromWallet } from '../services/finance_service.js';
 
+const normalizePhone = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  if (digits.startsWith('254')) return digits;
+  if (digits.startsWith('0')) return `254${digits.slice(1)}`;
+  return `254${digits}`;
+};
+
+const validPhone = (value: string) => /^254[17]\d{8}$/.test(normalizePhone(value));
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 const router = Router();
 
 router.get('/', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
@@ -64,7 +74,7 @@ router.get('/escrow/:bookingId', requireAuth, async (req: Request, res: Response
 router.post('/top-up', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const amount = Number(req.body?.amount);
-    const paymentMethodId = String(req.body?.paymentMethodId ?? '');
+    const paymentMethodId = String(req.body?.paymentMethodId ?? '').trim() || null;
     if (!Number.isFinite(amount) || amount < 10 || amount > 150000) {
       return res.status(400).json({ error: 'Top-up amount must be between KES 10 and KES 150,000.' });
     }
@@ -101,19 +111,27 @@ router.post('/withdraw', requireAuth, async (req: Request, res: Response, next: 
   try {
     const amount = Number(req.body?.amount);
     const paymentMethodId = String(req.body?.paymentMethodId ?? '');
+    const newMpesaPhone = String(req.body?.newMpesaPhone ?? '').trim();
     const idempotencyKey = String(req.body?.idempotencyKey ?? '');
     if (!Number.isFinite(amount) || amount < 50 || amount > 150000 || !idempotencyKey) {
       return res.status(400).json({ error: 'Valid amount and idempotencyKey are required.' });
     }
     await client.query('BEGIN');
-    const method = await client.query(
-      `SELECT id, type FROM landlord_payment_methods WHERE id = $1 AND user_id = $2 LIMIT 1`,
-      [paymentMethodId, req.auth!.id],
-    );
-    if (method.rows.length === 0) throw new Error('Payment method not found.');
-    if (!['mpesa', 'bank_transfer'].includes(method.rows[0].type)) {
+    if (paymentMethodId && !uuidPattern.test(paymentMethodId)) {
+      throw new Error('Invalid payment method.');
+    }
+    const method = paymentMethodId
+      ? await client.query(
+          `SELECT id, type, account_number FROM landlord_payment_methods WHERE id = $1 AND user_id = $2 LIMIT 1`,
+          [paymentMethodId, req.auth!.id],
+        )
+      : { rows: [] as any[] };
+    if (newMpesaPhone && !validPhone(newMpesaPhone)) throw new Error('Invalid Kenyan M-Pesa number.');
+    if (method.rows.length === 0 && !newMpesaPhone) throw new Error('Payment method not found.');
+    if (method.rows.length > 0 && !['mpesa', 'bank_transfer'].includes(method.rows[0].type)) {
       throw new Error('Withdrawals require an M-Pesa or bank payment method.');
     }
+    if (newMpesaPhone && method.rows.length > 0) throw new Error('Choose a saved method or enter a new M-Pesa number, not both.');
     const existing = await client.query(
       `SELECT id, status FROM wallet_withdrawals WHERE idempotency_key = $1 AND user_id = $2`,
       [idempotencyKey, req.auth!.id],
@@ -125,9 +143,13 @@ router.post('/withdraw', requireAuth, async (req: Request, res: Response, next: 
     const user = await client.query('SELECT wallet_balance FROM users WHERE id = $1 FOR UPDATE', [req.auth!.id]);
     if (Number(user.rows[0]?.wallet_balance ?? 0) < amount) throw new Error('Insufficient wallet balance.');
     const withdrawal = await client.query(
-      `INSERT INTO wallet_withdrawals (user_id, payment_method_id, amount, idempotency_key)
-       VALUES ($1, $2, $3, $4) RETURNING id, status`,
-      [req.auth!.id, paymentMethodId, amount, idempotencyKey],
+      `INSERT INTO wallet_withdrawals
+       (user_id, payment_method_id, amount, destination_type, destination_account, idempotency_key)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, status`,
+      [req.auth!.id, method.rows[0]?.id ?? null, amount,
+        newMpesaPhone ? 'mpesa_new' : method.rows[0].type,
+        newMpesaPhone ? normalizePhone(newMpesaPhone) : method.rows[0].account_number,
+        idempotencyKey],
     );
     await client.query(
       `INSERT INTO wallet_transactions

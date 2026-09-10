@@ -204,9 +204,18 @@ class _WalletViewState extends State<WalletView> {
 
   Future<LandlordPaymentMethod?> _selectMethod(
       {required Set<String> allowedTypes}) async {
-    final methods = (await LandlordPaymentMethodsService.getPaymentMethods())
-        .where((method) => allowedTypes.contains(method.type))
-        .toList();
+    List<LandlordPaymentMethod> methods;
+    try {
+      methods = (await LandlordPaymentMethodsService.getPaymentMethods())
+          .where((method) => allowedTypes.contains(method.type))
+          .toList();
+    } catch (error) {
+      if (mounted) {
+        _showErrorModal('Session expired',
+            'Please sign in again before managing wallet funds.');
+      }
+      return null;
+    }
     if (!mounted) return null;
 
     if (methods.isEmpty) {
@@ -276,6 +285,24 @@ class _WalletViewState extends State<WalletView> {
                   );
                 },
               ),
+              if (allowedTypes.contains('mpesa'))
+                ListTile(
+                  leading: const Icon(PhosphorIconsRegular.plusCircle),
+                  title: const Text('Use a new M-Pesa number'),
+                  subtitle:
+                      const Text('Do not save this number as a payment method'),
+                  onTap: () => Navigator.pop(
+                      context,
+                      LandlordPaymentMethod(
+                        id: '',
+                        type: 'mpesa',
+                        displayName: 'New M-Pesa number',
+                        accountNumber: '',
+                        isDefault: false,
+                        lastUsed: '',
+                        createdAt: '',
+                      )),
+                ),
               const SizedBox(height: 24),
             ],
           ),
@@ -359,7 +386,6 @@ class _WalletViewState extends State<WalletView> {
                               return;
                             }
                             setSheetState(() => isProcessing = true);
-                            FocusScope.of(context).unfocus();
                             if (context.mounted)
                               Navigator.pop(sheetContext, amount);
                           },
@@ -422,8 +448,20 @@ class _WalletViewState extends State<WalletView> {
     final method =
         await _selectMethod(allowedTypes: {'mpesa', 'bank_transfer'});
     if (method == null) return;
+    String? newPhone;
+    if (method.id.isEmpty) {
+      newPhone = await showDialog<String>(
+        context: context,
+        builder: (_) => const _NewMpesaPhoneDialog(),
+      );
+      if (newPhone == null || !mounted) return;
+    }
     try {
-      await WalletApi.withdraw(amount: amount, paymentMethod: method);
+      await WalletApi.withdraw(
+        amount: amount,
+        paymentMethod: method.id.isEmpty ? null : method,
+        newMpesaPhone: newPhone,
+      );
       await _loadData();
       if (mounted)
         _showSuccessModal('Withdrawal Processing',
@@ -829,6 +867,55 @@ class _AddMpesaMethodDialog extends StatefulWidget {
 
   @override
   State<_AddMpesaMethodDialog> createState() => _AddMpesaMethodDialogState();
+}
+
+class _NewMpesaPhoneDialog extends StatefulWidget {
+  const _NewMpesaPhoneDialog();
+
+  @override
+  State<_NewMpesaPhoneDialog> createState() => _NewMpesaPhoneDialogState();
+}
+
+class _NewMpesaPhoneDialogState extends State<_NewMpesaPhoneDialog> {
+  final _controller = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _continue() {
+    final value = _controller.text.trim();
+    if (!LandlordPaymentMethodsService.isValidMpesaPhone(value)) {
+      setState(() => _error = 'Enter a valid Kenyan M-Pesa number.');
+      return;
+    }
+    Navigator.pop(context, value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('New M-Pesa number'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: TextInputType.phone,
+        decoration: InputDecoration(
+          labelText: '2547XXXXXXXX',
+          errorText: _error,
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
+        FilledButton(onPressed: _continue, child: const Text('Continue')),
+      ],
+    );
+  }
 }
 
 class _AddMpesaMethodDialogState extends State<_AddMpesaMethodDialog> {

@@ -46,13 +46,22 @@ class WalletApi {
 
   static Future<Map<String, dynamic>> withdraw({
     required double amount,
-    required LandlordPaymentMethod paymentMethod,
+    LandlordPaymentMethod? paymentMethod,
+    String? newMpesaPhone,
   }) async {
-    final response = await _client().postJson('/wallet/withdraw', body: {
+    if (paymentMethod == null &&
+        (newMpesaPhone == null || newMpesaPhone.isEmpty)) {
+      throw ArgumentError('A payment method or new M-Pesa number is required.');
+    }
+    final body = <String, dynamic>{
       'amount': amount,
-      'paymentMethodId': paymentMethod.id,
+      if (paymentMethod?.id.isNotEmpty == true)
+        'paymentMethodId': paymentMethod!.id,
+      if (newMpesaPhone != null && newMpesaPhone.trim().isNotEmpty)
+        'newMpesaPhone': newMpesaPhone.trim(),
       'idempotencyKey': const Uuid().v4(),
-    });
+    };
+    final response = await _client().postJson('/wallet/withdraw', body: body);
     return Map<String, dynamic>.from(response['data'] as Map);
   }
 
