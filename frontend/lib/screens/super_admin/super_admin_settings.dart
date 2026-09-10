@@ -27,6 +27,7 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
   bool _maintenanceMode = false;
   bool _logsLoading = true;
   List<Map<String, dynamic>> _auditLogs = [];
+  bool _pushTestSending = false;
 
   @override
   void initState() {
@@ -266,8 +267,41 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _pushTestSending ? null : _sendPushTest,
+            icon: _pushTestSending
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : Icon(PhosphorIcons.paperPlaneTilt(), size: 16),
+            label: const Text('Send Test Push To Me'),
+          ),
+        ),
       ],
     );
+  }
+
+  Future<void> _sendPushTest() async {
+    setState(() => _pushTestSending = true);
+    try {
+      await SuperAdminService.sendPushTest();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Test push queued. Check the device and backend logs.')));
+        await _loadAuditLogs();
+      }
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Push test failed: $error')));
+    } finally {
+      if (mounted) setState(() => _pushTestSending = false);
+    }
   }
 
   Widget _buildLogMonitoring() {

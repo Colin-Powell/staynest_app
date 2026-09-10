@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { initiateSTKPush, parseCallback, verifyCallbackSignature } from '../services/mpesa.js';
 import { cache } from '../services/cache.js';
 import { settleWalletTopup } from '../services/finance_service.js';
+import { queueUserPush } from '../services/queue.js';
 
 const router = Router();
 
@@ -167,6 +168,9 @@ router.post('/mpesa-callback', async (req: Request, res: Response, next: NextFun
         if (transaction.transaction_type === 'wallet_topup') {
           await query('COMMIT');
           await settleWalletTopup(transaction.id);
+          await queueUserPush(transaction.user_id, 'Wallet top-up complete',
+            `KSh ${Number(transaction.amount).toFixed(2)} has been added to your wallet.`,
+            { type: 'wallet_topup_completed', transactionId: transaction.id });
           return res.json({
             ResultCode: 0,
             ResultDesc: 'Wallet top-up processed successfully',

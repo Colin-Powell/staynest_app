@@ -128,4 +128,11 @@ class SuperAdminService {
 
   static Future<List<Map<String, dynamic>>> fetchAuditLogs() async =>
       _list(await _getJson('/admin/audit-logs'));
+
+  static Future<Map<String, dynamic>> sendPushTest({String? userId}) async =>
+      _data(await _decode(
+          () => _client.post(_uri('/admin/notifications/test'), body: {
+                if (userId != null && userId.trim().isNotEmpty)
+                  'userId': userId.trim(),
+              })));
 }

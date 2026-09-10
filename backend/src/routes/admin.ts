@@ -7,8 +7,32 @@ import { finalizeVerificationDecision } from './verifications.js';
 import { pool } from '../db.js';
 import { initiateB2CPayout } from '../services/mpesa.js';
 import { recordAdminAudit } from '../services/audit_service.js';
+import { queueUserPush } from '../services/queue.js';
 
 const router = Router();
+
+router.post('/notifications/test', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const targetUserId = String(req.body?.userId ?? req.auth!.id).trim();
+    const title = String(req.body?.title ?? 'StayNest push test').trim().slice(0, 100);
+    const body = String(req.body?.body ?? 'Push notification delivery is working.').trim().slice(0, 240);
+    if (!targetUserId || !title || !body) {
+      return res.status(400).json({ error: 'userId, title, and body are required.' });
+    }
+    const target = await query('SELECT id FROM users WHERE id = $1 LIMIT 1', [targetUserId]);
+    if (target.rows.length === 0) return res.status(404).json({ error: 'Target user not found.' });
+    console.log(`[PushTest] requestedBy=${req.auth!.id} targetUserId=${targetUserId} title=${JSON.stringify(title)}`);
+    await queueUserPush(targetUserId, title, body, {
+      type: 'admin_push_test',
+      requestedBy: req.auth!.id,
+    });
+    await recordAdminAudit(req, 'push_test_sent', 'user', targetUserId, { title });
+    res.json({ data: { queued: true, targetUserId } });
+  } catch (error) {
+    console.error(`[PushTest] failed adminId=${req.auth?.id}:`, error);
+    next(error);
+  }
+});
 
 router.get('/withdrawals', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -32,6 +56,12 @@ router.patch('/withdrawals/:id/approve', requireAuth, authorize('admin'), async 
     );
     if (result.rows.length === 0) return res.status(409).json({ error: 'Withdrawal is no longer pending.' });
     await recordAdminAudit(req, 'withdrawal_approved', 'wallet_withdrawal', req.params.id);
+    const withdrawal = await query('SELECT user_id, amount FROM wallet_withdrawals WHERE id = $1', [req.params.id]);
+    if (withdrawal.rows[0]) {
+      await queueUserPush(withdrawal.rows[0].user_id, 'Withdrawal approved',
+        `Your KSh ${Number(withdrawal.rows[0].amount).toFixed(2)} withdrawal is approved for release.`,
+        { type: 'withdrawal_approved', withdrawalId: req.params.id });
+    }
     res.json({ data: result.rows[0] });
   } catch (error) { next(error); }
 });
@@ -43,7 +73,7 @@ router.post('/withdrawals/:id/release', requireAuth, authorize('admin'), async (
     const result = await client.query(
       `UPDATE wallet_withdrawals SET status = 'processing', released_by = $1
        WHERE id = $2 AND status = 'approved'
-       RETURNING id, amount, destination_account`, [req.auth!.id, req.params.id],
+      RETURNING id, user_id, amount, destination_account`, [req.auth!.id, req.params.id],
     );
     if (result.rows.length === 0) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Withdrawal must be approved before release.' }); }
     await client.query('COMMIT');
@@ -59,6 +89,9 @@ router.post('/withdrawals/:id/release', requireAuth, authorize('admin'), async (
         [payout.conversationId, result.rows[0].id],
       );
       await recordAdminAudit(req, 'withdrawal_released', 'wallet_withdrawal', req.params.id, { providerReference: payout.conversationId });
+      await queueUserPush(result.rows[0].user_id, 'Withdrawal released',
+        `Your KSh ${Number(result.rows[0].amount).toFixed(2)} withdrawal has been sent to M-Pesa.`,
+        { type: 'withdrawal_released', withdrawalId: req.params.id });
       res.json({ data: { id: result.rows[0].id, status: 'processing', providerReference: payout.conversationId } });
     } catch (error: any) {
       await query(`UPDATE wallet_withdrawals SET status = 'approved', failure_reason = $1 WHERE id = $2`, [error.message, result.rows[0].id]);

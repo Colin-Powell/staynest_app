@@ -4,6 +4,7 @@ import { pool } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { initiateSTKPush } from '../services/mpesa.js';
 import { payBookingFromWallet } from '../services/finance_service.js';
+import { queueUserPush } from '../services/queue.js';
 const normalizePhone = (value) => {
     const digits = value.replace(/\D/g, '');
     if (digits.startsWith('254'))
@@ -133,6 +134,7 @@ router.post('/withdraw', requireAuth, async (req, res, next) => {
        VALUES ($1, $2, 'withdrawal_hold', 'Wallet withdrawal pending review', 'withdrawal', $3, $4)`, [req.auth.id, -amount, withdrawal.rows[0].id, `withdrawal-hold:${idempotencyKey}`]);
         await client.query('UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2', [amount, req.auth.id]);
         await client.query('COMMIT');
+        await queueUserPush(req.auth.id, 'Withdrawal submitted', `Your KSh ${amount.toFixed(2)} withdrawal is pending admin review.`, { type: 'withdrawal_submitted', withdrawalId: withdrawal.rows[0].id });
         res.status(201).json({ data: withdrawal.rows[0] });
     }
     catch (error) {

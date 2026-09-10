@@ -21,12 +21,12 @@ function initFirebase() {
       initializeApp({
         credential: cert(serviceAccount),
       });
-      console.log('Firebase Admin initialized successfully.');
+      console.log(`[Firebase] Admin initialized project=${serviceAccount.project_id ?? 'unknown'}`);
     } catch (e) {
       console.error('Failed to initialize Firebase Admin SDK:', e);
     }
   } else {
-    console.warn('FIREBASE_SERVICE_ACCOUNT is not set. Push notifications will be disabled.');
+    console.warn('[Firebase] FIREBASE_SERVICE_ACCOUNT is not set. Native push is disabled.');
   }
 }
 
@@ -39,7 +39,7 @@ export async function sendPushToUser(
   data?: Record<string, string>
 ): Promise<boolean> {
   try {
-    console.log(`[Push] requested userId=${userId} title=${JSON.stringify(title)}`);
+    console.log(`[Push] requested userId=${userId} title=${JSON.stringify(title)} data=${JSON.stringify(data ?? {})}`);
     // Always save to database for the in-app notifications tab, EVEN IF Firebase is disabled
     try {
       await query(
@@ -70,6 +70,7 @@ export async function sendPushToUser(
       console.warn(`[Push] no FCM token; in-app notification only userId=${userId}`);
       return true;
     }
+    console.log(`[Push] token found userId=${userId} tokenSuffix=${user.fcm_token.slice(-8)}`);
 
     // Check if the user has opted out of push notifications
     if (user.settings && typeof user.settings === 'object') {
@@ -99,6 +100,12 @@ export async function sendPushToUser(
     return true;
   } catch (error) {
     console.error(`Failed to send push to user ${userId}:`, error);
+    const code = (error as { errorInfo?: { code?: string } })?.errorInfo?.code;
+    if (code === 'messaging/registration-token-not-registered' ||
+        code === 'messaging/invalid-registration-token') {
+      await query('UPDATE users SET fcm_token = NULL WHERE id = $1', [userId]);
+      console.warn(`[Push] removed invalid FCM token userId=${userId}`);
+    }
     return false;
   }
 }
