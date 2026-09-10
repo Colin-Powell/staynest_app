@@ -3,6 +3,7 @@ import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { initiateSTKPush, parseCallback, verifyCallbackSignature } from '../services/mpesa.js';
 import { cache } from '../services/cache.js';
+import { settleWalletTopup } from '../services/finance_service.js';
 
 const router = Router();
 
@@ -125,7 +126,7 @@ router.post('/mpesa-callback', async (req: Request, res: Response, next: NextFun
 
     // Find the payment transaction
     const txnResult = await query(
-      `SELECT id, promotion_id, user_id, amount FROM payment_transactions 
+      `SELECT id, promotion_id, user_id, amount, transaction_type FROM payment_transactions
        WHERE checkout_request_id = $1 LIMIT 1`,
       [checkoutRequestId]
     );
@@ -150,6 +151,15 @@ router.post('/mpesa-callback', async (req: Request, res: Response, next: NextFun
            WHERE checkout_request_id = $3`,
           [result.mpesaReceiptNumber, result.mpesaReceiptNumber, checkoutRequestId]
         );
+
+        if (transaction.transaction_type === 'wallet_topup') {
+          await query('COMMIT');
+          await settleWalletTopup(transaction.id);
+          return res.json({
+            ResultCode: 0,
+            ResultDesc: 'Wallet top-up processed successfully',
+          });
+        }
 
         // Check if this is for a promotion (boost)
         // Find unprocessed promotion for this user with pending payment

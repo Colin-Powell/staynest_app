@@ -3,6 +3,7 @@ import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { queueUserPush } from '../services/queue.js';
 import { settleReferralReward } from '../services/referral_service.js';
+import { settleEscrow } from '../services/finance_service.js';
 
 const router = Router();
 
@@ -117,7 +118,10 @@ router.get('/tenant', requireAuth, async (req: Request, res: Response, next: Nex
        RETURNING id`,
       []
     );
-    for (const booking of completed.rows) await settleReferralReward(booking.id);
+    for (const booking of completed.rows) {
+      await settleReferralReward(booking.id);
+      await settleEscrow(booking.id, 'release');
+    }
 
     const result = await query(
       `SELECT b.id,
@@ -160,7 +164,10 @@ router.get('/landlord', requireAuth, async (req: Request, res: Response, next: N
        RETURNING id`,
       []
     );
-    for (const booking of completed.rows) await settleReferralReward(booking.id);
+    for (const booking of completed.rows) {
+      await settleReferralReward(booking.id);
+      await settleEscrow(booking.id, 'release');
+    }
 
     const result = await query(
       `SELECT b.id,
@@ -257,6 +264,7 @@ router.patch('/:id/reject', requireAuth, async (req: Request, res: Response, nex
        RETURNING *`,
       ['rejected', notesUpdate, bookingId],
     );
+    await settleEscrow(bookingId, 'refund');
     try {
       const b = result.rows[0];
       const pRes = await query('SELECT title FROM properties WHERE id = $1 LIMIT 1', [b.property_id]);
@@ -304,6 +312,7 @@ router.patch('/:id/cancel', requireAuth, async (req: Request, res: Response, nex
        RETURNING *`,
       ['cancelled', notesUpdate, bookingId],
     );
+    await settleEscrow(bookingId, 'refund');
     try {
       const b = result.rows[0];
       const notifyUserId = isTenant ? b.landlord_id : b.tenant_id;
@@ -329,7 +338,10 @@ router.get('/:id', requireAuth, async (req: Request, res: Response, next: NextFu
        RETURNING id`,
       [req.params.id]
     );
-    for (const booking of completed.rows) await settleReferralReward(booking.id);
+    for (const booking of completed.rows) {
+      await settleReferralReward(booking.id);
+      await settleEscrow(booking.id, 'release');
+    }
 
     const bookingId = req.params.id;
 

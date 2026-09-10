@@ -7,7 +7,7 @@ class BookingService {
   static final HttpJsonClient _client = HttpJsonClient();
 
   /// Creates a new booking request for a tenant
-  static Future<bool> createBooking({
+  static Future<Map<String, dynamic>> createBooking({
     required String propertyId,
     required DateTime checkIn,
     required DateTime checkOut,
@@ -28,7 +28,11 @@ class BookingService {
         'notes': notes,
       },
     );
-    return response.statusCode == 201 || response.statusCode == 200;
+    if (response.statusCode != 201 && response.statusCode != 200) {
+      throw Exception('Booking request failed.');
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return Map<String, dynamic>.from(decoded['data'] as Map);
   }
 
   /// Fetches bookings based on role (Tenant or Landlord)

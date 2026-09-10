@@ -11,6 +11,7 @@ import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/booking_service.dart';
+import 'package:property_app/services/wallet_api.dart';
 import 'package:property_app/utils/api_result.dart';
 
 // ─── Tenant Design System Constants ───────────────────────────────────────────
@@ -607,7 +608,7 @@ class _BookingViewState extends State<BookingView> {
       final totalPrice =
           (nights > 0 ? nights : 1) * _property!.price.toDouble();
 
-      success = await BookingService.createBooking(
+      final booking = await BookingService.createBooking(
         propertyId: widget.propertyId,
         checkIn: _selectedRange!.start,
         checkOut: _selectedRange!.end,
@@ -617,6 +618,11 @@ class _BookingViewState extends State<BookingView> {
             ? null
             : _notesController.text.trim(),
       );
+      final paymentChoice = await _choosePaymentMethod();
+      if (paymentChoice == 'wallet') {
+        await WalletApi.payBooking(booking['id'].toString());
+      }
+      success = true;
     } catch (error) {
       errorMessage = _bookingErrorMessage(error);
     }
@@ -646,6 +652,33 @@ class _BookingViewState extends State<BookingView> {
         );
       }
     }
+  }
+
+  Future<String?> _choosePaymentMethod() async {
+    if (!mounted) return null;
+    return showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(title: Text('Payment option')),
+            ListTile(
+              leading: const Icon(Icons.account_balance_wallet_outlined),
+              title: const Text('Pay from wallet'),
+              subtitle: const Text('Hold the booking amount in escrow'),
+              onTap: () => Navigator.pop(context, 'wallet'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.schedule_outlined),
+              title: const Text('Pay later'),
+              subtitle: const Text('Send a booking request without payment'),
+              onTap: () => Navigator.pop(context, 'later'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _bookingErrorMessage(Object error) {

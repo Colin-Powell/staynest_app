@@ -3,6 +3,7 @@ import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { queueUserPush } from '../services/queue.js';
 import { settleReferralReward } from '../services/referral_service.js';
+import { settleEscrow } from '../services/finance_service.js';
 const router = Router();
 // Create a new booking (tenant creates booking)
 router.post('/', requireAuth, async (req, res, next) => {
@@ -86,8 +87,10 @@ router.get('/tenant', requireAuth, async (req, res, next) => {
        SET status = 'completed', updated_at = now() 
        WHERE status = 'confirmed' AND check_out_date < CURRENT_DATE
        RETURNING id`, []);
-        for (const booking of completed.rows)
+        for (const booking of completed.rows) {
             await settleReferralReward(booking.id);
+            await settleEscrow(booking.id, 'release');
+        }
         const result = await query(`SELECT b.id,
               b.property_id,
               b.check_in_date,
@@ -122,8 +125,10 @@ router.get('/landlord', requireAuth, async (req, res, next) => {
        SET status = 'completed', updated_at = now() 
        WHERE status = 'confirmed' AND check_out_date < CURRENT_DATE
        RETURNING id`, []);
-        for (const booking of completed.rows)
+        for (const booking of completed.rows) {
             await settleReferralReward(booking.id);
+            await settleEscrow(booking.id, 'release');
+        }
         const result = await query(`SELECT b.id,
               b.property_id,
               b.tenant_id,
@@ -203,6 +208,7 @@ router.patch('/:id/reject', requireAuth, async (req, res, next) => {
            updated_at = now() 
        WHERE id = $3 
        RETURNING *`, ['rejected', notesUpdate, bookingId]);
+        await settleEscrow(bookingId, 'refund');
         try {
             const b = result.rows[0];
             const pRes = await query('SELECT title FROM properties WHERE id = $1 LIMIT 1', [b.property_id]);
@@ -241,6 +247,7 @@ router.patch('/:id/cancel', requireAuth, async (req, res, next) => {
        SET status = $1, notes = CASE WHEN $2::text IS NOT NULL THEN COALESCE(notes, '') || ' ' || $2 ELSE notes END, updated_at = now() 
        WHERE id = $3 
        RETURNING *`, ['cancelled', notesUpdate, bookingId]);
+        await settleEscrow(bookingId, 'refund');
         try {
             const b = result.rows[0];
             const notifyUserId = isTenant ? b.landlord_id : b.tenant_id;
@@ -266,8 +273,10 @@ router.get('/:id', requireAuth, async (req, res, next) => {
        SET status = 'completed', updated_at = now() 
        WHERE id = $1 AND status = 'confirmed' AND check_out_date < CURRENT_DATE
        RETURNING id`, [req.params.id]);
-        for (const booking of completed.rows)
+        for (const booking of completed.rows) {
             await settleReferralReward(booking.id);
+            await settleEscrow(booking.id, 'release');
+        }
         const bookingId = req.params.id;
         const result = await query(`SELECT b.id,
               b.property_id,

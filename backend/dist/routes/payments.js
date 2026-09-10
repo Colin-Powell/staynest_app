@@ -3,6 +3,7 @@ import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { initiateSTKPush, parseCallback, verifyCallbackSignature } from '../services/mpesa.js';
 import { cache } from '../services/cache.js';
+import { settleWalletTopup } from '../services/finance_service.js';
 const router = Router();
 /**
  * Initiate M-Pesa STKPush for boost payment
@@ -96,7 +97,7 @@ router.post('/mpesa-callback', async (req, res, next) => {
         const result = parseCallback(callbackData);
         const checkoutRequestId = result.checkoutRequestId;
         // Find the payment transaction
-        const txnResult = await query(`SELECT id, promotion_id, user_id, amount FROM payment_transactions 
+        const txnResult = await query(`SELECT id, promotion_id, user_id, amount, transaction_type FROM payment_transactions
        WHERE checkout_request_id = $1 LIMIT 1`, [checkoutRequestId]);
         if (!txnResult.rowCount || txnResult.rowCount === 0) {
             console.warn('[Payment] Callback for unknown transaction:', checkoutRequestId);
@@ -113,6 +114,14 @@ router.post('/mpesa-callback', async (req, res, next) => {
             mpesa_transaction_id = $2,
             completed_at = NOW()
            WHERE checkout_request_id = $3`, [result.mpesaReceiptNumber, result.mpesaReceiptNumber, checkoutRequestId]);
+                if (transaction.transaction_type === 'wallet_topup') {
+                    await query('COMMIT');
+                    await settleWalletTopup(transaction.id);
+                    return res.json({
+                        ResultCode: 0,
+                        ResultDesc: 'Wallet top-up processed successfully',
+                    });
+                }
                 // Check if this is for a promotion (boost)
                 // Find unprocessed promotion for this user with pending payment
                 const promoResult = await query(`SELECT id, property_id, landlord_id, package_type, boost_score, amount,

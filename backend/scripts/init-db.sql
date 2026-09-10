@@ -113,10 +113,12 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
 ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS reference_type varchar(40);
 ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS reference_id uuid;
 ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS idempotency_key varchar(160);
+ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS status varchar(20) NOT NULL DEFAULT 'posted';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_transactions_idempotency
   ON wallet_transactions(idempotency_key) WHERE idempotency_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user_created
   ON wallet_transactions(user_id, created_at DESC);
+
 
 CREATE TABLE IF NOT EXISTS properties (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -460,14 +462,35 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
   mpesa_receipt_number text UNIQUE,
   mpesa_transaction_id text,
   error_message text,
+  idempotency_key text UNIQUE,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
   completed_at timestamptz
 );
+ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS idempotency_key text;
+ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_transactions_idempotency
+  ON payment_transactions(idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_user ON payment_transactions(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_status ON payment_transactions(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_checkout ON payment_transactions(checkout_request_id);
 CREATE INDEX IF NOT EXISTS idx_payment_transactions_receipt ON payment_transactions(mpesa_receipt_number);
+
+CREATE TABLE IF NOT EXISTS booking_escrows (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id uuid NOT NULL UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+  payer_id uuid NOT NULL REFERENCES users(id),
+  payee_id uuid NOT NULL REFERENCES users(id),
+  amount numeric(10, 2) NOT NULL CHECK (amount > 0),
+  status varchar(20) NOT NULL DEFAULT 'held',
+  funded_at timestamptz NOT NULL DEFAULT now(),
+  released_at timestamptz,
+  refunded_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (payer_id <> payee_id)
+);
+CREATE INDEX IF NOT EXISTS idx_booking_escrows_status ON booking_escrows(status, created_at DESC);
 
 -- Landlord payment methods table
 CREATE TABLE IF NOT EXISTS landlord_payment_methods (
@@ -485,6 +508,20 @@ CREATE TABLE IF NOT EXISTS landlord_payment_methods (
 
 CREATE INDEX IF NOT EXISTS idx_landlord_payment_methods_user ON landlord_payment_methods(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_landlord_payment_methods_default ON landlord_payment_methods(user_id, is_default);
+
+CREATE TABLE IF NOT EXISTS wallet_withdrawals (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  payment_method_id uuid REFERENCES landlord_payment_methods(id) ON DELETE SET NULL,
+  amount numeric(10, 2) NOT NULL CHECK (amount > 0),
+  status varchar(20) NOT NULL DEFAULT 'pending',
+  idempotency_key varchar(160) NOT NULL UNIQUE,
+  failure_reason text,
+  processed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_wallet_withdrawals_user_created
+  ON wallet_withdrawals(user_id, created_at DESC);
 
 -- 6. Unique View Tracking (Anti-Inflation)
 CREATE TABLE IF NOT EXISTS property_unique_views (

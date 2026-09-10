@@ -1,5 +1,7 @@
 import 'package:property_app/services/api_client.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/services/landlord_payment_methods_service.dart';
+import 'package:uuid/uuid.dart';
 
 class WalletApi {
   static ApiClient _client() => ApiClient(
@@ -18,5 +20,47 @@ class WalletApi {
     final response = await _client().getJson('/wallet/transactions');
     final data = response['data'] as List<dynamic>? ?? const [];
     return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+  }
+
+  static Future<List<Map<String, dynamic>>> getWithdrawals() async {
+    final response = await _client().getJson('/wallet/withdrawals');
+    final data = response['data'] as List<dynamic>? ?? const [];
+    return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+  }
+
+  static Future<Map<String, dynamic>> getEscrow(String bookingId) async {
+    final response = await _client().getJson('/wallet/escrow/$bookingId');
+    return Map<String, dynamic>.from(response['data'] as Map);
+  }
+
+  static Future<Map<String, dynamic>> topUp({
+    required double amount,
+    required LandlordPaymentMethod paymentMethod,
+  }) async {
+    final response = await _client().postJson('/wallet/top-up', body: {
+      'amount': amount,
+      'paymentMethodId': paymentMethod.id,
+    });
+    return Map<String, dynamic>.from(response['data'] as Map);
+  }
+
+  static Future<Map<String, dynamic>> withdraw({
+    required double amount,
+    required LandlordPaymentMethod paymentMethod,
+  }) async {
+    final response = await _client().postJson('/wallet/withdraw', body: {
+      'amount': amount,
+      'paymentMethodId': paymentMethod.id,
+      'idempotencyKey': const Uuid().v4(),
+    });
+    return Map<String, dynamic>.from(response['data'] as Map);
+  }
+
+  static Future<Map<String, dynamic>> payBooking(String bookingId) async {
+    final response = await _client().postJson('/wallet/pay-booking', body: {
+      'bookingId': bookingId,
+      'idempotencyKey': const Uuid().v4(),
+    });
+    return Map<String, dynamic>.from(response['data'] as Map);
   }
 }
