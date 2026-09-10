@@ -2,7 +2,6 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { query } from '../db.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
 import { cache } from '../services/cache.js';
-import { sendPushToUser } from '../services/firebase.js';
 import { finalizeVerificationDecision } from './verifications.js';
 import { pool } from '../db.js';
 import { initiateB2CPayout } from '../services/mpesa.js';
@@ -533,21 +532,21 @@ router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (r
 
     // Notify the landlord
     if (status === 'approved') {
-      const notificationSent = await sendPushToUser(
+      await queueUserPush(
         property.landlord_id,
         'Property Approved! ??',
         `Your listing "${property.title}" has been approved and is now live on StayNest.`,
         { type: 'property_status', propertyId: id, status: 'approved' }
       );
-      console.log(`[AdminPropertyStatus] approval notification userId=${property.landlord_id} sent=${notificationSent} propertyId=${id}`);
+      console.log(`[AdminPropertyStatus] approval notification queued for userId=${property.landlord_id} propertyId=${id}`);
     } else if (status === 'rejected') {
-      const notificationSent = await sendPushToUser(
+      await queueUserPush(
         property.landlord_id,
         'Property Requires Revision',
         `Your listing "${property.title}" requires some changes before it can be published.`,
         { type: 'property_status', propertyId: id, status: 'rejected' }
       );
-      console.log(`[AdminPropertyStatus] rejection notification userId=${property.landlord_id} sent=${notificationSent} propertyId=${id}`);
+      console.log(`[AdminPropertyStatus] rejection notification queued for userId=${property.landlord_id} propertyId=${id}`);
     }
 
     res.json({

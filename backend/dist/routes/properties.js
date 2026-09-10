@@ -5,7 +5,7 @@ import { cache } from '../services/cache.js';
 import { requireAuth, authorize } from '../middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../config.js';
-import { sendPushToUser } from '../services/firebase.js';
+import { queueUserPush } from '../services/queue.js';
 async function getCache(key) {
     const raw = await cache.get(`cache:${key}`);
     if (!raw)
@@ -771,8 +771,8 @@ async function handleCreateProperty(req, res, next, logRouteName) {
        VALUES ($1)
        ON CONFLICT (property_id) DO NOTHING`, [property.id]);
         // Notify the landlord that their listing was submitted
-        const notificationSent = await sendPushToUser(userId, 'Listing Submitted ??', `Your property "${property.title}" has been successfully submitted and is pending admin review.`, { type: 'property_submitted', propertyId: property.id });
-        console.log(`[PropertyCreateFromListing] submission notification userId=${userId} sent=${notificationSent} propertyId=${property.id}`);
+        await queueUserPush(userId, 'Listing Submitted ??', `Your property "${property.title}" has been successfully submitted and is pending admin review.`, { type: 'property_submitted', propertyId: property.id });
+        console.log(`[PropertyCreateFromListing] submission notification queued for userId=${userId} propertyId=${property.id}`);
         res.status(201).json({ data: property });
     }
     catch (error) {

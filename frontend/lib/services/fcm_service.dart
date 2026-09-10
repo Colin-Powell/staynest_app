@@ -46,18 +46,18 @@ class FCMService {
       return;
     }
 
+    // ── Step 1: Register FCM listeners FIRST ─────────────────────────────────
+    // Isolated so a flutter_local_notifications failure never blocks delivery.
     try {
       FirebaseMessaging.onBackgroundMessage(
           _firebaseMessagingBackgroundHandler);
 
-      // Set iOS foreground presentation options
       await _messaging.setForegroundNotificationPresentationOptions(
         alert: true,
         badge: true,
         sound: true,
       );
 
-      // 1. Request Permissions (iOS/Android 13+)
       final settings = await _messaging.requestPermission(
         alert: true,
         badge: true,
@@ -65,11 +65,43 @@ class FCMService {
       );
       debugPrint('[FCM] authorization=${settings.authorizationStatus}');
 
-      // 2. Setup Local Notifications for Foreground
-      const androidInit = AndroidInitializationSettings(
-        '@drawable/ic_notification',
-      );
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        debugPrint(
+            '[FCM] onMessage id=${message.messageId} title=${message.notification?.title} data=${message.data}');
+        _notificationsController.add(message);
+        try {
+          _showLocalNotification(message);
+        } catch (error, stackTrace) {
+          debugPrint('[FCM] local notification failed: $error');
+          debugPrintStack(stackTrace: stackTrace);
+        }
+        _showIncomingModal(message);
+      });
 
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageAction);
+
+      final RemoteMessage? initialMessage =
+          await _messaging.getInitialMessage();
+      if (initialMessage != null) _handleMessageAction(initialMessage);
+
+      _messaging.onTokenRefresh.listen((newToken) {
+        AuthService.instance.syncFCMToken(newToken: newToken);
+      });
+
+      final token = await getToken();
+      debugPrint('[FCM] token=${(token?.length ?? 0) > 20 ? token!.substring(0, 20) : token ?? "null"}...');
+    } catch (error, stackTrace) {
+      debugPrint('[FCM] listener registration failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+
+    // ── Step 2: Set up local notifications (foreground banners) ──────────────
+    // Separate try/catch — a failure here never kills the listeners above.
+    try {
+      // ic_launcher_foreground is monochrome (required on Android 5+)
+      const androidInit = AndroidInitializationSettings(
+        'ic_launcher_foreground',
+      );
       const iosInit = DarwinInitializationSettings();
 
       await _localNotifications.initialize(
@@ -79,39 +111,18 @@ class FCMService {
         ),
       );
 
-      // Create Android Notification Channel
-      final androidImplementation =
-          _localNotifications.resolvePlatformSpecificImplementation<
+      final androidImpl = _localNotifications
+          .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
-      if (androidImplementation != null) {
-        await androidImplementation.createNotificationChannel(_channel);
+      if (androidImpl != null) {
+        await androidImpl.createNotificationChannel(_channel);
+        final granted = await androidImpl.requestNotificationsPermission();
+        debugPrint('[FCM] Android notification permission=$granted');
       }
 
-      // 3. Handle Foreground Messages & Trigger Modal
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        _notificationsController.add(message);
-        _showLocalNotification(message);
-        _showIncomingModal(message);
-      });
-
-      // 4. Handle Notification Clicks (App in background)
-      FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageAction);
-
-      // 5. Handle App start from terminated state
-      RemoteMessage? initialMessage = await _messaging.getInitialMessage();
-      if (initialMessage != null) _handleMessageAction(initialMessage);
-
-      // 6. Token Refresh
-      _messaging.onTokenRefresh.listen((newToken) {
-        AuthService.instance
-            .syncFCMToken(newToken: newToken); // Sync new token to backend
-      });
-
-      // Print token for testing purposes
-      final token = await getToken();
-      debugPrint("FCM Token: $token");
+      debugPrint('[FCM] local notifications initialised');
     } catch (error, stackTrace) {
-      debugPrint('[FCM] initialization failed: $error');
+      debugPrint('[FCM] local notifications setup failed: $error');
       debugPrintStack(stackTrace: stackTrace);
     }
   }
@@ -231,6 +242,8 @@ class FCMService {
 
     if (notification == null) return;
 
+    debugPrint(
+        '[FCM] showing local notification id=${notification.hashCode} channel=${_channel.id}');
     _localNotifications.show(
       id: notification.hashCode,
       title: notification.title,
@@ -242,7 +255,7 @@ class FCMService {
           channelDescription: _channel.description,
           importance: _channel.importance,
           priority: Priority.high,
-          icon: '@drawable/ic_notification',
+          icon: 'ic_launcher_foreground',
         ),
       ),
       payload: message.data['chatId']?.toString(),
