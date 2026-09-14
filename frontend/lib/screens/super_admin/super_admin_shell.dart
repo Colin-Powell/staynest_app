@@ -139,7 +139,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = AppSession.currentRole.toLowerCase() == 'admin';
+    final isAdmin = AppSession.isAdmin;
     if (!isAdmin) {
       return Scaffold(
         body: Center(

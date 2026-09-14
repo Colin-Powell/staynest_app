@@ -534,7 +534,7 @@ router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (r
     if (status === 'approved') {
       await queueUserPush(
         property.landlord_id,
-        'Property Approved! ??',
+        'Property Approved!',
         `Your listing "${property.title}" has been approved and is now live on StayNest.`,
         { type: 'property_status', propertyId: id, status: 'approved' }
       );

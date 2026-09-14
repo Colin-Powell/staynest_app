@@ -982,7 +982,7 @@ async function handleCreateProperty(req: Request, res: Response, next: NextFunct
     // Notify the landlord that their listing was submitted
     await queueUserPush(
       userId!,
-      'Listing Submitted ??',
+      'Listing Submitted',
       `Your property "${property.title}" has been successfully submitted and is pending admin review.`,
       { type: 'property_submitted', propertyId: property.id }
     );

@@ -21,7 +21,7 @@ class NotificationItem {
   final String title;
   final String subtitle;
   final String time;
-  final String emoji;
+  final IconData icon;
   bool isRead;
 
   NotificationItem({
@@ -29,7 +29,7 @@ class NotificationItem {
     required this.title,
     required this.subtitle,
     required this.time,
-    this.emoji = '🔔',
+    this.icon = Icons.notifications_none,
     this.isRead = false,
   });
 }
@@ -83,18 +83,24 @@ class _NotificationsViewState extends State<NotificationsView>
     _setupFCMStream();
   }
 
-  String _notificationEmoji(Map<dynamic, dynamic> data) {
+  IconData _notificationIcon(Map<dynamic, dynamic> data) {
     final type = data['type']?.toString().toLowerCase() ?? '';
     if (type.contains('booking') ||
         type.contains('checkin') ||
-        type.contains('checkout')) return '📅';
-    if (type.contains('message') || type.contains('unread')) return '💬';
-    if (type.contains('payment') || type.contains('price')) return '💰';
+        type.contains('checkout')) return Icons.calendar_today_outlined;
+    if (type.contains('message') || type.contains('unread')) {
+      return Icons.chat_bubble_outline;
+    }
+    if (type.contains('payment') || type.contains('price')) {
+      return Icons.account_balance_wallet_outlined;
+    }
     if (type.contains('alert') ||
         type.contains('warning') ||
-        type.contains('stale')) return '⚠️';
-    if (type.contains('approved') || type.contains('success')) return '✅';
-    return '🔔';
+        type.contains('stale')) return Icons.warning_amber_outlined;
+    if (type.contains('approved') || type.contains('success')) {
+      return Icons.check_circle_outline;
+    }
+    return Icons.notifications_none;
   }
 
   void _setupFCMStream() {
@@ -103,7 +109,7 @@ class _NotificationsViewState extends State<NotificationsView>
       if (!mounted) return;
       final title = message.notification?.title ?? 'Notification';
       final subtitle = message.notification?.body ?? '';
-      final emoji = _notificationEmoji(message.data);
+      final icon = _notificationIcon(message.data);
       final now = DateTime.now();
 
       setState(() {
@@ -114,7 +120,7 @@ class _NotificationsViewState extends State<NotificationsView>
             title: title,
             subtitle: subtitle,
             time: _formatTime(now),
-            emoji: emoji,
+            icon: icon,
             isRead: false,
           ),
         );
@@ -143,7 +149,7 @@ class _NotificationsViewState extends State<NotificationsView>
             title: item['title'] ?? 'Notification',
             subtitle: item['body'] ?? '',
             time: _formatTime(created),
-            emoji: _notificationEmoji(dataMap),
+            icon: _notificationIcon(dataMap),
             isRead: unreadCount == 0,
           ));
         }
@@ -454,8 +460,8 @@ class _NotificationsViewState extends State<NotificationsView>
                       color: item.isRead ? _bg : _primaryText.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
-                    child:
-                        Text(item.emoji, style: const TextStyle(fontSize: 20)),
+                    child: Icon(item.icon,
+                        color: item.isRead ? _grey : _primaryText, size: 22),
                   ),
                 Expanded(
                   child: Column(
