@@ -4,6 +4,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/responsive_layout.dart';
+import 'package:property_app/services/notification_api.dart';
 import 'super_admin_dashboard.dart';
 import 'super_admin_properties.dart';
 import 'super_admin_users.dart';
@@ -23,6 +24,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
   int _selectedIndex = 0;
   bool _isSidebarExpanded = true;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  List<Map<String, dynamic>> _notifications = [];
 
   static final List<_NavItem> _navItems = [
     _NavItem(label: 'Dashboard', icon: PhosphorIcons.house()),
@@ -52,8 +54,92 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications() async {
+    try {
+      final response = await NotificationApi.fetchNotifications(limit: 20);
+      if (mounted) {
+        setState(() => _notifications =
+            (response['data'] as List<dynamic>? ?? [])
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList());
+      }
+    } catch (_) {
+      // The admin shell remains usable if notification history is unavailable.
+    }
+  }
+
+  String _notificationTime(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (date == null) return '';
+    final diff = DateTime.now().difference(date);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  int get _mobileSelectedIndex {
+    if (_selectedIndex == 0) return 0;
+    if (_selectedIndex == 1) return 1;
+    if (_selectedIndex == 4) return 2;
+    return 3;
+  }
+
+  void _selectMobileDestination(int index) {
+    const pageIndices = [0, 1, 4];
+    if (index < pageIndices.length) {
+      setState(() => _selectedIndex = pageIndices[index]);
+      return;
+    }
+    _showMoreSheet();
+  }
+
+  Future<void> _showMoreSheet() async {
+    final pageIndex = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(title: Text('Admin sections')),
+            _MoreDestination(
+              icon: _navItems[2].icon,
+              label: _navItems[2].label,
+              selected: _selectedIndex == 2,
+              onTap: () => Navigator.pop(sheetContext, 2),
+            ),
+            _MoreDestination(
+              icon: _navItems[3].icon,
+              label: _navItems[3].label,
+              selected: _selectedIndex == 3,
+              onTap: () => Navigator.pop(sheetContext, 3),
+            ),
+            _MoreDestination(
+              icon: _navItems[5].icon,
+              label: _navItems[5].label,
+              selected: _selectedIndex == 5,
+              onTap: () => Navigator.pop(sheetContext, 5),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+    if (pageIndex != null && mounted) {
+      setState(() => _selectedIndex = pageIndex);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isAdmin = AppSession.currentRole.toLowerCase() == 'admin';
+    final isAdmin = AppSession.isAdmin;
     if (!isAdmin) {
       return Scaffold(
         body: Center(
@@ -175,7 +261,17 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                                             fontWeight: FontWeight.w600,
                                             color: AppColors.gray900)),
                                     InkWell(
-                                      onTap: () {},
+                                      onTap: () async {
+                                        await NotificationApi.markAllAsRead();
+                                        if (mounted) {
+                                          setState(() {
+                                            _notifications = _notifications
+                                                .map((item) =>
+                                                    {...item, 'is_read': true})
+                                                .toList();
+                                          });
+                                        }
+                                      },
                                       child: Text('Mark all read',
                                           style: GoogleFonts.inter(
                                               fontSize: 12,
@@ -196,30 +292,37 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
                                 child: ListView(
                                   shrinkWrap: true,
                                   padding: EdgeInsets.zero,
-                                  children: [
-                                    _NotificationItem(
-                                        title: 'New KYC Document',
-                                        time: '10 mins ago',
-                                        icon: PhosphorIcons.shieldCheck(),
-                                        unread: true),
-                                    _NotificationItem(
-                                        title: 'Suspicious login attempt',
-                                        time: '1 hour ago',
-                                        icon: PhosphorIcons.warning(),
-                                        iconColor: StayNestColors.error,
-                                        unread: true),
-                                    _NotificationItem(
-                                        title: 'Property Approved',
-                                        time: '2 hours ago',
-                                        icon: PhosphorIcons.checkCircle(),
-                                        iconColor: AppColors.green600,
-                                        unread: false),
-                                    _NotificationItem(
-                                        title: 'Daily Report Generated',
-                                        time: '1 day ago',
-                                        icon: PhosphorIcons.fileText(),
-                                        unread: false),
-                                  ],
+                                  children: _notifications.isEmpty
+                                      ? [
+                                          const Padding(
+                                            padding: EdgeInsets.all(24),
+                                            child:
+                                                Text('No notifications yet.'),
+                                          )
+                                        ]
+                                      : _notifications.map((item) {
+                                          final data = item['data'] is Map
+                                              ? Map<String, dynamic>.from(
+                                                  item['data'] as Map)
+                                              : <String, dynamic>{};
+                                          final type =
+                                              data['type']?.toString() ?? '';
+                                          final isUnread =
+                                              item['is_read'] != true;
+                                          return _NotificationItem(
+                                            title: item['title']?.toString() ??
+                                                'Notification',
+                                            time: _notificationTime(
+                                                item['created_at']),
+                                            icon: type.contains('withdrawal')
+                                                ? PhosphorIcons.wallet()
+                                                : type.contains('property')
+                                                    ? PhosphorIcons
+                                                        .buildingApartment()
+                                                    : PhosphorIcons.bell(),
+                                            unread: isUnread,
+                                          );
+                                        }).toList(),
                                 ),
                               ),
 
@@ -374,15 +477,23 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
       bottomNavigationBar: isDesktop
           ? null
           : NavigationBar(
-              selectedIndex: _selectedIndex,
+              selectedIndex: _mobileSelectedIndex,
+              height: 68,
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
               backgroundColor: Colors.white,
               indicatorColor: AppColors.gray100,
-              onDestinationSelected: (index) =>
-                  setState(() => _selectedIndex = index),
-              destinations: _navItems
-                  .map((item) => NavigationDestination(
-                      icon: Icon(item.icon), label: item.label))
-                  .toList(),
+              onDestinationSelected: _selectMobileDestination,
+              destinations: [
+                NavigationDestination(
+                    icon: Icon(_navItems[0].icon), label: _navItems[0].label),
+                NavigationDestination(
+                    icon: Icon(_navItems[1].icon), label: 'KYC'),
+                NavigationDestination(
+                    icon: Icon(_navItems[4].icon), label: 'Withdrawals'),
+                NavigationDestination(
+                    icon: Icon(PhosphorIcons.dotsThreeOutline()),
+                    label: 'More'),
+              ],
             ),
     );
   }
@@ -451,6 +562,31 @@ class _NotificationItem extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MoreDestination extends StatelessWidget {
+  const _MoreDestination({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      selected: selected,
+      leading: Icon(icon),
+      title: Text(label),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
     );
   }
 }

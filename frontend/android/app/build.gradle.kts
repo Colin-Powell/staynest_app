@@ -43,6 +43,20 @@ android {
         versionName = flutter.versionName
     }
 
+    flavorDimensions += "app"
+    productFlavors {
+        create("consumer") {
+            dimension = "app"
+            manifestPlaceholders["appName"] = "StayNest"
+        }
+        create("admin") {
+            dimension = "app"
+            applicationIdSuffix = ".admin"
+            versionNameSuffix = "-admin"
+            manifestPlaceholders["appName"] = "StayNest Admin"
+        }
+    }
+
     // 2. Add the signing configuration block before the buildTypes block
     signingConfigs {
         create("release") {

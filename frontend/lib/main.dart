@@ -39,40 +39,40 @@ import 'package:property_app/firebase_options.dart';
 import 'utils/responsive_layout.dart';
 
 Future<void> _initializeFirebaseAsync() async {
+  // ── Step 1: Core Firebase init ────────────────────────────────────────────
   try {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
+      debugPrint('[Firebase] initialized');
     } else {
       Firebase.app();
+      debugPrint('[Firebase] already initialized');
     }
+  } catch (err, stackTrace) {
+    debugPrint('[Firebase] initializeApp failed: $err');
+    debugPrintStack(stackTrace: stackTrace);
+    // Do NOT return — FCMService may still work via the native SDK.
+  }
+
+  // ── Step 2: Analytics (non-critical) ─────────────────────────────────────
+  try {
     await AnalyticsService.initialize();
+  } catch (err) {
+    debugPrint('[Firebase] Analytics init failed: $err');
+  }
 
-    void logFcm(RemoteMessage m, {String source = 'unknown'}) {
-      final data = m.data;
-      final title = m.notification?.title;
-      final body = m.notification?.body;
-      final senderId = data['senderId']?.toString();
-      final chatId = data['chatId']?.toString();
-      final clickAction = data['click_action']?.toString();
-      debugPrint(
-        '[FCM][$source] title=${title ?? '-'} body=${body ?? '-'} senderId=${senderId ?? '-'} chatId=${chatId ?? '-'} click_action=${clickAction ?? '-'} data=${data.isEmpty ? '{}' : data} ',
-      );
-    }
-
+  // ── Step 3: FCM service — completely isolated ─────────────────────────────
+  // Must never be skipped by a failure in steps 1 or 2.
+  try {
     FCMService.instance.navigatorKey = navigatorKey;
     if (!kIsWeb) {
       await FCMService.instance.initialize();
       await FCMService.instance.subscribeToTopic('new_listings');
-      FirebaseMessaging.onMessage.listen((m) => logFcm(m, source: 'onMessage'));
-      FirebaseMessaging.onMessageOpenedApp
-          .listen((m) => logFcm(m, source: 'onMessageOpenedApp'));
-      final initial = await FirebaseMessaging.instance.getInitialMessage();
-      if (initial != null) logFcm(initial, source: 'getInitialMessage');
     }
   } catch (err, stackTrace) {
-    debugPrint('Firebase initialization failed; continuing without it: $err');
+    debugPrint('[FCM] service init failed: $err');
     debugPrintStack(stackTrace: stackTrace);
   }
 }

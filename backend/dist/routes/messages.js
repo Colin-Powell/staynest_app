@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { queueUserPush } from '../services/queue.js';
 import { ioInstance } from '../socket.js';
 const router = Router();
 // Save a message to database
@@ -11,11 +12,15 @@ router.post('/', requireAuth, async (req, res, next) => {
             return res.status(400).json({ error: 'to_user_id and text are required.' });
         }
         const from_user_id = req.auth.id;
-        // Verify both users exist
-        const toUserResult = await query('SELECT id FROM users WHERE id = $1 LIMIT 1', [to_user_id]);
+        // Verify both users exist and get sender's name
+        const [toUserResult, fromUserResult] = await Promise.all([
+            query('SELECT id FROM users WHERE id = $1 LIMIT 1', [to_user_id]),
+            query('SELECT name FROM users WHERE id = $1 LIMIT 1', [from_user_id]),
+        ]);
         if (toUserResult.rowCount === 0) {
             return res.status(404).json({ error: 'Recipient not found.' });
         }
+        const from_name = fromUserResult.rows[0]?.name || 'Someone';
         const result = await query(`INSERT INTO messages (from_user_id, to_user_id, text)
        VALUES ($1, $2, $3)
        RETURNING id, from_user_id, to_user_id, text, created_at`, [from_user_id, to_user_id, text.trim()]);
@@ -23,6 +28,10 @@ router.post('/', requireAuth, async (req, res, next) => {
         // Emit to recipient over socket
         if (ioInstance && to_user_id !== from_user_id) {
             ioInstance.to(`user:${to_user_id}`).emit('message', payload);
+        }
+        // Send push notification
+        if (to_user_id !== from_user_id) {
+            await queueUserPush(to_user_id, `New message from ${from_name}`, text.trim(), { type: 'new_message', chatId: from_user_id, messageId: payload.id.toString() });
         }
         return res.status(201).json({ data: payload });
     }

@@ -43,7 +43,7 @@ async function sendCheckinReminders() {
       // Notify tenant
       await queueUserPush(
         row.tenant_id,
-        '?? Check-in Tomorrow!',
+        'Check-in Tomorrow!',
         `Your check-in at ${row.property_name} is tomorrow (${dateStr}). Get ready!`,
         { type: 'checkin_reminder', bookingId: row.id }
       );
@@ -51,7 +51,7 @@ async function sendCheckinReminders() {
       // Notify landlord
       await queueUserPush(
         row.landlord_id,
-        '?? Tenant Arrives Tomorrow',
+        'Tenant Arrives Tomorrow',
         `${row.tenant_name} checks in to ${row.property_name} tomorrow (${dateStr}).`,
         { type: 'checkin_landlord', bookingId: row.id }
       );
@@ -80,7 +80,7 @@ async function sendCheckoutReminders() {
     for (const row of res.rows) {
       await queueUserPush(
         row.tenant_id,
-        '?? Check-out Today',
+        'Check-out Today',
         `Your check-out at ${row.property_name} is today. Safe travels!`,
         { type: 'checkout_reminder', bookingId: row.id }
       );
@@ -144,7 +144,7 @@ async function sendUnreadMessageNudges() {
       const n = parseInt(row.unread_count);
       await queueUserPush(
         row.to_user_id,
-        '?? Unread Messages',
+        'Unread Messages',
         `You have ${n} unread message${n === 1 ? '' : 's'} on StayNest.`,
         { type: 'unread_nudge' }
       );
@@ -191,7 +191,7 @@ async function sendWeeklyPerformanceDigest() {
     for (const row of res.rows) {
       const { landlord_id, landlord_name, landlord_email, views, new_bookings, revenue } = row;
 
-      const subject = `?? Your Weekly StayNest Report`;
+      const subject = `Your Weekly StayNest Report`;
       const html = `
         <h2>Hello ${landlord_name},</h2>
         <p>Here's your StayNest performance for the past 7 days:</p>
@@ -212,7 +212,7 @@ async function sendWeeklyPerformanceDigest() {
 
       await queueUserPush(
         landlord_id,
-        '?? Weekly Report Ready',
+        'Weekly Report Ready',
         `Last 7 days: ${views} views, ${new_bookings} bookings, Ksh ${Number(revenue).toLocaleString()} revenue.`,
         { type: 'weekly_digest' }
       );
