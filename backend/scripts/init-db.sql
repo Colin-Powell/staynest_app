@@ -731,12 +731,47 @@ CREATE TABLE IF NOT EXISTS promotions (
     target_location VARCHAR(100),
     image_url TEXT,
     active BOOLEAN DEFAULT true,
+
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
- 
- C R E A T E   T A B L E   I F   N O T   E X I S T S   e n g a g e m e n t _ e v e n t s   ( i d   u u i d   P R I M A R Y   K E Y   D E F A U L T   g e n _ r a n d o m _ u u i d ( ) ,   u s e r _ i d   u u i d   R E F E R E N C E S   u s e r s ( i d )   O N   D E L E T E   C A S C A D E ,   p r o p e r t y _ i d   u u i d   R E F E R E N C E S   p r o p e r t i e s ( i d )   O N   D E L E T E   C A S C A D E ,   e v e n t _ t y p e   t e x t   N O T   N U L L ,   c r e a t e d _ a t   t i m e s t a m p t z   N O T   N U L L   D E F A U L T   n o w ( ) ,   s o u r c e _ s e c t i o n   t e x t ,   l o c a t i o n _ c o n t e x t   j s o n b ) ;  
- A L T E R   T A B L E   e n g a g e m e n t _ e v e n t s   A D D   C O L U M N   I F   N O T   E X I S T S   s o u r c e _ s e c t i o n   t e x t ;  
- A L T E R   T A B L E   e n g a g e m e n t _ e v e n t s   A D D   C O L U M N   I F   N O T   E X I S T S   l o c a t i o n _ c o n t e x t   j s o n b ;  
- C R E A T E   T A B L E   I F   N O T   E X I S T S   u s e r _ d i s c o v e r y _ p r o f i l e s   ( u s e r _ i d   u u i d   P R I M A R Y   K E Y   R E F E R E N C E S   u s e r s ( i d )   O N   D E L E T E   C A S C A D E ,   u p d a t e d _ a t   t i m e s t a m p t z   N O T   N U L L   D E F A U L T   n o w ( ) ,   m e t a d a t a   j s o n b ) ;  
- C R E A T E   T A B L E   I F   N O T   E X I S T S   f e e d _ i m p r e s s i o n s   ( i d   u u i d   P R I M A R Y   K E Y   D E F A U L T   g e n _ r a n d o m _ u u i d ( ) ,   u s e r _ i d   u u i d   R E F E R E N C E S   u s e r s ( i d )   O N   D E L E T E   C A S C A D E ,   s e s s i o n _ i d   t e x t ,   f e e d _ i d   t e x t ,   s e c t i o n _ i d   t e x t ,   l i s t i n g _ i d   u u i d   R E F E R E N C E S   p r o p e r t i e s ( i d )   O N   D E L E T E   C A S C A D E ,   p o s i t i o n   i n t e g e r ,   a l g o r i t h m   t e x t ,   c r e a t e d _ a t   t i m e s t a m p t z   N O T   N U L L   D E F A U L T   n o w ( ) ) ;  
- 
+
+-- Feed intelligence tables (added for intelligent home feed)
+CREATE TABLE IF NOT EXISTS engagement_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+  property_id uuid REFERENCES properties(id) ON DELETE CASCADE,
+  event_type text NOT NULL,
+  session_id text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  source_section text,
+  location_context jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_property_type ON engagement_events(property_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_events_user_type ON engagement_events(user_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_events_created_at ON engagement_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_events_session ON engagement_events(session_id);
+
+ALTER TABLE engagement_events ADD COLUMN IF NOT EXISTS source_section text;
+ALTER TABLE engagement_events ADD COLUMN IF NOT EXISTS location_context jsonb;
+
+CREATE TABLE IF NOT EXISTS user_discovery_profiles (
+  user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  metadata jsonb
+);
+
+CREATE TABLE IF NOT EXISTS feed_impressions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+  session_id text,
+  feed_id text,
+  section_id text,
+  listing_id uuid REFERENCES properties(id) ON DELETE CASCADE,
+  position integer,
+  algorithm text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_feed_impressions_session ON feed_impressions(session_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feed_impressions_listing ON feed_impressions(listing_id, created_at DESC);
