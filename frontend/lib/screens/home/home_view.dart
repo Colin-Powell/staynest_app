@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/session/onboarding_prefs.dart';
+import 'package:property_app/session/app_session.dart';
 import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
 import 'package:property_app/widgets/property_card.dart';
 
@@ -19,12 +21,22 @@ class HomeView extends StatefulWidget {
   final void Function(Property)? onSelectProperty;
   final VoidCallback? onNotifications;
   final void Function(String category)? onSeeCategory;
+  final double? latitude;
+  final double? longitude;
+  final String? campusId;
+  final String? locationId;
+  final double radiusKm;
 
   const HomeView({
     super.key,
     this.onSelectProperty,
     this.onNotifications,
     this.onSeeCategory,
+    this.latitude,
+    this.longitude,
+    this.campusId,
+    this.locationId,
+    this.radiusKm = 5,
   });
 
   @override
@@ -70,12 +82,39 @@ class _HomeViewState extends State<HomeView> {
   }
 
   Future<void> _loadFeed() async {
-    // Basic context; more logic can be added later
-    await _feedController.loadFeed();
+    var latitude = widget.latitude ?? AppSession.discoveryLatitude;
+    var longitude = widget.longitude ?? AppSession.discoveryLongitude;
+    final campusId = widget.campusId ?? AppSession.discoveryCampusId;
+    final locationId = widget.locationId ?? AppSession.discoveryLocationId;
+
+    // Use device location only when permission was already granted. Home must
+    // remain usable without prompting or depending on location services.
+    if (latitude == null || longitude == null) {
+      try {
+        final permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.always ||
+            permission == LocationPermission.whileInUse) {
+          final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+          if (serviceEnabled) {
+            final position = await Geolocator.getCurrentPosition();
+            latitude = position.latitude;
+            longitude = position.longitude;
+          }
+        }
+      } catch (_) {
+        // Feed context is optional; fall back to campus/location/global data.
+      }
+    }
+
+    await _feedController.loadFeed(
+      lat: latitude,
+      lng: longitude,
+      radiusKm: widget.radiusKm,
+      campusId: campusId,
+      locationId: locationId,
+      category: _selectedCategory,
+    );
   }
-
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -103,7 +142,7 @@ class _HomeViewState extends State<HomeView> {
                   ),
                 )
               else if (_feedController.feedResponse == null ||
-                       _feedController.feedResponse!.sections.isEmpty)
+                  _feedController.feedResponse!.sections.isEmpty)
                 SliverToBoxAdapter(
                   child: Center(
                     child: Padding(
@@ -123,16 +162,18 @@ class _HomeViewState extends State<HomeView> {
 
                     sliverWidgets.add(
                       SliverToBoxAdapter(
-                        child: _buildHorizontalCollection(section.title, section.items),
+                        child: _buildHorizontalCollection(
+                            section.title, section.items),
                       ),
                     );
 
                     // Insert Promo Card after the first section
                     if (i == 0) {
-                      sliverWidgets.add(SliverToBoxAdapter(child: _buildPromoCard()));
+                      sliverWidgets
+                          .add(SliverToBoxAdapter(child: _buildPromoCard()));
                     }
                   }
-                  
+
                   return sliverWidgets;
                 }(),
               const SliverToBoxAdapter(child: SizedBox(height: 120)),
@@ -145,168 +186,166 @@ class _HomeViewState extends State<HomeView> {
 
 // ─── REHANI PROMOTIONAL CARD ─────────────────────────────────────────
 
-Widget _buildPromoCard() {
-  return Padding(
-    padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-    child: Container(
-      height: 250,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: Stack(
-        children: [
-          // ─── LEFT CONTENT ───────────────────────────────────────
-          Positioned(
-            left: 24,
-            top: 24,
-            bottom: 24,
-            right: 125,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // New Feature Badge
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE4F5EB),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            PhosphorIconsRegular.tag,
-                            color: Color(0xFF065F46),
-                            size: 14,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'New Feature',
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF065F46),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(width: 6),
-
-                    CustomPaint(
-                      size: const Size(16, 16),
-                      painter: _SparklePainter(),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                // Rehani Title
-                Text(
-                  'Rehani',
-                  style: GoogleFonts.poppins(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF0A1C30),
-                    letterSpacing: -1.0,
-                    height: 1.0,
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Description
-                Text(
-                  'Buy and sell second-hand\nitems near you.',
-                  style: GoogleFonts.poppins(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF475569),
-                    height: 1.45,
-                  ),
-                ),
-
-                const Spacer(),
-
-                // Coming Soon Button
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 9,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE4F5EB),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
+  Widget _buildPromoCard() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+      child: Container(
+        height: 250,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.hardEdge,
+        child: Stack(
+          children: [
+            // ─── LEFT CONTENT ───────────────────────────────────────
+            Positioned(
+              left: 24,
+              top: 24,
+              bottom: 24,
+              right: 125,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // New Feature Badge
+                  Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Coming Soon',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF065F46),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE4F5EB),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              PhosphorIconsRegular.tag,
+                              color: Color(0xFF065F46),
+                              size: 14,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'New Feature',
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF065F46),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 6),
-                      const Icon(
-                        PhosphorIconsRegular.arrowRight,
-                        color: Color(0xFF065F46),
-                        size: 15,
+                      CustomPaint(
+                        size: const Size(16, 16),
+                        painter: _SparklePainter(),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
-          ),
 
-          // ─── 3D ILLUSTRATION ────────────────────────────────────
-          Positioned(
-            right: -8,
-            bottom: 0,
-            child: Image.asset(
-              'assets/images/rehani.png',
-              height: 175,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return SizedBox(
-                  width: 140,
-                  height: 140,
-                  child: Center(
-                    child: Icon(
-                      PhosphorIconsRegular.shoppingBag,
-                      color: _grey,
-                      size: 48,
+                  const SizedBox(height: 16),
+
+                  // Rehani Title
+                  Text(
+                    'Rehani',
+                    style: GoogleFonts.poppins(
+                      fontSize: 34,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0A1C30),
+                      letterSpacing: -1.0,
+                      height: 1.0,
                     ),
                   ),
-                );
-              },
+
+                  const SizedBox(height: 12),
+
+                  // Description
+                  Text(
+                    'Buy and sell second-hand\nitems near you.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF475569),
+                      height: 1.45,
+                    ),
+                  ),
+
+                  const Spacer(),
+
+                  // Coming Soon Button
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE4F5EB),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Coming Soon',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF065F46),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(
+                          PhosphorIconsRegular.arrowRight,
+                          color: Color(0xFF065F46),
+                          size: 15,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+
+            // ─── 3D ILLUSTRATION ────────────────────────────────────
+            Positioned(
+              right: -8,
+              bottom: 0,
+              child: Image.asset(
+                'assets/images/rehani.png',
+                height: 175,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return SizedBox(
+                    width: 140,
+                    height: 140,
+                    child: Center(
+                      child: Icon(
+                        PhosphorIconsRegular.shoppingBag,
+                        color: _grey,
+                        size: 48,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // ─── UI BUILDERS ──────────────────────────────────────────────────────────
 
@@ -338,11 +377,12 @@ Widget _buildPromoCard() {
               onTap: () {
                 setState(() {
                   if (_selectedCategory == label) {
-                    _selectedCategory = 'All'; 
+                    _selectedCategory = 'All';
                   } else {
                     _selectedCategory = label;
                   }
                 });
+                _loadFeed();
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),

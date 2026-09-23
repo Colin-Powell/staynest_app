@@ -486,7 +486,7 @@ router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (r
         await cache.del('cache:/api/properties*');
         // Notify the landlord
         if (status === 'approved') {
-            await queueUserPush(property.landlord_id, 'Property Approved! ??', `Your listing "${property.title}" has been approved and is now live on StayNest.`, { type: 'property_status', propertyId: id, status: 'approved' });
+            await queueUserPush(property.landlord_id, 'Property Approved!', `Your listing "${property.title}" has been approved and is now live on StayNest.`, { type: 'property_status', propertyId: id, status: 'approved' });
             console.log(`[AdminPropertyStatus] approval notification queued for userId=${property.landlord_id} propertyId=${id}`);
         }
         else if (status === 'rejected') {

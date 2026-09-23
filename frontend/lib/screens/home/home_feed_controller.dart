@@ -8,6 +8,12 @@ class HomeFeedController extends ChangeNotifier {
   HomeFeedResponse? feedResponse;
 
   bool _disposed = false;
+  double? _lat;
+  double? _lng;
+  double? _radiusKm;
+  String? _campusId;
+  String? _locationId;
+  String? _category;
 
   /// Safe wrapper — skips notifyListeners if already disposed.
   void _notify() {
@@ -17,9 +23,19 @@ class HomeFeedController extends ChangeNotifier {
   Future<void> loadFeed({
     double? lat,
     double? lng,
+    double? radiusKm,
     String? campusId,
+    String? locationId,
+    String? category,
   }) async {
     if (_disposed) return;
+
+    _lat = lat;
+    _lng = lng;
+    _radiusKm = radiusKm;
+    _campusId = campusId;
+    _locationId = locationId;
+    _category = category;
 
     isLoading = true;
     hasError = false;
@@ -29,7 +45,10 @@ class HomeFeedController extends ChangeNotifier {
       final response = await PropertiesApi.getHomeFeed(
         lat: lat,
         lng: lng,
+        radiusKm: radiusKm,
         campusId: campusId,
+        locationId: locationId,
+        category: category,
       );
       if (_disposed) return;
       feedResponse = response;
@@ -46,7 +65,14 @@ class HomeFeedController extends ChangeNotifier {
   }
 
   Future<void> refreshFeed() async {
-    await loadFeed();
+    await loadFeed(
+      lat: _lat,
+      lng: _lng,
+      radiusKm: _radiusKm,
+      campusId: _campusId,
+      locationId: _locationId,
+      category: _category,
+    );
   }
 
   @override

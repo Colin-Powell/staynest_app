@@ -771,7 +771,7 @@ async function handleCreateProperty(req, res, next, logRouteName) {
        VALUES ($1)
        ON CONFLICT (property_id) DO NOTHING`, [property.id]);
         // Notify the landlord that their listing was submitted
-        await queueUserPush(userId, 'Listing Submitted ??', `Your property "${property.title}" has been successfully submitted and is pending admin review.`, { type: 'property_submitted', propertyId: property.id });
+        await queueUserPush(userId, 'Listing Submitted', `Your property "${property.title}" has been successfully submitted and is pending admin review.`, { type: 'property_submitted', propertyId: property.id });
         console.log(`[PropertyCreateFromListing] submission notification queued for userId=${userId} propertyId=${property.id}`);
         res.status(201).json({ data: property });
     }

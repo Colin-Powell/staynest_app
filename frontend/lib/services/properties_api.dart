@@ -11,6 +11,8 @@ class PropertiesApi {
     double? lng,
     double? radiusKm,
     String? campusId,
+    String? locationId,
+    String? category,
     int limit = 20,
     String? cursor,
   }) async {
@@ -20,15 +22,21 @@ class PropertiesApi {
     if (lng != null) queryParams['lng'] = lng.toString();
     if (radiusKm != null) queryParams['radiusKm'] = radiusKm.toString();
     if (campusId != null) queryParams['campusId'] = campusId;
+    if (locationId != null) queryParams['locationId'] = locationId;
+    if (category != null && category.isNotEmpty && category != 'All') {
+      queryParams['category'] = category;
+    }
     queryParams['limit'] = limit.toString();
     if (cursor != null) queryParams['cursor'] = cursor;
 
     String queryString = Uri(queryParameters: queryParams).query;
-    final path = queryString.isNotEmpty ? '/home/feed?$queryString' : '/home/feed';
-    
+    final path =
+        queryString.isNotEmpty ? '/home/feed?$queryString' : '/home/feed';
+
     final response = await client.getJson(path);
     return HomeFeedResponse.fromJson(response);
   }
+
   static Future<void> trackPropertyShare(String propertyId) async {
     final client = _client();
     await client.postJson('/analytics/track', body: {

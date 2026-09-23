@@ -95,6 +95,12 @@ class AppSession {
 
   static final Set<String> savedPropertyIds = {};
 
+  // Optional discovery context selected by the user in search/location UI.
+  static double? discoveryLatitude;
+  static double? discoveryLongitude;
+  static String? discoveryLocationId;
+  static String? discoveryCampusId;
+
   static Future<void> initializeAppInfo() async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
@@ -383,6 +389,10 @@ class AppSession {
     emailVerified = false;
     referralCode = null;
     walletBalance = 0.0;
+    discoveryLatitude = null;
+    discoveryLongitude = null;
+    discoveryLocationId = null;
+    discoveryCampusId = null;
     await AnalyticsService.setUserId(null);
     apiToken = null;
     refreshToken = null;

@@ -6,6 +6,7 @@ export interface FeedContext {
   radiusKm?: number;
   campusId?: string;
   locationId?: string;
+  category?: string;
   userId?: string;
 }
 
@@ -20,107 +21,264 @@ export interface FeedSection {
   hasMore: boolean;
 }
 
+type ResolvedContext = FeedContext & {
+  anchorLat?: number;
+  anchorLng?: number;
+  locationName?: string;
+  locationTown?: string;
+  locationNeighborhood?: string;
+};
+
+const APPROVED = "COALESCE(p.status, 'pending_review') = 'approved'";
+
+function distanceSql(latParam: number, lngParam: number): string {
+  return `(6371 * 2 * ASIN(SQRT(
+    POWER(SIN(RADIANS(p.lat - $${latParam}) / 2), 2) +
+    COS(RADIANS($${latParam})) * COS(RADIANS(p.lat)) *
+    POWER(SIN(RADIANS(p.lng - $${lngParam}) / 2), 2)
+  )))`;
+}
+
+async function resolveContext(context: FeedContext): Promise<ResolvedContext> {
+  let anchorLat = context.lat;
+  let anchorLng = context.lng;
+  let locationName: string | undefined;
+  let locationTown: string | undefined;
+  let locationNeighborhood: string | undefined;
+  const locationId = context.locationId || context.campusId;
+
+  if (locationId) {
+    const result = await query(
+      `SELECT name, town, neighborhood, latitude, longitude
+         FROM locations WHERE id = $1 LIMIT 1`,
+      [locationId],
+    );
+    const row = result.rows[0];
+    locationName = row?.name?.toString();
+    locationTown = row?.town?.toString();
+    locationNeighborhood = row?.neighborhood?.toString();
+    const parsedLat = row?.latitude == null ? undefined : Number(row.latitude);
+    const parsedLng = row?.longitude == null ? undefined : Number(row.longitude);
+    if ((anchorLat == null || anchorLng == null) &&
+      Number.isFinite(parsedLat) && Number.isFinite(parsedLng)) {
+      anchorLat = parsedLat;
+      anchorLng = parsedLng;
+    }
+  }
+
+  return {
+    ...context,
+    anchorLat,
+    anchorLng,
+    locationName,
+    locationTown,
+    locationNeighborhood,
+  };
+}
+
+function filtersFor(
+  context: ResolvedContext,
+  params: any[],
+  excluded: string[],
+  includeCampus = true,
+): string[] {
+  const filters = [APPROVED];
+
+  if (context.category && context.category.toLowerCase() !== 'all') {
+    params.push(context.category);
+    const categoryParam = `$${params.length}`;
+    filters.push(`(
+      LOWER(p.category) = LOWER(${categoryParam})
+      OR LOWER(p.category) = LOWER(REGEXP_REPLACE(${categoryParam}, 's$', ''))
+      OR REGEXP_REPLACE(LOWER(p.category), '[ _-]+', '_', 'g') =
+         REGEXP_REPLACE(LOWER(${categoryParam}), '[ _-]+', '_', 'g')
+      OR REGEXP_REPLACE(LOWER(p.category), '[ _-]+', '_', 'g') =
+         REGEXP_REPLACE(LOWER(${categoryParam}), '[ _-]+', '_', 'g') || '_room'
+      OR EXISTS (SELECT 1 FROM property_types pt
+        WHERE pt.id = p.property_type_id
+          AND REGEXP_REPLACE(LOWER(pt.label), '[ _-]+', '_', 'g') =
+              REGEXP_REPLACE(LOWER(${categoryParam}), '[ _-]+', '_', 'g'))
+      OR EXISTS (SELECT 1 FROM room_types rt
+        WHERE rt.id = p.room_type_id
+          AND REGEXP_REPLACE(LOWER(rt.label), '[ _-]+', '_', 'g') =
+              REGEXP_REPLACE(LOWER(${categoryParam}), '[ _-]+', '_', 'g'))
+    )`);
+  }
+
+  if (includeCampus && context.campusId) {
+    params.push(context.campusId);
+    filters.push(`p.campus_id = $${params.length}`);
+  }
+
+  if (context.locationId && !context.campusId) {
+    const locationParts = [
+      context.locationNeighborhood,
+      context.locationName,
+      context.locationTown,
+    ].filter((value): value is string => Boolean(value));
+    if (locationParts.length > 0) {
+      params.push(context.locationId);
+      const locationIdParam = `$${params.length}`;
+      params.push(locationParts);
+      filters.push(`(
+        p.campus_id::text = ${locationIdParam}
+        OR LOWER(COALESCE(p.neighborhood, '')) = ANY(
+          SELECT LOWER(value) FROM unnest($${params.length}::text[]) AS value)
+        OR LOWER(COALESCE(p.town, '')) = ANY(
+          SELECT LOWER(value) FROM unnest($${params.length}::text[]) AS value)
+        OR LOWER(COALESCE(p.city, '')) = ANY(
+          SELECT LOWER(value) FROM unnest($${params.length}::text[]) AS value)
+      )`);
+    }
+  }
+
+  if (excluded.length > 0) {
+    params.push(excluded);
+    filters.push(`p.id <> ALL($${params.length}::uuid[])`);
+  }
+
+  return filters;
+}
+
+function section(
+  id: string,
+  type: string,
+  title: string,
+  subtitle: string,
+  algorithm: string,
+  items: any[],
+): FeedSection | null {
+  if (items.length === 0) return null;
+  return { id, type, title, subtitle, algorithm, items, hasMore: false };
+}
+
 export class FeedService {
-  public static async generateFeed(context: FeedContext, limit: number = 20): Promise<FeedSection[]> {
+  public static async generateFeed(
+    context: FeedContext,
+    requestedLimit: number = 20,
+  ): Promise<FeedSection[]> {
+    const limit = Math.min(Math.max(requestedLimit, 1), 50);
+    const resolved = await resolveContext(context);
+    const radiusKm = Math.min(Math.max(resolved.radiusKm ?? 5, 0.5), 50);
     const sections: FeedSection[] = [];
+    const excluded = new Set<string>();
 
-    // Normalize items func (assuming normalizePropertyRow will be used in route or here)
-    // For simplicity, we just return the raw rows and let the route normalize.
+    const addSection = (candidate: FeedSection | null) => {
+      if (!candidate) return;
+      candidate.items.forEach((item) => excluded.add(String(item.id)));
+      sections.push(candidate);
+    };
 
-    // 1. Nearby section
-    if (context.lat && context.lng) {
-      const nearbyQuery = `
-        SELECT p.*
-        FROM properties p
-        WHERE COALESCE(p.status, 'pending_review') = 'approved'
-          AND p.lat IS NOT NULL AND p.lng IS NOT NULL
-        ORDER BY (
-          6371 * acos(cos(radians($1)) * cos(radians(p.lat)) *
-          cos(radians(p.lng) - radians($2)) + sin(radians($1)) *
-          sin(radians(p.lat)))
-        ) ASC
-        LIMIT $3
-      `;
-      const nearbyRes = await query(nearbyQuery, [context.lat, context.lng, limit]);
-      if (nearbyRes.rows.length > 0) {
-        sections.push({
-          id: 'nearby_places',
-          type: 'property_carousel',
-          title: 'Nearby Places',
-          subtitle: 'Properties near you',
-          algorithm: 'nearby_v1',
-          items: nearbyRes.rows,
-          hasMore: false,
-        });
-      }
+    if (resolved.anchorLat != null && resolved.anchorLng != null) {
+      const params: any[] = [];
+      const filters = filtersFor(resolved, params, []);
+      params.push(resolved.anchorLat, resolved.anchorLng);
+      const distance = distanceSql(params.length - 1, params.length);
+      params.push(radiusKm, limit);
+      filters.push(`${distance} <= $${params.length - 1}`);
+      const result = await query(
+        `SELECT p.* FROM properties p
+         WHERE ${filters.join(' AND ')}
+         ORDER BY ${distance} ASC, p.created_at DESC, p.id
+         LIMIT $${params.length}`,
+        params,
+      );
+      addSection(section(
+        'nearby_places',
+        'property_carousel',
+        resolved.category && resolved.category !== 'All'
+            ? `${resolved.category} Near You`
+            : 'Nearby Places',
+        `Available within ${radiusKm} km`,
+        'nearby_radius_v2',
+        result.rows,
+      ));
     }
 
-    // 2. New listings
-    const freshQuery = `
-      SELECT p.*
-      FROM properties p
-      WHERE COALESCE(p.status, 'pending_review') = 'approved'
-      ORDER BY COALESCE(p.updated_at, p.created_at) DESC
-      LIMIT $1
-    `;
-    const freshRes = await query(freshQuery, [limit]);
-    if (freshRes.rows.length > 0) {
-      sections.push({
-        id: 'new_listings',
-        type: 'property_carousel',
-        title: 'New on StayNest',
-        subtitle: 'Recently added properties',
-        algorithm: 'fresh_v1',
-        items: freshRes.rows,
-        hasMore: false,
-      });
+    {
+      const params: any[] = [];
+      const filters = filtersFor(resolved, params, [...excluded]);
+      params.push(limit);
+      const result = await query(
+        `SELECT p.* FROM properties p
+         WHERE ${filters.join(' AND ')}
+         ORDER BY p.created_at DESC, p.id
+         LIMIT $${params.length}`,
+        params,
+      );
+      addSection(section(
+        'new_listings',
+        'property_carousel',
+        'New on StayNest',
+        'Recently added properties',
+        'fresh_created_at_v2',
+        result.rows,
+      ));
     }
 
-    // 3. Trending (highly rated)
-    const trendingQuery = `
-      SELECT p.*
-      FROM properties p
-      WHERE COALESCE(p.status, 'pending_review') = 'approved'
-        AND p.average_rating >= 4.0
-      ORDER BY p.average_rating DESC, p.review_count DESC
-      LIMIT $1
-    `;
-    const trendingRes = await query(trendingQuery, [limit]);
-    if (trendingRes.rows.length > 0) {
-      sections.push({
-        id: 'trending_now',
-        type: 'property_grid',
-        title: 'Trending Now',
-        subtitle: 'Highly rated properties',
-        algorithm: 'trending_v1',
-        items: trendingRes.rows,
-        hasMore: false,
-      });
+    {
+      const params: any[] = [];
+      const filters = filtersFor(resolved, params, [...excluded]);
+      params.push(limit);
+      const result = await query(
+        `SELECT p.*, COALESCE(pa.velocity_score, 0) AS velocity_score,
+                COALESCE(pa.engagement_score, 0) AS engagement_score
+           FROM properties p
+           LEFT JOIN property_analytics pa ON pa.property_id = p.id
+          WHERE ${filters.join(' AND ')}
+          ORDER BY COALESCE(pa.velocity_score, 0) DESC,
+                   COALESCE(pa.engagement_score, 0) DESC,
+                   COALESCE(p.average_rating, 0) DESC,
+                   p.created_at DESC, p.id
+          LIMIT $${params.length}`,
+        params,
+      );
+      addSection(section(
+        'trending_now',
+        'property_grid',
+        resolved.anchorLat != null ? 'Trending Near You' : 'Trending Now',
+        'Popular properties with recent engagement',
+        'trending_velocity_v2',
+        result.rows,
+      ));
     }
 
-    // 4. Cold-start fallback: if no sections generated (no coordinates, no
-    //    highly-rated listings), show a general "Discover" section so the
-    //    feed is never blank.
     if (sections.length === 0) {
-      const fallbackQuery = `
-        SELECT p.*
-        FROM properties p
-        WHERE COALESCE(p.status, 'pending_review') = 'approved'
-        ORDER BY COALESCE(p.updated_at, p.created_at) DESC
-        LIMIT $1
-      `;
-      const fallbackRes = await query(fallbackQuery, [limit]);
-      if (fallbackRes.rows.length > 0) {
-        sections.push({
-          id: 'discover',
-          type: 'property_carousel',
-          title: 'Discover Properties',
-          subtitle: 'Find your next stay',
-          algorithm: 'fallback_v1',
-          items: fallbackRes.rows,
-          hasMore: false,
-        });
+      const params: any[] = [];
+      let filters = filtersFor(resolved, params, []);
+      params.push(limit);
+      let result = await query(
+        `SELECT p.* FROM properties p
+         WHERE ${filters.join(' AND ')}
+         ORDER BY p.created_at DESC, p.id
+         LIMIT $${params.length}`,
+        params,
+      );
+
+      // A campus is a preference, not a hard dependency. If its inventory is
+      // empty, retry the same category globally before returning no feed.
+      if (result.rows.length === 0 && resolved.campusId) {
+        const fallbackParams: any[] = [];
+        filters = filtersFor(resolved, fallbackParams, [], false);
+        fallbackParams.push(limit);
+        result = await query(
+          `SELECT p.* FROM properties p
+           WHERE ${filters.join(' AND ')}
+           ORDER BY p.created_at DESC, p.id
+           LIMIT $${fallbackParams.length}`,
+          fallbackParams,
+        );
       }
+      addSection(section(
+        'discover',
+        'property_carousel',
+        resolved.category && resolved.category !== 'All'
+            ? `Discover ${resolved.category}`
+            : 'Discover Properties',
+        'Find your next stay',
+        'fallback_created_at_v2',
+        result.rows,
+      ));
     }
 
     return sections;

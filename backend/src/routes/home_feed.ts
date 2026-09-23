@@ -46,8 +46,10 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const lat = req.query.lat ? parseFloat(req.query.lat as string) : undefined;
     const lng = req.query.lng ? parseFloat(req.query.lng as string) : undefined;
     const radiusKm = req.query.radiusKm ? parseFloat(req.query.radiusKm as string) : undefined;
-    const campusId = req.query.campusId as string;
-    const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+    const campusId = typeof req.query.campusId === 'string' ? req.query.campusId : undefined;
+    const locationId = typeof req.query.locationId === 'string' ? req.query.locationId : undefined;
+    const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
+    const limit = Math.min(Math.max(req.query.limit ? parseInt(req.query.limit as string) : 20, 1), 50);
     
     // Auth context (if any)
     const userId = (req as any).user?.id;
@@ -57,6 +59,8 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       lng,
       radiusKm,
       campusId,
+      locationId,
+      category,
       userId
     };
 
@@ -73,9 +77,13 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         schemaVersion: 1,
         generatedAt: new Date().toISOString(),
         context: {
-          source: lat && lng ? 'device' : 'none',
-          campusId: campusId || 'optional',
-          radiusKm: radiusKm || 5
+            source: lat != null && lng != null
+              ? 'device'
+              : (campusId || locationId ? 'selected_location' : 'none'),
+            campusId: campusId || '',
+            locationId: locationId || '',
+            radiusKm: radiusKm || 5,
+            category: category || 'All'
         },
         sections: normalizedSections,
         nextCursor: null

@@ -31,9 +31,9 @@ async function sendCheckinReminders() {
         for (const row of res.rows) {
             const dateStr = fmt(row.check_in_date);
             // Notify tenant
-            await queueUserPush(row.tenant_id, '?? Check-in Tomorrow!', `Your check-in at ${row.property_name} is tomorrow (${dateStr}). Get ready!`, { type: 'checkin_reminder', bookingId: row.id });
+            await queueUserPush(row.tenant_id, 'Check-in Tomorrow!', `Your check-in at ${row.property_name} is tomorrow (${dateStr}). Get ready!`, { type: 'checkin_reminder', bookingId: row.id });
             // Notify landlord
-            await queueUserPush(row.landlord_id, '?? Tenant Arrives Tomorrow', `${row.tenant_name} checks in to ${row.property_name} tomorrow (${dateStr}).`, { type: 'checkin_landlord', bookingId: row.id });
+            await queueUserPush(row.landlord_id, 'Tenant Arrives Tomorrow', `${row.tenant_name} checks in to ${row.property_name} tomorrow (${dateStr}).`, { type: 'checkin_landlord', bookingId: row.id });
         }
         console.log(`[cron] check-in reminders sent for ${res.rowCount} bookings`);
     }
@@ -51,7 +51,7 @@ async function sendCheckoutReminders() {
        WHERE b.status = 'confirmed'
          AND b.check_out_date = CURRENT_DATE`, []);
         for (const row of res.rows) {
-            await queueUserPush(row.tenant_id, '?? Check-out Today', `Your check-out at ${row.property_name} is today. Safe travels!`, { type: 'checkout_reminder', bookingId: row.id });
+            await queueUserPush(row.tenant_id, 'Check-out Today', `Your check-out at ${row.property_name} is today. Safe travels!`, { type: 'checkout_reminder', bookingId: row.id });
         }
         console.log(`[cron] check-out reminders sent for ${res.rowCount} bookings`);
     }
@@ -93,7 +93,7 @@ async function sendUnreadMessageNudges() {
        GROUP BY m.to_user_id`, []);
         for (const row of res.rows) {
             const n = parseInt(row.unread_count);
-            await queueUserPush(row.to_user_id, '?? Unread Messages', `You have ${n} unread message${n === 1 ? '' : 's'} on StayNest.`, { type: 'unread_nudge' });
+            await queueUserPush(row.to_user_id, 'Unread Messages', `You have ${n} unread message${n === 1 ? '' : 's'} on StayNest.`, { type: 'unread_nudge' });
         }
         console.log(`[cron] unread nudges sent to ${res.rowCount} users`);
     }
@@ -130,7 +130,7 @@ async function sendWeeklyPerformanceDigest() {
        WHERE EXISTS (SELECT 1 FROM properties p WHERE p.landlord_id = u.id)`, []);
         for (const row of res.rows) {
             const { landlord_id, landlord_name, landlord_email, views, new_bookings, revenue } = row;
-            const subject = `?? Your Weekly StayNest Report`;
+            const subject = `Your Weekly StayNest Report`;
             const html = `
         <h2>Hello ${landlord_name},</h2>
         <p>Here's your StayNest performance for the past 7 days:</p>
@@ -148,7 +148,7 @@ async function sendWeeklyPerformanceDigest() {
             catch (emailErr) {
                 console.error(`[cron] weekly digest email failed for ${landlord_email}:`, emailErr);
             }
-            await queueUserPush(landlord_id, '?? Weekly Report Ready', `Last 7 days: ${views} views, ${new_bookings} bookings, Ksh ${Number(revenue).toLocaleString()} revenue.`, { type: 'weekly_digest' });
+            await queueUserPush(landlord_id, 'Weekly Report Ready', `Last 7 days: ${views} views, ${new_bookings} bookings, Ksh ${Number(revenue).toLocaleString()} revenue.`, { type: 'weekly_digest' });
         }
         console.log(`[cron] weekly digest sent to ${res.rowCount} landlords`);
     }

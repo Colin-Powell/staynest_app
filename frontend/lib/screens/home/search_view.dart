@@ -121,6 +121,11 @@ class _SearchViewState extends State<SearchView> {
       _searchController.text = suggestion.displayName;
       _locationSuggestions = [];
     });
+    AppSession.discoveryLatitude = suggestion.lat;
+    AppSession.discoveryLongitude = suggestion.lng;
+    AppSession.discoveryLocationId = suggestion.locationId;
+    AppSession.discoveryCampusId =
+        suggestion.type == 'campus' ? suggestion.locationId : null;
     if (suggestion.lat == null || suggestion.lng == null) return;
 
     setState(() => _loading = true);
