@@ -87,48 +87,43 @@ class _NotificationsViewState extends State<NotificationsView>
     final type = data['type']?.toString().toLowerCase() ?? '';
     if (type.contains('booking') ||
         type.contains('checkin') ||
-        type.contains('checkout')) return '📅';
-    if (type.contains('message') || type.contains('unread')) return '💬';
-    if (type.contains('payment') || type.contains('price')) return '💰';
+        type.contains('checkout')) {
+      return PhosphorIconsRegular.calendarCheck;
+    }
+    if (type.contains('message') || type.contains('unread')) {
+      return PhosphorIconsRegular.chatCircleText;
+    }
+    if (type.contains('payment') || type.contains('price')) {
+      return PhosphorIconsRegular.wallet;
+    }
     if (type.contains('alert') ||
         type.contains('warning') ||
-        type.contains('stale')) return '⚠️';
-    if (type.contains('approved') || type.contains('success')) return '✅';
-    return '🔔';
+        type.contains('stale')) {
+      return PhosphorIconsRegular.warning;
+    }
+    if (type.contains('approved') || type.contains('success')) {
+      return PhosphorIconsRegular.checkCircle;
+    }
+    return PhosphorIconsRegular.bell;
   }
 
-  IconData _notificationIcon(String emoji) {
-    switch (emoji) {
-      case '📅':
-        return PhosphorIconsRegular.calendarCheck;
-      case '💬':
-        return PhosphorIconsRegular.chatCircleText;
-      case '💰':
-        return PhosphorIconsRegular.wallet;
-      case '⚠️':
-        return PhosphorIconsRegular.warning;
-      case '✅':
-        return PhosphorIconsRegular.checkCircle;
-      default:
-        return PhosphorIconsRegular.bell;
+  Color _notificationAccent(IconData icon) {
+    if (icon == PhosphorIconsRegular.calendarCheck) {
+      return StayNestColors.info;
     }
-  }
-
-  Color _notificationAccent(String emoji) {
-    switch (emoji) {
-      case '📅':
-        return StayNestColors.info;
-      case '💬':
-        return StayNestColors.primary;
-      case '💰':
-        return StayNestColors.accentDark;
-      case '⚠️':
-        return StayNestColors.warning;
-      case '✅':
-        return StayNestColors.success;
-      default:
-        return StayNestColors.primary;
+    if (icon == PhosphorIconsRegular.chatCircleText) {
+      return StayNestColors.primary;
     }
+    if (icon == PhosphorIconsRegular.wallet) {
+      return StayNestColors.accentDark;
+    }
+    if (icon == PhosphorIconsRegular.warning) {
+      return StayNestColors.warning;
+    }
+    if (icon == PhosphorIconsRegular.checkCircle) {
+      return StayNestColors.success;
+    }
+    return StayNestColors.primary;
   }
 
   void _setupFCMStream() {
@@ -503,12 +498,15 @@ class _NotificationsViewState extends State<NotificationsView>
                     decoration: BoxDecoration(
                       color: item.isRead
                           ? _bg
-                          : _notificationAccent(item.emoji)
+                          : _notificationAccent(item.icon)
                               .withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child:
-                        Text(item.emoji, style: const TextStyle(fontSize: 20)),
+                    child: Icon(
+                      item.icon,
+                      color: _notificationAccent(item.icon),
+                      size: 22,
+                    ),
                   ),
                 Expanded(
                   child: Column(

@@ -1,7 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { FeedService, FeedContext, FeedSection } from '../services/feed.js';
-import { requireAuth } from '../middleware/auth.js'; // Optional auth if needed
-import { query } from '../db.js';
 
 const router = Router();
 
