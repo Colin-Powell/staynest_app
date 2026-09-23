@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'dart:convert';
 
@@ -278,10 +280,10 @@ class AppSession {
   }
 
   static Future<void> restoreSession() async {
-    final raw = await _storage.read(key: _prefsKey);
-    if (raw == null || raw.isEmpty) return;
-
     try {
+      final raw = await _storage.read(key: _prefsKey);
+      if (raw == null || raw.isEmpty) return;
+
       final decoded = jsonDecode(raw);
       if (decoded is! Map) {
         await _storage.delete(key: _prefsKey);
@@ -299,17 +301,24 @@ class AppSession {
       }
 
       if (currentUserId != null) {
-        try {
-          final favorites = await RemoteDatabaseRepository()
-              .loadFavoritesForUser(currentUserId!);
-          setSavedPropertyIds(
-              favorites.map((f) => f['property_id'].toString()));
-        } catch (e) {
-          debugPrint('Failed to load favorites on restore: $e');
-        }
+        unawaited(_restoreFavorites(currentUserId!));
       }
     } catch (_) {
-      await _storage.delete(key: _prefsKey);
+      try {
+        await _storage.delete(key: _prefsKey);
+      } catch (cleanupError) {
+        debugPrint('Failed to clear corrupted session: $cleanupError');
+      }
+    }
+  }
+
+  static Future<void> _restoreFavorites(String userId) async {
+    try {
+      final favorites =
+          await RemoteDatabaseRepository().loadFavoritesForUser(userId);
+      setSavedPropertyIds(favorites.map((f) => f['property_id'].toString()));
+    } catch (e) {
+      debugPrint('Failed to load favorites on restore: $e');
     }
   }
 

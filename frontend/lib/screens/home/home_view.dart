@@ -3,15 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:property_app/session/app_session.dart';
 import 'package:property_app/session/onboarding_prefs.dart';
 import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
 import 'package:property_app/widgets/property_card.dart';
 
 import 'package:property_app/models/property.dart';
-import 'package:property_app/services/properties_api.dart';
-import 'package:property_app/utils/property_mapper.dart';
-import 'package:property_app/utils/category_utils.dart';
+import 'package:property_app/screens/home/home_feed_controller.dart';
 
 const _bg = Color(0xFFFAFAFA);
 const _dark = Color(0xFF111827);
@@ -36,24 +33,15 @@ class HomeView extends StatefulWidget {
 
 class _HomeViewState extends State<HomeView> {
   final _searchController = TextEditingController();
+  final HomeFeedController _feedController = HomeFeedController();
 
-  Map<String, List<Property>> _collections = {};
-  bool _loading = true;
-  bool _hasError = false;
   String _selectedCategory = 'All';
-
-  bool _matchesCategory(Property p, String category) {
-    return categoryMatchesUiFilter(
-      p.category,
-      category,
-      beds: p.features.beds,
-    );
-  }
 
   @override
   void initState() {
     super.initState();
-    _loadCollections();
+    _feedController.addListener(_onFeedUpdated);
+    _loadFeed();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!OnboardingPrefs.hasSeen('homeSeen')) {
@@ -71,102 +59,40 @@ class _HomeViewState extends State<HomeView> {
 
   @override
   void dispose() {
+    _feedController.removeListener(_onFeedUpdated);
+    _feedController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadCollections() async {
-    setState(() {
-      _loading = true;
-      _hasError = false;
-    });
-
-    try {
-      final categoriesData = await PropertiesApi.getCategories();
-      Map<String, List<Property>> mapped = {};
-
-      // Add personalized layers before the public category collections.
-      try {
-        if (AppSession.currentUserId != null) {
-          final recentData = await PropertiesApi.getRecentlyViewed();
-          if (recentData.isNotEmpty) {
-            mapped['Recently Viewed'] =
-                recentData.map((e) => mapApiProperty(e)).toList();
-          }
-
-          final recommendations = await PropertiesApi.getRecommendations();
-          if (recommendations.isNotEmpty) {
-            mapped['Recommended For You'] =
-                recommendations.map((e) => mapApiProperty(e)).toList();
-          }
-        }
-      } catch (e) {
-        debugPrint('Error loading personalized home layers: $e');
-      }
-
-      categoriesData.forEach((key, value) {
-        if (value is List) {
-          mapped[key] = value
-              .map((e) => mapApiProperty(Map<String, dynamic>.from(e as Map)))
-              .toList();
-        }
-      });
-
-      // Fallback if categories are empty, fetch all and group manually
-      if (categoriesData.isEmpty) {
-        final allProps = await PropertiesApi.getAllProperties();
-        final list = allProps.map((e) => mapApiProperty(e)).toList();
-
-        mapped['New on StayNest'] = list.take(5).toList();
-        mapped['Trending Now'] =
-            list.where((p) => p.rating >= 4.0).take(5).toList();
-        mapped['Budget-Friendly'] =
-            list.where((p) => p.price < 25000).take(5).toList();
-      }
-
-      if (mounted) {
-        setState(() {
-          _collections = mapped;
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading collections: $e');
-      if (mounted) {
-        setState(() {
-          _hasError = true;
-          _loading = false;
-        });
-      }
-    }
+  void _onFeedUpdated() {
+    if (mounted) setState(() {});
   }
+
+  Future<void> _loadFeed() async {
+    // Basic context; more logic can be added later
+    await _feedController.loadFeed();
+  }
+
+
+
 
   @override
   Widget build(BuildContext context) {
-    final filteredCollections = <String, List<Property>>{};
-    for (final entry in _collections.entries) {
-      final filteredList = entry.value
-          .where((p) => _matchesCategory(p, _selectedCategory))
-          .toList();
-      if (filteredList.isNotEmpty) {
-        filteredCollections[entry.key] = filteredList;
-      }
-    }
-
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _loadCollections,
+          onRefresh: _loadFeed,
           color: _primaryText,
           child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
               SliverToBoxAdapter(child: _buildHeader()),
               SliverToBoxAdapter(child: _buildCategoryPills()),
-              if (_loading)
+              if (_feedController.isLoading)
                 SliverToBoxAdapter(child: _buildShimmerLoading())
-              else if (_hasError)
+              else if (_feedController.hasError)
                 SliverToBoxAdapter(
                   child: Center(
                     child: Padding(
@@ -176,15 +102,13 @@ class _HomeViewState extends State<HomeView> {
                     ),
                   ),
                 )
-              else if (filteredCollections.isEmpty)
+              else if (_feedController.feedResponse == null ||
+                       _feedController.feedResponse!.sections.isEmpty)
                 SliverToBoxAdapter(
                   child: Center(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 40),
-                      child: Text(
-                          _collections.isEmpty
-                              ? 'No properties available'
-                              : 'No properties match this category',
+                      child: Text('No properties available',
                           style: GoogleFonts.poppins(color: _grey)),
                     ),
                   ),
@@ -192,22 +116,20 @@ class _HomeViewState extends State<HomeView> {
               else
                 ...() {
                   final sliverWidgets = <Widget>[];
-                  bool promoAdded = false;
 
-                  for (int i = 0; i < filteredCollections.length; i++) {
-                    final entry = filteredCollections.entries.elementAt(i);
+                  final sections = _feedController.feedResponse!.sections;
+                  for (int i = 0; i < sections.length; i++) {
+                    final section = sections[i];
 
-                    // Add the horizontal collection
                     sliverWidgets.add(
                       SliverToBoxAdapter(
-                        child: _buildHorizontalCollection(entry.key, entry.value),
+                        child: _buildHorizontalCollection(section.title, section.items),
                       ),
                     );
 
-                    // Insert Promo Card after 'Recently Viewed', or after the 1st item if Recently Viewed doesn't exist
-                    if (entry.key == 'Recently Viewed' || (!filteredCollections.containsKey('Recently Viewed') && i == 0)) {
+                    // Insert Promo Card after the first section
+                    if (i == 0) {
                       sliverWidgets.add(SliverToBoxAdapter(child: _buildPromoCard()));
-                      promoAdded = true;
                     }
                   }
                   
@@ -221,91 +143,170 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 
-  // ─── PROMOTION CARD ─────────────────────────────────────────────────────────
+// ─── REHANI PROMOTIONAL CARD ─────────────────────────────────────────
 
-  Widget _buildPromoCard() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: _grey.withOpacity(0.15)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'REHANI',
-                    style: GoogleFonts.poppins(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: _dark,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Find affordable pre-loved essentials from students around you.',
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      color: _grey,
-                      height: 1.4,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _primaryText.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      'Coming Soon',
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: _primaryText,
-                        letterSpacing: 0.5,
+Widget _buildPromoCard() {
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+    child: Container(
+      height: 250,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Stack(
+        children: [
+          // ─── LEFT CONTENT ───────────────────────────────────────
+          Positioned(
+            left: 24,
+            top: 24,
+            bottom: 24,
+            right: 125,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // New Feature Badge
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE4F5EB),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            PhosphorIconsRegular.tag,
+                            color: Color(0xFF065F46),
+                            size: 14,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'New Feature',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF065F46),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Image.asset(
-              'assets/images/rehani.png',
-              width: 90,
-              height: 90,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) => Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  color: _grey.withOpacity(0.1),
-                  shape: BoxShape.circle,
+
+                    const SizedBox(width: 6),
+
+                    CustomPaint(
+                      size: const Size(16, 16),
+                      painter: _SparklePainter(),
+                    ),
+                  ],
                 ),
-                child: const Icon(PhosphorIconsRegular.shoppingBag, color: _grey, size: 32),
-              ),
+
+                const SizedBox(height: 16),
+
+                // Rehani Title
+                Text(
+                  'Rehani',
+                  style: GoogleFonts.poppins(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF0A1C30),
+                    letterSpacing: -1.0,
+                    height: 1.0,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Description
+                Text(
+                  'Buy and sell second-hand\nitems near you.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF475569),
+                    height: 1.45,
+                  ),
+                ),
+
+                const Spacer(),
+
+                // Coming Soon Button
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE4F5EB),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Coming Soon',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF065F46),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(
+                        PhosphorIconsRegular.arrowRight,
+                        color: Color(0xFF065F46),
+                        size: 15,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          // ─── 3D ILLUSTRATION ────────────────────────────────────
+          Positioned(
+            right: -8,
+            bottom: 0,
+            child: Image.asset(
+              'assets/images/rehani.png',
+              height: 175,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return SizedBox(
+                  width: 140,
+                  height: 140,
+                  child: Center(
+                    child: Icon(
+                      PhosphorIconsRegular.shoppingBag,
+                      color: _grey,
+                      size: 48,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ─── UI BUILDERS ──────────────────────────────────────────────────────────
 
@@ -337,7 +338,7 @@ class _HomeViewState extends State<HomeView> {
               onTap: () {
                 setState(() {
                   if (_selectedCategory == label) {
-                    _selectedCategory = 'All'; // Deselect if already selected
+                    _selectedCategory = 'All'; 
                   } else {
                     _selectedCategory = label;
                   }
@@ -595,4 +596,30 @@ class _HomeViewState extends State<HomeView> {
       }),
     );
   }
+}
+
+// ─── Custom Painter for the Rehani "Sparkles" ──────────────────────────────
+class _SparklePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF065F46)
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+
+    // Center coordinates
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+
+    // Draw 3 radiating lines matching the screenshot
+    // Top right
+    canvas.drawLine(Offset(cx + 2, cy - 2), Offset(cx + 6, cy - 6), paint);
+    // Middle right
+    canvas.drawLine(Offset(cx + 4, cy + 2), Offset(cx + 10, cy + 2), paint);
+    // Bottom right
+    canvas.drawLine(Offset(cx + 2, cy + 6), Offset(cx + 6, cy + 10), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

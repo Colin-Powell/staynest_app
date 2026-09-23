@@ -136,6 +136,21 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_entity
   ON admin_audit_logs(entity_type, entity_id, created_at DESC);
 
 
+CREATE TABLE IF NOT EXISTS property_types (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug text UNIQUE NOT NULL,
+  label text NOT NULL,
+  parent_id uuid REFERENCES property_types(id) ON DELETE SET NULL,
+  active boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE IF NOT EXISTS room_types (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug text UNIQUE NOT NULL,
+  label text NOT NULL,
+  active boolean NOT NULL DEFAULT true
+);
+
 CREATE TABLE IF NOT EXISTS properties (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   title text NOT NULL,
@@ -191,6 +206,17 @@ ALTER TABLE properties ADD COLUMN IF NOT EXISTS landmark text;
 UPDATE properties SET status = 'pending_review' WHERE status IS NULL OR status = 'available';
 ALTER TABLE properties ALTER COLUMN status SET DEFAULT 'pending_review';
 ALTER TABLE properties ALTER COLUMN status SET NOT NULL;
+
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS property_type_id uuid REFERENCES property_types(id);
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS room_type_id uuid REFERENCES room_types(id);
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS verification_status text DEFAULT 'pending';
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS availability_status text DEFAULT 'unknown';
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS location_accuracy_m numeric;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS campus_id uuid REFERENCES locations(id);
+
+CREATE INDEX IF NOT EXISTS properties_status_availability_updated_idx ON properties (status, availability_status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS properties_campus_type_status_idx ON properties (campus_id, property_type_id, status);
 
 CREATE TABLE IF NOT EXISTS verifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -707,3 +733,10 @@ CREATE TABLE IF NOT EXISTS promotions (
     active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+ 
+ C R E A T E   T A B L E   I F   N O T   E X I S T S   e n g a g e m e n t _ e v e n t s   ( i d   u u i d   P R I M A R Y   K E Y   D E F A U L T   g e n _ r a n d o m _ u u i d ( ) ,   u s e r _ i d   u u i d   R E F E R E N C E S   u s e r s ( i d )   O N   D E L E T E   C A S C A D E ,   p r o p e r t y _ i d   u u i d   R E F E R E N C E S   p r o p e r t i e s ( i d )   O N   D E L E T E   C A S C A D E ,   e v e n t _ t y p e   t e x t   N O T   N U L L ,   c r e a t e d _ a t   t i m e s t a m p t z   N O T   N U L L   D E F A U L T   n o w ( ) ,   s o u r c e _ s e c t i o n   t e x t ,   l o c a t i o n _ c o n t e x t   j s o n b ) ;  
+ A L T E R   T A B L E   e n g a g e m e n t _ e v e n t s   A D D   C O L U M N   I F   N O T   E X I S T S   s o u r c e _ s e c t i o n   t e x t ;  
+ A L T E R   T A B L E   e n g a g e m e n t _ e v e n t s   A D D   C O L U M N   I F   N O T   E X I S T S   l o c a t i o n _ c o n t e x t   j s o n b ;  
+ C R E A T E   T A B L E   I F   N O T   E X I S T S   u s e r _ d i s c o v e r y _ p r o f i l e s   ( u s e r _ i d   u u i d   P R I M A R Y   K E Y   R E F E R E N C E S   u s e r s ( i d )   O N   D E L E T E   C A S C A D E ,   u p d a t e d _ a t   t i m e s t a m p t z   N O T   N U L L   D E F A U L T   n o w ( ) ,   m e t a d a t a   j s o n b ) ;  
+ C R E A T E   T A B L E   I F   N O T   E X I S T S   f e e d _ i m p r e s s i o n s   ( i d   u u i d   P R I M A R Y   K E Y   D E F A U L T   g e n _ r a n d o m _ u u i d ( ) ,   u s e r _ i d   u u i d   R E F E R E N C E S   u s e r s ( i d )   O N   D E L E T E   C A S C A D E ,   s e s s i o n _ i d   t e x t ,   f e e d _ i d   t e x t ,   s e c t i o n _ i d   t e x t ,   l i s t i n g _ i d   u u i d   R E F E R E N C E S   p r o p e r t i e s ( i d )   O N   D E L E T E   C A S C A D E ,   p o s i t i o n   i n t e g e r ,   a l g o r i t h m   t e x t ,   c r e a t e d _ a t   t i m e s t a m p t z   N O T   N U L L   D E F A U L T   n o w ( ) ) ;  
+ 
