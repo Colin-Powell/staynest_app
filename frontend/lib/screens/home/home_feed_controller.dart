@@ -7,14 +7,23 @@ class HomeFeedController extends ChangeNotifier {
   bool hasError = false;
   HomeFeedResponse? feedResponse;
 
+  bool _disposed = false;
+
+  /// Safe wrapper — skips notifyListeners if already disposed.
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
   Future<void> loadFeed({
     double? lat,
     double? lng,
     String? campusId,
   }) async {
+    if (_disposed) return;
+
     isLoading = true;
     hasError = false;
-    notifyListeners();
+    _notify();
 
     try {
       final response = await PropertiesApi.getHomeFeed(
@@ -22,18 +31,27 @@ class HomeFeedController extends ChangeNotifier {
         lng: lng,
         campusId: campusId,
       );
+      if (_disposed) return;
       feedResponse = response;
     } catch (e) {
+      if (_disposed) return;
       debugPrint('Error loading home feed: $e');
       hasError = true;
     } finally {
-      isLoading = false;
-      notifyListeners();
+      if (!_disposed) {
+        isLoading = false;
+        _notify();
+      }
     }
   }
 
   Future<void> refreshFeed() async {
-    // Retain old feed while refreshing if desired, but here we just reload
     await loadFeed();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

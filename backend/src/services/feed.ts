@@ -32,7 +32,7 @@ export class FeedService {
       const nearbyQuery = `
         SELECT p.*
         FROM properties p
-        WHERE p.status IN ('available', 'pending_review')
+        WHERE COALESCE(p.status, 'pending_review') = 'approved'
           AND p.lat IS NOT NULL AND p.lng IS NOT NULL
         ORDER BY (
           6371 * acos(cos(radians($1)) * cos(radians(p.lat)) *
@@ -59,8 +59,8 @@ export class FeedService {
     const freshQuery = `
       SELECT p.*
       FROM properties p
-      WHERE p.status IN ('available', 'pending_review')
-      ORDER BY p.updated_at DESC, p.created_at DESC
+      WHERE COALESCE(p.status, 'pending_review') = 'approved'
+      ORDER BY COALESCE(p.updated_at, p.created_at) DESC
       LIMIT $1
     `;
     const freshRes = await query(freshQuery, [limit]);
@@ -76,11 +76,12 @@ export class FeedService {
       });
     }
 
-    // 3. Trending
+    // 3. Trending (highly rated)
     const trendingQuery = `
       SELECT p.*
       FROM properties p
-      WHERE p.status IN ('available', 'pending_review') AND p.average_rating >= 4.0
+      WHERE COALESCE(p.status, 'pending_review') = 'approved'
+        AND p.average_rating >= 4.0
       ORDER BY p.average_rating DESC, p.review_count DESC
       LIMIT $1
     `;
@@ -95,6 +96,31 @@ export class FeedService {
         items: trendingRes.rows,
         hasMore: false,
       });
+    }
+
+    // 4. Cold-start fallback: if no sections generated (no coordinates, no
+    //    highly-rated listings), show a general "Discover" section so the
+    //    feed is never blank.
+    if (sections.length === 0) {
+      const fallbackQuery = `
+        SELECT p.*
+        FROM properties p
+        WHERE COALESCE(p.status, 'pending_review') = 'approved'
+        ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+        LIMIT $1
+      `;
+      const fallbackRes = await query(fallbackQuery, [limit]);
+      if (fallbackRes.rows.length > 0) {
+        sections.push({
+          id: 'discover',
+          type: 'property_carousel',
+          title: 'Discover Properties',
+          subtitle: 'Find your next stay',
+          algorithm: 'fallback_v1',
+          items: fallbackRes.rows,
+          hasMore: false,
+        });
+      }
     }
 
     return sections;
