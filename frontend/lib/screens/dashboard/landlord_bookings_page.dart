@@ -62,7 +62,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
           context: context,
           imagePath: 'assets/images/booking.webp',
           title: 'Booking Requests',
-          subtitle: 'Review tenant applications, approve bookings, and manage your reservation calendar.',
+          subtitle:
+              'Review tenant applications, approve bookings, and manage your reservation calendar.',
           ctaText: 'View Bookings',
         ).then((_) => OnboardingPrefs.markAsSeen('landlordBookingsSeen'));
       }
@@ -86,17 +87,23 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
         _allBookings = result.data!.map((b) {
           return {
             'id': b['id']?.toString() ?? '',
-            'title': b['title']?.toString() ?? b['property_title']?.toString() ?? 'Property',
+            'title': b['title']?.toString() ??
+                b['property_title']?.toString() ??
+                'Property',
             'location': b['city']?.toString() ?? '',
             'tenant_id': b['tenant_id']?.toString() ?? '',
             'tenant_name': b['tenant_name']?.toString() ?? 'Tenant',
             'date': _formatDateString(b['check_in_date']?.toString() ?? ''),
+            'checkOutDate': b['check_out_date']?.toString() ?? '',
             'time': '10:00 AM',
             'rawStatus': b['status']?.toString().toLowerCase() ?? '',
             'status': _mapStatus(b['status']?.toString() ?? ''),
             'image': b['image_url']?.toString() ?? '',
-            'price': (double.tryParse(b['total_price']?.toString() ?? '0') ?? 0).toInt(),
-            'rating': (double.tryParse(b['average_rating']?.toString() ?? '0') ?? 0.0).toDouble(),
+            'price': (double.tryParse(b['total_price']?.toString() ?? '0') ?? 0)
+                .toInt(),
+            'rating':
+                (double.tryParse(b['average_rating']?.toString() ?? '0') ?? 0.0)
+                    .toDouble(),
             'reviews': int.tryParse(b['review_count']?.toString() ?? '0') ?? 0,
           };
         }).toList();
@@ -169,7 +176,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
 
   Widget _buildShimmerLoading() {
     return SliverPadding(
-      padding: EdgeInsets.fromLTRB(24, 0, 24, MediaQuery.of(context).padding.bottom + 200),
+      padding: EdgeInsets.fromLTRB(
+          24, 0, 24, MediaQuery.of(context).padding.bottom + 200),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, index) {
@@ -191,7 +199,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                         width: 120,
                         decoration: const BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.horizontal(left: Radius.circular(20)),
+                          borderRadius: BorderRadius.horizontal(
+                              left: Radius.circular(20)),
                         ),
                       ),
                     ),
@@ -202,25 +211,51 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Shimmer.fromColors(
-                              baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                              child: Container(width: double.infinity, height: 16, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                              baseColor: Colors.grey.shade200,
+                              highlightColor: Colors.grey.shade100,
+                              child: Container(
+                                  width: double.infinity,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(4))),
                             ),
                             const SizedBox(height: 8),
                             Shimmer.fromColors(
-                              baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                              child: Container(width: 100, height: 12, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                              baseColor: Colors.grey.shade200,
+                              highlightColor: Colors.grey.shade100,
+                              child: Container(
+                                  width: 100,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(4))),
                             ),
                             const Spacer(),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Shimmer.fromColors(
-                                  baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                                  child: Container(width: 80, height: 14, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                                  baseColor: Colors.grey.shade200,
+                                  highlightColor: Colors.grey.shade100,
+                                  child: Container(
+                                      width: 80,
+                                      height: 14,
+                                      decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(4))),
                                 ),
                                 Shimmer.fromColors(
-                                  baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                                  child: Container(width: 60, height: 20, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10))),
+                                  baseColor: Colors.grey.shade200,
+                                  highlightColor: Colors.grey.shade100,
+                                  child: Container(
+                                      width: 60,
+                                      height: 20,
+                                      decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(10))),
                                 ),
                               ],
                             ),
@@ -246,7 +281,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(PhosphorIconsRegular.calendarSlash, size: 64, color: _grey),
+            const Icon(PhosphorIconsRegular.calendarSlash,
+                size: 64, color: _grey),
             const SizedBox(height: 20),
             Text(
               'No $_selectedTab bookings',
@@ -273,7 +309,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
 
   Widget _buildBookingCard(Map<String, dynamic> booking) {
     final status = booking['status'] as String? ?? 'Upcoming';
-    final statusColor = statusColors[status]?['text'] ?? const Color(0xFF065F46);
+    final statusColor =
+        statusColors[status]?['text'] ?? const Color(0xFF065F46);
     final statusBg = statusColors[status]?['bg'] ?? const Color(0xFFD1FAE5);
 
     return Container(
@@ -306,7 +343,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                 width: 120,
                 height: double.infinity,
                 color: _grey.withOpacity(0.1),
-                child: const Icon(PhosphorIconsRegular.house, color: _grey, size: 32),
+                child: const Icon(PhosphorIconsRegular.house,
+                    color: _grey, size: 32),
               ),
             ),
           ),
@@ -343,10 +381,12 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                   if ((booking['reviews'] as int? ?? 0) > 0)
                     Row(
                       children: [
-                        const Icon(PhosphorIconsFill.star, size: 12, color: Color(0xFFF59E0B)),
+                        const Icon(PhosphorIconsFill.star,
+                            size: 12, color: Color(0xFFF59E0B)),
                         const SizedBox(width: 4),
                         Text(
-                          (booking['rating'] as double? ?? 0.0).toStringAsFixed(1),
+                          (booking['rating'] as double? ?? 0.0)
+                              .toStringAsFixed(1),
                           style: GoogleFonts.poppins(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -355,9 +395,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                         ),
                       ],
                     ),
-                  
                   const Spacer(),
-                  
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -385,7 +423,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                         ],
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: statusBg,
                           borderRadius: BorderRadius.circular(10),
@@ -466,7 +505,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(PhosphorIconsRegular.warningCircle, color: Colors.redAccent, size: 48),
+                          const Icon(PhosphorIconsRegular.warningCircle,
+                              color: Colors.redAccent, size: 48),
                           const SizedBox(height: 16),
                           Text(
                             _errorMessage!,
@@ -480,7 +520,10 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                           const SizedBox(height: 16),
                           TextButton(
                             onPressed: _loadBookings,
-                            child: Text('Retry', style: GoogleFonts.poppins(color: _green, fontWeight: FontWeight.w600)),
+                            child: Text('Retry',
+                                style: GoogleFonts.poppins(
+                                    color: _green,
+                                    fontWeight: FontWeight.w600)),
                           ),
                         ],
                       ),
@@ -493,7 +536,8 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                 else
                   SliverPadding(
                     // Large bottom padding ensures cards scroll freely above the floating button
-                    padding: EdgeInsets.fromLTRB(24, 0, 24, MediaQuery.of(context).padding.bottom + 200),
+                    padding: EdgeInsets.fromLTRB(
+                        24, 0, 24, MediaQuery.of(context).padding.bottom + 200),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
@@ -504,7 +548,9 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                               onTap: () async {
                                 final result = await Navigator.push(
                                   context,
-                                  MaterialPageRoute(builder: (_) => LandlordBookingDetailPage(booking: booking)),
+                                  MaterialPageRoute(
+                                      builder: (_) => LandlordBookingDetailPage(
+                                          booking: booking)),
                                 );
                                 if (result == true) {
                                   _loadBookings();
@@ -524,15 +570,18 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
 
             // Floating "View Calendar" Button restored to exact original clearance
             Positioned(
-              bottom: MediaQuery.of(context).padding.bottom + 120, // Clears the app's bottom navigation bar
+              bottom: MediaQuery.of(context).padding.bottom +
+                  120, // Clears the app's bottom navigation bar
               left: 24,
               right: 24,
               child: SizedBox(
                 height: 56,
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () => Navigator.of(context).push(LandlordCalendarPage.route()),
-                  icon: const Icon(PhosphorIconsRegular.calendarBlank, size: 20, color: Colors.white),
+                  onPressed: () =>
+                      Navigator.of(context).push(LandlordCalendarPage.route()),
+                  icon: const Icon(PhosphorIconsRegular.calendarBlank,
+                      size: 20, color: Colors.white),
                   label: Text(
                     'View Calendar',
                     style: GoogleFonts.poppins(
@@ -542,11 +591,12 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _dark, 
+                    backgroundColor: _dark,
                     foregroundColor: Colors.white,
                     elevation: 8,
                     shadowColor: Colors.black.withOpacity(0.3),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(32)),
                   ),
                 ),
               ),

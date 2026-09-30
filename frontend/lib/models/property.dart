@@ -121,6 +121,7 @@ class Property {
   final String description;
   final Agent agent;
   final DateTime? viewedAt;
+  final String availabilityStatus;
 
   const Property({
     required this.id,
@@ -141,7 +142,22 @@ class Property {
     required this.description,
     required this.agent,
     this.viewedAt,
+    this.availabilityStatus = 'available',
   }) : images = images ?? const [];
+
+  bool get isAvailableForBooking => !const {
+        'fully_booked',
+        'rented',
+        'maintenance'
+      }.contains(availabilityStatus.toLowerCase());
+
+  String get availabilityLabel => switch (availabilityStatus.toLowerCase()) {
+        'fully_booked' => 'Fully booked',
+        'rented' => 'Rented out',
+        'maintenance' => 'Under maintenance',
+        'pending_booking' => 'Booking pending',
+        _ => 'Available',
+      };
 
   factory Property.fromJson(Map<String, dynamic> json) {
     double numberValue(dynamic value) {
@@ -165,6 +181,23 @@ class Property {
     final amenitiesList = json['amenities'] is List
         ? List<String>.from(json['amenities'] as List)
         : <String>[];
+    final legacyStatus = (json['status'] ?? '').toString().toLowerCase();
+    final rawAvailabilityStatus =
+        json['availability_status']?.toString().toLowerCase();
+    const occupancyStatuses = {
+      'available',
+      'pending_booking',
+      'fully_booked',
+      'rented',
+      'maintenance',
+    };
+    final availabilityStatus = rawAvailabilityStatus == null ||
+            rawAvailabilityStatus.isEmpty ||
+            rawAvailabilityStatus == 'unknown'
+        ? (occupancyStatuses.contains(legacyStatus)
+            ? legacyStatus
+            : 'available')
+        : rawAvailabilityStatus;
 
     return Property(
       id: (json['id'] ?? '').toString(),
@@ -193,6 +226,7 @@ class Property {
       ),
       amenities: amenitiesList,
       description: (json['description'] ?? '').toString(),
+      availabilityStatus: availabilityStatus,
       agent: Agent(
         userId: (json['landlord_id'] ?? '').toString(),
         name: (json['landlord_name'] ?? 'Unknown').toString(),

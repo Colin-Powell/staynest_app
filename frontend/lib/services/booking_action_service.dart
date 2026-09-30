@@ -23,7 +23,12 @@ class BookingActionService {
     }
 
     // 2. Execute API Call
-    final apiAction = action == 'Accepted' ? 'confirm' : 'reject';
+    final apiAction = switch (action) {
+      'Accepted' => 'confirm',
+      'Rejected' => 'reject',
+      'Completed' => 'complete',
+      _ => action.toLowerCase(),
+    };
     final success = await BookingService.updateStatus(
       bookingId,
       apiAction,

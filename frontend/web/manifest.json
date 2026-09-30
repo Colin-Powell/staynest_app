@@ -1,11 +1,11 @@
 {
-    "name": "property_app",
-    "short_name": "property_app",
+    "name": "StayNest",
+    "short_name": "StayNest",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F8F9FD",
+    "theme_color": "#3F37C9",
+    "description": "Find, rent, and live in your next home with StayNest.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

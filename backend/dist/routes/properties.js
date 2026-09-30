@@ -30,6 +30,13 @@ function normalizePropertyRow(property) {
     if (!property.status) {
         property.status = 'pending_review';
     }
+    const availabilityStatus = String(property.availability_status ?? '').toLowerCase();
+    const legacyAvailability = ['available', 'pending_booking', 'fully_booked', 'rented', 'maintenance'];
+    if (!availabilityStatus || availabilityStatus === 'unknown') {
+        property.availability_status = legacyAvailability.includes(String(property.status).toLowerCase())
+            ? property.status
+            : 'available';
+    }
     // FIX 1: null guard — pg returns null for empty jsonb, not undefined
     if (images === null)
         images = undefined;
@@ -95,6 +102,7 @@ const PROPERTY_SELECT = `p.id,
               p.lat,
               p.lng,
               p.status,
+              p.availability_status,
               u.id AS landlord_id,
               u.name AS landlord_name,
               u.email AS landlord_email,
@@ -508,7 +516,7 @@ router.patch('/:id/status', requireAuth, authorize('landlord', 'host'), async (r
             return res.status(400).json({ error: `Status must be one of: ${allowedStatuses.join(', ')}.` });
         }
         console.log(`[PropertyStatusUpdate] Query Params: status=${status}, propertyId=${propertyId}, userId=${userId}`);
-        const result = await query('UPDATE properties SET status = $1 WHERE id = $2 AND landlord_id = $3 RETURNING *', [status, propertyId, userId]);
+        const result = await query('UPDATE properties SET availability_status = $1 WHERE id = $2 AND landlord_id = $3 RETURNING *', [status, propertyId, userId]);
         console.log(`[PropertyStatusUpdate] Query result rowCount: ${result.rowCount}`);
         if (result.rowCount === 0) {
             console.warn(`[PropertyStatusUpdate] No rows updated. Either property ${propertyId} doesn't exist or user ${userId} is not the landlord.`);

@@ -24,6 +24,7 @@ export 'home/nearby_services_view.dart';
 export 'home/map_view.dart';
 
 export 'edit_profile_view.dart';
+export 'tenant_profile_view.dart';
 
 export 'my_bookings_view.dart' hide Property, properties, AppScrollBehavior;
 

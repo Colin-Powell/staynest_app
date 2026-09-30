@@ -13,6 +13,7 @@ import cron from 'node-cron';
 import { query } from '../db.js';
 import { queueUserPush } from './queue.js';
 import { sendAlertEmail } from './email.js';
+import { refundExpiredBookingEscrows } from './finance_service.js';
 
 // --- helpers ------------------------------------------------------------------
 
@@ -119,6 +120,17 @@ async function sendStalePendingAlerts() {
     console.log(`[cron] stale-pending alerts sent to ${res.rowCount} landlords`);
   } catch (err) {
     console.error('[cron] stale-pending alerts failed:', err);
+  }
+}
+
+async function refundExpiredBookings() {
+  try {
+    const refunded = await refundExpiredBookingEscrows();
+    if (refunded > 0) {
+      console.log(`[cron] refunded ${refunded} expired incomplete booking(s)`);
+    }
+  } catch (err) {
+    console.error('[cron] expired booking refunds failed:', err);
   }
 }
 
@@ -235,6 +247,7 @@ export function startCronJobs() {
 
   // 3. Stale pending alerts — daily 6:00 PM
   cron.schedule('0 18 * * *', sendStalePendingAlerts, { timezone: 'Africa/Nairobi' });
+  cron.schedule('10 1 * * *', refundExpiredBookings, { timezone: 'Africa/Nairobi' });
 
   // 4. Unread message nudge — every 2 hours
   cron.schedule('0 */2 * * *', sendUnreadMessageNudges, { timezone: 'Africa/Nairobi' });

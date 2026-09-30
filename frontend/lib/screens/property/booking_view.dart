@@ -64,9 +64,11 @@ class _MyBookingsViewState extends State<MyBookingsView>
     _loadBookings();
     _entryController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 400));
-    _fadeAnim = CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
+    _fadeAnim =
+        CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _entryController, curve: Curves.easeOutCubic));
+        .animate(CurvedAnimation(
+            parent: _entryController, curve: Curves.easeOutCubic));
     _entryController.forward();
   }
 
@@ -87,12 +89,17 @@ class _MyBookingsViewState extends State<MyBookingsView>
                   'id': b['id']?.toString() ?? '',
                   'title': b['title']?.toString() ?? 'Property',
                   'location': b['city']?.toString() ?? '',
-                  'date': _formatDateString(b['check_in_date']?.toString() ?? ''),
-                  'time': '10:00 AM', 
+                  'date':
+                      _formatDateString(b['check_in_date']?.toString() ?? ''),
+                  'time': '10:00 AM',
                   'status': _mapStatus(b['status']?.toString() ?? ''),
                   'image': b['image_url']?.toString() ?? '',
-                  'rating': (double.tryParse(b['average_rating']?.toString() ?? '0') ?? 0.0).toDouble(),
-                  'reviews': int.tryParse(b['review_count']?.toString() ?? '0') ?? 0,
+                  'rating': (double.tryParse(
+                              b['average_rating']?.toString() ?? '0') ??
+                          0.0)
+                      .toDouble(),
+                  'reviews':
+                      int.tryParse(b['review_count']?.toString() ?? '0') ?? 0,
                 })
             .toList();
         _isLoading = false;
@@ -161,7 +168,8 @@ class _MyBookingsViewState extends State<MyBookingsView>
 
   Widget _buildShimmerLoading() {
     return SliverPadding(
-      padding: EdgeInsets.fromLTRB(24, 0, 24, MediaQuery.of(context).padding.bottom + 100),
+      padding: EdgeInsets.fromLTRB(
+          24, 0, 24, MediaQuery.of(context).padding.bottom + 100),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, index) {
@@ -183,7 +191,8 @@ class _MyBookingsViewState extends State<MyBookingsView>
                         width: 120,
                         decoration: const BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.horizontal(left: Radius.circular(20)),
+                          borderRadius: BorderRadius.horizontal(
+                              left: Radius.circular(20)),
                         ),
                       ),
                     ),
@@ -194,18 +203,36 @@ class _MyBookingsViewState extends State<MyBookingsView>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Shimmer.fromColors(
-                              baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                              child: Container(width: double.infinity, height: 16, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                              baseColor: Colors.grey.shade200,
+                              highlightColor: Colors.grey.shade100,
+                              child: Container(
+                                  width: double.infinity,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(4))),
                             ),
                             const SizedBox(height: 8),
                             Shimmer.fromColors(
-                              baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                              child: Container(width: 100, height: 12, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                              baseColor: Colors.grey.shade200,
+                              highlightColor: Colors.grey.shade100,
+                              child: Container(
+                                  width: 100,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(4))),
                             ),
                             const Spacer(),
                             Shimmer.fromColors(
-                              baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                              child: Container(width: 140, height: 14, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                              baseColor: Colors.grey.shade200,
+                              highlightColor: Colors.grey.shade100,
+                              child: Container(
+                                  width: 140,
+                                  height: 14,
+                                  decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(4))),
                             ),
                           ],
                         ),
@@ -231,13 +258,16 @@ class _MyBookingsViewState extends State<MyBookingsView>
           children: [
             Container(
               padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(color: _grey.withOpacity(0.1), shape: BoxShape.circle),
-              child: const Icon(PhosphorIconsRegular.calendarSlash, size: 48, color: _grey),
+              decoration: BoxDecoration(
+                  color: _grey.withOpacity(0.1), shape: BoxShape.circle),
+              child: const Icon(PhosphorIconsRegular.calendarSlash,
+                  size: 48, color: _grey),
             ),
             const SizedBox(height: 24),
             Text(
               'No $_selectedTab bookings',
-              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
+              style: GoogleFonts.poppins(
+                  fontSize: 18, fontWeight: FontWeight.w700, color: _dark),
             ),
             const SizedBox(height: 8),
             Text(
@@ -253,16 +283,20 @@ class _MyBookingsViewState extends State<MyBookingsView>
 
   Widget _buildBookingCard(Map<String, dynamic> booking) {
     final status = booking['status'] as String? ?? 'Upcoming';
-    final statusColor = statusColors[status]?['text'] ?? const Color(0xFF3B82F6);
+    final statusColor =
+        statusColors[status]?['text'] ?? const Color(0xFF3B82F6);
     final statusBg = statusColors[status]?['bg'] ?? const Color(0xFFEEF2FF);
 
     return Container(
-      height: 120, 
+      height: 120,
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Row(
@@ -282,7 +316,8 @@ class _MyBookingsViewState extends State<MyBookingsView>
                 width: 120,
                 height: double.infinity,
                 color: _grey.withOpacity(0.1),
-                child: const Icon(PhosphorIconsRegular.house, color: _grey, size: 32),
+                child: const Icon(PhosphorIconsRegular.house,
+                    color: _grey, size: 32),
               ),
             ),
           ),
@@ -303,24 +338,32 @@ class _MyBookingsViewState extends State<MyBookingsView>
                           booking['title'] ?? 'Property',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: _dark),
+                          style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: _dark),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const Icon(PhosphorIconsFill.heart, color: Color(0xFFEC4899), size: 18),
+                      const Icon(PhosphorIconsFill.heart,
+                          color: Color(0xFFEC4899), size: 18),
                     ],
                   ),
                   const SizedBox(height: 2),
                   Row(
                     children: [
-                      const Icon(PhosphorIconsRegular.mapPin, size: 12, color: _grey),
+                      const Icon(PhosphorIconsRegular.mapPin,
+                          size: 12, color: _grey),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           booking['location'],
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: _grey),
+                          style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: _grey),
                         ),
                       ),
                     ],
@@ -335,21 +378,33 @@ class _MyBookingsViewState extends State<MyBookingsView>
                         children: [
                           Text(
                             booking['date'],
-                            style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700, color: _dark),
+                            style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: _dark),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             booking['time'],
-                            style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500, color: _grey),
+                            style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: _grey),
                           ),
                         ],
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                            color: statusBg,
+                            borderRadius: BorderRadius.circular(10)),
                         child: Text(
                           status,
-                          style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w700, color: statusColor),
+                          style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: statusColor),
                         ),
                       ),
                     ],
@@ -392,12 +447,18 @@ class _MyBookingsViewState extends State<MyBookingsView>
                             children: [
                               Text(
                                 'My Bookings',
-                                style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -1.0),
+                                style: GoogleFonts.poppins(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w700,
+                                    color: _dark,
+                                    letterSpacing: -1.0),
                               ),
                               const SizedBox(height: 32),
                               ..._tabs.map((tab) => Padding(
                                     padding: const EdgeInsets.only(bottom: 12),
-                                    child: SizedBox(width: double.infinity, child: _buildTab(tab)),
+                                    child: SizedBox(
+                                        width: double.infinity,
+                                        child: _buildTab(tab)),
                                   )),
                             ],
                           ),
@@ -408,20 +469,29 @@ class _MyBookingsViewState extends State<MyBookingsView>
                         child: CustomScrollView(
                           physics: const BouncingScrollPhysics(),
                           slivers: [
-                            SliverToBoxAdapter(child: SizedBox(height: MediaQuery.of(context).padding.top + 32)),
+                            SliverToBoxAdapter(
+                                child: SizedBox(
+                                    height: MediaQuery.of(context).padding.top +
+                                        32)),
                             if (_isLoading)
                               _buildShimmerLoading()
                             else if (_filteredBookings.isEmpty)
                               _buildEmptyState()
                             else
                               SliverPadding(
-                                padding: EdgeInsets.only(right: 32, bottom: MediaQuery.of(context).padding.bottom + 100),
+                                padding: EdgeInsets.only(
+                                    right: 32,
+                                    bottom:
+                                        MediaQuery.of(context).padding.bottom +
+                                            100),
                                 sliver: SliverList(
                                   delegate: SliverChildBuilderDelegate(
                                     (context, index) {
                                       return Padding(
-                                        padding: const EdgeInsets.only(bottom: 20),
-                                        child: _buildBookingCard(_filteredBookings[index]),
+                                        padding:
+                                            const EdgeInsets.only(bottom: 20),
+                                        child: _buildBookingCard(
+                                            _filteredBookings[index]),
                                       );
                                     },
                                     childCount: _filteredBookings.length,
@@ -444,7 +514,11 @@ class _MyBookingsViewState extends State<MyBookingsView>
                         padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                         child: Text(
                           'My Bookings',
-                          style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5),
+                          style: GoogleFonts.poppins(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              color: _dark,
+                              letterSpacing: -0.5),
                         ),
                       ),
                     ),
@@ -472,13 +546,15 @@ class _MyBookingsViewState extends State<MyBookingsView>
                       _buildEmptyState()
                     else
                       SliverPadding(
-                        padding: EdgeInsets.fromLTRB(24, 0, 24, MediaQuery.of(context).padding.bottom + 100),
+                        padding: EdgeInsets.fromLTRB(24, 0, 24,
+                            MediaQuery.of(context).padding.bottom + 100),
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 20),
-                                child: _buildBookingCard(_filteredBookings[index]),
+                                child:
+                                    _buildBookingCard(_filteredBookings[index]),
                               );
                             },
                             childCount: _filteredBookings.length,
@@ -501,12 +577,14 @@ class BookingView extends StatefulWidget {
   final String propertyId;
   final VoidCallback? onBack;
   final VoidCallback? onComplete;
+  final bool embedded;
 
   const BookingView({
     super.key,
     required this.propertyId,
     this.onBack,
     this.onComplete,
+    this.embedded = false,
   });
 
   @override
@@ -522,6 +600,8 @@ class _BookingViewState extends State<BookingView> {
   Property? _property;
   DateTimeRange? _selectedRange;
   bool _isSubmitting = false;
+  bool _showConfirmation = false;
+  bool _showPayment = false;
 
   late DateTime _currentMonth;
   String _selectedTime = '10.00 AM';
@@ -531,7 +611,9 @@ class _BookingViewState extends State<BookingView> {
   void initState() {
     super.initState();
     _currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
-    _selectedRange = DateTimeRange(start: DateTime.now(), end: DateTime.now().add(const Duration(days: 1)));
+    _selectedRange = DateTimeRange(
+        start: DateTime.now(),
+        end: DateTime.now().add(const Duration(days: 1)));
     _load();
   }
 
@@ -558,7 +640,8 @@ class _BookingViewState extends State<BookingView> {
         _loading = false;
       });
 
-      AnalyticsService.trackPropertyView(widget.propertyId, source: 'booking_view');
+      AnalyticsService.trackPropertyView(widget.propertyId,
+          source: 'booking_view');
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -573,6 +656,11 @@ class _BookingViewState extends State<BookingView> {
   Future<void> _submitBooking() async {
     if (_selectedRange == null || _isSubmitting || _property == null) return;
 
+    if (widget.embedded) {
+      setState(() => _showPayment = true);
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     bool checkoutComplete = false;
@@ -586,11 +674,14 @@ class _BookingViewState extends State<BookingView> {
                 checkIn: _selectedRange!.start,
                 checkOut: _selectedRange!.end,
                 selectedTime: _selectedTime,
-                notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+                notes: _notesController.text.trim().isEmpty
+                    ? null
+                    : _notesController.text.trim(),
                 idempotencyKey: _idempotencyKey,
               ),
             ),
-          ) ?? false;
+          ) ??
+          false;
     } catch (error) {
       errorMessage = _bookingErrorMessage(error);
     }
@@ -598,16 +689,20 @@ class _BookingViewState extends State<BookingView> {
     if (mounted) {
       setState(() => _isSubmitting = false);
       if (checkoutComplete) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => BookingConfirmedPage(
-              property: _property!,
-              selectedDate: _selectedRange!.start,
-              selectedTime: _selectedTime,
+        if (widget.embedded) {
+          setState(() => _showConfirmation = true);
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BookingConfirmedPage(
+                property: _property!,
+                selectedDate: _selectedRange!.start,
+                selectedTime: _selectedTime,
+              ),
             ),
-          ),
-        ).then((_) => widget.onComplete?.call());
+          ).then((_) => widget.onComplete?.call());
+        }
       } else if (errorMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -621,10 +716,13 @@ class _BookingViewState extends State<BookingView> {
 
   String _bookingErrorMessage(Object error) {
     final message = error.toString().toLowerCase();
-    if (message.contains('already booked') || message.contains('not available') || message.contains('overlap')) {
+    if (message.contains('already booked') ||
+        message.contains('not available') ||
+        message.contains('overlap')) {
       return 'These dates are no longer available. Please choose different dates.';
     }
-    if (message.contains('already have an active booking') || message.contains('duplicate')) {
+    if (message.contains('already have an active booking') ||
+        message.contains('duplicate')) {
       return 'You already have an active booking request for this property.';
     }
     if (message.contains('property not found')) {
@@ -636,7 +734,10 @@ class _BookingViewState extends State<BookingView> {
     return 'We could not submit your booking. Please try again.';
   }
 
-  Widget _buildDayCell(int day, {bool isCurrentMonth = true, bool isSelected = false, bool isBlue = false}) {
+  Widget _buildDayCell(int day,
+      {bool isCurrentMonth = true,
+      bool isSelected = false,
+      bool isBlue = false}) {
     return Container(
       margin: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -647,7 +748,9 @@ class _BookingViewState extends State<BookingView> {
         child: Text(
           '$day',
           style: GoogleFonts.poppins(
-            color: isSelected ? Colors.white : (isCurrentMonth ? _dark : _grey.withOpacity(0.4)),
+            color: isSelected
+                ? Colors.white
+                : (isCurrentMonth ? _dark : _grey.withOpacity(0.4)),
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             fontSize: 15,
           ),
@@ -656,14 +759,15 @@ class _BookingViewState extends State<BookingView> {
     );
   }
 
-  Widget _buildCalendar() {
-    int daysInMonth = DateUtils.getDaysInMonth(_currentMonth.year, _currentMonth.month);
-    DateTime firstDayOfMonth = DateTime(_currentMonth.year, _currentMonth.month, 1);
+  Widget _buildCalendar(DateTime month) {
+    final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
+    final firstDayOfMonth = DateTime(month.year, month.month, 1);
     int firstWeekday = firstDayOfMonth.weekday; // 1 (Mon) to 7 (Sun)
     int offset = firstWeekday == 7 ? 0 : firstWeekday;
 
-    DateTime prevMonth = DateTime(_currentMonth.year, _currentMonth.month - 1);
-    int daysInPrevMonth = DateUtils.getDaysInMonth(prevMonth.year, prevMonth.month);
+    final prevMonth = DateTime(month.year, month.month - 1);
+    final daysInPrevMonth =
+        DateUtils.getDaysInMonth(prevMonth.year, prevMonth.month);
 
     List<Widget> dayWidgets = [];
     const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -673,7 +777,8 @@ class _BookingViewState extends State<BookingView> {
         Center(
           child: Text(
             day,
-            style: GoogleFonts.poppins(color: _grey, fontWeight: FontWeight.w600, fontSize: 14),
+            style: GoogleFonts.poppins(
+                color: _grey, fontWeight: FontWeight.w600, fontSize: 14),
           ),
         ),
       );
@@ -686,10 +791,11 @@ class _BookingViewState extends State<BookingView> {
         dayWidgets.add(_buildDayCell(day, isCurrentMonth: false, isBlue: true));
       } else if (i >= offset + daysInMonth) {
         int day = i - (offset + daysInMonth) + 1;
-        dayWidgets.add(_buildDayCell(day, isCurrentMonth: false, isBlue: false));
+        dayWidgets
+            .add(_buildDayCell(day, isCurrentMonth: false, isBlue: false));
       } else {
         int day = i - offset + 1;
-        DateTime thisDate = DateTime(_currentMonth.year, _currentMonth.month, day);
+        final thisDate = DateTime(month.year, month.month, day);
         bool isSelected = _selectedRange?.start.year == thisDate.year &&
             _selectedRange?.start.month == thisDate.month &&
             _selectedRange?.start.day == thisDate.day;
@@ -698,11 +804,14 @@ class _BookingViewState extends State<BookingView> {
           GestureDetector(
             onTap: () {
               setState(() {
-                _selectedRange = DateTimeRange(start: thisDate, end: thisDate.add(const Duration(days: 1)));
+                _selectedRange = DateTimeRange(
+                    start: thisDate,
+                    end: thisDate.add(const Duration(days: 1)));
               });
             },
             behavior: HitTestBehavior.opaque,
-            child: _buildDayCell(day, isCurrentMonth: true, isSelected: isSelected),
+            child: _buildDayCell(day,
+                isCurrentMonth: true, isSelected: isSelected),
           ),
         );
       }
@@ -716,10 +825,270 @@ class _BookingViewState extends State<BookingView> {
     );
   }
 
+  Widget _buildMonthNavigation({required bool showSecondMonth}) {
+    final nextMonth = DateTime(_currentMonth.year, _currentMonth.month + 1);
+    return Row(
+      children: [
+        IconButton(
+          tooltip: 'Previous month',
+          onPressed: () => setState(() {
+            _currentMonth =
+                DateTime(_currentMonth.year, _currentMonth.month - 1);
+          }),
+          icon: const Icon(PhosphorIconsRegular.caretLeft, color: _dark),
+        ),
+        Expanded(
+          child: Center(
+            child: Text(
+              DateFormat('MMMM yyyy').format(_currentMonth),
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: _dark,
+              ),
+            ),
+          ),
+        ),
+        if (showSecondMonth)
+          Expanded(
+            child: Center(
+              child: Text(
+                DateFormat('MMMM yyyy').format(nextMonth),
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: _dark,
+                ),
+              ),
+            ),
+          ),
+        IconButton(
+          tooltip: 'Next month',
+          onPressed: () => setState(() {
+            _currentMonth =
+                DateTime(_currentMonth.year, _currentMonth.month + 1);
+          }),
+          icon: const Icon(PhosphorIconsRegular.caretRight, color: _dark),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimeOptions() {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: _times.map((time) {
+        final isSelected = _selectedTime == time;
+        return GestureDetector(
+          onTap: () => setState(() => _selectedTime = time),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            decoration: BoxDecoration(
+              color: isSelected ? _tenantPrimary : _surface,
+              border: Border.all(
+                color: isSelected ? _tenantPrimary : _grey.withOpacity(0.2),
+              ),
+              borderRadius: BorderRadius.circular(30),
+            ),
+            child: Text(
+              time,
+              style: GoogleFonts.poppins(
+                color: isSelected ? Colors.white : _dark,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildDesktopSummary() {
+    final selectedDate = _selectedRange?.start;
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _grey.withOpacity(0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: AspectRatio(
+              aspectRatio: 16 / 10,
+              child: buildPropertyImage(
+                _property?.image ?? '',
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            _property?.name ?? 'Property visit',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.poppins(
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              color: _dark,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _property?.location ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.poppins(fontSize: 13, color: _grey),
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+          Text(
+            'Visit details',
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: _dark,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildSummaryRow(
+            PhosphorIconsRegular.calendarBlank,
+            selectedDate == null
+                ? 'Choose a date'
+                : DateFormat('EEE, d MMM yyyy').format(selectedDate),
+          ),
+          const SizedBox(height: 10),
+          _buildSummaryRow(PhosphorIconsRegular.clock, _selectedTime),
+          const SizedBox(height: 18),
+          TextField(
+            controller: _notesController,
+            minLines: 2,
+            maxLines: 3,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              labelText: 'Note for the host (optional)',
+              alignLabelWithHint: true,
+              filled: true,
+              fillColor: const Color(0xFFF8F9FC),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: FilledButton(
+              onPressed: (_selectedRange == null || _isSubmitting)
+                  ? null
+                  : _submitBooking,
+              style: FilledButton.styleFrom(
+                backgroundColor: _tenantPrimary,
+                disabledBackgroundColor: _grey.withOpacity(0.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: _isSubmitting
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : Text(
+                      'Continue to payment',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow(IconData icon, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: _grey),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: _dark,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_showPayment && _property != null && _selectedRange != null) {
+      return PropertyPaymentPage(
+        property: _property!,
+        checkIn: _selectedRange!.start,
+        checkOut: _selectedRange!.end,
+        selectedTime: _selectedTime,
+        notes: _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
+        idempotencyKey: _idempotencyKey,
+        embedded: true,
+        onBack: () => setState(() => _showPayment = false),
+        onComplete: () => setState(() {
+          _showPayment = false;
+          _showConfirmation = true;
+        }),
+      );
+    }
+
+    if (_showConfirmation && _property != null && _selectedRange != null) {
+      return BookingConfirmedPage(
+        property: _property!,
+        selectedDate: _selectedRange!.start,
+        selectedTime: _selectedTime,
+        onViewBookings: widget.onComplete,
+      );
+    }
+
     if (_loading) {
-      return Scaffold(backgroundColor: _bg, body: const Center(child: CircularProgressIndicator(color: _tenantPrimary)));
+      return const Scaffold(
+          backgroundColor: _bg,
+          body:
+              Center(child: CircularProgressIndicator(color: _tenantPrimary)));
     }
 
     if (_error != null || _property == null) {
@@ -729,9 +1098,11 @@ class _BookingViewState extends State<BookingView> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(PhosphorIconsRegular.warningCircle, color: Colors.redAccent, size: 48),
+              const Icon(PhosphorIconsRegular.warningCircle,
+                  color: Colors.redAccent, size: 48),
               const SizedBox(height: 16),
-              Text(_error ?? 'Failed to load property', style: GoogleFonts.poppins(color: _dark)),
+              Text(_error ?? 'Failed to load property',
+                  style: GoogleFonts.poppins(color: _dark)),
             ],
           ),
         ),
@@ -747,146 +1118,276 @@ class _BookingViewState extends State<BookingView> {
         leading: GestureDetector(
           onTap: widget.onBack ?? () => Navigator.pop(context),
           behavior: HitTestBehavior.opaque,
-          child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 28),
+          child: const Icon(PhosphorIconsRegular.caretLeft,
+              color: _dark, size: 28),
         ),
         title: Text(
           'Book a Visit',
-          style: GoogleFonts.poppins(color: _dark, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.5),
+          style: GoogleFonts.poppins(
+              color: _dark,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5),
         ),
         centerTitle: false,
       ),
       body: SafeArea(
         bottom: false,
-        child: Center( // Center content on large screens
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 600), // Prevent stretching on desktop
-            child: Column(
-              children: [
-                Expanded(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth >= 1000) {
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1320),
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    physics: const BouncingScrollPhysics(),
-                    child: Column(
+                    padding: const EdgeInsets.fromLTRB(32, 24, 32, 32),
+                    child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ─── Month Selector ───
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            GestureDetector(
-                              onTap: () => setState(() => _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1)),
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(color: _surface, shape: BoxShape.circle, border: Border.all(color: _grey.withOpacity(0.2))),
-                                child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 18),
-                              ),
-                            ),
-                            Text(
-                              DateFormat('MMMM yyyy').format(_currentMonth),
-                              style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: _dark),
-                            ),
-                            GestureDetector(
-                              onTap: () => setState(() => _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1)),
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(color: _surface, shape: BoxShape.circle, border: Border.all(color: _grey.withOpacity(0.2))),
-                                child: const Icon(PhosphorIconsRegular.caretRight, color: _dark, size: 18),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-
-                        // ─── Calendar Widget ───
-                        _buildCalendar(),
-                        const SizedBox(height: 32),
-
-                        // ─── Selected Date ───
-                        Text('Selected Date', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: _dark)),
-                        const SizedBox(height: 8),
-                        Text(
-                          _selectedRange != null ? DateFormat('E, d MMM yyyy').format(_selectedRange!.start) : 'No date selected',
-                          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: _grey),
-                        ),
-                        const SizedBox(height: 32),
-
-                        // ─── Selected Time ───
-                        Text('Select Time', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: _dark)),
-                        const SizedBox(height: 16),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: _times.map((time) {
-                            bool isSelected = _selectedTime == time;
-                            return GestureDetector(
-                              onTap: () => setState(() => _selectedTime = time),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: isSelected ? _tenantPrimary : _surface,
-                                  border: Border.all(color: isSelected ? _tenantPrimary : _grey.withOpacity(0.2)),
-                                  borderRadius: BorderRadius.circular(30),
-                                ),
-                                child: Text(
-                                  time,
-                                  style: GoogleFonts.poppins(
-                                    color: isSelected ? Colors.white : _dark,
-                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                                    fontSize: 14,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildMonthNavigation(showSecondMonth: true),
+                              const SizedBox(height: 16),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                      child: _buildCalendar(_currentMonth)),
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                    child: _buildCalendar(DateTime(
+                                      _currentMonth.year,
+                                      _currentMonth.month + 1,
+                                    )),
                                   ),
+                                ],
+                              ),
+                              const SizedBox(height: 28),
+                              Text(
+                                'Select Time',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: _dark,
                                 ),
                               ),
-                            );
-                          }).toList(),
+                              const SizedBox(height: 16),
+                              _buildTimeOptions(),
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 32),
+                        SizedBox(width: 360, child: _buildDesktopSummary()),
                       ],
                     ),
                   ),
                 ),
+              );
+            }
 
-                // ─── Bottom Action Bar ───
-                Container(
-                  padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).padding.bottom + 20),
-                  decoration: BoxDecoration(
-                    color: _surface,
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, -4))],
-                    border: Border(top: BorderSide(color: _grey.withOpacity(0.1))),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_selectedRange != null && !_isSubmitting)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Text(
-                            'Ready to schedule your visit for ${DateFormat('MMM d').format(_selectedRange!.start)} at $_selectedTime',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: _grey),
-                          ),
-                        ),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: (_selectedRange == null || _isSubmitting) ? null : _submitBooking,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _tenantPrimary,
-                            disabledBackgroundColor: _grey.withOpacity(0.2),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-                            elevation: 0,
-                          ),
-                          child: _isSubmitting
-                              ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                              : Text('Confirm Booking', style: GoogleFonts.poppins(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 16),
+                        physics: const BouncingScrollPhysics(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // ─── Month Selector ───
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                GestureDetector(
+                                  onTap: () => setState(() => _currentMonth =
+                                      DateTime(_currentMonth.year,
+                                          _currentMonth.month - 1)),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                        color: _surface,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                            color: _grey.withOpacity(0.2))),
+                                    child: const Icon(
+                                        PhosphorIconsRegular.caretLeft,
+                                        color: _dark,
+                                        size: 18),
+                                  ),
+                                ),
+                                Text(
+                                  DateFormat('MMMM yyyy').format(_currentMonth),
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: _dark),
+                                ),
+                                GestureDetector(
+                                  onTap: () => setState(() => _currentMonth =
+                                      DateTime(_currentMonth.year,
+                                          _currentMonth.month + 1)),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                        color: _surface,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                            color: _grey.withOpacity(0.2))),
+                                    child: const Icon(
+                                        PhosphorIconsRegular.caretRight,
+                                        color: _dark,
+                                        size: 18),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+
+                            // ─── Calendar Widget ───
+                            _buildCalendar(_currentMonth),
+                            const SizedBox(height: 32),
+
+                            // ─── Selected Date ───
+                            Text('Selected Date',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: _dark)),
+                            const SizedBox(height: 8),
+                            Text(
+                              _selectedRange != null
+                                  ? DateFormat('E, d MMM yyyy')
+                                      .format(_selectedRange!.start)
+                                  : 'No date selected',
+                              style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: _grey),
+                            ),
+                            const SizedBox(height: 32),
+
+                            // ─── Selected Time ───
+                            Text('Select Time',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: _dark)),
+                            const SizedBox(height: 16),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: _times.map((time) {
+                                bool isSelected = _selectedTime == time;
+                                return GestureDetector(
+                                  onTap: () =>
+                                      setState(() => _selectedTime = time),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 18, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? _tenantPrimary
+                                          : _surface,
+                                      border: Border.all(
+                                          color: isSelected
+                                              ? _tenantPrimary
+                                              : _grey.withOpacity(0.2)),
+                                      borderRadius: BorderRadius.circular(30),
+                                    ),
+                                    child: Text(
+                                      time,
+                                      style: GoogleFonts.poppins(
+                                        color:
+                                            isSelected ? Colors.white : _dark,
+                                        fontWeight: isSelected
+                                            ? FontWeight.w600
+                                            : FontWeight.w500,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+
+                    // ─── Bottom Action Bar ───
+                    Container(
+                      padding: EdgeInsets.fromLTRB(24, 20, 24,
+                          MediaQuery.of(context).padding.bottom + 20),
+                      decoration: BoxDecoration(
+                        color: _surface,
+                        boxShadow: [
+                          BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 20,
+                              offset: const Offset(0, -4))
+                        ],
+                        border: Border(
+                            top: BorderSide(color: _grey.withOpacity(0.1))),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_selectedRange != null && !_isSubmitting)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: Text(
+                                'Ready to schedule your visit for ${DateFormat('MMM d').format(_selectedRange!.start)} at $_selectedTime',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: _grey),
+                              ),
+                            ),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed:
+                                  (_selectedRange == null || _isSubmitting)
+                                      ? null
+                                      : _submitBooking,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _tenantPrimary,
+                                disabledBackgroundColor: _grey.withOpacity(0.2),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(32)),
+                                elevation: 0,
+                              ),
+                              child: _isSubmitting
+                                  ? const SizedBox(
+                                      height: 24,
+                                      width: 24,
+                                      child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5))
+                                  : Text('Confirm Booking',
+                                      style: GoogleFonts.poppins(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -898,117 +1399,218 @@ class BookingConfirmedPage extends StatelessWidget {
   final Property property;
   final DateTime selectedDate;
   final String selectedTime;
+  final VoidCallback? onViewBookings;
 
   const BookingConfirmedPage({
     super.key,
     required this.property,
     required this.selectedDate,
     required this.selectedTime,
+    this.onViewBookings,
   });
 
   @override
   Widget build(BuildContext context) {
+    final confirmationHeader = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF10B981).withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            PhosphorIconsFill.checkCircle,
+            color: Color(0xFF10B981),
+            size: 80,
+          ),
+        ),
+        const SizedBox(height: 32),
+        Text(
+          'Payment received',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.poppins(
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+            color: _dark,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Your paid booking request has been sent to the host for approval.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.poppins(
+            fontSize: 15,
+            color: _grey,
+            height: 1.5,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+      ],
+    );
+
+    final propertyDetails = Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _grey.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: buildPropertyImage(
+              property.image,
+              width: 80,
+              height: 80,
+              fit: BoxFit.cover,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  property.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: _dark,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${DateFormat('E, d MMM yyyy').format(selectedDate)}  |  $selectedTime',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: _dark,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: ClipOval(
+                        child: AppSession.buildAvatar(property.agent.avatar),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        property.agent.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: _grey,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final reminder = Text(
+      'You will receive a reminder before your visit.',
+      textAlign: TextAlign.center,
+      style: GoogleFonts.poppins(
+        fontSize: 14,
+        color: _grey,
+        height: 1.5,
+        fontWeight: FontWeight.w400,
+      ),
+    );
+
+    final bookingsButton = SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton(
+        onPressed: onViewBookings ?? () => Navigator.of(context).pop(),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _tenantPrimary,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          elevation: 0,
+        ),
+        child: Text(
+          'View My Bookings',
+          style: GoogleFonts.poppins(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 500), // Keeps text readable on desktop
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Spacer(),
-                  // Circular Green Checkmark
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), shape: BoxShape.circle),
-                    child: const Icon(PhosphorIconsFill.checkCircle, color: Color(0xFF10B981), size: 80),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Main Confirmation Text
-                  Text(
-                    'Payment received',
-                    style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Your paid booking request has been sent to the host for approval.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(fontSize: 15, color: _grey, height: 1.5, fontWeight: FontWeight.w400),
-                  ),
-                  const SizedBox(height: 48),
-
-                  // Custom Property Details Card
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: _surface,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: _grey.withOpacity(0.1)),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
-                    ),
-                    child: Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: buildPropertyImage(property.image, width: 80, height: 80, fit: BoxFit.cover),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(property.name, style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: _dark)),
-                              const SizedBox(height: 4),
-                              Text('${DateFormat('E, d MMM yyyy').format(selectedDate)}  |  $selectedTime', style: GoogleFonts.poppins(fontSize: 13, color: _dark, fontWeight: FontWeight.w500)),
-                              const SizedBox(height: 12),
-                              Row(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth >= 800;
+            return Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: isDesktop ? 960 : 500),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: isDesktop
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(child: confirmationHeader),
+                            const SizedBox(width: 48),
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Container(
-                                    width: 24, height: 24,
-                                    decoration: const BoxDecoration(shape: BoxShape.circle),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: AppSession.buildAvatar(property.agent.avatar),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(property.agent.name, style: GoogleFonts.poppins(fontSize: 13, color: _grey, fontWeight: FontWeight.w500)),
+                                  propertyDetails,
+                                  const SizedBox(height: 24),
+                                  reminder,
+                                  const SizedBox(height: 24),
+                                  bookingsButton,
                                 ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            confirmationHeader,
+                            const SizedBox(height: 32),
+                            propertyDetails,
+                            const SizedBox(height: 24),
+                            reminder,
+                            const SizedBox(height: 32),
+                            bookingsButton,
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Bottom Subtitle Text
-                  Text(
-                    'You will receive a reminder\nbefore your visit.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.5, fontWeight: FontWeight.w400),
-                  ),
-
-                  const Spacer(),
-
-                  // View My Booking Blue Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: ElevatedButton.styleFrom(backgroundColor: _tenantPrimary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)), elevation: 0),
-                      child: Text('View My Bookings', style: GoogleFonts.poppins(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );

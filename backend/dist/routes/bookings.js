@@ -3,8 +3,15 @@ import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { queueUserPush } from '../services/queue.js';
 import { settleReferralReward } from '../services/referral_service.js';
-import { createAndPayBookingFromWallet, settleEscrow, } from '../services/finance_service.js';
+import { BOOKING_VIEWING_FEE_KES, completeBookingWithEscrow, createAndPayBookingFromWallet, refundExpiredBookingEscrows, settleEscrow, } from '../services/finance_service.js';
 const router = Router();
+const unavailablePropertyStatuses = new Set(['fully_booked', 'rented', 'maintenance']);
+function isPropertyUnavailable(availabilityStatus, legacyStatus) {
+    const availability = String(availabilityStatus ?? '').toLowerCase();
+    const legacy = String(legacyStatus ?? '').toLowerCase();
+    return unavailablePropertyStatuses.has(availability) ||
+        (['', 'unknown'].includes(availability) && unavailablePropertyStatuses.has(legacy));
+}
 router.post('/pay-with-wallet', requireAuth, async (req, res, next) => {
     const { propertyId, checkInDate, checkOutDate, notes } = req.body;
     const idempotencyKey = String(req.get('Idempotency-Key') ?? '').trim();
@@ -45,7 +52,7 @@ router.post('/pay-with-wallet', requireAuth, async (req, res, next) => {
         if (message.includes('Insufficient wallet balance')) {
             return res.status(402).json({ error: message });
         }
-        if (message.includes('already booked') || message.includes('active booking')) {
+        if (message.includes('already booked') || message.includes('active booking') || message.includes('not available')) {
             return res.status(409).json({ error: message });
         }
         if (message.includes('Invalid booking date') || message.includes('total is invalid')) {
@@ -73,13 +80,16 @@ router.post('/', requireAuth, async (req, res, next) => {
         await query('BEGIN');
         try {
             // Lock the property row to prevent concurrent booking races
-            const propResult = await query('SELECT id, landlord_id, price FROM properties WHERE id = $1 FOR UPDATE', [propertyId]);
+            const propResult = await query('SELECT id, landlord_id, price, status, availability_status FROM properties WHERE id = $1 FOR UPDATE', [propertyId]);
             if (propResult.rowCount === 0) {
                 await query('ROLLBACK');
                 return res.status(404).json({ error: 'Property not found.' });
             }
             const landlordId = propResult.rows[0].landlord_id;
-            const basePrice = Number(propResult.rows[0].price);
+            if (isPropertyUnavailable(propResult.rows[0].availability_status, propResult.rows[0].status)) {
+                await query('ROLLBACK');
+                return res.status(409).json({ error: 'Property is not available for booking.' });
+            }
             if (!landlordId) {
                 await query('ROLLBACK');
                 return res.status(400).json({ error: 'Property has no landlord assigned.' });
@@ -87,10 +97,13 @@ router.post('/', requireAuth, async (req, res, next) => {
             // Calculate nights and server-side totalPrice
             const cIn = new Date(checkInDate);
             const cOut = new Date(checkOutDate);
-            const diffTime = Math.abs(cOut.getTime() - cIn.getTime());
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            const nights = diffDays > 0 ? diffDays : 1;
-            const calculatedTotalPrice = nights * basePrice;
+            if (!Number.isFinite(cIn.getTime()) ||
+                !Number.isFinite(cOut.getTime()) ||
+                cOut <= cIn) {
+                await query('ROLLBACK');
+                return res.status(400).json({ error: 'Invalid booking date range.' });
+            }
+            const calculatedTotalPrice = BOOKING_VIEWING_FEE_KES;
             // Availability Engine: Check for overlapping confirmed bookings
             const overlapCheck = await query(`SELECT id FROM bookings 
          WHERE property_id = $1 
@@ -137,15 +150,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 // Get bookings for tenant
 router.get('/tenant', requireAuth, async (req, res, next) => {
     try {
-        // Auto-complete confirmed bookings that have passed their check-out date
-        const completed = await query(`UPDATE bookings 
-       SET status = 'completed', updated_at = now() 
-       WHERE status = 'confirmed' AND check_out_date < CURRENT_DATE
-       RETURNING id`, []);
-        for (const booking of completed.rows) {
-            await settleReferralReward(booking.id);
-            await settleEscrow(booking.id, 'release');
-        }
+        await refundExpiredBookingEscrows();
         const result = await query(`SELECT b.id,
               b.property_id,
               b.check_in_date,
@@ -175,15 +180,7 @@ router.get('/tenant', requireAuth, async (req, res, next) => {
 // Get bookings for landlord
 router.get('/landlord', requireAuth, async (req, res, next) => {
     try {
-        // Auto-complete confirmed bookings that have passed their check-out date
-        const completed = await query(`UPDATE bookings 
-       SET status = 'completed', updated_at = now() 
-       WHERE status = 'confirmed' AND check_out_date < CURRENT_DATE
-       RETURNING id`, []);
-        for (const booking of completed.rows) {
-            await settleReferralReward(booking.id);
-            await settleEscrow(booking.id, 'release');
-        }
+        await refundExpiredBookingEscrows();
         const result = await query(`SELECT b.id,
               b.property_id,
               b.tenant_id,
@@ -239,6 +236,25 @@ router.patch('/:id/confirm', requireAuth, async (req, res, next) => {
     }
     catch (error) {
         next(error);
+    }
+});
+// Complete booking after the stay ends and release the held payment.
+router.patch('/:id/complete', requireAuth, async (req, res, next) => {
+    try {
+        const booking = await completeBookingWithEscrow(req.params.id, req.auth.id);
+        await settleReferralReward(req.params.id);
+        return res.json({ data: booking });
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not complete booking.';
+        if (message.includes('not found'))
+            return res.status(404).json({ error: message });
+        if (message.includes('Only the landlord'))
+            return res.status(403).json({ error: message });
+        if (message.includes('Only confirmed') || message.includes('checkout date') || message.includes('escrow')) {
+            return res.status(409).json({ error: message });
+        }
+        return next(error);
     }
 });
 // Reject booking (landlord rejects)
@@ -323,15 +339,7 @@ router.patch('/:id/cancel', requireAuth, async (req, res, next) => {
 // Get booking by ID
 router.get('/:id', requireAuth, async (req, res, next) => {
     try {
-        // Auto-complete this specific booking if check-out date has passed
-        const completed = await query(`UPDATE bookings 
-       SET status = 'completed', updated_at = now() 
-       WHERE id = $1 AND status = 'confirmed' AND check_out_date < CURRENT_DATE
-       RETURNING id`, [req.params.id]);
-        for (const booking of completed.rows) {
-            await settleReferralReward(booking.id);
-            await settleEscrow(booking.id, 'release');
-        }
+        await refundExpiredBookingEscrows();
         const bookingId = req.params.id;
         const result = await query(`SELECT b.id,
               b.property_id,

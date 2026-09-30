@@ -12,6 +12,7 @@ import cron from 'node-cron';
 import { query } from '../db.js';
 import { queueUserPush } from './queue.js';
 import { sendAlertEmail } from './email.js';
+import { refundExpiredBookingEscrows } from './finance_service.js';
 // --- helpers ------------------------------------------------------------------
 function fmt(date) {
     const d = new Date(date);
@@ -76,6 +77,17 @@ async function sendStalePendingAlerts() {
     }
     catch (err) {
         console.error('[cron] stale-pending alerts failed:', err);
+    }
+}
+async function refundExpiredBookings() {
+    try {
+        const refunded = await refundExpiredBookingEscrows();
+        if (refunded > 0) {
+            console.log(`[cron] refunded ${refunded} expired incomplete booking(s)`);
+        }
+    }
+    catch (err) {
+        console.error('[cron] expired booking refunds failed:', err);
     }
 }
 // --- 4. Unread message nudge (every 2 hours) ---------------------------------
@@ -164,6 +176,7 @@ export function startCronJobs() {
     cron.schedule('0 8 * * *', sendCheckoutReminders, { timezone: 'Africa/Nairobi' });
     // 3. Stale pending alerts — daily 6:00 PM
     cron.schedule('0 18 * * *', sendStalePendingAlerts, { timezone: 'Africa/Nairobi' });
+    cron.schedule('10 1 * * *', refundExpiredBookings, { timezone: 'Africa/Nairobi' });
     // 4. Unread message nudge — every 2 hours
     cron.schedule('0 */2 * * *', sendUnreadMessageNudges, { timezone: 'Africa/Nairobi' });
     // 5. Weekly landlord digest — every Monday 9:00 AM

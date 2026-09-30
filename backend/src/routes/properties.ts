@@ -35,6 +35,14 @@ function normalizePropertyRow(property: Record<string, unknown>): Record<string,
     property.status = 'pending_review';
   }
 
+  const availabilityStatus = String(property.availability_status ?? '').toLowerCase();
+  const legacyAvailability = ['available', 'pending_booking', 'fully_booked', 'rented', 'maintenance'];
+  if (!availabilityStatus || availabilityStatus === 'unknown') {
+    property.availability_status = legacyAvailability.includes(String(property.status).toLowerCase())
+      ? property.status
+      : 'available';
+  }
+
   // FIX 1: null guard — pg returns null for empty jsonb, not undefined
   if (images === null) images = undefined;
 
@@ -99,6 +107,7 @@ const PROPERTY_SELECT = `p.id,
               p.lat,
               p.lng,
               p.status,
+              p.availability_status,
               u.id AS landlord_id,
               u.name AS landlord_name,
               u.email AS landlord_email,
@@ -599,7 +608,7 @@ router.patch('/:id/status', requireAuth, authorize('landlord', 'host'), async (r
     console.log(`[PropertyStatusUpdate] Query Params: status=${status}, propertyId=${propertyId}, userId=${userId}`);
 
     const result = await query(
-      'UPDATE properties SET status = $1 WHERE id = $2 AND landlord_id = $3 RETURNING *',
+      'UPDATE properties SET availability_status = $1 WHERE id = $2 AND landlord_id = $3 RETURNING *',
       [status, propertyId, userId],
     );
 

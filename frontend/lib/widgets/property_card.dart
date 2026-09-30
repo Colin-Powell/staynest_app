@@ -361,19 +361,22 @@ class _PropertyCardState extends State<PropertyCard> {
   }
 
   Widget _buildBadge() {
-    final text = widget.badgeLabel ??
-        (widget.property.rating >= 4.8
-            ? 'Student Favourite'
-            : widget.property.rating == 0
-                ? 'New'
-                : '');
+    final isUnavailable = !widget.property.isAvailableForBooking;
+    final text = isUnavailable
+        ? widget.property.availabilityLabel
+        : widget.badgeLabel ??
+            (widget.property.rating >= 4.8
+                ? 'Student Favourite'
+                : widget.property.rating == 0
+                    ? 'New'
+                    : '');
 
     if (text.isEmpty) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isUnavailable ? const Color(0xFFFFE4E6) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -388,7 +391,7 @@ class _PropertyCardState extends State<PropertyCard> {
         style: GoogleFonts.poppins(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: AppColors.gray900,
+          color: isUnavailable ? const Color(0xFF9F1239) : AppColors.gray900,
         ),
       ),
     );

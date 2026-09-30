@@ -19,6 +19,7 @@ class ProfileView extends StatefulWidget {
   final void Function(String name)? onSetting;
   final VoidCallback? onLogout;
   final VoidCallback? onEditProfile;
+  final VoidCallback? onMyProfile;
   final VoidCallback? onRefer;
   final VoidCallback? onListProperty;
   final VoidCallback? onVerificationCenter;
@@ -34,6 +35,7 @@ class ProfileView extends StatefulWidget {
     this.onSetting,
     this.onLogout,
     this.onEditProfile,
+    this.onMyProfile,
     this.onRefer,
     this.onListProperty,
     this.onVerificationCenter,
@@ -387,7 +389,7 @@ class _ProfileViewState extends State<ProfileView>
             MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
-                onTap: widget.onEditProfile,
+                onTap: widget.onMyProfile,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -440,8 +442,7 @@ class _ProfileViewState extends State<ProfileView>
                     height: 104,
                     decoration: const BoxDecoration(
                       shape: BoxShape.circle,
-                      color:
-                          Color(0xFFEBE6FE), // Light purple mockup color
+                      color: Color(0xFFEBE6FE), // Light purple mockup color
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: _avatarPath.isNotEmpty
@@ -509,7 +510,7 @@ class _ProfileViewState extends State<ProfileView>
                   MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: ElevatedButton(
-                      onPressed: widget.onEditProfile ?? () {},
+                      onPressed: widget.onMyProfile ?? () {},
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _airbnbPink,
                         elevation: 0,
@@ -611,7 +612,7 @@ class _ProfileViewState extends State<ProfileView>
                       child: Row(
                         children: [
                           GestureDetector(
-                            onTap: widget.onEditProfile,
+                            onTap: widget.onMyProfile,
                             child: Container(
                               width: 72,
                               height: 72,

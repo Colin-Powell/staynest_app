@@ -23,6 +23,9 @@ class PropertyPaymentPage extends StatefulWidget {
   final String selectedTime;
   final String? notes;
   final String idempotencyKey;
+  final bool embedded;
+  final VoidCallback? onBack;
+  final VoidCallback? onComplete;
 
   const PropertyPaymentPage({
     super.key,
@@ -32,6 +35,9 @@ class PropertyPaymentPage extends StatefulWidget {
     required this.selectedTime,
     this.notes,
     required this.idempotencyKey,
+    this.embedded = false,
+    this.onBack,
+    this.onComplete,
   });
 
   @override
@@ -39,16 +45,13 @@ class PropertyPaymentPage extends StatefulWidget {
 }
 
 class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
+  static const int _viewingFee = 500;
   bool _processing = false;
   bool _loadingWallet = true;
+  String? _walletError;
   double _walletBalance = 0;
 
-  int get _nights {
-    final nights = widget.checkOut.difference(widget.checkIn).inDays;
-    return nights > 0 ? nights : 1;
-  }
-
-  int get _total => widget.property.price * _nights;
+  int get _total => _viewingFee;
 
   @override
   void initState() {
@@ -67,8 +70,13 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
             : double.tryParse(balance?.toString() ?? '') ?? 0;
         _loadingWallet = false;
       });
-    } catch (_) {
-      if (mounted) setState(() => _loadingWallet = false);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _loadingWallet = false;
+          _walletError = error.toString().replaceFirst('Exception: ', '');
+        });
+      }
     }
   }
 
@@ -83,7 +91,13 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
         notes: widget.notes,
         idempotencyKey: widget.idempotencyKey,
       );
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) {
+        if (widget.onComplete != null) {
+          widget.onComplete!();
+        } else {
+          Navigator.pop(context, true);
+        }
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() => _processing = false);
@@ -103,6 +117,81 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
 
   @override
   Widget build(BuildContext context) {
+    final content = SafeArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isDesktop = constraints.maxWidth > 900;
+          if (isDesktop) {
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: _maxWebWidth),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 48),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildPageHeading(),
+                      const SizedBox(height: 28),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 55, child: _buildWalletSection()),
+                          const SizedBox(width: 32),
+                          Expanded(flex: 45, child: _buildSummaryCard()),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+
+          return Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildPageHeading(),
+                      const SizedBox(height: 24),
+                      _buildSummaryCard(),
+                      const SizedBox(height: 24),
+                      _buildWalletSection(),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  14,
+                  20,
+                  14 + MediaQuery.of(context).padding.bottom,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: const Border(top: BorderSide(color: _dividerColor)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 14,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+                child: _buildConfirmButton(),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (widget.embedded) return content;
+
     return Scaffold(
       backgroundColor: _pageBackground,
       appBar: AppBar(
@@ -126,78 +215,7 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
           ),
         ),
       ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isDesktop = constraints.maxWidth > 900;
-            if (isDesktop) {
-              return Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: _maxWebWidth),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 48),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildPageHeading(),
-                        const SizedBox(height: 28),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(flex: 55, child: _buildWalletSection()),
-                            const SizedBox(width: 32),
-                            Expanded(flex: 45, child: _buildSummaryCard()),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            return Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildPageHeading(),
-                        const SizedBox(height: 24),
-                        _buildSummaryCard(),
-                        const SizedBox(height: 24),
-                        _buildWalletSection(),
-                      ],
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.fromLTRB(
-                    20,
-                    14,
-                    20,
-                    14 + MediaQuery.of(context).padding.bottom,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: const Border(top: BorderSide(color: _dividerColor)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 14,
-                        offset: const Offset(0, -4),
-                      ),
-                    ],
-                  ),
-                  child: _buildConfirmButton(),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
+      body: content,
     );
   }
 
@@ -205,6 +223,15 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (widget.embedded && widget.onBack != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 18),
+            child: TextButton.icon(
+              onPressed: widget.onBack,
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('Back to booking'),
+            ),
+          ),
         Text(
           'Complete your booking',
           style: GoogleFonts.poppins(
@@ -279,6 +306,33 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
           const SizedBox(height: 20),
           const Divider(height: 1, color: _dividerColor),
           const SizedBox(height: 16),
+          if (_walletError != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7ED),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFED7AA)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      color: Color(0xFFC2410C)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'We could not initialise your wallet session.',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, color: const Color(0xFF9A3412)),
+                    ),
+                  ),
+                  TextButton(
+                      onPressed: _loadWallet, child: const Text('Retry')),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -479,12 +533,9 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
 
           const SizedBox(height: 20),
           _buildPriceRow(
-            'Stay dates',
+            'Viewing date',
             '${DateFormat('MMM d').format(widget.checkIn)} - ${DateFormat('MMM d, yyyy').format(widget.checkOut)}',
           ),
-          const SizedBox(height: 10),
-          _buildPriceRow('Length of stay',
-              '$_nights ${_nights == 1 ? 'night' : 'nights'}'),
           const SizedBox(height: 20),
           const Divider(height: 1, color: _dividerColor),
           const SizedBox(height: 24),
@@ -500,8 +551,13 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
           ),
           const SizedBox(height: 16),
           _buildPriceRow(
-            'Ksh ${widget.property.price} x $_nights ${_nights == 1 ? 'night' : 'nights'}',
-            'Ksh ${_total.toStringAsFixed(2)}',
+            'Viewing booking fee',
+            'Ksh ${_viewingFee.toStringAsFixed(2)}',
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Monthly rent is arranged separately with the landlord.',
+            style: GoogleFonts.poppins(fontSize: 12, color: _textLight),
           ),
           const SizedBox(height: 20),
           const Divider(height: 1, color: _dividerColor),

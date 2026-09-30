@@ -11,6 +11,16 @@ type LedgerEntry = {
   idempotencyKey: string;
 };
 
+export const BOOKING_VIEWING_FEE_KES = 500;
+
+type BookingEscrowRecord = {
+  id: string;
+  payer_id: string;
+  payee_id: string;
+  amount: string | number;
+  status: string;
+};
+
 async function postLedgerEntry(client: PoolClient, entry: LedgerEntry): Promise<boolean> {
   const result = await client.query(
     `INSERT INTO wallet_transactions
@@ -28,6 +38,28 @@ async function postLedgerEntry(client: PoolClient, entry: LedgerEntry): Promise<
     [entry.amount, entry.userId],
   );
   return true;
+}
+
+async function settleEscrowRecord(
+  client: PoolClient,
+  escrow: BookingEscrowRecord,
+  action: 'release' | 'refund',
+): Promise<void> {
+  const recipient = action === 'release' ? escrow.payee_id : escrow.payer_id;
+  await postLedgerEntry(client, {
+    userId: recipient,
+    amount: Number(escrow.amount),
+    type: action === 'release' ? 'escrow_release' : 'escrow_refund',
+    description: action === 'release' ? 'Booking escrow released' : 'Booking payment refunded',
+    referenceType: 'booking_escrow',
+    referenceId: escrow.id,
+    idempotencyKey: `escrow-${action}:${escrow.id}`,
+  });
+  await client.query(
+    `UPDATE booking_escrows SET status = $1, ${action === 'release' ? 'released_at' : 'refunded_at'} = NOW()
+     WHERE id = $2`,
+    [action === 'release' ? 'released' : 'refunded', escrow.id],
+  );
 }
 
 export async function payBookingFromWallet(
@@ -137,7 +169,7 @@ export async function createAndPayBookingFromWallet(input: {
     }
 
     const propertyResult = await client.query(
-      'SELECT id, landlord_id, price FROM properties WHERE id = $1 FOR UPDATE',
+      'SELECT id, landlord_id, price, status, availability_status FROM properties WHERE id = $1 FOR UPDATE',
       [input.propertyId],
     );
     const property = propertyResult.rows[0];
@@ -145,6 +177,15 @@ export async function createAndPayBookingFromWallet(input: {
     if (!property.landlord_id) throw new Error('Property has no landlord assigned.');
     if (property.landlord_id === input.tenantId) {
       throw new Error('Landlords cannot book their own property.');
+    }
+    const unavailableStatuses = ['fully_booked', 'rented', 'maintenance'];
+    const availabilityStatus = String(property.availability_status ?? '').toLowerCase();
+    const legacyStatus = String(property.status ?? '').toLowerCase();
+    if (
+      unavailableStatuses.includes(availabilityStatus) ||
+      (['', 'unknown'].includes(availabilityStatus) && unavailableStatuses.includes(legacyStatus))
+    ) {
+      throw new Error('Property is not available for booking.');
     }
 
     const overlap = await client.query(
@@ -177,13 +218,7 @@ export async function createAndPayBookingFromWallet(input: {
       'SELECT wallet_balance FROM users WHERE id = $1 FOR UPDATE',
       [input.tenantId],
     );
-    const nightlyPrice = Number(property.price);
-    const nights = Math.ceil(
-      (Date.UTC(checkOut.getUTCFullYear(), checkOut.getUTCMonth(), checkOut.getUTCDate()) -
-        Date.UTC(checkIn.getUTCFullYear(), checkIn.getUTCMonth(), checkIn.getUTCDate())) /
-        86400000,
-    );
-    const amount = nights * nightlyPrice;
+    const amount = BOOKING_VIEWING_FEE_KES;
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error('The booking total is invalid.');
     }
@@ -240,6 +275,96 @@ export async function createAndPayBookingFromWallet(input: {
   }
 }
 
+export async function completeBookingWithEscrow(
+  bookingId: string,
+  landlordId: string,
+): Promise<Record<string, unknown>> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const bookingResult = await client.query(
+      `SELECT id, landlord_id, status, check_out_date <= CURRENT_DATE AS checkout_passed
+       FROM bookings WHERE id = $1 FOR UPDATE`,
+      [bookingId],
+    );
+    const booking = bookingResult.rows[0];
+    if (!booking) throw new Error('Booking not found.');
+    if (booking.landlord_id !== landlordId) throw new Error('Only the landlord can complete this booking.');
+    if (!['confirmed', 'completed'].includes(booking.status)) {
+      throw new Error('Only confirmed bookings can be completed.');
+    }
+    if (booking.status === 'confirmed' && !booking.checkout_passed) {
+      throw new Error('A booking can only be completed after its checkout date.');
+    }
+
+    const escrowResult = await client.query(
+      `SELECT id, payer_id, payee_id, amount, status
+       FROM booking_escrows WHERE booking_id = $1 FOR UPDATE`,
+      [bookingId],
+    );
+    const escrow = escrowResult.rows[0] as BookingEscrowRecord | undefined;
+    if (booking.status === 'confirmed' && escrow && escrow.status !== 'held') {
+      throw new Error('Booking escrow is not held.');
+    }
+
+    const updated = booking.status === 'completed'
+      ? bookingResult
+      : await client.query(
+          `UPDATE bookings SET status = 'completed', updated_at = NOW()
+           WHERE id = $1 RETURNING *`,
+          [bookingId],
+        );
+    if (escrow?.status === 'held') {
+      await settleEscrowRecord(client, escrow, 'release');
+    }
+    await client.query('COMMIT');
+    return updated.rows[0] as Record<string, unknown>;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function refundExpiredBookingEscrows(): Promise<number> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const expired = await client.query(
+      `SELECT b.id AS booking_id, e.id, e.payer_id, e.payee_id, e.amount, e.status
+       FROM bookings b
+       JOIN booking_escrows e ON e.booking_id = b.id
+       WHERE b.status IN ('pending', 'confirmed')
+         AND b.check_out_date < CURRENT_DATE
+         AND e.status = 'held'
+       FOR UPDATE OF b, e SKIP LOCKED`,
+    );
+
+    for (const row of expired.rows) {
+      await client.query(
+        `UPDATE bookings
+         SET status = 'cancelled',
+             notes = CASE WHEN COALESCE(notes, '') = ''
+               THEN 'Booking expired before completion'
+               ELSE notes || ' | Booking expired before completion' END,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [row.booking_id],
+      );
+      await settleEscrowRecord(client, row as BookingEscrowRecord, 'refund');
+    }
+
+    await client.query('COMMIT');
+    return expired.rows.length;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function settleEscrow(bookingId: string, action: 'release' | 'refund'): Promise<void> {
   const client = await pool.connect();
   try {
@@ -252,21 +377,7 @@ export async function settleEscrow(bookingId: string, action: 'release' | 'refun
       await client.query('COMMIT');
       return;
     }
-    const recipient = action === 'release' ? escrow.payee_id : escrow.payer_id;
-    await postLedgerEntry(client, {
-      userId: recipient,
-      amount: Number(escrow.amount),
-      type: action === 'release' ? 'escrow_release' : 'escrow_refund',
-      description: action === 'release' ? 'Booking escrow released' : 'Booking payment refunded',
-      referenceType: 'booking_escrow',
-      referenceId: escrow.id,
-      idempotencyKey: `escrow-${action}:${escrow.id}`,
-    });
-    await client.query(
-      `UPDATE booking_escrows SET status = $1, ${action === 'release' ? 'released_at' : 'refunded_at'} = NOW()
-       WHERE id = $2`,
-      [action === 'release' ? 'released' : 'refunded', escrow.id],
-    );
+    await settleEscrowRecord(client, escrow as BookingEscrowRecord, action);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');

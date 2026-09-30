@@ -181,7 +181,8 @@ CREATE TABLE IF NOT EXISTS properties (
   created_at timestamptz NOT NULL DEFAULT now(),
   average_rating numeric DEFAULT 0,
   review_count integer DEFAULT 0,
-  status text NOT NULL DEFAULT 'pending_review'
+  status text NOT NULL DEFAULT 'pending_review',
+  availability_status text NOT NULL DEFAULT 'available'
 );
 
 -- Ensure lat/lng columns exist for older databases
@@ -194,6 +195,18 @@ ALTER TABLE properties ADD COLUMN IF NOT EXISTS address text;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS average_rating numeric DEFAULT 0;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS review_count integer DEFAULT 0;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS status text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS availability_status text DEFAULT 'unknown';
+UPDATE properties
+SET availability_status = status
+WHERE status IN ('available', 'pending_booking', 'fully_booked', 'rented', 'maintenance')
+  AND (availability_status IS NULL OR availability_status = 'unknown');
+UPDATE properties
+SET status = 'approved'
+WHERE status IN ('available', 'pending_booking', 'fully_booked', 'rented', 'maintenance');
+ALTER TABLE properties ALTER COLUMN availability_status SET DEFAULT 'available';
+UPDATE properties SET availability_status = 'available'
+WHERE availability_status IS NULL OR availability_status = 'unknown';
+ALTER TABLE properties ALTER COLUMN availability_status SET NOT NULL;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS country text;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS county text;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS sub_county text;
@@ -281,6 +294,22 @@ ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS preferred_cities text[];
 ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS consent_given boolean DEFAULT false;
 ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS consent_at timestamptz;
 ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS data_retention_days integer DEFAULT 365;
+
+-- Student identity and housing preferences stay separate from account credentials.
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS preferred_name text;
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS bio text;
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS languages text[] DEFAULT '{}';
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS interests text[] DEFAULT '{}';
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS institution text;
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS campus text;
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS course text;
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS year_of_study text;
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS expected_graduation integer;
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS preferred_amenities text[] DEFAULT '{}';
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS distance_preference text;
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS move_in_preference text;
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS room_preference text;
+ALTER TABLE tenant_profiles ADD COLUMN IF NOT EXISTS gender_preference text;
 
 -- Data deletion requests table to track user requests for account/data removal
 CREATE TABLE IF NOT EXISTS deletion_requests (

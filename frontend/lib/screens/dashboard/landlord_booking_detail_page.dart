@@ -57,7 +57,7 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
   Color _getStatusColor(String status) {
     return statusColors[status.toLowerCase()] ?? _grey;
   }
-  
+
   String _formatDateString(String dateStr) {
     if (dateStr.isEmpty || dateStr == 'TBD') return 'TBD';
     try {
@@ -72,10 +72,17 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
   Widget build(BuildContext context) {
     final booking = widget.booking;
     final status = booking['status']?.toString() ?? 'Upcoming';
-    
-    final isPending = booking['rawStatus'] == 'pending' || 
-                      booking['status'].toString().toLowerCase() == 'pending';
-    
+
+    final isPending = booking['rawStatus'] == 'pending' ||
+        booking['status'].toString().toLowerCase() == 'pending';
+    final checkOutDate = DateTime.tryParse(
+      booking['checkOutDate']?.toString() ?? '',
+    );
+    final canMarkCompleted = booking['rawStatus'] == 'confirmed' &&
+        checkOutDate != null &&
+        !DateUtils.dateOnly(checkOutDate)
+            .isAfter(DateUtils.dateOnly(DateTime.now()));
+
     final statusColor = _getStatusColor(status);
 
     return Scaffold(
@@ -92,7 +99,8 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     behavior: HitTestBehavior.opaque,
-                    child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 24),
+                    child: const Icon(PhosphorIconsRegular.caretLeft,
+                        color: _dark, size: 24),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -108,7 +116,8 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: statusColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
@@ -172,7 +181,8 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  booking['tenant_name'] ?? 'Prospective Tenant',
+                                  booking['tenant_name'] ??
+                                      'Prospective Tenant',
                                   style: GoogleFonts.poppins(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,
@@ -197,9 +207,14 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                             onTap: () {
                               Navigator.pushNamed(context, '/chat',
                                   arguments: <String, String>{
-                                    'userId': booking['tenant_id']?.toString() ?? '',
-                                    'name': booking['tenant_name']?.toString() ?? 'Tenant',
-                                    'avatar': booking['tenant_avatar']?.toString() ?? '',
+                                    'userId':
+                                        booking['tenant_id']?.toString() ?? '',
+                                    'name':
+                                        booking['tenant_name']?.toString() ??
+                                            'Tenant',
+                                    'avatar':
+                                        booking['tenant_avatar']?.toString() ??
+                                            '',
                                   });
                             },
                             child: Container(
@@ -243,9 +258,11 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                             height: 220, // Taller for a premium look
                             width: double.infinity, // Forces full width
                             child: ClipRRect(
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                              borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(24)),
                               child: Stack(
-                                fit: StackFit.expand, // Forces child to fill container
+                                fit: StackFit
+                                    .expand, // Forces child to fill container
                                 children: [
                                   buildPropertyImage(
                                     booking['image'] ?? '',
@@ -254,14 +271,17 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                                     fit: BoxFit.cover,
                                     errorPlaceholder: Container(
                                       color: _grey.withOpacity(0.1),
-                                      child: const Icon(PhosphorIconsRegular.house, color: _grey, size: 48),
+                                      child: const Icon(
+                                          PhosphorIconsRegular.house,
+                                          color: _grey,
+                                          size: 48),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
                           ),
-                          
+
                           // Bottom Details
                           Padding(
                             padding: const EdgeInsets.all(20),
@@ -281,7 +301,8 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                                 const SizedBox(height: 6),
                                 Row(
                                   children: [
-                                    const Icon(PhosphorIconsRegular.mapPin, size: 16, color: _grey),
+                                    const Icon(PhosphorIconsRegular.mapPin,
+                                        size: 16, color: _grey),
                                     const SizedBox(width: 6),
                                     Expanded(
                                       child: Text(
@@ -298,21 +319,27 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                                   ],
                                 ),
                                 const SizedBox(height: 20),
-                                Divider(color: _grey.withOpacity(0.2), height: 1),
+                                Divider(
+                                    color: _grey.withOpacity(0.2), height: 1),
                                 const SizedBox(height: 20),
-                                
+
                                 // Quick Info Grid
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
                                   children: [
                                     Expanded(
                                       child: _buildInfoColumn(
                                         PhosphorIconsRegular.calendarBlank,
                                         'Date',
-                                        _formatDateString(booking['date'] ?? 'TBD'),
+                                        _formatDateString(
+                                            booking['date'] ?? 'TBD'),
                                       ),
                                     ),
-                                    Container(width: 1, height: 40, color: _grey.withOpacity(0.2)),
+                                    Container(
+                                        width: 1,
+                                        height: 40,
+                                        color: _grey.withOpacity(0.2)),
                                     Expanded(
                                       child: _buildInfoColumn(
                                         PhosphorIconsRegular.clock,
@@ -320,7 +347,10 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                                         booking['time'] ?? '10:00 AM',
                                       ),
                                     ),
-                                    Container(width: 1, height: 40, color: _grey.withOpacity(0.2)),
+                                    Container(
+                                        width: 1,
+                                        height: 40,
+                                        color: _grey.withOpacity(0.2)),
                                     Expanded(
                                       child: _buildInfoColumn(
                                         PhosphorIconsRegular.wallet,
@@ -342,9 +372,10 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
             ),
 
             // ─── Bottom Action Bar ───
-            if (isPending || status == 'Upcoming')
+            if (isPending || status == 'Upcoming' || canMarkCompleted)
               Container(
-                padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
+                padding: EdgeInsets.fromLTRB(
+                    24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
                 decoration: BoxDecoration(
                   color: _surface,
                   boxShadow: [
@@ -354,7 +385,8 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                       offset: const Offset(0, -4),
                     ),
                   ],
-                  border: Border(top: BorderSide(color: _grey.withOpacity(0.1))),
+                  border:
+                      Border(top: BorderSide(color: _grey.withOpacity(0.1))),
                 ),
                 child: _isProcessing
                     ? const Center(
@@ -371,9 +403,13 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                                   child: TextButton(
                                     onPressed: () => _handleAction('Rejected'),
                                     style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
-                                      backgroundColor: const Color(0xFFFEF2F2), // Soft Red
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 16),
+                                      backgroundColor:
+                                          const Color(0xFFFEF2F2), // Soft Red
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(32)),
                                     ),
                                     child: Text(
                                       'Decline',
@@ -392,8 +428,11 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: _green,
                                       elevation: 0,
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 16),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(32)),
                                     ),
                                     child: Text(
                                       'Accept',
@@ -409,28 +448,45 @@ class _LandlordBookingDetailPageState extends State<LandlordBookingDetailPage> {
                             ),
                             const SizedBox(height: 12),
                           ],
-                          
+
+                          if (canMarkCompleted) ...[
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: () => _handleAction('Completed'),
+                                icon: const Icon(Icons.task_alt_rounded),
+                                label: const Text('Mark stay completed'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: _green,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+
                           // Reschedule Button
                           GestureDetector(
                             onTap: () async {
                               final DateTime? picked = await showDatePicker(
-                                context: context,
-                                initialDate: DateTime.now(),
-                                firstDate: DateTime.now(),
-                                lastDate: DateTime.now().add(const Duration(days: 365)),
-                                builder: (context, child) {
-                                  return Theme(
-                                    data: Theme.of(context).copyWith(
-                                      colorScheme: const ColorScheme.light(
-                                        primary: _green,
-                                        onPrimary: Colors.white,
-                                        onSurface: _dark,
+                                  context: context,
+                                  initialDate: DateTime.now(),
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime.now()
+                                      .add(const Duration(days: 365)),
+                                  builder: (context, child) {
+                                    return Theme(
+                                      data: Theme.of(context).copyWith(
+                                        colorScheme: const ColorScheme.light(
+                                          primary: _green,
+                                          onPrimary: Colors.white,
+                                          onSurface: _dark,
+                                        ),
                                       ),
-                                    ),
-                                    child: child!,
-                                  );
-                                }
-                              );
+                                      child: child!,
+                                    );
+                                  });
                               if (picked != null && mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(

@@ -7,11 +7,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:property_app/screens/dashboard/landlord_overview_page.dart';
-import 'theme.dart';
 import 'data.dart';
 import 'models/property.dart';
 import 'screens/screens.dart'
@@ -19,7 +17,6 @@ import 'screens/screens.dart'
 import 'services/google_auth_service.dart';
 import 'screens/dashboard/landlord_property_management_page.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
-import 'package:property_app/screens/dashboard/landlord_dashboard_service.dart';
 import 'screens/dashboard/landlord_tenants_page.dart';
 import 'screens/dashboard/landlord_messages_page.dart';
 import 'screens/landlord/verification_flow.dart' show VerificationCenter;
@@ -372,6 +369,8 @@ class _PropertyAppState extends State<PropertyApp> {
               },
               onEditProfile: () =>
                   Navigator.pushNamed(context, '/edit_profile'),
+              onMyProfile: () =>
+                  Navigator.pushNamed(context, '/tenant_profile'),
               onRefer: () => Navigator.pushNamed(context, '/referral'),
               onSetting: (setting) {
                 switch (setting) {
@@ -483,6 +482,9 @@ class _PropertyAppState extends State<PropertyApp> {
         '/edit_profile': (context) => EditProfileView(
             onBack: () => Navigator.pop(context),
             onSave: () => Navigator.pop(context)),
+        '/tenant_profile': (context) => TenantProfileView(
+              onBack: () => Navigator.pop(context),
+            ),
         '/list_property': (context) => AddListingFlow(
             property: ModalRoute.of(context)?.settings.arguments
                 as Map<String, dynamic>?),
@@ -802,6 +804,7 @@ class _AppShellState extends State<AppShell> {
   String? _mapSearchQuery;
 
   String? _selectedPropertyId;
+  String? _bookingPropertyId;
   Property? _selectedProperty;
   bool _loadingPropertyDetails = false;
   bool _showPhotoGallery = false;
@@ -925,6 +928,8 @@ class _AppShellState extends State<AppShell> {
           onBack: _closeProfileHelper,
           onSave: _closeProfileHelper,
         );
+      case '/tenant_profile':
+        return TenantProfileView(onBack: _closeProfileHelper);
       case '/tenant_bookings':
         return TenantBookingsView(onBack: _closeProfileHelper);
       case '/landlord_bookings':
@@ -1224,6 +1229,7 @@ class _AppShellState extends State<AppShell> {
 
   bool get _isOverlayOpen =>
       _selectedPropertyId != null ||
+      _bookingPropertyId != null ||
       _showPhotoGallery ||
       _showAmenities ||
       _showLocation ||
@@ -1366,6 +1372,14 @@ class _AppShellState extends State<AppShell> {
 
   List<Widget> _buildOverlays() => [
         if (_selectedPropertyId != null) _buildPropertyDetailsOverlay(),
+        if (_bookingPropertyId != null)
+          BookingView(
+            key: ValueKey(_bookingPropertyId),
+            propertyId: _bookingPropertyId!,
+            embedded: true,
+            onBack: () => setState(() => _bookingPropertyId = null),
+            onComplete: _finishBookingInShell,
+          ),
         if (_showPhotoGallery) _buildPhotoGalleryOverlay(),
         if (_showAmenities) _buildAmenitiesOverlay(),
         if (_showLocation) _buildLocationOverlay(),
@@ -1449,6 +1463,7 @@ class _AppShellState extends State<AppShell> {
               ? '/landlord_bookings'
               : '/tenant_bookings'),
           onEditProfile: () => _openProfileHelper('/edit_profile'),
+          onMyProfile: () => _openProfileHelper('/tenant_profile'),
           onRefer: () => _openProfileHelper('/referral'),
           onSetting: (setting) {
             switch (setting) {
@@ -1515,9 +1530,22 @@ class _AppShellState extends State<AppShell> {
         onViewLocation: _openLocation,
         onViewLandlord: _openLandlordInfo,
         onMessage: (userId, name, avatar) => _openChat(userId, name, avatar),
+        onBookNow: MediaQuery.sizeOf(context).width >= 768
+            ? () => setState(() => _bookingPropertyId = property.id)
+            : null,
         onRequireAuthentication: _requireAuthentication,
       ),
     );
+  }
+
+  void _finishBookingInShell() {
+    setState(() {
+      _bookingPropertyId = null;
+      _selectedPropertyId = null;
+      _selectedProperty = null;
+      _screen = _AppScreen.profile;
+      _desktopProfileHelperRoute = '/tenant_bookings';
+    });
   }
 
   Widget _buildPhotoGalleryOverlay() {

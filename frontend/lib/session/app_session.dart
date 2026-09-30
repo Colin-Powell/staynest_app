@@ -68,7 +68,7 @@ class AppSession {
     if (kIsWeb) {
       return const String.fromEnvironment(
         'API_BASE_URL',
-        defaultValue: 'http://localhost:8080/api',
+        defaultValue: 'https://staynest-s7n7.onrender.com/api',
       );
     }
 
@@ -76,14 +76,14 @@ class AppSession {
     if (defaultTargetPlatform == TargetPlatform.android) {
       return const String.fromEnvironment(
         'API_BASE_URL',
-        defaultValue: 'http://10.0.2.2:8080/api',
+        defaultValue: 'https://staynest-s7n7.onrender.com/api',
       );
     }
 
     // For iOS simulator, localhost works fine
     return const String.fromEnvironment(
       'API_BASE_URL',
-      defaultValue: 'http://localhost:8080/api',
+      defaultValue: 'https://staynest-s7n7.onrender.com/api',
     );
   }
 

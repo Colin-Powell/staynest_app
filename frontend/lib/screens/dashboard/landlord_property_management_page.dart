@@ -302,7 +302,7 @@ class _LandlordPropertyManagementPageState
                     color: _dark,
                     letterSpacing: -0.5)),
             content: Text(
-                'This will update your occupancy metrics and hide this listing from search results. Are you sure?',
+                'This will update the availability shown to tenants and prevent new booking requests. Are you sure?',
                 style: GoogleFonts.poppins(color: _grey, fontSize: 14)),
             actions: [
               TextButton(
@@ -355,7 +355,7 @@ class _LandlordPropertyManagementPageState
         final success = await LandlordDashboardService.updatePropertyStatus(
             propertyId, statusCode);
         if (success && mounted) {
-          setState(() => _property['status'] = statusCode);
+          setState(() => _property['availability_status'] = statusCode);
           _showActionSuccess('Property status updated to $label.');
         } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -614,8 +614,11 @@ class _LandlordPropertyManagementPageState
                   'fully_booked': 'Fully booked',
                   'rented': 'Rented',
                   'maintenance': 'Under maintenance',
-                }[_property['status']?.toString()] ??
-                (_property['status']?.toString() ?? 'Available'),
+                }[(_property['availability_status'] ?? _property['status'])
+                    ?.toString()] ??
+                ((_property['availability_status'] ?? _property['status'])
+                        ?.toString() ??
+                    'Available'),
           ),
         ),
       ],

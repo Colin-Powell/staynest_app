@@ -1,4 +1,5 @@
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:property_app/session/app_session.dart';
@@ -8,9 +9,17 @@ class GoogleAuthService {
   static final GoogleAuthService instance = GoogleAuthService._();
   GoogleAuthService._();
 
-    final GoogleSignIn _googleSignIn = GoogleSignIn(
+  static const _webClientId =
+      '193200636263-02mmqpu8fa9urq35p46432bdinilc29l.apps.googleusercontent.com';
+  static const _serverClientId = String.fromEnvironment(
+    'GOOGLE_CLIENT_ID',
+    defaultValue: _webClientId,
+  );
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
-    serverClientId: const String.fromEnvironment('GOOGLE_CLIENT_ID', defaultValue: '193200636263-02mmqpu8fa9urq35p46432bdinilc29l.apps.googleusercontent.com'),
+    clientId: kIsWeb ? _webClientId : null,
+    serverClientId: _serverClientId,
   );
 
   Future<bool> signInWithGoogle({String? role}) async {
@@ -18,7 +27,10 @@ class GoogleAuthService {
     if (account == null) return false;
     final auth = await account.authentication;
     final idToken = auth.idToken;
-    if (idToken == null) return false;
+    if (idToken == null || idToken.isEmpty) {
+      throw StateError(
+          'Google did not return an ID token. Check the OAuth client configuration.');
+    }
 
     // Send idToken to backend for verification and JWT issuance
     final response = await http.post(
@@ -37,6 +49,11 @@ class GoogleAuthService {
       return true;
     }
 
-    return false;
+    final body = jsonDecode(response.body);
+    throw StateError(
+      body is Map && body['error'] != null
+          ? body['error'].toString()
+          : 'Google authentication was rejected by the server.',
+    );
   }
 }

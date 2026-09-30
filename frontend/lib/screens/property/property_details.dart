@@ -35,6 +35,7 @@ class PropertyDetails extends StatefulWidget {
   final VoidCallback? onViewAmenities;
   final VoidCallback? onViewLocation;
   final VoidCallback? onViewLandlord;
+  final VoidCallback? onBookNow;
   final Function(String userId, String name, String avatar)? onMessage;
   final Future<void> Function({VoidCallback? onAuthenticated})?
       onRequireAuthentication;
@@ -47,6 +48,7 @@ class PropertyDetails extends StatefulWidget {
     this.onViewAmenities,
     this.onViewLocation,
     this.onViewLandlord,
+    this.onBookNow,
     this.onMessage,
     this.onRequireAuthentication,
   });
@@ -197,6 +199,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   }
 
   void _handleBookTap() {
+    if (!widget.property.isAvailableForBooking) return;
     if (AppSession.isGuest) {
       widget.onRequireAuthentication?.call(onAuthenticated: _openBooking);
       return;
@@ -205,6 +208,10 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   }
 
   void _openBooking() {
+    if (widget.onBookNow != null) {
+      widget.onBookNow!();
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(
