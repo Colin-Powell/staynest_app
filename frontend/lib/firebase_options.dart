@@ -19,8 +19,8 @@ class DefaultFirebaseOptions {
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return const FirebaseOptions(
-          apiKey: 'AIzaSyDHC6sT1nMwwvt7MAnWmi1yx8iQaVTqMMk',
-          appId: '1:193200636263:android:be474b649bb8053a02efc2',
+          apiKey: 'AIzaSyB9_bsqsky_UE0U0D_JPWraqFfuBXVtcczY',
+          appId: '1:193200636263:android:ab65acef0915225e02efc2',
           messagingSenderId: '193200636263',
           projectId: 'staynest-3a1bb',
           storageBucket: 'staynest-3a1bb.firebasestorage.app',

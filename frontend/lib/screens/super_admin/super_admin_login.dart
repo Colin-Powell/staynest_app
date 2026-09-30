@@ -42,15 +42,19 @@ class _SuperAdminLoginViewState extends State<SuperAdminLoginView> {
       }
 
       AppSession.updateCurrentUser(user);
-      AppSession.apiToken = user['token']?.toString() ?? user['accessToken']?.toString() ?? AppSession.apiToken;
-      AppSession.refreshToken = user['refreshToken']?.toString() ?? AppSession.refreshToken;
+      AppSession.apiToken = user['token']?.toString() ??
+          user['accessToken']?.toString() ??
+          AppSession.apiToken;
+      AppSession.refreshToken =
+          user['refreshToken']?.toString() ?? AppSession.refreshToken;
       await AppSession.persistSession();
 
-      if (AppSession.currentRole.toLowerCase() != 'admin') {
+      if (!AppSession.isAdmin) {
         // Kick them out if they aren't actually an admin
         await AppSession.reset();
         setState(() {
-          _errorMessage = 'Unauthorized. This portal is strictly for administrators.';
+          _errorMessage =
+              'Unauthorized. This portal is strictly for administrators.';
           _isLoading = false;
         });
         return;
@@ -114,7 +118,6 @@ class _SuperAdminLoginViewState extends State<SuperAdminLoginView> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                
                 if (_errorMessage != null) ...[
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -133,7 +136,6 @@ class _SuperAdminLoginViewState extends State<SuperAdminLoginView> {
                   ),
                   const SizedBox(height: 16),
                 ],
-
                 TextField(
                   controller: _emailCtrl,
                   decoration: InputDecoration(
@@ -188,7 +190,6 @@ class _SuperAdminLoginViewState extends State<SuperAdminLoginView> {
                         ),
                 ),
                 const SizedBox(height: 16),
-                
               ],
             ),
           ),

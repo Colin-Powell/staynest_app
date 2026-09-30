@@ -46,10 +46,12 @@ import 'screens/super_admin/super_admin_login.dart';
 import 'package:property_app/firebase_options.dart';
 
 Future<void> _initializeFirebaseAsync() async {
+  // ── Step 1: Core Firebase init ────────────────────────────────────────────
   try {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform);
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
       debugPrint('[Firebase] initialized');
     } else {
       Firebase.app();
@@ -58,14 +60,18 @@ Future<void> _initializeFirebaseAsync() async {
   } catch (err, stackTrace) {
     debugPrint('[Firebase] initializeApp failed: $err');
     debugPrintStack(stackTrace: stackTrace);
+    // Do NOT return — FCMService may still work via the native SDK.
   }
 
+  // ── Step 2: Analytics (non-critical) ─────────────────────────────────────
   try {
     await AnalyticsService.initialize();
   } catch (err) {
     debugPrint('[Firebase] Analytics init failed: $err');
   }
 
+  // ── Step 3: FCM service — completely isolated ─────────────────────────────
+  // Must never be skipped by a failure in steps 1 or 2.
   try {
     FCMService.instance.navigatorKey = navigatorKey;
     if (!kIsWeb) {

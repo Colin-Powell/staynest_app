@@ -136,6 +136,21 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_entity
   ON admin_audit_logs(entity_type, entity_id, created_at DESC);
 
 
+CREATE TABLE IF NOT EXISTS property_types (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug text UNIQUE NOT NULL,
+  label text NOT NULL,
+  parent_id uuid REFERENCES property_types(id) ON DELETE SET NULL,
+  active boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE IF NOT EXISTS room_types (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug text UNIQUE NOT NULL,
+  label text NOT NULL,
+  active boolean NOT NULL DEFAULT true
+);
+
 CREATE TABLE IF NOT EXISTS properties (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   title text NOT NULL,
@@ -191,6 +206,17 @@ ALTER TABLE properties ADD COLUMN IF NOT EXISTS landmark text;
 UPDATE properties SET status = 'pending_review' WHERE status IS NULL OR status = 'available';
 ALTER TABLE properties ALTER COLUMN status SET DEFAULT 'pending_review';
 ALTER TABLE properties ALTER COLUMN status SET NOT NULL;
+
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS property_type_id uuid REFERENCES property_types(id);
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS room_type_id uuid REFERENCES room_types(id);
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS verification_status text DEFAULT 'pending';
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS availability_status text DEFAULT 'unknown';
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS location_accuracy_m numeric;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS campus_id uuid REFERENCES locations(id);
+
+CREATE INDEX IF NOT EXISTS properties_status_availability_updated_idx ON properties (status, availability_status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS properties_campus_type_status_idx ON properties (campus_id, property_type_id, status);
 
 CREATE TABLE IF NOT EXISTS verifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -705,5 +731,47 @@ CREATE TABLE IF NOT EXISTS promotions (
     target_location VARCHAR(100),
     image_url TEXT,
     active BOOLEAN DEFAULT true,
+
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Feed intelligence tables (added for intelligent home feed)
+CREATE TABLE IF NOT EXISTS engagement_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+  property_id uuid REFERENCES properties(id) ON DELETE CASCADE,
+  event_type text NOT NULL,
+  session_id text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  source_section text,
+  location_context jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_property_type ON engagement_events(property_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_events_user_type ON engagement_events(user_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_events_created_at ON engagement_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_events_session ON engagement_events(session_id);
+
+ALTER TABLE engagement_events ADD COLUMN IF NOT EXISTS source_section text;
+ALTER TABLE engagement_events ADD COLUMN IF NOT EXISTS location_context jsonb;
+
+CREATE TABLE IF NOT EXISTS user_discovery_profiles (
+  user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  metadata jsonb
+);
+
+CREATE TABLE IF NOT EXISTS feed_impressions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+  session_id text,
+  feed_id text,
+  section_id text,
+  listing_id uuid REFERENCES properties(id) ON DELETE CASCADE,
+  position integer,
+  algorithm text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_feed_impressions_session ON feed_impressions(session_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feed_impressions_listing ON feed_impressions(listing_id, created_at DESC);
