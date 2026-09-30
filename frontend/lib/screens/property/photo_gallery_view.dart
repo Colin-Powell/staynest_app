@@ -142,117 +142,321 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
       backgroundColor: _bg,
       body: SafeArea(
         bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ─── Header ───
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: widget.onClose,
-                    behavior: HitTestBehavior.opaque,
-                    child: const Icon(PhosphorIconsRegular.caretLeft,
-                        size: 28, color: _dark),
+        child: LayoutBuilder(
+          builder: (context, constraints) => constraints.maxWidth >= 1000
+              ? _buildDesktopLayout()
+              : _buildMobileLayout(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileLayout() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: widget.onClose,
+                behavior: HitTestBehavior.opaque,
+                child: const Icon(PhosphorIconsRegular.caretLeft,
+                    size: 28, color: _dark),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  'Gallery',
+                  style: GoogleFonts.poppins(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: _dark,
+                    letterSpacing: -0.5,
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      'Gallery',
-                      style: GoogleFonts.poppins(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: _dark,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
+                ),
+              ),
+              if (_photos.isNotEmpty && _pageIndex == 0) _buildPhotoCount(),
+            ],
+          ),
+        ),
+        _buildMobileTabs(),
+        const SizedBox(height: 16),
+        Expanded(child: _buildContentPages(isDesktop: false)),
+      ],
+    );
+  }
+
+  Widget _buildDesktopLayout() {
+    return Row(
+      children: [
+        SizedBox(
+          width: 260,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 28, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                IconButton(
+                  tooltip: 'Back to property',
+                  onPressed: widget.onClose,
+                  icon: const Icon(PhosphorIconsRegular.caretLeft,
+                      size: 24, color: _dark),
+                  alignment: Alignment.centerLeft,
+                  padding: EdgeInsets.zero,
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Gallery',
+                  style: GoogleFonts.poppins(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: _dark,
                   ),
-                  if (_photos.isNotEmpty && _pageIndex == 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                          color: _grey.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(16)),
-                      child: Text(
-                        '${_photos.length} Photo${_photos.length == 1 ? '' : 's'}',
-                        style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: _dark),
-                      ),
-                    ),
+                ),
+                if (_photos.isNotEmpty && _pageIndex == 0) ...[
+                  const SizedBox(height: 8),
+                  _buildPhotoCount(),
                 ],
+                const SizedBox(height: 32),
+                Text(
+                  'Explore',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _grey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                for (var index = 0; index < _tabs.length; index++)
+                  _buildDesktopTab(index),
+                const Spacer(),
+                Text(
+                  'StayNest',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: _grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+        Expanded(child: _buildContentPages(isDesktop: true)),
+      ],
+    );
+  }
+
+  Widget _buildPhotoCount() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: _grey.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        '${_photos.length} Photo${_photos.length == 1 ? '' : 's'}',
+        style: GoogleFonts.poppins(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: _dark,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileTabs() {
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: _tabs.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          final active = index == _pageIndex;
+          return GestureDetector(
+            onTap: () => _switchTab(index),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: active ? _dark : _surface,
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(
+                  color: active ? _dark : _grey.withOpacity(0.2),
+                  width: active ? 2.0 : 1.5,
+                ),
+              ),
+              child: Text(
+                _tabs[index],
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                  color: active ? Colors.white : _dark,
+                ),
               ),
             ),
+          );
+        },
+      ),
+    );
+  }
 
-            // ─── Pills Navigation ───
-            SizedBox(
-              height: 48,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                itemCount: _tabs.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
-                itemBuilder: (context, index) {
-                  final tab = _tabs[index];
-                  final active = index == _pageIndex;
-                  return GestureDetector(
-                    onTap: () => _switchTab(index),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeOutCubic,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: active ? _dark : _surface,
-                        borderRadius: BorderRadius.circular(30),
-                        border: Border.all(
-                          color: active ? _dark : _grey.withOpacity(0.2),
-                          width: active ? 2.0 : 1.5,
-                        ),
-                      ),
+  Widget _buildDesktopTab(int index) {
+    final active = index == _pageIndex;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: active ? const Color(0xFFEFF2F7) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: () => _switchTab(index),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  index == 0
+                      ? PhosphorIconsRegular.image
+                      : index == 1
+                          ? PhosphorIconsRegular.videoCamera
+                          : index == 2
+                              ? PhosphorIconsRegular.cube
+                              : PhosphorIconsRegular.blueprint,
+                  size: 18,
+                  color: active ? _dark : _grey,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  _tabs[index],
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                    color: active ? _dark : _grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContentPages({required bool isDesktop}) {
+    return PageView.builder(
+      controller: _pageController,
+      onPageChanged: _onPageChanged,
+      itemCount: _tabs.length,
+      physics: const BouncingScrollPhysics(),
+      itemBuilder: (context, index) {
+        final tab = _tabs[index];
+        if (tab == 'Videos') {
+          return _buildVideoPage(key: const ValueKey('Videos'));
+        }
+        if (_comingSoonTabs.contains(tab)) {
+          return _buildComingSoon(tab, key: ValueKey('Soon-$tab'));
+        }
+        if (_photos.isEmpty) {
+          return _buildEmptyState(
+            PhosphorIconsRegular.image,
+            'No photos available.',
+          );
+        }
+        return isDesktop
+            ? _buildDesktopPhotoLayout(
+                _photos,
+                key: ValueKey('Photos-$index'),
+              )
+            : _buildGrid(
+                _photos,
+                key: ValueKey('Photos-$index'),
+              );
+      },
+    );
+  }
+
+  Widget _buildDesktopPhotoLayout(List<String> images, {Key? key}) {
+    return LayoutBuilder(
+      key: key,
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth - 48;
+        final columns = availableWidth >= 1160
+            ? 6
+            : availableWidth >= 850
+                ? 5
+                : availableWidth >= 620
+                    ? 4
+                    : 3;
+
+        return CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              sliver: SliverToBoxAdapter(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
                       child: Text(
-                        tab,
+                        'Photo tour',
                         style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight:
-                              active ? FontWeight.w600 : FontWeight.w500,
-                          color: active ? Colors.white : _dark,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                          color: _dark,
                         ),
                       ),
                     ),
-                  );
-                },
+                    Text(
+                      '${images.length} photos',
+                      style: GoogleFonts.poppins(fontSize: 13, color: _grey),
+                    ),
+                  ],
+                ),
               ),
             ),
-
-            const SizedBox(height: 16),
-
-            // ─── Content Pages ───
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                onPageChanged: _onPageChanged,
-                itemCount: _tabs.length,
-                physics: const BouncingScrollPhysics(),
-                itemBuilder: (context, index) {
-                  final tab = _tabs[index];
-                  if (tab == 'Videos')
-                    return _buildVideoPage(key: const ValueKey('Videos'));
-                  if (_comingSoonTabs.contains(tab))
-                    return _buildComingSoon(tab, key: ValueKey('Soon-$tab'));
-
-                  return _photos.isEmpty
-                      ? _buildEmptyState(
-                          PhosphorIconsRegular.image, 'No photos available.')
-                      : _buildGrid(_photos, key: ValueKey('Photos-$index'));
-                },
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+              sliver: SliverGrid.builder(
+                itemCount: images.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 1.45,
+                ),
+                itemBuilder: (context, index) =>
+                    _buildDesktopPhotoTile(images, index),
               ),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDesktopPhotoTile(List<String> images, int index) {
+    return GestureDetector(
+      onTap: () => _openFullscreen(index),
+      child: Hero(
+        tag: 'gallery_image_$index',
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: buildPropertyImage(
+            images[index],
+            width: double.infinity,
+            height: double.infinity,
+            fit: BoxFit.cover,
+          ),
         ),
       ),
     );
@@ -361,7 +565,7 @@ class _PhotoGalleryViewState extends State<PhotoGalleryView> {
                       },
                       child: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                             color: Colors.black45, shape: BoxShape.circle),
                         child: Icon(
                             controller.value.volume > 0

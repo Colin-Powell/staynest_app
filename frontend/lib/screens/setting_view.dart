@@ -147,8 +147,12 @@ class _SettingViewState extends State<SettingView>
                             icon: Icons.notifications_outlined,
                             label: 'Notifications',
                             onTap: () {
-                              Navigator.pushNamed(
-                                  context, '/notification_settings');
+                              if (widget.onItemTap != null) {
+                                widget.onItemTap!('Notifications');
+                              } else {
+                                Navigator.pushNamed(
+                                    context, '/notification_settings');
+                              }
                             },
                           ),
                         ),
@@ -158,7 +162,11 @@ class _SettingViewState extends State<SettingView>
                             icon: Icons.lock_outline_rounded,
                             label: 'Privacy & Security',
                             onTap: () {
-                              Navigator.pushNamed(context, '/privacy');
+                              if (widget.onItemTap != null) {
+                                widget.onItemTap!('Privacy & Security');
+                              } else {
+                                Navigator.pushNamed(context, '/privacy');
+                              }
                             },
                           ),
                         ),
@@ -168,12 +176,16 @@ class _SettingViewState extends State<SettingView>
                             icon: Icons.info_outline_rounded,
                             label: 'About StayNest',
                             onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const AboutView(),
-                                ),
-                              );
+                              if (widget.onItemTap != null) {
+                                widget.onItemTap!('About StayNest');
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const AboutView(),
+                                  ),
+                                );
+                              }
                             },
                           ),
                         ),
@@ -289,7 +301,9 @@ class _MenuItemState extends State<_MenuItem>
 // ─── New Clean About Page (Matches Design Language) ───────────────────────────
 
 class AboutView extends StatelessWidget {
-  const AboutView({super.key});
+  final VoidCallback? onBack;
+
+  const AboutView({super.key, this.onBack});
 
   @override
   Widget build(BuildContext context) {
@@ -302,7 +316,7 @@ class AboutView extends StatelessWidget {
         leading: IconButton(
           icon: const Icon(Icons.chevron_left_rounded,
               size: 32, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+          onPressed: onBack ?? () => Navigator.pop(context),
         ),
         title: const Text(
           'About StayNest',
@@ -330,7 +344,7 @@ class AboutView extends StatelessWidget {
             // Version Info
             Text(
               'Version ${AppSession.currentAppVersion} (Build ${AppSession.currentAppBuildNumber})',
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF9CA3AF),

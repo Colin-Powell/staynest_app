@@ -5,7 +5,9 @@ import 'package:property_app/services/fcm_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class NotificationSettingsView extends StatefulWidget {
-  const NotificationSettingsView({super.key});
+  final VoidCallback? onBack;
+
+  const NotificationSettingsView({super.key, this.onBack});
 
   @override
   State<NotificationSettingsView> createState() =>
@@ -43,7 +45,7 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
       await FCMService.instance.unsubscribeFromTopic('promotions');
       await FCMService.instance.unsubscribeFromTopic('updates');
     }
-    
+
     // Apply FCM topic subscriptions based on settings
     if (key == 'enablePromotions') {
       if (value) {
@@ -80,6 +82,13 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
         backgroundColor: AppColors.background,
         elevation: 0,
         iconTheme: const IconThemeData(color: AppColors.gray900),
+        leading: widget.onBack == null
+            ? null
+            : IconButton(
+                tooltip: 'Back to profile',
+                onPressed: widget.onBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
         title: Text('Notification Settings',
             style: GoogleFonts.poppins(
                 color: AppColors.gray900,

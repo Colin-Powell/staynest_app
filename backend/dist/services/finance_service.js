@@ -53,6 +53,116 @@ export async function payBookingFromWallet(bookingId, payerId, idempotencyKey) {
         client.release();
     }
 }
+export async function createAndPayBookingFromWallet(input) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [input.tenantId, input.idempotencyKey]);
+        const existing = await client.query(`SELECT b.*, e.id AS escrow_id
+       FROM wallet_transactions wt
+       JOIN booking_escrows e ON e.booking_id = wt.reference_id
+       JOIN bookings b ON b.id = e.booking_id
+       WHERE wt.user_id = $1 AND wt.type = 'booking_payment'
+         AND wt.idempotency_key = $2
+       FOR UPDATE OF b`, [input.tenantId, `booking-payment:${input.idempotencyKey}`]);
+        if (existing.rows.length > 0) {
+            const row = existing.rows[0];
+            await client.query('COMMIT');
+            const { escrow_id: escrowId, ...booking } = row;
+            return {
+                booking,
+                escrowId,
+                amount: Number(row.total_price),
+                created: false,
+            };
+        }
+        const checkIn = new Date(input.checkInDate);
+        const checkOut = new Date(input.checkOutDate);
+        if (!Number.isFinite(checkIn.getTime()) ||
+            !Number.isFinite(checkOut.getTime()) ||
+            checkOut <= checkIn) {
+            throw new Error('Invalid booking date range.');
+        }
+        const propertyResult = await client.query('SELECT id, landlord_id, price FROM properties WHERE id = $1 FOR UPDATE', [input.propertyId]);
+        const property = propertyResult.rows[0];
+        if (!property)
+            throw new Error('Property not found.');
+        if (!property.landlord_id)
+            throw new Error('Property has no landlord assigned.');
+        if (property.landlord_id === input.tenantId) {
+            throw new Error('Landlords cannot book their own property.');
+        }
+        const overlap = await client.query(`SELECT id FROM bookings
+       WHERE property_id = $1
+         AND (status = 'confirmed' OR (status = 'pending' AND EXISTS (
+           SELECT 1 FROM booking_escrows e
+           WHERE e.booking_id = bookings.id AND e.status = 'held'
+         )))
+         AND (check_in_date, check_out_date) OVERLAPS ($2::date, $3::date)
+       LIMIT 1`, [input.propertyId, input.checkInDate, input.checkOutDate]);
+        if (overlap.rows.length > 0) {
+            throw new Error('Property is already booked for these dates.');
+        }
+        const activeBooking = await client.query(`SELECT id FROM bookings
+       WHERE property_id = $1 AND tenant_id = $2
+         AND status IN ('pending', 'confirmed')
+       LIMIT 1`, [input.propertyId, input.tenantId]);
+        if (activeBooking.rows.length > 0) {
+            throw new Error('You already have an active booking or request for this property.');
+        }
+        const userResult = await client.query('SELECT wallet_balance FROM users WHERE id = $1 FOR UPDATE', [input.tenantId]);
+        const nightlyPrice = Number(property.price);
+        const nights = Math.ceil((Date.UTC(checkOut.getUTCFullYear(), checkOut.getUTCMonth(), checkOut.getUTCDate()) -
+            Date.UTC(checkIn.getUTCFullYear(), checkIn.getUTCMonth(), checkIn.getUTCDate())) /
+            86400000);
+        const amount = nights * nightlyPrice;
+        if (!Number.isFinite(amount) || amount <= 0) {
+            throw new Error('The booking total is invalid.');
+        }
+        if (Number(userResult.rows[0]?.wallet_balance ?? 0) < amount) {
+            throw new Error('Insufficient wallet balance. Add funds and try again.');
+        }
+        const bookingResult = await client.query(`INSERT INTO bookings
+         (property_id, tenant_id, landlord_id, check_in_date, check_out_date,
+          status, total_price, notes)
+       VALUES ($1, $2, $3, $4::date, $5::date, 'pending', $6, $7)
+       RETURNING *`, [
+            input.propertyId,
+            input.tenantId,
+            property.landlord_id,
+            input.checkInDate,
+            input.checkOutDate,
+            amount,
+            input.notes?.trim() || null,
+        ]);
+        const booking = bookingResult.rows[0];
+        await postLedgerEntry(client, {
+            userId: input.tenantId,
+            amount: -amount,
+            type: 'booking_payment',
+            description: 'Booking payment held in escrow',
+            referenceType: 'booking',
+            referenceId: String(booking.id),
+            idempotencyKey: `booking-payment:${input.idempotencyKey}`,
+        });
+        const escrowResult = await client.query(`INSERT INTO booking_escrows (booking_id, payer_id, payee_id, amount)
+       VALUES ($1, $2, $3, $4) RETURNING id`, [booking.id, input.tenantId, property.landlord_id, amount]);
+        await client.query('COMMIT');
+        return {
+            booking,
+            escrowId: escrowResult.rows[0].id,
+            amount,
+            created: true,
+        };
+    }
+    catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    }
+    finally {
+        client.release();
+    }
+}
 export async function settleEscrow(bookingId, action) {
     const client = await pool.connect();
     try {

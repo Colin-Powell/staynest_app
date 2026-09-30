@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'mpesa_payment_modal.dart';
@@ -16,7 +17,7 @@ class BoostListingModal extends StatefulWidget {
   const BoostListingModal({super.key, required this.propertyId});
 
   static Future<bool?> show(BuildContext context, String propertyId) {
-    return showModalBottomSheet<bool>(
+    return showResponsiveModalSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -30,7 +31,7 @@ class BoostListingModal extends StatefulWidget {
 
 class _BoostListingModalState extends State<BoostListingModal> {
   String _selectedPackage = 'basic';
-  bool _isProcessing = false;
+  final bool _isProcessing = false;
   String? _errorMessage;
 
   Future<void> _handleBoost() async {

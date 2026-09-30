@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -261,10 +262,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
         _selectedCity = data['city'] ?? 'Kenya';
         _neighborhood.text = data['address'] ?? '';
         _locationSearch.text = data['address'] ?? '';
-        if (data['lat'] != null)
+        if (data['lat'] != null) {
           _selectedLatitude = (data['lat'] as num).toDouble();
-        if (data['lng'] != null)
+        }
+        if (data['lng'] != null) {
           _selectedLongitude = (data['lng'] as num).toDouble();
+        }
         if (_selectedLatitude != null && _selectedLongitude != null) {
           _locationBiasLatitude = _selectedLatitude;
           _locationBiasLongitude = _selectedLongitude;
@@ -553,13 +556,16 @@ class _AddListingFlowState extends State<AddListingFlow> {
     });
 
     try {
-      if (_pickedPhotos.any((p) => p.isUploading))
+      if (_pickedPhotos.any((p) => p.isUploading)) {
         throw Exception('Please wait for all photos to finish uploading.');
-      if (_pickedPhotos.any((p) => p.error != null))
+      }
+      if (_pickedPhotos.any((p) => p.error != null)) {
         throw Exception(
             'Some photos failed to upload. Please remove them or try again.');
-      if (_pickedVideo?.isUploading == true)
+      }
+      if (_pickedVideo?.isUploading == true) {
         throw Exception('Please wait for the video to finish uploading.');
+      }
 
       final uploadedUrls = _pickedPhotos.map((p) => p.url!).toList();
       if (uploadedUrls.isEmpty) throw Exception('No photos uploaded');
@@ -637,9 +643,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
         },
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ModalUtils.showError(
             context, "Oops! We hit a snag", ApiResult.mapError(e));
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -708,17 +715,20 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // NAVIGATION
   // ==========================================
   void _nextStep() {
-    if (_currentStep == 1 && !(_step1Key.currentState?.validate() ?? false))
+    if (_currentStep == 1 && !(_step1Key.currentState?.validate() ?? false)) {
       return;
-    if (_currentStep == 2 && !(_step2Key.currentState?.validate() ?? false))
+    }
+    if (_currentStep == 2 && !(_step2Key.currentState?.validate() ?? false)) {
       return;
+    }
     if (_currentStep == 4 && _pickedPhotos.isEmpty) {
       ModalUtils.showError(context, "Photos Required",
           "Let's show off your property! Please upload at least one photo.");
       return;
     }
-    if (_currentStep == 5 && !(_step5Key.currentState?.validate() ?? false))
+    if (_currentStep == 5 && !(_step5Key.currentState?.validate() ?? false)) {
       return;
+    }
 
     if (_currentStep < _totalSteps) {
       setState(() => _currentStep++);
@@ -954,7 +964,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // STEP 2: Location & Address
   // ==========================================
   void _openLocationPickerSheet() {
-    showModalBottomSheet(
+    showResponsiveModalSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -2331,11 +2341,13 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied)
+        if (permission == LocationPermission.denied) {
           throw Exception('Location permissions denied');
+        }
       }
-      if (permission == LocationPermission.deniedForever)
+      if (permission == LocationPermission.deniedForever) {
         throw Exception('Location permissions permanently denied');
+      }
 
       final position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
@@ -2353,11 +2365,12 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
         });
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = e.toString().replaceAll('Exception: ', '');
           _isLoading = false;
         });
+      }
     }
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -26,7 +27,8 @@ class _AddPropertyViewState extends State<AddPropertyView>
   final _locationController = TextEditingController();
   String _selectedType = 'Apartment';
 
-  static const Color _primary = Color(0xFF6366F1); // indigo — matches typical "primary" in Tailwind
+  static const Color _primary =
+      Color(0xFF6366F1); // indigo — matches typical "primary" in Tailwind
 
   late final AnimationController _slideController;
   late final Animation<Offset> _slideAnimation;
@@ -241,7 +243,7 @@ class _AddPropertyViewState extends State<AddPropertyView>
   }
 
   void _openLocationPickerSheet() {
-    showModalBottomSheet(
+    showResponsiveModalSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -337,7 +339,8 @@ class _AddPropertyViewState extends State<AddPropertyView>
               onTap: () => setState(() => _selectedType = label),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
+                padding: const EdgeInsets.only(
+                    left: 6, right: 16, top: 6, bottom: 6),
                 decoration: BoxDecoration(
                   color: isSelected ? _primary : const Color(0xFFF9FAFB),
                   borderRadius: BorderRadius.circular(30),
@@ -355,7 +358,9 @@ class _AddPropertyViewState extends State<AddPropertyView>
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: isSelected ? Colors.white.withOpacity(0.5) : Colors.transparent,
+                          color: isSelected
+                              ? Colors.white.withOpacity(0.5)
+                              : Colors.transparent,
                           width: 2,
                         ),
                         image: DecorationImage(
@@ -370,7 +375,8 @@ class _AddPropertyViewState extends State<AddPropertyView>
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : const Color(0xFF374151),
+                        color:
+                            isSelected ? Colors.white : const Color(0xFF374151),
                       ),
                     ),
                   ],
@@ -408,7 +414,8 @@ class _AddPropertyViewState extends State<AddPropertyView>
                 ),
               ),
             ),
-            prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+            prefixIconConstraints:
+                const BoxConstraints(minWidth: 0, minHeight: 0),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
           ),
@@ -464,7 +471,9 @@ class _AddPropertyViewState extends State<AddPropertyView>
       ),
     );
   }
-}class _LocationPickerSheet extends StatefulWidget {
+}
+
+class _LocationPickerSheet extends StatefulWidget {
   final ValueChanged<String> onLocationSelected;
   const _LocationPickerSheet({required this.onLocationSelected});
 
@@ -473,7 +482,8 @@ class _AddPropertyViewState extends State<AddPropertyView>
 }
 
 class _LocationPickerSheetState extends State<_LocationPickerSheet> {
-  final LatLng _currentLocation = const LatLng(-1.2921, 36.8219); // Nairobi fallback for prototype
+  final LatLng _currentLocation =
+      const LatLng(-1.2921, 36.8219); // Nairobi fallback for prototype
   final MapController _mapCtrl = MapController();
 
   @override
@@ -520,7 +530,8 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.rashoti.staynest',
                     ),
                   ],

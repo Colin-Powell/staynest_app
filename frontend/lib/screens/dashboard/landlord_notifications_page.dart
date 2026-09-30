@@ -65,12 +65,16 @@ class _LandlordNotificationsPageState extends State<LandlordNotificationsPage>
     final type = data['type']?.toString().toLowerCase() ?? '';
     if (type.contains('booking') ||
         type.contains('checkin') ||
-        type.contains('checkout')) return '📅';
+        type.contains('checkout')) {
+      return '📅';
+    }
     if (type.contains('message') || type.contains('unread')) return '💬';
     if (type.contains('payment') || type.contains('price')) return '💰';
     if (type.contains('alert') ||
         type.contains('warning') ||
-        type.contains('stale')) return '⚠️';
+        type.contains('stale')) {
+      return '⚠️';
+    }
     if (type.contains('approved') || type.contains('success')) return '✅';
     return '🔔';
   }

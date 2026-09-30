@@ -35,6 +35,37 @@ class BookingService {
     return Map<String, dynamic>.from(decoded['data'] as Map);
   }
 
+  static Future<Map<String, dynamic>> createAndPayFromWallet({
+    required String propertyId,
+    required DateTime checkIn,
+    required DateTime checkOut,
+    String? notes,
+    required String idempotencyKey,
+  }) async {
+    String dateOnly(DateTime value) =>
+        DateTime(value.year, value.month, value.day)
+            .toIso8601String()
+            .split('T')
+            .first;
+
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/pay-with-wallet'),
+      headers: {'Idempotency-Key': idempotencyKey},
+      body: {
+        'propertyId': propertyId,
+        'checkInDate': dateOnly(checkIn),
+        'checkOutDate': dateOnly(checkOut),
+        'notes': notes,
+      },
+    );
+
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 201 && response.statusCode != 200) {
+      throw Exception(decoded['error']?.toString() ?? 'Payment failed.');
+    }
+    return Map<String, dynamic>.from(decoded['data'] as Map);
+  }
+
   /// Fetches bookings based on role (Tenant or Landlord)
   static Future<List<dynamic>> fetchBookings({bool isLandlord = false}) async {
     final endpoint = isLandlord ? '/landlord' : '/tenant';

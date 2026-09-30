@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -894,9 +895,10 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -1079,7 +1081,7 @@ class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
   }
 
   Future<void> _showAddMpesaSheet() async {
-    final phone = await showModalBottomSheet<String>(
+    final phone = await showResponsiveModalSheet<String>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,

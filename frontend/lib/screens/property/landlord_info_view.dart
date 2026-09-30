@@ -6,7 +6,7 @@ import 'package:property_app/models/property.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/property_mapper.dart';
-import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/widgets/property_card.dart';
 
 // ─── Design System Constants ──────────────────────────────────────────────────
 const _bg = Color(0xFFFAFAFA);
@@ -19,11 +19,14 @@ const _green = Color(0xFF10B981); // Emerald Green for Verified items
 class LandlordInfoView extends StatefulWidget {
   final VoidCallback onClose;
   final Property? property;
+  final Future<void> Function({VoidCallback? onAuthenticated})?
+      onRequireAuthentication;
 
   const LandlordInfoView({
     super.key,
     required this.onClose,
     this.property,
+    this.onRequireAuthentication,
   });
 
   @override
@@ -557,116 +560,14 @@ class _LandlordInfoViewState extends State<LandlordInfoView>
   }
 
   Widget _buildPropertyCard(Property prop) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      height: 120, // Tighter card height
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: buildPropertyImage(
-              prop.image,
-              width: 120,
-              height: double.infinity,
-              fit: BoxFit.cover,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 12, 16, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    prop.name,
-                    style: GoogleFonts.poppins(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: _dark,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(PhosphorIconsRegular.mapPin,
-                          size: 14, color: _grey),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          prop.location,
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            color: _grey,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Text(
-                            'Ksh. ${prop.price}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: _dark,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          Text(
-                            ' /mo',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: _grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          const Icon(PhosphorIconsFill.star,
-                              size: 12, color: Color(0xFFF59E0B)),
-                          const SizedBox(width: 4),
-                          Text(
-                            prop.rating.toStringAsFixed(1),
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: _dark,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: PropertyCard(
+        property: prop,
+        isHorizontal: false,
+        isGrid: true,
+        onTap: () {},
+        onRequireAuthentication: widget.onRequireAuthentication,
       ),
     );
   }

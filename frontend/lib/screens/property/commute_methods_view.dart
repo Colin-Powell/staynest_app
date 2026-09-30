@@ -748,7 +748,7 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
             behavior: HitTestBehavior.opaque,
             child: Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: _bg, shape: BoxShape.circle),
+              decoration: const BoxDecoration(color: _bg, shape: BoxShape.circle),
               child: const Icon(PhosphorIconsRegular.caretLeft,
                   size: 20, color: _dark),
             ),
@@ -925,7 +925,7 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration:
-                          BoxDecoration(color: _bg, shape: BoxShape.circle),
+                          const BoxDecoration(color: _bg, shape: BoxShape.circle),
                       child: const Icon(PhosphorIconsRegular.mapPin,
                           color: _dark, size: 18),
                     ),

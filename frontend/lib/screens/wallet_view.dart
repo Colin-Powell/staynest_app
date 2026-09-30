@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -16,7 +17,9 @@ const Color _green = Color(0xFF10B981);
 const Color _primary = Color(0xFF3F37C9); // App Accent
 
 class WalletView extends StatefulWidget {
-  const WalletView({super.key});
+  final VoidCallback? onBack;
+
+  const WalletView({super.key, this.onBack});
 
   @override
   State<WalletView> createState() => _WalletViewState();
@@ -230,7 +233,7 @@ class _WalletViewState extends State<WalletView> {
       return result;
     }
 
-    return showModalBottomSheet<LandlordPaymentMethod>(
+    return showResponsiveModalSheet<LandlordPaymentMethod>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
@@ -316,7 +319,7 @@ class _WalletViewState extends State<WalletView> {
     String amountText = '';
     var isProcessing = false;
 
-    final amount = await showModalBottomSheet<double>(
+    final amount = await showResponsiveModalSheet<double>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -386,8 +389,9 @@ class _WalletViewState extends State<WalletView> {
                               return;
                             }
                             setSheetState(() => isProcessing = true);
-                            if (context.mounted)
+                            if (context.mounted) {
                               Navigator.pop(sheetContext, amount);
+                            }
                           },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _primary,
@@ -425,9 +429,10 @@ class _WalletViewState extends State<WalletView> {
     try {
       await WalletApi.topUp(amount: amount, paymentMethod: method);
       await _loadData();
-      if (mounted)
+      if (mounted) {
         _showSuccessModal('Top Up Initiated',
             'An M-Pesa prompt has been sent to your phone. Enter your PIN to complete the transaction.');
+      }
     } catch (error) {
       if (mounted) _showErrorModal('Top Up Failed', ApiResult.mapError(error));
     }
@@ -439,9 +444,10 @@ class _WalletViewState extends State<WalletView> {
     final balance =
         double.tryParse(_walletData['wallet_balance'].toString()) ?? 0;
     if (amount > balance) {
-      if (mounted)
+      if (mounted) {
         _showErrorModal('Insufficient Funds',
             'You cannot withdraw more than your available balance.');
+      }
       return;
     }
 
@@ -463,12 +469,14 @@ class _WalletViewState extends State<WalletView> {
         newMpesaPhone: newPhone,
       );
       await _loadData();
-      if (mounted)
+      if (mounted) {
         _showSuccessModal('Withdrawal Processing',
             'Your withdrawal request has been submitted and is currently being processed.');
+      }
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         _showErrorModal('Withdrawal Failed', ApiResult.mapError(error));
+      }
     }
   }
 
@@ -480,7 +488,7 @@ class _WalletViewState extends State<WalletView> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => Navigator.pop(context),
+            onTap: widget.onBack ?? () => Navigator.pop(context),
             behavior: HitTestBehavior.opaque,
             child: const Icon(PhosphorIconsRegular.caretLeft,
                 color: _dark, size: 28),

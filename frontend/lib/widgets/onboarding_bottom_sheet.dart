@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/theme.dart';
+import 'package:property_app/utils/responsive_modal_sheet.dart';
 
 class OnboardingBottomSheet extends StatelessWidget {
   final String title;
@@ -28,7 +29,7 @@ class OnboardingBottomSheet extends StatelessWidget {
     required String ctaText,
     String? imagePath,
   }) async {
-    await showModalBottomSheet(
+    await showResponsiveModalSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -85,7 +86,8 @@ class OnboardingBottomSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: const Center(
-                    child: Icon(Icons.image_not_supported_outlined, size: 48, color: AppColors.gray400),
+                    child: Icon(Icons.image_not_supported_outlined,
+                        size: 48, color: AppColors.gray400),
                   ),
                 ),
               ),
@@ -100,7 +102,8 @@ class OnboardingBottomSheet extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
               ),
               child: const Center(
-                child: Icon(Icons.image_outlined, size: 48, color: AppColors.gray400),
+                child: Icon(Icons.image_outlined,
+                    size: 48, color: AppColors.gray400),
               ),
             ),
           const SizedBox(height: 32),

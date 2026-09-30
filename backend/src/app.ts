@@ -5,6 +5,7 @@ import { requestLogger } from './middleware/logger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import authRouter from './routes/auth.js'; // Assuming requireAuth is imported here or available globally
 import propertiesRouter from './routes/properties.js';
+import homeFeedRouter from './routes/home_feed.js';
 import promotionsRouter from './routes/promotions.js';
 import usersRouter from './routes/users.js';
 import uploadsRouter from './routes/uploads.js';
@@ -44,6 +45,7 @@ app.use(apiRateLimiter);
 
 app.use('/api/auth', authRouter);
 app.use('/api/properties', propertiesRouter);
+app.use('/api/home/feed', homeFeedRouter);
 app.use('/api/promotions', promotionsRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/landlord', landlordPaymentMethodsRouter);

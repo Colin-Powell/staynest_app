@@ -5,7 +5,9 @@ import 'package:flutter_svg/flutter_svg.dart'; // Make sure flutter_svg is added
 import 'package:property_app/session/app_session.dart';
 
 class ReferralView extends StatelessWidget {
-  const ReferralView({super.key});
+  final VoidCallback? onBack;
+
+  const ReferralView({super.key, this.onBack});
 
   // Original Logic: Preserved exactly as requested
   String get _referralCode {
@@ -41,6 +43,16 @@ class ReferralView extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              if (onBack != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    tooltip: 'Back to profile',
+                    onPressed: onBack,
+                    icon: const Icon(Icons.arrow_back_rounded,
+                        color: Colors.white),
+                  ),
+                ),
               const SizedBox(height: 24),
               // Title
               const Text(

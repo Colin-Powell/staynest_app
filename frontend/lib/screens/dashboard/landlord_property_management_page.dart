@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -258,7 +259,7 @@ class _LandlordPropertyManagementPageState
   }
 
   void _showStatusPicker() async {
-    showModalBottomSheet(
+    showResponsiveModalSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(

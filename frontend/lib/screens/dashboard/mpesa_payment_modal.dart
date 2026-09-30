@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -39,7 +40,7 @@ class MpesaPaymentModal extends StatefulWidget {
     required String description,
     LandlordPaymentMethod? paymentMethod,
   }) {
-    return showModalBottomSheet<bool>(
+    return showResponsiveModalSheet<bool>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -101,9 +102,9 @@ class _MpesaPaymentModalState extends State<MpesaPaymentModal> {
       // Format phone number
       String formattedPhone = phone.replaceAll(RegExp(r'\D'), '');
       if (formattedPhone.startsWith('0')) {
-        formattedPhone = '254' + formattedPhone.substring(1);
+        formattedPhone = '254${formattedPhone.substring(1)}';
       } else if (!formattedPhone.startsWith('254')) {
-        formattedPhone = '254' + formattedPhone;
+        formattedPhone = '254$formattedPhone';
       }
 
       // Call backend to initiate STKPush
@@ -256,7 +257,7 @@ class _MpesaPaymentModalState extends State<MpesaPaymentModal> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        '${widget.description}',
+                        widget.description,
                         textAlign: TextAlign.center,
                         style: GoogleFonts.poppins(
                           fontSize: 14,
@@ -499,7 +500,7 @@ class _MpesaPaymentModalState extends State<MpesaPaymentModal> {
                         padding: const EdgeInsets.all(32),
                         child: Column(
                           children: [
-                            SizedBox(
+                            const SizedBox(
                               width: 80,
                               height: 80,
                               child: CircularProgressIndicator(

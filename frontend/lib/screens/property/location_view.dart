@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -147,8 +148,9 @@ class _LocationViewState extends State<LocationView> {
                 await http.get(url, headers: {'User-Agent': 'PropertyApp/1.0'});
             if (res.statusCode != 200) throw StateError('Geocoding failed');
             final data = json.decode(res.body);
-            if (data is! List || data.isEmpty)
+            if (data is! List || data.isEmpty) {
               throw StateError('Location not found');
+            }
             return {'lat': data[0]['lat'], 'lng': data[0]['lon']};
           },
         );
@@ -259,9 +261,10 @@ class _LocationViewState extends State<LocationView> {
         }
       } catch (_) {}
 
-      if (mounted)
+      if (mounted) {
         setState(() => _currentAddress =
             '${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}');
+      }
       return;
     }
 
@@ -274,10 +277,11 @@ class _LocationViewState extends State<LocationView> {
         final data = json.decode(response.body);
         final results = data['results'] as List<dynamic>?;
         if (results != null && results.isNotEmpty) {
-          if (mounted)
+          if (mounted) {
             setState(() => _currentAddress =
                 results.first['formatted_address'] as String? ??
                     'Unknown address');
+          }
           return;
         }
       }
@@ -400,10 +404,12 @@ class _LocationViewState extends State<LocationView> {
     final types = place['types'];
     if (types is List && types.contains('property')) return _primary;
     final name = (place['name'] ?? '').toString().toLowerCase();
-    if (name.contains('school') || name.contains('university'))
+    if (name.contains('school') || name.contains('university')) {
       return const Color(0xFFF59E0B);
-    if (name.contains('hospital') || name.contains('clinic'))
+    }
+    if (name.contains('hospital') || name.contains('clinic')) {
       return const Color(0xFFEF4444);
+    }
     if (name.contains('police') || name.contains('security')) return _primary;
     return const Color(0xFF6B7280);
   }
@@ -768,7 +774,7 @@ class _LocationViewState extends State<LocationView> {
   }
 
   void _showPropertyDrawer(BuildContext context, Property prop) {
-    showModalBottomSheet(
+    showResponsiveModalSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

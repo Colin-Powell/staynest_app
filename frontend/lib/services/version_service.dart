@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:property_app/session/app_session.dart';
@@ -94,7 +95,7 @@ class VersionService {
 
   static Future<void> _showUpgradePrompt(
       BuildContext context, String url, bool force) {
-    return showModalBottomSheet<void>(
+    return showResponsiveModalSheet<void>(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,

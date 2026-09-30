@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:camera/camera.dart';
@@ -67,13 +68,23 @@ class LandlordVerificationEntry extends StatelessWidget {
 // 2. BASE PAGE: Verification Center
 // ==========================================
 class VerificationCenter extends StatefulWidget {
-  const VerificationCenter({super.key});
+  final VoidCallback? onBack;
+
+  const VerificationCenter({super.key, this.onBack});
   @override
   State<VerificationCenter> createState() => _VerificationCenterState();
 }
 
 class _VerificationCenterState extends State<VerificationCenter> {
   final VerificationSession _session = VerificationSession();
+
+  void _handleBack() {
+    if (widget.onBack != null) {
+      widget.onBack!();
+    } else {
+      Navigator.pop(context);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +95,7 @@ class _VerificationCenterState extends State<VerificationCenter> {
           backgroundColor: _bg,
           elevation: 0,
           leading: GestureDetector(
-            onTap: () => Navigator.pop(context),
+            onTap: _handleBack,
             child: const Icon(PhosphorIconsRegular.caretLeft,
                 color: _dark, size: 24),
           ),
@@ -125,7 +136,7 @@ class _VerificationCenterState extends State<VerificationCenter> {
           backgroundColor: _bg,
           elevation: 0,
           leading: GestureDetector(
-            onTap: () => Navigator.pop(context),
+            onTap: _handleBack,
             child: const Icon(PhosphorIconsRegular.caretLeft,
                 color: _dark, size: 24),
           ),
@@ -148,8 +159,7 @@ class _VerificationCenterState extends State<VerificationCenter> {
                   style: GoogleFonts.poppins(fontSize: 16, color: _grey),
                 ),
                 const SizedBox(height: 24),
-                PrimaryButton(
-                    text: 'Go Back', onPressed: () => Navigator.pop(context)),
+                PrimaryButton(text: 'Go Back', onPressed: _handleBack),
               ],
             ),
           ),
@@ -164,7 +174,7 @@ class _VerificationCenterState extends State<VerificationCenter> {
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: GestureDetector(
-          onTap: () => Navigator.pop(context),
+          onTap: _handleBack,
           child: const Icon(PhosphorIconsRegular.caretLeft,
               color: _dark, size: 28),
         ),
@@ -871,7 +881,7 @@ class _DocumentCaptureState extends State<DocumentCapture> {
   Future<void> _chooseSource(BuildContext context) async {
     if (!context.mounted) return;
 
-    final source = await showModalBottomSheet<ImageSource>(
+    final source = await showResponsiveModalSheet<ImageSource>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => Container(
@@ -1235,7 +1245,7 @@ class VerificationStatusView extends StatelessWidget {
     } else if (status == 'rejected' || status == 'action_required') {
       return _RejectedScreen(rejections: statusData['reasons'] ?? []);
     } else if (status == 'not_started') {
-      return _NotStartedScreen();
+      return const _NotStartedScreen();
     }
     return _ReviewScreen(statusData: statusData);
   }
@@ -1256,8 +1266,8 @@ class _NotStartedScreen extends StatelessWidget {
               const Spacer(),
               Container(
                 padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0F2FE),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE0F2FE),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -1322,8 +1332,8 @@ class _RejectedScreen extends StatelessWidget {
               const Spacer(),
               Container(
                   padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2), shape: BoxShape.circle),
+                  decoration: const BoxDecoration(
+                      color: Color(0xFFFEF2F2), shape: BoxShape.circle),
                   child: const Icon(PhosphorIconsFill.warningCircle,
                       size: 80, color: Color(0xFFEF4444))),
               const SizedBox(height: 32),
@@ -1816,10 +1826,11 @@ class ModalUtils {
           try {
             Navigator.pop(context);
           } catch (_) {}
-          if (onOk != null)
+          if (onOk != null) {
             try {
               onOk();
             } catch (_) {}
+          }
         }
       });
     }

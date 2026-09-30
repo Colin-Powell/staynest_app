@@ -9,11 +9,13 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 class FilterView extends StatefulWidget {
   final VoidCallback onClose;
   final Function(Map<String, dynamic> filters)? onApplyFilters;
+  final bool desktopLayout;
 
   const FilterView({
     super.key,
     required this.onClose,
     this.onApplyFilters,
+    this.desktopLayout = false,
   });
 
   @override
@@ -109,9 +111,13 @@ class _FilterViewState extends State<FilterView> {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      borderRadius: widget.desktopLayout
+          ? BorderRadius.circular(24)
+          : const BorderRadius.vertical(top: Radius.circular(32)),
       child: Container(
-        height: MediaQuery.of(context).size.height * 0.9,
+        height: widget.desktopLayout
+            ? double.infinity
+            : MediaQuery.of(context).size.height * 0.9,
         decoration: const BoxDecoration(
           color: Colors.white,
         ),
@@ -150,6 +156,9 @@ class _FilterViewState extends State<FilterView> {
                           const SizedBox(height: 24),
                           _GlassContainer(
                             padding: const EdgeInsets.all(24),
+                            blur: 20,
+                            opacity: 0.12,
+                            borderWidth: 1,
                             child: _buildAmenities(),
                           ),
 
@@ -714,9 +723,9 @@ class _GlassContainer extends StatelessWidget {
     required this.child,
     this.padding = EdgeInsets.zero,
     this.borderRadius,
-    this.blur = 15.0,
-    this.opacity = 0.55,
-    this.borderWidth = 1.0,
+    required this.blur,
+    required this.opacity,
+    required this.borderWidth,
   });
 
   @override

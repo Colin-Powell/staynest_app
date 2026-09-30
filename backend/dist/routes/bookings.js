@@ -3,8 +3,63 @@ import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { queueUserPush } from '../services/queue.js';
 import { settleReferralReward } from '../services/referral_service.js';
-import { settleEscrow } from '../services/finance_service.js';
+import { createAndPayBookingFromWallet, settleEscrow, } from '../services/finance_service.js';
 const router = Router();
+router.post('/pay-with-wallet', requireAuth, async (req, res, next) => {
+    const { propertyId, checkInDate, checkOutDate, notes } = req.body;
+    const idempotencyKey = String(req.get('Idempotency-Key') ?? '').trim();
+    if (!propertyId || !checkInDate || !checkOutDate || !idempotencyKey) {
+        return res.status(400).json({
+            error: 'propertyId, checkInDate, checkOutDate, and Idempotency-Key are required.',
+        });
+    }
+    try {
+        const result = await createAndPayBookingFromWallet({
+            propertyId,
+            tenantId: req.auth.id,
+            checkInDate,
+            checkOutDate,
+            notes,
+            idempotencyKey,
+        });
+        if (result.created) {
+            try {
+                const tenantResult = await query('SELECT name FROM users WHERE id = $1 LIMIT 1', [req.auth.id]);
+                const propertyResult = await query('SELECT title FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
+                await queueUserPush(String(result.booking.landlord_id), 'New Booking Request', `${tenantResult.rows[0]?.name || 'A tenant'} paid to book ${propertyResult.rows[0]?.title || 'your property'}.`, { type: 'new_booking', bookingId: String(result.booking.id) });
+            }
+            catch (pushError) {
+                console.error('Paid booking notification error:', pushError);
+            }
+        }
+        return res.status(result.created ? 201 : 200).json({
+            data: {
+                ...result.booking,
+                escrow_id: result.escrowId,
+                amount_paid: result.amount,
+            },
+        });
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : 'Payment failed.';
+        if (message.includes('Insufficient wallet balance')) {
+            return res.status(402).json({ error: message });
+        }
+        if (message.includes('already booked') || message.includes('active booking')) {
+            return res.status(409).json({ error: message });
+        }
+        if (message.includes('Invalid booking date') || message.includes('total is invalid')) {
+            return res.status(400).json({ error: message });
+        }
+        if (message.includes('Property not found')) {
+            return res.status(404).json({ error: message });
+        }
+        if (message.includes('no landlord') || message.includes('own property')) {
+            return res.status(400).json({ error: message });
+        }
+        return next(error);
+    }
+});
 // Create a new booking (tenant creates booking)
 router.post('/', requireAuth, async (req, res, next) => {
     try {

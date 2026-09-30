@@ -69,6 +69,15 @@ class _SplashViewState extends State<SplashView> {
   void _navigateBasedOnSession() {
     if (!mounted) return;
 
+    final isDesktop = MediaQuery.sizeOf(context).width >= 768;
+
+    if (isDesktop &&
+        (AppSession.apiToken == null || AppSession.apiToken!.isEmpty)) {
+      AppSession.isGuest = true;
+      Navigator.pushReplacementNamed(context, '/home');
+      return;
+    }
+
     // No stored token — show the splash landing page (do nothing, buttons are shown)
     if (AppSession.apiToken == null || AppSession.apiToken!.isEmpty) {
       return;

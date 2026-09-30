@@ -10,12 +10,16 @@ import 'package:property_app/utils/property_mapper.dart';
 import 'package:property_app/services/property_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/widgets/property_card.dart';
 
 // --- Airbnb-Style Colors ---
 const Color _textDark = Color(0xFF222222);
 const Color _textLight = Color(0xFF717171);
 const Color _dividerColor = Color(0xFFEBEBEB);
 const Color _primary = Color(0xFF3F37C9);
+
+// Responsive constant matching desktop standard widths
+const double _maxWebWidth = 1280.0;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WISH LIST HUB (Main Page)
@@ -114,8 +118,7 @@ class _SavedViewState extends State<SavedView>
           properties: properties,
           onOpenProperty: widget.onOpenProperty,
           onSelectProperty: widget.onSelectProperty,
-          onListUpdated: () =>
-              setState(() {}), // Refresh counts when popping back
+          onListUpdated: () => setState(() {}),
         ),
       ),
     );
@@ -125,63 +128,83 @@ class _SavedViewState extends State<SavedView>
   Widget build(BuildContext context) {
     final savedProperties =
         _all.where((p) => AppSession.isSaved(p.id)).toList();
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 768;
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // --- Header ---
-          Padding(
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 24,
-              left: 24,
-              right: 24,
-              bottom: 16,
-            ),
-            child: Text(
-              'Wishlists',
-              style: GoogleFonts.poppins(
-                fontSize: 32,
-                fontWeight: FontWeight.w700,
-                color: _textDark,
-                letterSpacing: -0.5,
+      body: Center(
+        child: ConstrainedBox(
+          // Applies the max width wrapper for web and desktop
+          constraints: const BoxConstraints(maxWidth: _maxWebWidth),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // --- Header ---
+              Padding(
+                padding: EdgeInsets.only(
+                  top: isDesktop ? 64 : MediaQuery.of(context).padding.top + 24,
+                  left: isDesktop ? 40 : 24,
+                  right: isDesktop ? 40 : 24,
+                  bottom: 16,
+                ),
+                child: Text(
+                  'Wishlists',
+                  style: GoogleFonts.poppins(
+                    fontSize: isDesktop ? 38 : 32,
+                    fontWeight: FontWeight.w700,
+                    color: _textDark,
+                    letterSpacing: -0.5,
+                  ),
+                ),
               ),
-            ),
-          ),
 
-          // --- Content Area (Vertical List) ---
-          Expanded(
-            child: _loading
-                ? const _SkeletonCollageLoader()
-                : _hasError
-                    ? _buildErrorState()
-                    : FadeTransition(
-                        opacity: _animController,
-                        child: ListView(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 8),
-                          physics: const BouncingScrollPhysics(),
-                          children: [
-                            _CollageCard(
-                              title: 'Saved',
-                              properties: savedProperties,
-                              onTap: () =>
-                                  _openWishlistDetail('Saved', savedProperties),
+              // --- Content Area (Dynamic Grid) ---
+              Expanded(
+                child: _loading
+                    ? _SkeletonCollageLoader(isDesktop: isDesktop)
+                    : _hasError
+                        ? _buildErrorState()
+                        : FadeTransition(
+                            opacity: _animController,
+                            child: GridView(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: isDesktop ? 40 : 24,
+                                vertical: isDesktop ? 24 : 8,
+                              ),
+                              physics: const BouncingScrollPhysics(),
+                              // Responsive dynamically shifting grid
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount:
+                                    isDesktop ? (width > 1024 ? 3 : 2) : 1,
+                                crossAxisSpacing: 24,
+                                mainAxisSpacing: 32,
+                                // Maintain image proportions smoothly across all sizes
+                                childAspectRatio: isDesktop
+                                    ? 0.95
+                                    : (width - 48) / ((width - 48) / 1.33 + 70),
+                              ),
+                              children: [
+                                _CollageCard(
+                                  title: 'Saved',
+                                  properties: savedProperties,
+                                  onTap: () => _openWishlistDetail(
+                                      'Saved', savedProperties),
+                                ),
+                                _CollageCard(
+                                  title: 'Recently Viewed',
+                                  properties: _recent,
+                                  onTap: () => _openWishlistDetail(
+                                      'Recently Viewed', _recent),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 32),
-                            _CollageCard(
-                              title: 'Recently Viewed',
-                              properties: _recent,
-                              onTap: () => _openWishlistDetail(
-                                  'Recently Viewed', _recent),
-                            ),
-                            const SizedBox(height: 40),
-                          ],
-                        ),
-                      ),
+                          ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -244,55 +267,59 @@ class _CollageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // The Image Collage Square (Set to 1.33 for a pleasant wide rectangle)
-          AspectRatio(
-            aspectRatio: 1.33,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _dividerColor, width: 1.2),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+    // Adding MouseRegion to show Web Pointer cursor
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // The Image Collage Square (Set to 1.33 for a pleasant wide rectangle)
+            AspectRatio(
+              aspectRatio: 1.33,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _dividerColor, width: 1.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(15),
+                  child: _buildCollageImages(),
+                ),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(15),
-                child: _buildCollageImages(),
+            ),
+            const SizedBox(height: 16),
+            // Title
+            Text(
+              title,
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: _textDark,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            // Subtitle (Count)
+            Text(
+              '${properties.length} ${properties.length == 1 ? 'property' : 'properties'}',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: _textLight,
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          // Title
-          Text(
-            title,
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: _textDark,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          // Subtitle (Count)
-          Text(
-            '${properties.length} ${properties.length == 1 ? 'property' : 'properties'}',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: _textLight,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -311,9 +338,7 @@ class _CollageCard extends StatelessWidget {
       );
     }
 
-    if (images.length == 1) {
-      return _buildImg(images[0]);
-    }
+    if (images.length == 1) return _buildImg(images[0]);
 
     if (images.length == 2) {
       return Row(
@@ -379,7 +404,7 @@ class _CollageCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WISHLIST DETAIL SCREEN (2-Column Grid)
+// WISHLIST DETAIL SCREEN (Dynamic Desktop/Mobile Grid)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _WishlistDetailScreen extends StatefulWidget {
@@ -418,7 +443,6 @@ class _WishlistDetailScreenState extends State<_WishlistDetailScreen> {
 
     widget.onListUpdated();
 
-    // If it's the "Saved" wishlist, we also remove it from the backend favorites
     if (widget.title == 'Saved' &&
         AppSession.currentUserId != null &&
         AppSession.apiToken != null) {
@@ -428,253 +452,170 @@ class _WishlistDetailScreenState extends State<_WishlistDetailScreen> {
           userId: AppSession.currentUserId!,
           propertyId: property.id,
         );
-      } catch (_) {
-        // Silently handle error or revert locally if strictly needed
-      }
-    }
-  }
-
-  Future<void> _toggleSave(Property property) async {
-    final isCurrentlySaved = AppSession.isSaved(property.id);
-
-    setState(() {
-      if (isCurrentlySaved) {
-        AppSession.savedPropertyIds.remove(property.id);
-      } else {
-        AppSession.savedPropertyIds.add(property.id);
-      }
-    });
-
-    widget.onListUpdated();
-
-    if (AppSession.currentUserId != null && AppSession.apiToken != null) {
-      try {
-        final repository = RemoteDatabaseRepository();
-        if (isCurrentlySaved) {
-          await repository.removeFavoriteForUser(
-            userId: AppSession.currentUserId!,
-            propertyId: property.id,
-          );
-        } else {
-          await repository.savePropertyForUser(
-            userId: AppSession.currentUserId!,
-            propertyId: property.id,
-          );
-        }
-      } catch (_) {
-        setState(() {
-          if (isCurrentlySaved) {
-            AppSession.savedPropertyIds.add(property.id);
-          } else {
-            AppSession.savedPropertyIds.remove(property.id);
-          }
-        });
-      }
+      } catch (_) {}
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 768;
+
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // --- Header ---
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        behavior: HitTestBehavior.opaque,
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border:
-                                Border.all(color: _dividerColor, width: 1.2),
-                          ),
-                          child: const Icon(Icons.arrow_back_ios_new_rounded,
-                              size: 18, color: _textDark),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(
-                        widget.title,
-                        style: GoogleFonts.poppins(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: _textDark,
-                        ),
-                      ),
-                    ],
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _maxWebWidth),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // --- Header ---
+              SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    isDesktop ? 40 : 24,
+                    isDesktop ? 48 : 16,
+                    isDesktop ? 40 : 24,
+                    8,
                   ),
-                  if (_localProperties.isNotEmpty)
-                    TextButton(
-                      onPressed: () => setState(() => _isEditing = !_isEditing),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        foregroundColor: _textDark,
-                      ),
-                      child: Text(
-                        _isEditing ? 'Done' : 'Edit',
-                        style: GoogleFonts.poppins(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-
-          // --- Grid Content ---
-          Expanded(
-            child: _localProperties.isEmpty
-                ? _buildEmptyState()
-                : GridView.builder(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 24,
-                      childAspectRatio:
-                          0.70, // Optimized for square image + text below
-                    ),
-                    itemCount: _localProperties.length,
-                    itemBuilder: (context, index) {
-                      final property = _localProperties[index];
-                      return GestureDetector(
-                        onTap: () {
-                          if (_isEditing)
-                            return; // Disable tap navigation while editing
-                          if (widget.onSelectProperty != null) {
-                            // Close the saved/recent grid before the shell opens
-                            // the property detail overlay; otherwise the overlay
-                            // is rendered underneath this route.
-                            Navigator.of(context).pop();
-                            widget.onSelectProperty!(property);
-                          } else {
-                            widget.onOpenProperty?.call();
-                          }
-                        },
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Image with overlay button
-                            Stack(
-                              children: [
-                                AspectRatio(
-                                  aspectRatio: 1.0, // Square image
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: buildPropertyImage(
-                                      property.image,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: () => Navigator.pop(context),
+                              behavior: HitTestBehavior.opaque,
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                      color: _dividerColor, width: 1.2),
                                 ),
-                                Positioned(
-                                  top: 12,
-                                  right: 12,
-                                  child: _isEditing
-                                      ? GestureDetector(
-                                          onTap: () => _removeItem(property),
-                                          child: Container(
-                                            padding: const EdgeInsets.all(6),
-                                            decoration: BoxDecoration(
-                                              color:
-                                                  Colors.white.withOpacity(0.9),
-                                              shape: BoxShape.circle,
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black
-                                                      .withOpacity(0.1),
-                                                  blurRadius: 4,
-                                                ),
-                                              ],
-                                            ),
-                                            child: const Icon(
-                                                Icons.close_rounded,
-                                                size: 18,
-                                                color: _textDark),
-                                          ),
-                                        )
-                                      : GestureDetector(
-                                          onTap: () => _toggleSave(property),
-                                          child: Icon(
-                                            AppSession.isSaved(property.id)
-                                                ? Icons.favorite
-                                                : Icons.favorite_border,
-                                            color:
-                                                AppSession.isSaved(property.id)
-                                                    ? const Color(0xFFE51D53)
-                                                    : Colors.white,
-                                            size: 24,
-                                            shadows: [
-                                              if (!AppSession.isSaved(
-                                                  property.id))
-                                                Shadow(
-                                                  color: Colors.black
-                                                      .withOpacity(0.5),
-                                                  blurRadius: 4,
-                                                )
-                                            ],
-                                          ),
-                                        ),
-                                ),
-                              ],
+                                child: const Icon(
+                                    Icons.arrow_back_ios_new_rounded,
+                                    size: 18,
+                                    color: _textDark),
+                              ),
                             ),
-                            const SizedBox(height: 12),
-                            // Details
-                            Text(
-                              property.name,
+                          ),
+                          const SizedBox(width: 16),
+                          Text(
+                            widget.title,
+                            style: GoogleFonts.poppins(
+                              fontSize: isDesktop ? 32 : 24,
+                              fontWeight: FontWeight.w700,
+                              color: _textDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_localProperties.isNotEmpty)
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: TextButton(
+                            onPressed: () =>
+                                setState(() => _isEditing = !_isEditing),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              foregroundColor: _textDark,
+                            ),
+                            child: Text(
+                              _isEditing ? 'Done' : 'Edit',
                               style: GoogleFonts.poppins(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
-                                color: _textDark,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              property.location,
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                color: _textLight,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Ksh. ${property.price}',
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: _textDark,
+                                decoration: TextDecoration.underline,
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      );
-                    },
+                    ],
                   ),
+                ),
+              ),
+
+              // --- Grid Content ---
+              Expanded(
+                child: _localProperties.isEmpty
+                    ? _buildEmptyState()
+                    : GridView.builder(
+                        physics: const BouncingScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(
+                          isDesktop ? 40 : 24,
+                          isDesktop ? 24 : 16,
+                          isDesktop ? 40 : 24,
+                          40,
+                        ),
+                        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent:
+                              isDesktop ? 340 : 200, // Forces dynamic scaling
+                          crossAxisSpacing: isDesktop ? 24 : 16,
+                          mainAxisSpacing: isDesktop ? 32 : 24,
+                          childAspectRatio: isDesktop ? 0.65 : 0.58,
+                        ),
+                        itemCount: _localProperties.length,
+                        itemBuilder: (context, index) {
+                          final property = _localProperties[index];
+                          return MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: PropertyCard(
+                              property: property,
+                              isHorizontal: false,
+                              isGrid: true,
+                              onTap: () {
+                                if (_isEditing) return;
+                                if (widget.onSelectProperty != null) {
+                                  Navigator.of(context).pop();
+                                  widget.onSelectProperty!(property);
+                                } else {
+                                  widget.onOpenProperty?.call();
+                                }
+                              },
+                              imageAction: _isEditing
+                                  ? MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: GestureDetector(
+                                        onTap: () => _removeItem(property),
+                                        behavior: HitTestBehavior.opaque,
+                                        child: Container(
+                                          width: 32,
+                                          height: 32,
+                                          decoration: BoxDecoration(
+                                            color:
+                                                Colors.white.withOpacity(0.9),
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black
+                                                    .withOpacity(0.1),
+                                                blurRadius: 4,
+                                              ),
+                                            ],
+                                          ),
+                                          child: const Icon(
+                                            Icons.close_rounded,
+                                            size: 18,
+                                            color: _textDark,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -712,9 +653,7 @@ class _WishlistDetailScreenState extends State<_WishlistDetailScreen> {
                 height: 1.5,
               ),
             ),
-            const SizedBox(
-                height:
-                    80), // Offset slightly to account for missing bottom nav
+            const SizedBox(height: 80),
           ],
         ),
       ),
@@ -723,20 +662,33 @@ class _WishlistDetailScreenState extends State<_WishlistDetailScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SKELETON LOADER (For Main Wishlist Hub)
+// SKELETON LOADER (Dynamic Support)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SkeletonCollageLoader extends StatelessWidget {
-  const _SkeletonCollageLoader();
+  final bool isDesktop;
+
+  const _SkeletonCollageLoader({required this.isDesktop});
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+    return GridView(
+      padding: EdgeInsets.symmetric(
+        horizontal: isDesktop ? 40 : 24,
+        vertical: 8,
+      ),
       physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: isDesktop ? 2 : 1,
+        crossAxisSpacing: 24,
+        mainAxisSpacing: 32,
+        childAspectRatio: isDesktop
+            ? 0.95
+            : (MediaQuery.of(context).size.width - 48) /
+                ((MediaQuery.of(context).size.width - 48) / 1.33 + 70),
+      ),
       children: const [
         _SkeletonCard(),
-        SizedBox(height: 32),
         _SkeletonCard(),
       ],
     );
@@ -776,7 +728,7 @@ class _SkeletonCardState extends State<_SkeletonCard>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AspectRatio(
-            aspectRatio: 1.33, // Match collage card
+            aspectRatio: 1.33,
             child: Container(
               decoration: BoxDecoration(
                 color: skeletonColor,

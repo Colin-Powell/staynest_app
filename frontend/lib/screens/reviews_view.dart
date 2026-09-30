@@ -24,6 +24,7 @@ class ReviewsView extends StatefulWidget {
   final int reviewCount;
   final bool canReview;
   final bool hasReviewed;
+  final VoidCallback? onBack;
 
   const ReviewsView({
     super.key,
@@ -34,6 +35,7 @@ class ReviewsView extends StatefulWidget {
     this.reviewCount = 0,
     this.canReview = false,
     this.hasReviewed = false,
+    this.onBack,
   });
 
   @override
@@ -165,7 +167,10 @@ class _ReviewsViewState extends State<ReviewsView>
           backgroundColor: const Color(0xFFFFFFFF),
           body: Column(
             children: [
-              _Header(title: 'Reviews', onBack: () => Navigator.pop(context)),
+              _Header(
+                title: 'Reviews',
+                onBack: widget.onBack ?? () => Navigator.pop(context),
+              ),
               Expanded(
                 child: ScrollConfiguration(
                   behavior: const AppScrollBehavior(),
@@ -838,7 +843,12 @@ class _OverallRatingSection extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 24),
-            _StarRating(rating: rating),
+            _StarRating(
+              rating: rating,
+              size: 32,
+              color: const Color(0xFFFBBF24),
+              backgroundColor: const Color(0xFFE5E7EB),
+            ),
           ],
         ),
         const SizedBox(height: 4),
@@ -1064,9 +1074,9 @@ class _StarRating extends StatelessWidget {
 
   const _StarRating({
     required this.rating,
-    this.size = 18,
-    this.color = const Color(0xFFFBBF24),
-    this.backgroundColor = const Color(0xFFE5E7EB),
+    required this.size,
+    required this.color,
+    required this.backgroundColor,
   });
 
   @override

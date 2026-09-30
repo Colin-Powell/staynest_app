@@ -212,8 +212,9 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
   }
 
   String _buildErrorMessage(Object err) {
-    if (err is TimeoutException)
+    if (err is TimeoutException) {
       return 'Server taking too long. Check your internet.';
+    }
     if (err is ApiException) {
       if (err.statusCode == 401) return 'Invalid email or password.';
       if (err.statusCode == 400) return 'Invalid login request.';

@@ -48,11 +48,13 @@ class MessagesViewScreen extends StatefulWidget {
   final void Function(String userId, String name, String? avatarUrl)
       onSelectChat;
   final ValueChanged<bool>? onSelectionModeChanged;
+  final VoidCallback? onClose;
 
   const MessagesViewScreen({
     super.key,
     required this.onSelectChat,
     this.onSelectionModeChanged,
+    this.onClose,
   });
 
   @override
@@ -320,43 +322,54 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
             letterSpacing: -1.0,
           ),
         ),
-        PopupMenuButton<_MessageFilter>(
-          icon: const Icon(PhosphorIconsRegular.dotsThreeVertical,
-              color: _dark, size: 28),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          color: Colors.white,
-          elevation: 4,
-          onSelected: (filter) => setState(() => _currentFilter = filter),
-          itemBuilder: (context) => _MessageFilter.values.map((filter) {
-            final isSelected = _currentFilter == filter;
-            final name =
-                filter.name[0].toUpperCase() + filter.name.substring(1);
-            return PopupMenuItem(
-              value: filter,
-              child: Row(
-                children: [
-                  Icon(
-                    isSelected
-                        ? PhosphorIconsFill.checkCircle
-                        : PhosphorIconsRegular.circle,
-                    color: isSelected ? _tenantPrimary : _grey,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    name,
-                    style: GoogleFonts.poppins(
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w500,
-                      color: isSelected ? _tenantPrimary : _dark,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.onClose != null)
+              IconButton(
+                tooltip: 'Close messages',
+                onPressed: widget.onClose,
+                icon: const Icon(Icons.close_rounded, color: _tenantPrimary),
               ),
-            );
-          }).toList(),
+            PopupMenuButton<_MessageFilter>(
+              icon: const Icon(PhosphorIconsRegular.dotsThreeVertical,
+                  color: _dark, size: 28),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              color: Colors.white,
+              elevation: 4,
+              onSelected: (filter) => setState(() => _currentFilter = filter),
+              itemBuilder: (context) => _MessageFilter.values.map((filter) {
+                final isSelected = _currentFilter == filter;
+                final name =
+                    filter.name[0].toUpperCase() + filter.name.substring(1);
+                return PopupMenuItem(
+                  value: filter,
+                  child: Row(
+                    children: [
+                      Icon(
+                        isSelected
+                            ? PhosphorIconsFill.checkCircle
+                            : PhosphorIconsRegular.circle,
+                        color: isSelected ? _tenantPrimary : _grey,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        name,
+                        style: GoogleFonts.poppins(
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.w500,
+                          color: isSelected ? _tenantPrimary : _dark,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
         ),
       ],
     );
@@ -790,8 +803,9 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                                             }
                                           },
                                           onLongPress: () {
-                                            if (!_isSelectionMode)
+                                            if (!_isSelectionMode) {
                                               _enterSelectionMode(chat.id);
+                                            }
                                           },
                                         ),
                                       );

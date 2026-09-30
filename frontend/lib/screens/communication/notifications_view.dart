@@ -7,13 +7,13 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:property_app/services/fcm_service.dart';
 import 'package:property_app/services/notification_api.dart';
+import 'package:property_app/theme.dart';
 
 // ─── Design System Constants ──────────────────────────────────────────────────
-const _bg = Color(0xFFFAFAFA);
-const _dark = Color(0xFF111827);
-const _grey = Color(0xFF9CA3AF);
-const _primaryText = Color(0xFF4F70F8);
-const _surface = Colors.white;
+const _bg = StayNestColors.surfaceVariantLight;
+const _dark = StayNestColors.textPrimaryLight;
+const _grey = StayNestColors.textMutedLight;
+const _primaryText = StayNestColors.primary;
 
 // ─── Model ────────────────────────────────────────────────────────────────────
 class NotificationItem {
@@ -21,7 +21,7 @@ class NotificationItem {
   final String title;
   final String subtitle;
   final String time;
-  final String emoji;
+  final IconData icon;
   bool isRead;
 
   NotificationItem({
@@ -29,14 +29,16 @@ class NotificationItem {
     required this.title,
     required this.subtitle,
     required this.time,
-    this.emoji = '🔔',
+    this.icon = Icons.notifications_none,
     this.isRead = false,
   });
 }
 
 // ─── View ─────────────────────────────────────────────────────────────────────
 class NotificationsView extends StatefulWidget {
-  const NotificationsView({super.key});
+  final VoidCallback? onClose;
+
+  const NotificationsView({super.key, this.onClose});
 
   @override
   State<NotificationsView> createState() => _NotificationsViewState();
@@ -83,18 +85,47 @@ class _NotificationsViewState extends State<NotificationsView>
     _setupFCMStream();
   }
 
-  String _notificationEmoji(Map<dynamic, dynamic> data) {
+  IconData _notificationIcon(Map<dynamic, dynamic> data) {
     final type = data['type']?.toString().toLowerCase() ?? '';
     if (type.contains('booking') ||
         type.contains('checkin') ||
-        type.contains('checkout')) return '📅';
-    if (type.contains('message') || type.contains('unread')) return '💬';
-    if (type.contains('payment') || type.contains('price')) return '💰';
+        type.contains('checkout')) {
+      return PhosphorIconsRegular.calendarCheck;
+    }
+    if (type.contains('message') || type.contains('unread')) {
+      return PhosphorIconsRegular.chatCircleText;
+    }
+    if (type.contains('payment') || type.contains('price')) {
+      return PhosphorIconsRegular.wallet;
+    }
     if (type.contains('alert') ||
         type.contains('warning') ||
-        type.contains('stale')) return '⚠️';
-    if (type.contains('approved') || type.contains('success')) return '✅';
-    return '🔔';
+        type.contains('stale')) {
+      return PhosphorIconsRegular.warning;
+    }
+    if (type.contains('approved') || type.contains('success')) {
+      return PhosphorIconsRegular.checkCircle;
+    }
+    return PhosphorIconsRegular.bell;
+  }
+
+  Color _notificationAccent(IconData icon) {
+    if (icon == PhosphorIconsRegular.calendarCheck) {
+      return StayNestColors.info;
+    }
+    if (icon == PhosphorIconsRegular.chatCircleText) {
+      return StayNestColors.primary;
+    }
+    if (icon == PhosphorIconsRegular.wallet) {
+      return StayNestColors.accentDark;
+    }
+    if (icon == PhosphorIconsRegular.warning) {
+      return StayNestColors.warning;
+    }
+    if (icon == PhosphorIconsRegular.checkCircle) {
+      return StayNestColors.success;
+    }
+    return StayNestColors.primary;
   }
 
   void _setupFCMStream() {
@@ -103,7 +134,7 @@ class _NotificationsViewState extends State<NotificationsView>
       if (!mounted) return;
       final title = message.notification?.title ?? 'Notification';
       final subtitle = message.notification?.body ?? '';
-      final emoji = _notificationEmoji(message.data);
+      final icon = _notificationIcon(message.data);
       final now = DateTime.now();
 
       setState(() {
@@ -114,7 +145,7 @@ class _NotificationsViewState extends State<NotificationsView>
             title: title,
             subtitle: subtitle,
             time: _formatTime(now),
-            emoji: emoji,
+            icon: icon,
             isRead: false,
           ),
         );
@@ -135,16 +166,14 @@ class _NotificationsViewState extends State<NotificationsView>
               DateTime.tryParse(item['created_at'].toString())?.toLocal() ??
                   DateTime.now();
           final dataMap = item['data'] ?? {};
-          final unreadCount =
-              int.tryParse(dataMap['unreadCount']?.toString() ?? '') ?? 0;
 
           _items.add(NotificationItem(
             id: item['id']?.toString() ?? UniqueKey().toString(),
             title: item['title'] ?? 'Notification',
             subtitle: item['body'] ?? '',
             time: _formatTime(created),
-            emoji: _notificationEmoji(dataMap),
-            isRead: unreadCount == 0,
+            icon: _notificationIcon(dataMap),
+            isRead: item['is_read'] == true,
           ));
         }
         _isLoading = false;
@@ -270,7 +299,7 @@ class _NotificationsViewState extends State<NotificationsView>
                 key: const ValueKey('normal_header'),
                 children: [
                   GestureDetector(
-                    onTap: () => Navigator.pop(context),
+                    onTap: widget.onClose ?? () => Navigator.pop(context),
                     child: Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
@@ -278,7 +307,7 @@ class _NotificationsViewState extends State<NotificationsView>
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
+                            color: Colors.black.withValues(alpha: 0.04),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           )
@@ -290,14 +319,28 @@ class _NotificationsViewState extends State<NotificationsView>
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: Text(
-                      'Notifications',
-                      style: GoogleFonts.poppins(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: _dark,
-                        letterSpacing: -0.5,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Notifications',
+                          style: GoogleFonts.poppins(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            color: _dark,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${_items.where((item) => !item.isRead).length} unread updates',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: _grey,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   PopupMenuButton<String>(
@@ -412,21 +455,22 @@ class _NotificationsViewState extends State<NotificationsView>
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color:
-                  item.isRead ? Colors.white : _primaryText.withOpacity(0.04),
+              color: item.isRead
+                  ? Colors.white
+                  : _primaryText.withValues(alpha: 0.04),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: isSelected
                     ? _primaryText
                     : (item.isRead
                         ? Colors.transparent
-                        : _primaryText.withOpacity(0.1)),
+                        : _primaryText.withValues(alpha: 0.1)),
                 width: isSelected ? 2.0 : 1.0,
               ),
               boxShadow: item.isRead
                   ? [
                       BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
+                          color: Colors.black.withValues(alpha: 0.03),
                           blurRadius: 10,
                           offset: const Offset(0, 4))
                     ]
@@ -449,13 +493,20 @@ class _NotificationsViewState extends State<NotificationsView>
                 else
                   Container(
                     margin: const EdgeInsets.only(right: 16),
-                    padding: const EdgeInsets.all(10),
+                    width: 46,
+                    height: 46,
                     decoration: BoxDecoration(
-                      color: item.isRead ? _bg : _primaryText.withOpacity(0.1),
-                      shape: BoxShape.circle,
+                      color: item.isRead
+                          ? _bg
+                          : _notificationAccent(item.icon)
+                              .withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child:
-                        Text(item.emoji, style: const TextStyle(fontSize: 20)),
+                    child: Icon(
+                      item.icon,
+                      color: _notificationAccent(item.icon),
+                      size: 22,
+                    ),
                   ),
                 Expanded(
                   child: Column(
@@ -479,14 +530,24 @@ class _NotificationsViewState extends State<NotificationsView>
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            item.time,
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: item.isRead ? _grey : _primaryText,
-                              fontWeight: item.isRead
-                                  ? FontWeight.w400
-                                  : FontWeight.w600,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: item.isRead
+                                  ? _bg
+                                  : _primaryText.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              item.time,
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                color: item.isRead ? _grey : _primaryText,
+                                fontWeight: item.isRead
+                                    ? FontWeight.w500
+                                    : FontWeight.w700,
+                              ),
                             ),
                           ),
                         ],
@@ -527,7 +588,7 @@ class _NotificationsViewState extends State<NotificationsView>
           borderRadius: BorderRadius.circular(32), // Pill shape
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withValues(alpha: 0.15),
               blurRadius: 20,
               offset: const Offset(0, 10),
             )
@@ -543,19 +604,20 @@ class _NotificationsViewState extends State<NotificationsView>
                 children: [
                   Icon(PhosphorIconsRegular.envelopeOpen,
                       color: _selectedIds.isEmpty
-                          ? _grey.withOpacity(0.5)
+                          ? _grey.withValues(alpha: 0.5)
                           : Colors.white),
                   const SizedBox(height: 4),
                   Text('Read',
                       style: GoogleFonts.poppins(
                           fontSize: 12,
                           color: _selectedIds.isEmpty
-                              ? _grey.withOpacity(0.5)
+                              ? _grey.withValues(alpha: 0.5)
                               : Colors.white)),
                 ],
               ),
             ),
-            Container(width: 1, height: 30, color: _grey.withOpacity(0.3)),
+            Container(
+                width: 1, height: 30, color: _grey.withValues(alpha: 0.3)),
             GestureDetector(
               onTap: _selectedIds.isEmpty ? null : _deleteSelected,
               child: Column(
@@ -563,14 +625,14 @@ class _NotificationsViewState extends State<NotificationsView>
                 children: [
                   Icon(PhosphorIconsRegular.trash,
                       color: _selectedIds.isEmpty
-                          ? _grey.withOpacity(0.5)
+                          ? _grey.withValues(alpha: 0.5)
                           : const Color(0xFFEF4444)), // Red
                   const SizedBox(height: 4),
                   Text('Delete',
                       style: GoogleFonts.poppins(
                           fontSize: 12,
                           color: _selectedIds.isEmpty
-                              ? _grey.withOpacity(0.5)
+                              ? _grey.withValues(alpha: 0.5)
                               : const Color(0xFFEF4444))),
                 ],
               ),

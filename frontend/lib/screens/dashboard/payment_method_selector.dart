@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/services/landlord_payment_methods_service.dart';
 
@@ -30,7 +31,7 @@ class PaymentMethodSelector extends StatefulWidget {
     required int amount,
     required String description,
   }) {
-    return showModalBottomSheet<LandlordPaymentMethod>(
+    return showResponsiveModalSheet<LandlordPaymentMethod>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -78,7 +79,7 @@ class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
   }
 
   Future<LandlordPaymentMethod?> _enterPhoneNumber() async {
-    final phone = await showModalBottomSheet<String>(
+    final phone = await showResponsiveModalSheet<String>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -290,9 +291,9 @@ class _PaymentMethodSelectorState extends State<PaymentMethodSelector> {
 
                     // Methods or loading/error
                     if (_isLoading)
-                      Center(
+                      const Center(
                         child: Padding(
-                          padding: const EdgeInsets.all(32),
+                          padding: EdgeInsets.all(32),
                           child: CircularProgressIndicator(
                             valueColor: AlwaysStoppedAnimation(_green),
                           ),

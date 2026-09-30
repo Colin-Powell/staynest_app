@@ -39,11 +39,12 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
   Future<void> _loadAuditLogs() async {
     try {
       final logs = await SuperAdminService.fetchAuditLogs();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _auditLogs = logs;
           _logsLoading = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _logsLoading = false);
     }
@@ -296,9 +297,10 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
         await _loadAuditLogs();
       }
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Push test failed: $error')));
+      }
     } finally {
       if (mounted) setState(() => _pushTestSending = false);
     }

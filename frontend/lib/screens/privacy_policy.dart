@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class PrivacyPolicyView extends StatelessWidget {
-  const PrivacyPolicyView({super.key});
+  final VoidCallback? onBack;
+
+  const PrivacyPolicyView({super.key, this.onBack});
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +22,16 @@ Contact: privacy@staynest.example (replace with actual contact)
 ''';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Privacy & Data Policy')),
+      appBar: AppBar(
+        leading: onBack == null
+            ? null
+            : IconButton(
+                tooltip: 'Back to profile',
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+        title: const Text('Privacy & Data Policy'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: SingleChildScrollView(

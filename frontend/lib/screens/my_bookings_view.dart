@@ -39,8 +39,7 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
   static const _tabs = ['Upcoming', 'Completed', 'Cancelled'];
 
   // Airbnb-style Minimalist Color Palette
-  static const Color tenantPrimary =
-      Color(0xFF3F37C9); // Tenant Blue (Used sparingly)
+  static const Color tenantPrimary = Color(0xFF3F37C9); // Tenant Blue
   static const Color textDark = Color(0xFF222222); // Dark grey/black
   static const Color textLight = Color(0xFF717171); // Light grey
   static const Color dividerColor = Color(0xFFEBEBEB);
@@ -151,19 +150,7 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
 
   String _monthName(int month) {
     const months = [
-      '',
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
     return months[month.clamp(1, 12)];
   }
@@ -196,26 +183,39 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Determine if we are rendering in desktop mode
+    final bool isDesktop = MediaQuery.of(context).size.width >= 900;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.white, // Safe for embedded or standalone rendering
       body: SafeArea(
+        bottom: false,
+        // Remove top safe area padding if embedded in desktop to fit flush
+        top: !isDesktop,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- Minimalist Header ---
+            // --- Header (Responsive) ---
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+              padding: EdgeInsets.fromLTRB(
+                isDesktop ? 0 : 24,
+                isDesktop ? 0 : 16,
+                isDesktop ? 0 : 24,
+                16,
+              ),
               child: Row(
                 children: [
-                  _NavButton(
-                    icon: Icons.arrow_back_ios_new_rounded,
-                    onTap: widget.onBack,
-                  ),
-                  const SizedBox(width: 24),
+                  if (!isDesktop) ...[
+                    _NavButton(
+                      icon: Icons.arrow_back_ios_new_rounded,
+                      onTap: widget.onBack,
+                    ),
+                    const SizedBox(width: 24),
+                  ],
                   Text(
                     'My Bookings',
                     style: GoogleFonts.poppins(
-                      fontSize: 28,
+                      fontSize: isDesktop ? 32 : 28,
                       fontWeight: FontWeight.w700,
                       color: textDark,
                       letterSpacing: -0.5,
@@ -232,23 +232,28 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                   bottom: BorderSide(color: dividerColor, width: 1.5),
                 ),
               ),
-              child: TabBar(
-                controller: _tabController,
-                indicatorSize: TabBarIndicatorSize.tab,
-                indicatorColor: textDark,
-                indicatorWeight: 2,
-                dividerColor: Colors.transparent,
-                labelColor: textDark,
-                unselectedLabelColor: textLight,
-                labelStyle: GoogleFonts.poppins(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+              child: Align(
+                alignment: isDesktop ? Alignment.centerLeft : Alignment.center,
+                child: TabBar(
+                  controller: _tabController,
+                  isScrollable: isDesktop, // Align tabs tightly to the left on Desktop
+                  tabAlignment: isDesktop ? TabAlignment.start : TabAlignment.fill,
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  indicatorColor: textDark,
+                  indicatorWeight: 2,
+                  dividerColor: Colors.transparent,
+                  labelColor: textDark,
+                  unselectedLabelColor: textLight,
+                  labelStyle: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  unselectedLabelStyle: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  tabs: _tabs.map((t) => Tab(text: t)).toList(),
                 ),
-                unselectedLabelStyle: GoogleFonts.poppins(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                ),
-                tabs: _tabs.map((t) => Tab(text: t)).toList(),
               ),
             ),
 
@@ -262,7 +267,7 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                       : TabBarView(
                           controller: _tabController,
                           children: _tabs
-                              .map((tab) => _buildTabContent(tab))
+                              .map((tab) => _buildTabContent(tab, isDesktop))
                               .toList(),
                         ),
             ),
@@ -272,7 +277,7 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
     );
   }
 
-  Widget _buildTabContent(String tab) {
+  Widget _buildTabContent(String tab, bool isDesktop) {
     final visible = bookings.where((b) => b.status == tab).toList();
     if (visible.isEmpty) {
       return _buildEmptyState(tab);
@@ -284,10 +289,11 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+        padding: EdgeInsets.fromLTRB(
+            isDesktop ? 0 : 24, 24, isDesktop ? 0 : 24, 40),
         itemCount: visible.length,
         separatorBuilder: (_, __) => const SizedBox(height: 24),
-        itemBuilder: (_, index) => _bookingCard(visible[index]),
+        itemBuilder: (_, index) => _bookingCard(visible[index], isDesktop),
       ),
     );
   }
@@ -372,7 +378,193 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
     );
   }
 
-  Widget _bookingCard(BookingWrapper booking) {
+  // --- Card Router based on Screen Size ---
+  Widget _bookingCard(BookingWrapper booking, bool isDesktop) {
+    if (isDesktop) return _buildDesktopBookingCard(booking);
+    return _buildMobileBookingCard(booking);
+  }
+
+  // ─── DESKTOP CARD DESIGN (Horizontal) ──────────────────────────────────────
+  Widget _buildDesktopBookingCard(BookingWrapper booking) {
+    final statusColor = _statusColor(booking.status);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: dividerColor, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Left Side: Image
+            SizedBox(
+              width: 240,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.horizontal(left: Radius.circular(15)),
+                child: booking.property.image.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: booking.property.image,
+                        fit: BoxFit.cover,
+                        errorWidget: (context, url, error) => Container(
+                          color: dividerColor,
+                          child: const Icon(Icons.image_not_supported_outlined,
+                              size: 40, color: textLight),
+                        ),
+                      )
+                    : Container(
+                        color: dividerColor,
+                        child: const Icon(Icons.image_outlined,
+                            size: 40, color: textLight),
+                      ),
+              ),
+            ),
+
+            // Right Side: Details
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                booking.property.name,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600,
+                                  color: textDark,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border.all(color: statusColor, width: 1),
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(_statusIcon(booking.status), size: 12, color: statusColor),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    booking.status,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: statusColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          booking.property.location,
+                          style: GoogleFonts.poppins(fontSize: 15, color: textLight),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+
+                    const Divider(height: 32, color: dividerColor, thickness: 1.2),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              booking.checkOut.isNotEmpty ? 'Dates' : 'Check-in',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: textLight,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              booking.checkOut.isNotEmpty
+                                  ? '${booking.dateTime} - ${booking.checkOut}'
+                                  : booking.dateTime,
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: textDark,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Booking ID: #${booking.bookingId.substring(0, booking.bookingId.length > 8 ? 8 : booking.bookingId.length).toUpperCase()}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: textLight,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              'Total',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: textLight,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Ksh. ${booking.property.price}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: textDark,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── MOBILE CARD DESIGN (Vertical - Unchanged) ──────────────────────────────
+  Widget _buildMobileBookingCard(BookingWrapper booking) {
     final statusColor = _statusColor(booking.status);
 
     return Container(
@@ -384,7 +576,6 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Property Image
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
             child: SizedBox(
@@ -407,14 +598,11 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                     ),
             ),
           ),
-
-          // Card Content
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title and Status Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -432,7 +620,6 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Minimalist Status Pill
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
@@ -461,24 +648,18 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                   ],
                 ),
                 const SizedBox(height: 4),
-
-                // Location
                 Text(
                   booking.property.location,
                   style: GoogleFonts.poppins(fontSize: 14, color: textLight),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-
                 const SizedBox(height: 16),
                 const Divider(height: 1, color: dividerColor, thickness: 1.2),
                 const SizedBox(height: 16),
-
-                // Date + Price Info Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Dates
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -505,8 +686,6 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                         ],
                       ),
                     ),
-
-                    // Price
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -531,10 +710,7 @@ class _MyBookingsViewScreenState extends State<MyBookingsViewScreen>
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 16),
-
-                // Booking ID (Subtle)
                 Text(
                   'Booking ID: #${booking.bookingId.substring(0, booking.bookingId.length > 8 ? 8 : booking.bookingId.length).toUpperCase()}',
                   style: GoogleFonts.poppins(

@@ -52,14 +52,53 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
     setState(() => _isChatOpen = false);
   }
 
+  void _openMessagesModal() {
+    final size = MediaQuery.sizeOf(context);
+    final inset = size.width < 768 ? 8.0 : 24.0;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => Dialog(
+        insetPadding: EdgeInsets.all(inset),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: (size.width - inset * 2).clamp(0.0, 880.0).toDouble(),
+          height: (size.height - inset * 2).clamp(0.0, 860.0).toDouble(),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: LandlordMessagesPage(
+                  onChatOpen: _handleChatOpen,
+                  onChatClose: _handleChatClose,
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton(
+                  tooltip: 'Close messages',
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  icon: const Icon(Icons.close_rounded, color: _green),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ).whenComplete(_handleChatClose);
+  }
+
   Future<void> _loadVerificationStatus() async {
     try {
       final status = await VerificationApi.getVerificationStatus();
-      final isCurrentlyApproved = status?['status']?.toString().toLowerCase() == 'approved';
+      final isCurrentlyApproved =
+          status?['status']?.toString().toLowerCase() == 'approved';
 
       if (mounted) {
         // Show modal only once ever using persistent onboarding prefs
-        if (isCurrentlyApproved && !OnboardingPrefs.hasSeen('landlordVerifiedCongrats')) {
+        if (isCurrentlyApproved &&
+            !OnboardingPrefs.hasSeen('landlordVerifiedCongrats')) {
           await _refreshUserData();
           _showVerificationSuccessModal();
           OnboardingPrefs.markAsSeen('landlordVerifiedCongrats');
@@ -126,25 +165,40 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
             Text(
               'Congratulations!',
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5),
+              style: GoogleFonts.poppins(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: _dark,
+                  letterSpacing: -0.5),
             ),
             const SizedBox(height: 8),
             Text(
               'Your landlord account has been fully verified and approved.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.5),
+              style:
+                  GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.5),
             ),
             const SizedBox(height: 32),
             Container(
-              decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(16)),
+              decoration: BoxDecoration(
+                  color: _bg, borderRadius: BorderRadius.circular(16)),
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  _buildSuccessFeature(PhosphorIconsFill.buildings, 'Add Properties', 'List properties and manage your portfolio'),
+                  _buildSuccessFeature(
+                      PhosphorIconsFill.buildings,
+                      'Add Properties',
+                      'List properties and manage your portfolio'),
                   const SizedBox(height: 16),
-                  _buildSuccessFeature(PhosphorIconsFill.usersThree, 'Manage Tenants', 'Screen and communicate with prospects'),
+                  _buildSuccessFeature(
+                      PhosphorIconsFill.usersThree,
+                      'Manage Tenants',
+                      'Screen and communicate with prospects'),
                   const SizedBox(height: 16),
-                  _buildSuccessFeature(PhosphorIconsFill.eye, 'Higher Visibility', 'Get featured in premium search results'),
+                  _buildSuccessFeature(
+                      PhosphorIconsFill.eye,
+                      'Higher Visibility',
+                      'Get featured in premium search results'),
                 ],
               ),
             ),
@@ -159,10 +213,15 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _green,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(32)),
                   elevation: 0,
                 ),
-                child: Text('Get Started', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                child: Text('Get Started',
+                    style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white)),
               ),
             ),
           ],
@@ -181,9 +240,12 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: _dark)),
+              Text(title,
+                  style: GoogleFonts.poppins(
+                      fontSize: 14, fontWeight: FontWeight.w600, color: _dark)),
               const SizedBox(height: 2),
-              Text(subtitle, style: GoogleFonts.poppins(fontSize: 12, color: _grey)),
+              Text(subtitle,
+                  style: GoogleFonts.poppins(fontSize: 12, color: _grey)),
             ],
           ),
         ),
@@ -201,13 +263,12 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
     switch (_selectedNav) {
       case 'Bookings':
         return const LandlordBookingsPage();
-      case 'Messages':
-        return LandlordMessagesPage(onChatOpen: _handleChatOpen, onChatClose: _handleChatClose);
       case 'Settings':
         return const LandlordSettingsPage();
       default:
         return LandlordOverviewPage(
-          onViewAllProperties: () => setState(() => _selectedNav = 'Properties'),
+          onViewAllProperties: () =>
+              setState(() => _selectedNav = 'Properties'),
         );
     }
   }
@@ -215,14 +276,20 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   Widget _buildBodyContent() {
     if (_isLoadingStatus) {
       return ListView.builder(
-        padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).padding.bottom + 120),
+        padding: EdgeInsets.fromLTRB(
+            24, 24, 24, MediaQuery.of(context).padding.bottom + 120),
         itemCount: 4,
         itemBuilder: (context, index) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 24),
             child: Shimmer.fromColors(
-              baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-              child: Container(height: 180, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24))),
+              baseColor: Colors.grey.shade200,
+              highlightColor: Colors.grey.shade100,
+              child: Container(
+                  height: 180,
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24))),
             ),
           );
         },
@@ -231,7 +298,8 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
 
     if (!_isLandlordRole) return _buildUnauthorizedView();
 
-    final isKycApproved = _verificationStatus != null && _verificationStatus!['status']?.toString().toLowerCase() == 'approved';
+    final isKycApproved = _verificationStatus != null &&
+        _verificationStatus!['status']?.toString().toLowerCase() == 'approved';
     if (!isKycApproved) return _buildPendingVerificationDashboard();
 
     if (_selectedNav == 'Properties') {
@@ -250,11 +318,19 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(PhosphorIconsFill.warningCircle, size: 64, color: Color(0xFFEF4444)),
+            const Icon(PhosphorIconsFill.warningCircle,
+                size: 64, color: Color(0xFFEF4444)),
             const SizedBox(height: 20),
-            Text('Access Restricted', textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
+            Text('Access Restricted',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                    fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
             const SizedBox(height: 12),
-            Text('This portal is only available to verified landlords and agents.', textAlign: TextAlign.center, style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.5)),
+            Text(
+                'This portal is only available to verified landlords and agents.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                    fontSize: 14, color: _grey, height: 1.5)),
           ],
         ),
       ),
@@ -262,15 +338,19 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   }
 
   Widget _buildPendingVerificationDashboard() {
-    final statusLabel = _verificationStatus?['status']?.toString().toLowerCase();
+    final statusLabel =
+        _verificationStatus?['status']?.toString().toLowerCase();
     final isRejected = statusLabel == 'rejected';
-    final title = isRejected ? 'Verification needs attention' : 'Verification in progress';
+    final title = isRejected
+        ? 'Verification needs attention'
+        : 'Verification in progress';
     final message = isRejected
         ? 'Please resubmit your identity documents to restore access to dashboard actions and listing tools.'
         : 'Your landlord KYC has been submitted. Dashboard actions and listing tools will unlock once admin approval is complete.';
 
     return ListView(
-      padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).padding.bottom + 120),
+      padding: EdgeInsets.fromLTRB(
+          24, 24, 24, MediaQuery.of(context).padding.bottom + 120),
       children: [
         Container(
           padding: const EdgeInsets.all(24),
@@ -278,7 +358,12 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
             color: _surface,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: _grey.withOpacity(0.1)),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4))
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,30 +371,45 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
               Row(
                 children: [
                   Icon(
-                    isRejected ? PhosphorIconsFill.warningCircle : PhosphorIconsFill.shieldCheck,
+                    isRejected
+                        ? PhosphorIconsFill.warningCircle
+                        : PhosphorIconsFill.shieldCheck,
                     size: 32,
                     color: isRejected ? const Color(0xFFEF4444) : _green,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(title, style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark, letterSpacing: -0.5)),
+                    child: Text(title,
+                        style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: _dark,
+                            letterSpacing: -0.5)),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              Text(message, style: GoogleFonts.poppins(fontSize: 14, color: _grey, height: 1.5)),
+              Text(message,
+                  style: GoogleFonts.poppins(
+                      fontSize: 14, color: _grey, height: 1.5)),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.pushNamed(context, '/verification_center'),
+                  onPressed: () =>
+                      Navigator.pushNamed(context, '/verification_center'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _dark,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(32)),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     elevation: 0,
                   ),
-                  child: Text(isRejected ? 'Resubmit KYC' : 'View Verification', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+                  child: Text(isRejected ? 'Resubmit KYC' : 'View Verification',
+                      style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white)),
                 ),
               ),
             ],
@@ -318,24 +418,33 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
         const SizedBox(height: 24),
         Row(
           children: [
-            Expanded(child: _buildMiniStatCard('Properties', '0', icon: PhosphorIconsRegular.buildings)),
+            Expanded(
+                child: _buildMiniStatCard('Properties', '0',
+                    icon: PhosphorIconsRegular.buildings)),
             const SizedBox(width: 16),
-            Expanded(child: _buildMiniStatCard('Inquiries', '0', icon: PhosphorIconsRegular.users)),
+            Expanded(
+                child: _buildMiniStatCard('Inquiries', '0',
+                    icon: PhosphorIconsRegular.users)),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _buildMiniStatCard('Bookings', '0', icon: PhosphorIconsRegular.calendarCheck)),
+            Expanded(
+                child: _buildMiniStatCard('Bookings', '0',
+                    icon: PhosphorIconsRegular.calendarCheck)),
             const SizedBox(width: 16),
-            Expanded(child: _buildMiniStatCard('Messages', '0', icon: PhosphorIconsRegular.chatTeardropText)),
+            Expanded(
+                child: _buildMiniStatCard('Messages', '0',
+                    icon: PhosphorIconsRegular.chatTeardropText)),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildMiniStatCard(String label, String value, {required IconData icon}) {
+  Widget _buildMiniStatCard(String label, String value,
+      {required IconData icon}) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -348,9 +457,16 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
         children: [
           Icon(icon, size: 24, color: _green),
           const SizedBox(height: 16),
-          Text(value, style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: _dark, height: 1.1)),
+          Text(value,
+              style: GoogleFonts.poppins(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: _dark,
+                  height: 1.1)),
           const SizedBox(height: 2),
-          Text(label, style: GoogleFonts.poppins(fontSize: 12, color: _grey, fontWeight: FontWeight.w500)),
+          Text(label,
+              style: GoogleFonts.poppins(
+                  fontSize: 12, color: _grey, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -393,7 +509,10 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
           color: _surface,
           borderRadius: BorderRadius.circular(40), // Perfect pill shape
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 10))
+            BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 20,
+                offset: const Offset(0, 10))
           ],
         ),
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
@@ -404,19 +523,27 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
             _buildNavItem(PhosphorIconsRegular.buildings, 'Properties'),
             _buildNavItem(PhosphorIconsRegular.calendarCheck, 'Bookings'),
             _buildNavItem(PhosphorIconsRegular.chatTeardrop, 'Messages'),
-            _buildNavItem(PhosphorIconsRegular.user, 'Settings', displayLabel: 'Profile'),
+            _buildNavItem(PhosphorIconsRegular.user, 'Settings',
+                displayLabel: 'Profile'),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(IconData icon, String routeLabel, {String? displayLabel}) {
+  Widget _buildNavItem(IconData icon, String routeLabel,
+      {String? displayLabel}) {
     final bool isActive = _selectedNav == routeLabel;
     final String labelToShow = displayLabel ?? routeLabel;
 
     return GestureDetector(
-      onTap: () => setState(() => _selectedNav = routeLabel),
+      onTap: () {
+        if (routeLabel == 'Messages') {
+          _openMessagesModal();
+          return;
+        }
+        setState(() => _selectedNav = routeLabel);
+      },
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),

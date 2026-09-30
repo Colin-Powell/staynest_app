@@ -793,7 +793,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 borderData: FlBorderData(
                     show: true,
                     border:
-                        Border(bottom: BorderSide(color: _divider, width: 1))),
+                        const Border(bottom: BorderSide(color: _divider, width: 1))),
                 barGroups: List.generate(
                   backlogData.length,
                   (i) => BarChartGroupData(x: i, barRods: [
@@ -815,11 +815,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   Widget _buildSingleLineChartCard(String title, {required double height}) {
     final List<dynamic> data = _overview['verificationData'] ?? [];
-    if (data.isEmpty)
+    if (data.isEmpty) {
       return _ChartCardBase(
           title: title,
           height: height,
           child: _buildEmptyChartState('No trends available.'));
+    }
 
     bool allZero = true;
     List<FlSpot> spots = [];
@@ -829,11 +830,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       spots.add(FlSpot(i.toDouble(), val));
     }
 
-    if (allZero || spots.length < 2)
+    if (allZero || spots.length < 2) {
       return _ChartCardBase(
           title: title,
           height: height,
           child: _buildEmptyChartState('Not enough data recorded.'));
+    }
 
     return _ChartCardBase(
       title: title,
@@ -901,8 +903,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 getTitlesWidget: (val, meta) {
                   final index = val.toInt();
                   if (index >= 0 && index < data.length) {
-                    if (data.length > 5 && index % 2 != 0)
+                    if (data.length > 5 && index % 2 != 0) {
                       return const SizedBox.shrink();
+                    }
                     return Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Text(data[index]['label'] ?? '',
@@ -945,11 +948,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   Widget _buildRetentionChartCard({required double height}) {
     final List<dynamic> data = _overview['retentionData'] ?? [];
-    if (data.isEmpty)
+    if (data.isEmpty) {
       return _ChartCardBase(
           title: 'User retention',
           height: height,
           child: _buildEmptyChartState('Insufficient data for retention.'));
+    }
 
     bool allZero = true;
     List<FlSpot> spots = [];
@@ -959,11 +963,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       spots.add(FlSpot(i.toDouble(), val));
     }
 
-    if (allZero || spots.length < 2)
+    if (allZero || spots.length < 2) {
       return _ChartCardBase(
           title: 'User retention',
           height: height,
           child: _buildEmptyChartState('Not enough returning users yet.'));
+    }
 
     return _ChartCardBase(
       title: 'User retention',
@@ -1034,8 +1039,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       getTitlesWidget: (val, meta) {
                         final index = val.toInt();
                         if (index >= 0 && index < data.length) {
-                          if (data.length > 5 && index % 2 != 0)
+                          if (data.length > 5 && index % 2 != 0) {
                             return const SizedBox.shrink();
+                          }
                           return Padding(
                             padding: const EdgeInsets.only(top: 8.0),
                             child: Text('Day\n${data[index]['label_day']}',
@@ -1371,7 +1377,7 @@ class _ActionButton extends StatelessWidget {
                 style: GoogleFonts.inter(
                     fontSize: 14, fontWeight: FontWeight.w500, color: _gaBlue)),
             const Spacer(),
-            Icon(PhosphorIconsRegular.arrowRight, color: _gaBlue, size: 16),
+            const Icon(PhosphorIconsRegular.arrowRight, color: _gaBlue, size: 16),
           ],
         ),
       ),

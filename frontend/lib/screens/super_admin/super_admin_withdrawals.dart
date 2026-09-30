@@ -24,11 +24,12 @@ class _SuperAdminWithdrawalsPageState extends State<SuperAdminWithdrawalsPage> {
     setState(() => _loading = true);
     try {
       final rows = await SuperAdminService.fetchWithdrawals();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _rows = rows;
           _loading = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }

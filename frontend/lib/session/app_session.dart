@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'dart:convert';
 
@@ -92,6 +94,14 @@ class AppSession {
   static String? get authToken => apiToken;
 
   static final Set<String> savedPropertyIds = {};
+
+  // Optional discovery context selected by the user in search/location UI.
+  static double? discoveryLatitude;
+  static double? discoveryLongitude;
+  static double? deviceLatitude;
+  static double? deviceLongitude;
+  static String? discoveryLocationId;
+  static String? discoveryCampusId;
 
   static Future<void> initializeAppInfo() async {
     try {
@@ -278,10 +288,10 @@ class AppSession {
   }
 
   static Future<void> restoreSession() async {
-    final raw = await _storage.read(key: _prefsKey);
-    if (raw == null || raw.isEmpty) return;
-
     try {
+      final raw = await _storage.read(key: _prefsKey);
+      if (raw == null || raw.isEmpty) return;
+
       final decoded = jsonDecode(raw);
       if (decoded is! Map) {
         await _storage.delete(key: _prefsKey);
@@ -299,17 +309,24 @@ class AppSession {
       }
 
       if (currentUserId != null) {
-        try {
-          final favorites = await RemoteDatabaseRepository()
-              .loadFavoritesForUser(currentUserId!);
-          setSavedPropertyIds(
-              favorites.map((f) => f['property_id'].toString()));
-        } catch (e) {
-          debugPrint('Failed to load favorites on restore: $e');
-        }
+        unawaited(_restoreFavorites(currentUserId!));
       }
     } catch (_) {
-      await _storage.delete(key: _prefsKey);
+      try {
+        await _storage.delete(key: _prefsKey);
+      } catch (cleanupError) {
+        debugPrint('Failed to clear corrupted session: $cleanupError');
+      }
+    }
+  }
+
+  static Future<void> _restoreFavorites(String userId) async {
+    try {
+      final favorites =
+          await RemoteDatabaseRepository().loadFavoritesForUser(userId);
+      setSavedPropertyIds(favorites.map((f) => f['property_id'].toString()));
+    } catch (e) {
+      debugPrint('Failed to load favorites on restore: $e');
     }
   }
 
@@ -374,6 +391,10 @@ class AppSession {
     emailVerified = false;
     referralCode = null;
     walletBalance = 0.0;
+    discoveryLatitude = null;
+    discoveryLongitude = null;
+    discoveryLocationId = null;
+    discoveryCampusId = null;
     await AnalyticsService.setUserId(null);
     apiToken = null;
     refreshToken = null;
