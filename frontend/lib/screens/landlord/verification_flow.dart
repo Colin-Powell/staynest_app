@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:image_picker/image_picker.dart';
@@ -21,17 +23,43 @@ const Color _grey = Color(0xFF9CA3AF);
 const Color _surface = Colors.white;
 const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 
+Widget _buildXFileImage(
+  XFile file, {
+  double? width,
+  double? height,
+  BoxFit fit = BoxFit.cover,
+}) {
+  if (!kIsWeb) {
+    return Image.file(File(file.path), width: width, height: height, fit: fit);
+  }
+  return FutureBuilder<Uint8List>(
+    future: file.readAsBytes(),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData) {
+        return SizedBox(
+          width: width,
+          height: height,
+          child: const Center(
+              child: CircularProgressIndicator(strokeWidth: 2, color: _green)),
+        );
+      }
+      return Image.memory(snapshot.data!,
+          width: width, height: height, fit: fit);
+    },
+  );
+}
+
 // ==========================================
 // 1. CORE DATA
 // ==========================================
 class VerificationSession {
-  File? idPhotoFront;
-  File? idPhotoBack;
-  File? selfie;
-  File? proofOfAddress;
-  File? utilityBill;
-  File? leaseAgreement;
-  File? propertyPhotos;
+  XFile? idPhotoFront;
+  XFile? idPhotoBack;
+  XFile? selfie;
+  XFile? proofOfAddress;
+  XFile? utilityBill;
+  XFile? leaseAgreement;
+  XFile? propertyPhotos;
 
   String? idPhotoFrontUrl;
   String? idPhotoBackUrl;
@@ -673,9 +701,9 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
   }
 
   Future<void> _handleUpload(
-      File file, String type, Function(String url) onSuccess) async {
+      XFile file, String type, Function(String url) onSuccess) async {
     final progress = ValueNotifier<double>(0.0);
-    final task = UploadsService.uploadFileWithProgress(
+    final task = UploadsService.uploadVerificationFileWithProgress(
         file, (p) => progress.value = p,
         idempotencyKey: '${_idempotencyKey}_$type');
 
@@ -892,7 +920,7 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
             previewWidget: widget.session.idPhotoFront != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.file(widget.session.idPhotoFront!,
+                    child: _buildXFileImage(widget.session.idPhotoFront!,
                         width: 72, height: 72, fit: BoxFit.cover),
                   )
                 : null,
@@ -932,7 +960,7 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
             previewWidget: widget.session.idPhotoBack != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.file(widget.session.idPhotoBack!,
+                    child: _buildXFileImage(widget.session.idPhotoBack!,
                         width: 72, height: 72, fit: BoxFit.cover),
                   )
                 : null,
@@ -969,7 +997,7 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
             previewWidget: widget.session.selfie != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.file(widget.session.selfie!,
+                    child: _buildXFileImage(widget.session.selfie!,
                         width: 72, height: 72, fit: BoxFit.cover),
                   )
                 : null,
@@ -1000,7 +1028,7 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
 class DocumentCapture extends StatefulWidget {
   final String title;
   final String subtitle;
-  final Future<void> Function(File file) onFileCaptured;
+  final Future<void> Function(XFile file) onFileCaptured;
 
   const DocumentCapture(
       {super.key,
@@ -1013,7 +1041,7 @@ class DocumentCapture extends StatefulWidget {
 }
 
 class _DocumentCaptureState extends State<DocumentCapture> {
-  File? _previewFile;
+  XFile? _previewFile;
   bool _isUploading = false;
 
   Future<void> _captureDocument(
@@ -1022,17 +1050,18 @@ class _DocumentCaptureState extends State<DocumentCapture> {
       final picker = ImagePicker();
       final picked = await picker.pickImage(
         source: source,
-        imageQuality: 100,
+        imageQuality: 84,
+        maxWidth: 1600,
+        maxHeight: 1600,
         preferredCameraDevice: CameraDevice.rear,
       );
       if (picked == null) return;
 
-      final sourcePath = picked.path;
-      var finalFile = File(sourcePath);
+      var finalFile = picked;
 
-      if (source == ImageSource.gallery) {
+      if (source == ImageSource.gallery && !kIsWeb) {
         final croppedFile = await ImageCropper().cropImage(
-          sourcePath: sourcePath,
+          sourcePath: picked.path,
           uiSettings: [
             AndroidUiSettings(
               toolbarTitle: 'Adjust Document',
@@ -1045,12 +1074,12 @@ class _DocumentCaptureState extends State<DocumentCapture> {
           ],
         );
         if (croppedFile != null) {
-          finalFile = File(croppedFile.path);
+          finalFile = XFile(croppedFile.path, name: picked.name);
         }
       }
 
       final compressedFile =
-          await ImageUploadService.compressImageFile(finalFile);
+          await ImageUploadService.compressPickedImage(finalFile);
       if (!mounted) return;
 
       setState(() {
@@ -1162,7 +1191,7 @@ class _DocumentCaptureState extends State<DocumentCapture> {
                             children: [
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(16),
-                                child: Image.file(_previewFile!,
+                                child: _buildXFileImage(_previewFile!,
                                     width: double.infinity,
                                     height: 220,
                                     fit: BoxFit.cover),
@@ -1252,14 +1281,14 @@ class _DocumentCaptureState extends State<DocumentCapture> {
 }
 
 class SelfieCaptureScreen extends StatefulWidget {
-  final Future<void> Function(File file) onFileCaptured;
+  final Future<void> Function(XFile file) onFileCaptured;
   const SelfieCaptureScreen({super.key, required this.onFileCaptured});
   @override
   State<SelfieCaptureScreen> createState() => _SelfieCaptureScreenState();
 }
 
 class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
-  File? _capturedImage;
+  XFile? _capturedImage;
   CameraController? _cameraController;
   bool _cameraReady = false;
   bool _initializingCamera = false;
@@ -1275,15 +1304,16 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
       } else {
         xfile = await ImagePicker().pickImage(
             source: ImageSource.camera,
+            imageQuality: 78,
+            maxWidth: 1024,
+            maxHeight: 1024,
             preferredCameraDevice: CameraDevice.front);
       }
       if (xfile == null) return;
 
-      final imageFile = File(xfile.path);
-      if (!await imageFile.exists()) throw Exception();
-
+      if (!kIsWeb && !await File(xfile.path).exists()) throw Exception();
       final compressedFile =
-          await ImageUploadService.compressImageFile(imageFile);
+          await ImageUploadService.compressPickedImage(xfile);
 
       setState(() {
         _capturedImage = compressedFile;
@@ -1308,7 +1338,7 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
           (c) => c.lensDirection == CameraLensDirection.front,
           orElse: () => cameras.isNotEmpty ? cameras.first : throw Exception());
       _cameraController =
-          CameraController(front, ResolutionPreset.high, enableAudio: false);
+          CameraController(front, ResolutionPreset.medium, enableAudio: false);
       await _cameraController!.initialize();
       if (!mounted) return;
       setState(() => _cameraReady = true);
@@ -1376,7 +1406,8 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
                             color: _grey.withOpacity(0.1)),
                         clipBehavior: Clip.hardEdge,
                         child: _capturedImage != null
-                            ? Image.file(_capturedImage!, fit: BoxFit.cover)
+                            ? _buildXFileImage(_capturedImage!,
+                                fit: BoxFit.cover)
                             : (_cameraReady && _cameraController != null
                                 ? CameraPreview(_cameraController!)
                                 : const Center(

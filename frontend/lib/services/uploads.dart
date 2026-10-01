@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
@@ -24,6 +25,9 @@ class UploadsService {
   /// Uploads a single file synchronously to the backend /uploads endpoint.
   static Future<String> uploadFile(File file,
       {String? token, String? idempotencyKey}) async {
+    if (!await AppSession.ensureWebSessionAlive()) {
+      throw Exception('Web session expired. Please log in again.');
+    }
     final base = AppSession.apiBaseUrl;
     final uri = Uri.parse("$base/uploads");
     bool tokenRefreshed = false;
@@ -78,6 +82,106 @@ class UploadsService {
     );
   }
 
+  static UploadTask uploadVerificationFileWithProgress(
+    XFile file,
+    void Function(double) onProgress, {
+    String? token,
+    String? idempotencyKey,
+  }) {
+    final client = http.Client();
+    final completer = Completer<String>();
+    var isCancelled = false;
+
+    () async {
+      try {
+        if (!await AppSession.ensureWebSessionAlive()) {
+          throw Exception('Web session expired. Please log in again.');
+        }
+        final total = await file.length();
+        final webBytes = kIsWeb ? await file.readAsBytes() : null;
+        var tokenRefreshed = false;
+
+        while (!isCancelled) {
+          final request = http.MultipartRequest(
+            'POST',
+            Uri.parse('${AppSession.apiBaseUrl}/uploads'),
+          );
+          final activeToken = token ?? AppSession.apiToken;
+          if (activeToken != null) {
+            request.headers['Authorization'] = 'Bearer $activeToken';
+          }
+          if (idempotencyKey != null) {
+            request.headers['Idempotency-Key'] = idempotencyKey;
+          }
+
+          final http.MultipartFile multipart;
+          if (webBytes != null) {
+            onProgress(0.75);
+            multipart = http.MultipartFile.fromBytes(
+              'file',
+              webBytes,
+              filename: file.name,
+            );
+          } else {
+            var bytesSent = 0;
+            final stream = file.openRead().transform(
+              StreamTransformer.fromHandlers(
+                handleData: (List<int> data, EventSink<List<int>> sink) {
+                  bytesSent += data.length;
+                  if (total > 0) onProgress((bytesSent / total) * 0.75);
+                  sink.add(data);
+                },
+              ),
+            );
+            multipart = http.MultipartFile(
+              'file',
+              stream,
+              total,
+              filename: path.basename(file.name),
+            );
+          }
+          request.files.add(multipart);
+
+          final streamed = await client.send(request);
+          final response = await http.Response.fromStream(streamed);
+          if (response.statusCode == 401 && !tokenRefreshed) {
+            tokenRefreshed = true;
+            await HttpJsonClient().refreshAccessTokenIfPossible();
+            token = null;
+            continue;
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            throw Exception(
+                'Verification upload failed (${response.statusCode}): ${response.body}');
+          }
+
+          final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+          final data = decoded['data'];
+          final url = (data is Map ? data['url'] : null) ?? decoded['url'];
+          if (url == null) throw Exception('Upload returned no URL');
+          onProgress(1.0);
+          if (!completer.isCompleted) completer.complete(url.toString());
+          return;
+        }
+        if (!completer.isCompleted) {
+          completer.completeError(UploadCancelledException());
+        }
+      } catch (error, stackTrace) {
+        if (!completer.isCompleted) completer.completeError(error, stackTrace);
+      } finally {
+        client.close();
+      }
+    }();
+
+    return UploadTask(completer.future, () {
+      isCancelled = true;
+      client.close();
+      if (!completer.isCompleted) {
+        completer.completeError(UploadCancelledException());
+      }
+    });
+  }
+
   static UploadTask uploadXFileWithProgress(
       XFile file, void Function(double) onProgress,
       {String? token, String? idempotencyKey}) {
@@ -90,6 +194,9 @@ class UploadsService {
       final uri = Uri.parse("$base/uploads/async");
 
       try {
+        if (!await AppSession.ensureWebSessionAlive()) {
+          throw Exception('Web session expired. Please log in again.');
+        }
         final total = await file.length();
         String? jobId;
         bool tokenRefreshed = false;
@@ -105,18 +212,30 @@ class UploadsService {
           }
 
           int bytesSent = 0;
-          final stream = file.openRead().transform(
-              StreamTransformer.fromHandlers(
-                  handleData: (List<int> data, EventSink<List<int>> sink) {
-            bytesSent += data.length;
-            try {
-              onProgress((bytesSent / total) * 0.8);
-            } catch (_) {}
-            sink.add(data);
-          }));
+          final http.MultipartFile multipart;
+          if (kIsWeb) {
+            final bytes = await file.readAsBytes();
+            bytesSent = bytes.length;
+            onProgress(0.8);
+            multipart = http.MultipartFile.fromBytes(
+              'file',
+              bytes,
+              filename: file.name,
+            );
+          } else {
+            final stream = file.openRead().transform(
+                StreamTransformer.fromHandlers(
+                    handleData: (List<int> data, EventSink<List<int>> sink) {
+              bytesSent += data.length;
+              try {
+                onProgress((bytesSent / total) * 0.8);
+              } catch (_) {}
+              sink.add(data);
+            }));
 
-          final multipart = http.MultipartFile('file', stream, total,
-              filename: path.basename(file.name));
+            multipart = http.MultipartFile('file', stream, total,
+                filename: path.basename(file.name));
+          }
           request.files.add(multipart);
 
           final streamed = await client.send(request);
@@ -154,8 +273,9 @@ class UploadsService {
         bool pollTokenRefreshed = false;
 
         while (!isCancelled) {
-          if (attempts >= maxAttempts)
+          if (attempts >= maxAttempts) {
             throw Exception('Upload timed out while processing');
+          }
           attempts++;
           await Future.delayed(const Duration(seconds: 2));
           if (isCancelled) break;
@@ -198,8 +318,9 @@ class UploadsService {
           throw UploadCancelledException();
         }
 
-        if (finalUrl == null)
+        if (finalUrl == null) {
           throw Exception('Job finished but no URL was returned');
+        }
 
         try {
           onProgress(1.0);

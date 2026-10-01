@@ -120,15 +120,17 @@ class PropertyApp extends StatefulWidget {
   State<PropertyApp> createState() => _PropertyAppState();
 }
 
-class _PropertyAppState extends State<PropertyApp> {
+class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
   late String _role;
   bool _isCompletingModalLogin = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _role = AppSession.currentRole;
     AppSession.currentRoleNotifier.addListener(_handleRoleChange);
+    AppSession.webSessionExpiryRevision.addListener(_handleWebSessionExpiry);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final navigatorContext = navigatorKey.currentState?.overlay?.context;
       if (navigatorContext != null) {
@@ -139,8 +141,27 @@ class _PropertyAppState extends State<PropertyApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     AppSession.currentRoleNotifier.removeListener(_handleRoleChange);
+    AppSession.webSessionExpiryRevision.removeListener(_handleWebSessionExpiry);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(AppSession.ensureWebSessionAlive());
+    }
+  }
+
+  void _handleWebSessionExpiry() {
+    if (!kIsWeb || !AppSession.webSessionExpiredAtStartup || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      navigatorKey.currentState?.pushNamedAndRemoveUntil<void>(
+        '/login',
+        (route) => false,
+      );
+    });
   }
 
   Future<void> _enforceTenantPreferencesIfMissing(BuildContext context) async {
@@ -394,12 +415,14 @@ class _PropertyAppState extends State<PropertyApp> {
           child: child ?? const SizedBox.shrink(),
         );
       },
-      initialRoute: '/',
+      initialRoute:
+          kIsWeb && AppSession.webSessionExpiredAtStartup ? '/login' : '/',
       routes: {
         '/': (context) {
           final isDesktop = MediaQuery.sizeOf(context).width >= 768;
           if (isDesktop) {
-            AppSession.isGuest = true;
+            AppSession.isGuest = AppSession.currentUserId == null ||
+                AppSession.apiToken?.isNotEmpty != true;
             return AppShell(onRequireLogin: _showLoginModal);
           }
           return const SplashView();

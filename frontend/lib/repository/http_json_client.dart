@@ -37,6 +37,9 @@ class HttpJsonClient {
       };
 
   Future<void> refreshAccessTokenIfPossible() async {
+    if (!await AppSession.ensureWebSessionAlive()) {
+      throw ApiException(401, 'Web session expired. Please log in again.');
+    }
     if (_refreshing != null) {
       await _refreshing;
       return;
@@ -122,6 +125,9 @@ class HttpJsonClient {
   Future<http.Response> _sendWithOptionalRetry(
     Future<http.Response> Function() send,
   ) async {
+    if (!await AppSession.ensureWebSessionAlive()) {
+      throw ApiException(401, 'Web session expired. Please log in again.');
+    }
     final first = await send().timeout(timeout);
 
     if (kDebugMode) {

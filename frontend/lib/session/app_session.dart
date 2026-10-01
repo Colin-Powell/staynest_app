@@ -27,6 +27,11 @@ class AppSession {
   static final ValueNotifier<String> currentRoleNotifier =
       ValueNotifier(currentRole);
   static final ValueNotifier<int> hostApplicationRevision = ValueNotifier(0);
+  static final ValueNotifier<int> webSessionExpiryRevision = ValueNotifier(0);
+  static const Duration webSessionLifetime = Duration(hours: 24);
+  static DateTime? _webSessionStartedAt;
+  static Timer? _webSessionExpiryTimer;
+  static bool webSessionExpiredAtStartup = false;
 
   static void notifyHostApplicationChanged() {
     hostApplicationRevision.value++;
@@ -294,13 +299,51 @@ class AppSession {
           'apiToken': apiToken,
           'refreshToken': refreshToken,
         },
+        if (_webSessionStartedAt != null)
+          'web_session_started_at':
+              _webSessionStartedAt!.toUtc().toIso8601String(),
       };
 
   static const _storage = FlutterSecureStorage();
 
   static Future<void> persistSession() async {
+    if (kIsWeb && apiToken?.isNotEmpty == true) {
+      _webSessionStartedAt ??= DateTime.now().toUtc();
+      webSessionExpiredAtStartup = false;
+      _scheduleWebSessionExpiry();
+    }
     await _storage.write(
         key: _prefsKey, value: jsonEncode(toSessionSnapshot()));
+  }
+
+  static void _scheduleWebSessionExpiry() {
+    if (!kIsWeb || _webSessionStartedAt == null) return;
+    _webSessionExpiryTimer?.cancel();
+    final expiresAt = _webSessionStartedAt!.add(webSessionLifetime);
+    final remaining = expiresAt.difference(DateTime.now().toUtc());
+    if (remaining <= Duration.zero) {
+      unawaited(_expireWebSession());
+      return;
+    }
+    _webSessionExpiryTimer = Timer(remaining, _expireWebSession);
+  }
+
+  static Future<bool> ensureWebSessionAlive() async {
+    if (!kIsWeb || currentUserId == null || _webSessionStartedAt == null) {
+      return true;
+    }
+    if (DateTime.now().toUtc().difference(_webSessionStartedAt!) <
+        webSessionLifetime) {
+      return true;
+    }
+    await _expireWebSession();
+    return false;
+  }
+
+  static Future<void> _expireWebSession() async {
+    if (!kIsWeb || currentUserId == null) return;
+    await reset(expired: true);
+    webSessionExpiryRevision.value++;
   }
 
   static Future<void> restoreSession() async {
@@ -322,6 +365,21 @@ class AppSession {
       if (tokens is Map) {
         apiToken = tokens['apiToken']?.toString();
         refreshToken = tokens['refreshToken']?.toString();
+      }
+
+      if (kIsWeb && apiToken?.isNotEmpty == true) {
+        final startedAt = DateTime.tryParse(
+          decoded['web_session_started_at']?.toString() ?? '',
+        )?.toUtc();
+        _webSessionStartedAt = startedAt ?? DateTime.now().toUtc();
+        if (DateTime.now().toUtc().difference(_webSessionStartedAt!) >=
+            webSessionLifetime) {
+          await reset(expired: true);
+          webSessionExpiryRevision.value++;
+          return;
+        }
+        _scheduleWebSessionExpiry();
+        if (startedAt == null) await persistSession();
       }
 
       if (currentUserId != null) {
@@ -419,7 +477,11 @@ class AppSession {
         normalized == 'administrator';
   }
 
-  static Future<void> reset() async {
+  static Future<void> reset({bool expired = false}) async {
+    _webSessionExpiryTimer?.cancel();
+    _webSessionExpiryTimer = null;
+    _webSessionStartedAt = null;
+    webSessionExpiredAtStartup = expired;
     currentRole = 'tenant';
     activePortal = 'tenant';
     accountRoles = ['tenant'];
