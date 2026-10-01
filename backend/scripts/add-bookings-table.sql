@@ -18,3 +18,8 @@ CREATE INDEX IF NOT EXISTS idx_bookings_tenant ON bookings(tenant_id, created_at
 CREATE INDEX IF NOT EXISTS idx_bookings_landlord ON bookings(landlord_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bookings_property ON bookings(property_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
+
+-- Prevent duplicate active bookings for the same tenant and property.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_bookings_active_property_tenant
+  ON bookings(property_id, tenant_id)
+  WHERE status IN ('pending', 'confirmed');

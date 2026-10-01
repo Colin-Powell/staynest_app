@@ -83,7 +83,7 @@ router.post('/', requireAuth, async (req, res, next) => {
         try {
             // Lock the property row to prevent concurrent booking races
             const propResult = await client.query('SELECT id, landlord_id, price, status, availability_status FROM properties WHERE id = $1 FOR UPDATE', [propertyId]);
-            if (propResult.rowCount === 0) {
+            if (propResult.rows.length === 0) {
                 await client.query('ROLLBACK');
                 return res.status(404).json({ error: 'Property not found.' });
             }
@@ -111,14 +111,14 @@ router.post('/', requireAuth, async (req, res, next) => {
          WHERE property_id = $1 
          AND status = 'confirmed'
          AND (check_in_date, check_out_date) OVERLAPS ($2::date, $3::date)`, [propertyId, checkInDate, checkOutDate]);
-            if (overlapCheck.rowCount > 0) {
+            if (overlapCheck.rows.length > 0) {
                 await client.query('ROLLBACK');
                 return res.status(409).json({ error: 'Property is already booked for these dates.' });
             }
             // Strict Idempotency Check
             const existingBooking = await client.query(`SELECT id FROM bookings 
          WHERE property_id = $1 AND tenant_id = $2 AND status IN ('pending', 'confirmed')`, [propertyId, req.auth.id]);
-            if (existingBooking.rowCount > 0) {
+            if (existingBooking.rows.length > 0) {
                 await client.query('ROLLBACK');
                 return res.status(409).json({ error: 'You already have an active booking or request for this property.' });
             }

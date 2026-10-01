@@ -1639,22 +1639,54 @@ class _PropertyPreviewCardState extends State<_PropertyPreviewCard>
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.gray500)),
                         const SizedBox(height: 6),
-                        GestureDetector(
-                          onTap: () => Navigator.pushNamed(context, '/reviews'),
-                          behavior: HitTestBehavior.opaque,
-                          child: Row(
-                            children: [
-                              const Icon(Icons.star_rounded,
-                                  size: 14, color: Color(0xFFFBBF24)),
-                              const SizedBox(width: 3),
-                              Text(
-                                  '${widget.property.rating}  ·  ${widget.property.reviews} reviews',
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.gray600)),
-                            ],
-                          ),
+                        Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () => Navigator.pushNamed(
+                                context,
+                                '/reviews',
+                                arguments: {
+                                  'propertyId': widget.property.id,
+                                  'propertyName': widget.property.name,
+                                  'averageRating':
+                                      widget.property.rating.toDouble(),
+                                  'reviewCount': widget.property.reviews,
+                                  'canReview': false,
+                                  'hasReviewed': false,
+                                },
+                              ),
+                              behavior: HitTestBehavior.opaque,
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.star_rounded,
+                                      size: 14, color: Color(0xFFFBBF24)),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                      '${widget.property.rating}  ·  ${widget.property.reviews} reviews',
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.gray600)),
+                                ],
+                              ),
+                            ),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: () => Navigator.pushNamed(
+                                context,
+                                '/location',
+                                arguments: widget.property,
+                              ),
+                              icon: const Icon(Icons.location_on_outlined,
+                                  size: 14),
+                              label: const Text('View location'),
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),

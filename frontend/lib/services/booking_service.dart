@@ -52,10 +52,11 @@ class BookingService {
         'notes': notes,
       },
     );
-    if (response.statusCode != 201 && response.statusCode != 200) {
-      throw Exception('Booking request failed.');
-    }
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 201 && response.statusCode != 200) {
+      final message = decoded['error']?.toString() ?? 'Booking request failed.';
+      throw Exception(message);
+    }
     return Map<String, dynamic>.from(decoded['data'] as Map);
   }
 

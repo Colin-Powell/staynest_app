@@ -370,6 +370,11 @@ CREATE INDEX IF NOT EXISTS idx_bookings_landlord ON bookings(landlord_id, create
 CREATE INDEX IF NOT EXISTS idx_bookings_property ON bookings(property_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
 
+-- Prevent duplicate active bookings for the same tenant and property.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_bookings_active_property_tenant
+  ON bookings(property_id, tenant_id)
+  WHERE status IN ('pending', 'confirmed');
+
 -- Property Availability blocks (for manual landlord blocks)
 CREATE TABLE IF NOT EXISTS property_availability (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
