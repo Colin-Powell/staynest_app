@@ -28,6 +28,7 @@ import 'screens/privacy_policy.dart';
 import 'screens/auth/tenant_survey.dart';
 import 'repository/remote_database_repository.dart';
 import 'screens/notification_settings_view.dart';
+import 'screens/property/write_review_view.dart';
 
 import 'services/property_service.dart';
 import 'services/device_location_service.dart';
@@ -345,12 +346,22 @@ class _PropertyAppState extends State<PropertyApp> {
       routes: {
         '/': (context) {
           final isDesktop = MediaQuery.sizeOf(context).width >= 768;
-          final hasToken = AppSession.apiToken?.isNotEmpty == true;
-          if (isDesktop && !hasToken) {
+          if (isDesktop) {
             AppSession.isGuest = true;
             return AppShell(onRequireLogin: _showLoginModal);
           }
           return const SplashView();
+        },
+        '/onboarding': (context) {
+          final isDesktop = MediaQuery.sizeOf(context).width >= 768;
+          if (isDesktop) {
+            AppSession.isGuest = true;
+            return AppShell(onRequireLogin: _showLoginModal);
+          }
+          return OnboardingView(
+            onFinish: () =>
+                Navigator.pushReplacementNamed(context, '/register'),
+          );
         },
         '/privacy': (context) => const PrivacyPolicyView(),
         '/home': (context) => AppShell(onRequireLogin: _showLoginModal),
@@ -505,19 +516,6 @@ class _PropertyAppState extends State<PropertyApp> {
         '/super_admin': (context) => const SuperAdminShell(),
         '/referral': (context) => const ReferralView(),
         '/wallet': (context) => const WalletView(),
-        '/reviews': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments
-              as Map<String, dynamic>?;
-          return ReviewsView(
-            propertyId: args?['propertyId'] ?? '',
-            propertyName: args?['propertyName'] ?? '',
-            bookingId: args?['bookingId'],
-            averageRating: (args?['averageRating'] as num?)?.toDouble() ?? 0.0,
-            reviewCount: args?['reviewCount'] ?? 0,
-            canReview: args?['canReview'] ?? false,
-            hasReviewed: args?['hasReviewed'] ?? false,
-          );
-        },
         '/amenities': (context) =>
             AmenitiesView(onClose: () => Navigator.pop(context)),
         '/location': (context) {
@@ -581,7 +579,105 @@ class _PropertyAppState extends State<PropertyApp> {
         '/notification_settings': (context) => const NotificationSettingsView(),
       },
       onGenerateRoute: (settings) =>
-          _buildMessageModalRoute(settings) ?? _buildAuthRoute(settings),
+          _buildReviewRoute(settings) ??
+          _buildMessageModalRoute(settings) ??
+          _buildAuthRoute(settings),
+    );
+  }
+
+  Route<bool?>? _buildReviewRoute(RouteSettings settings) {
+    const reviewRoutes = {
+      '/reviews',
+      '/all_reviews',
+      '/write_review',
+      '/landlord_reviews',
+    };
+    if (!reviewRoutes.contains(settings.name)) return null;
+
+    final rawArguments = settings.arguments;
+    final arguments = rawArguments is Map ? rawArguments : const {};
+    Widget buildScreen(BuildContext context) {
+      switch (settings.name) {
+        case '/reviews':
+          return ReviewsView(
+            propertyId: arguments['propertyId']?.toString() ?? '',
+            propertyName: arguments['propertyName']?.toString() ?? '',
+            bookingId: arguments['bookingId']?.toString(),
+            averageRating:
+                (arguments['averageRating'] as num?)?.toDouble() ?? 0.0,
+            reviewCount: (arguments['reviewCount'] as num?)?.toInt() ?? 0,
+            canReview: arguments['canReview'] == true,
+            hasReviewed: arguments['hasReviewed'] == true,
+          );
+        case '/all_reviews':
+          return AllReviewsView(
+            propertyId: arguments['propertyId']?.toString() ?? '',
+            propertyName: arguments['propertyName']?.toString() ?? '',
+            bookingId: arguments['bookingId']?.toString(),
+            hasReviewed: arguments['hasReviewed'] == true,
+          );
+        case '/write_review':
+          return WriteReviewView(
+            propertyId: arguments['propertyId']?.toString() ?? '',
+            propertyName: arguments['propertyName']?.toString() ?? '',
+            bookingId: arguments['bookingId']?.toString() ?? '',
+          );
+        case '/landlord_reviews':
+          return LandlordReviewsView(
+            onClose: () => Navigator.of(context).pop(),
+          );
+        default:
+          return const SizedBox.shrink();
+      }
+    }
+
+    final navigatorContext = navigatorKey.currentContext;
+    final isDesktop = navigatorContext != null &&
+        MediaQuery.sizeOf(navigatorContext).width >= 768;
+    if (!isDesktop) {
+      return MaterialPageRoute<bool?>(
+        settings: settings,
+        builder: buildScreen,
+      );
+    }
+
+    return PageRouteBuilder<bool?>(
+      settings: settings,
+      opaque: false,
+      barrierDismissible: true,
+      barrierColor: Colors.black.withValues(alpha: 0.4),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        final size = MediaQuery.sizeOf(context);
+        final width = (size.width - 64).clamp(480.0, 1040.0).toDouble();
+        final height = (size.height - 64).clamp(420.0, 900.0).toDouble();
+        return Center(
+          child: Dialog(
+            insetPadding: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: SizedBox(
+              width: width,
+              height: height,
+              child: buildScreen(context),
+            ),
+          ),
+        );
+      },
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        );
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.97, end: 1).animate(curved),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -962,6 +1058,10 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _openProfileHelper(String route) {
+    if (route == '/reviews') {
+      Navigator.pushNamed(context, route);
+      return;
+    }
     if (MediaQuery.sizeOf(context).width >= 900) {
       setState(() => _desktopProfileHelperRoute = route);
       return;
@@ -992,12 +1092,6 @@ class _AppShellState extends State<AppShell> {
         return WalletView(onBack: _closeProfileHelper);
       case '/referral':
         return ReferralView(onBack: _closeProfileHelper);
-      case '/reviews':
-        return ReviewsView(
-          propertyId: '',
-          propertyName: '',
-          onBack: _closeProfileHelper,
-        );
       case '/settings':
         return SettingView(
           onBack: _closeProfileHelper,

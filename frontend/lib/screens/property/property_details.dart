@@ -19,7 +19,6 @@ import 'package:property_app/widgets/property_image.dart';
 
 import 'amenities_view.dart';
 import 'booking_view.dart';
-import '../reviews_view.dart';
 
 // ─── StayNest Design Tokens ───────────────────────────────────────────────────
 const Color _dark = StayNestColors.textPrimaryLight;
@@ -289,19 +288,18 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   }
 
   void _openReviews() {
-    Navigator.push<bool>(
+    Navigator.pushNamed<bool>(
       context,
-      MaterialPageRoute(
-        builder: (_) => ReviewsView(
-          propertyId: widget.property.id,
-          propertyName: widget.property.name,
-          averageRating: _avgRating,
-          reviewCount: _reviewCount,
-          canReview: _eligibleBookingId != null && !_hasReviewed,
-          hasReviewed: _hasReviewed,
-          bookingId: _eligibleBookingId,
-        ),
-      ),
+      '/reviews',
+      arguments: {
+        'propertyId': widget.property.id,
+        'propertyName': widget.property.name,
+        'averageRating': _avgRating,
+        'reviewCount': _reviewCount,
+        'canReview': _eligibleBookingId != null && !_hasReviewed,
+        'hasReviewed': _hasReviewed,
+        'bookingId': _eligibleBookingId,
+      },
     ).then((_) {
       if (!mounted) return;
       _fetchReviews();

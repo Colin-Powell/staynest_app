@@ -127,6 +127,11 @@ class _SplashViewState extends State<SplashView> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 768;
+    if (isDesktop) {
+      return const SizedBox.shrink();
+    }
+
     return Scaffold(
       backgroundColor: _AppColor.primaryBackground,
       body: SafeArea(

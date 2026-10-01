@@ -6,6 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/models/property_taxonomy.dart';
+import 'package:property_app/repository/remote_database_repository.dart';
+import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/widgets/shared.dart';
@@ -1572,6 +1574,10 @@ class _PropertyPreviewCard extends StatefulWidget {
 
 class _PropertyPreviewCardState extends State<_PropertyPreviewCard>
     with SingleTickerProviderStateMixin {
+  String? _completedBookingId;
+  bool _canReview = false;
+  bool _hasReviewed = false;
+
   late final AnimationController _ctrl = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 380));
   late final Animation<Offset> _slide =
@@ -1583,6 +1589,22 @@ class _PropertyPreviewCardState extends State<_PropertyPreviewCard>
   void initState() {
     super.initState();
     _ctrl.forward();
+    _loadReviewEligibility();
+  }
+
+  Future<void> _loadReviewEligibility() async {
+    if (AppSession.isGuest) return;
+
+    try {
+      final eligibility = await RemoteDatabaseRepository()
+          .getReviewEligibility(widget.property.id);
+      if (!mounted) return;
+      setState(() {
+        _completedBookingId = eligibility['bookingId']?.toString();
+        _canReview = eligibility['canReview'] == true;
+        _hasReviewed = eligibility['reviewExists'] == true;
+      });
+    } catch (_) {}
   }
 
   @override
@@ -1639,55 +1661,62 @@ class _PropertyPreviewCardState extends State<_PropertyPreviewCard>
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.gray500)),
                         const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            GestureDetector(
-                              onTap: () => Navigator.pushNamed(
-                                context,
-                                '/reviews',
-                                arguments: {
-                                  'propertyId': widget.property.id,
-                                  'propertyName': widget.property.name,
-                                  'averageRating':
-                                      widget.property.rating.toDouble(),
-                                  'reviewCount': widget.property.reviews,
-                                  'canReview': false,
-                                  'hasReviewed': false,
-                                },
-                              ),
-                              behavior: HitTestBehavior.opaque,
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.star_rounded,
-                                      size: 14, color: Color(0xFFFBBF24)),
-                                  const SizedBox(width: 3),
-                                  Text(
+                        if (_completedBookingId?.isNotEmpty == true) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              GestureDetector(
+                                onTap: () => Navigator.pushNamed(
+                                  context,
+                                  '/reviews',
+                                  arguments: {
+                                    'propertyId': widget.property.id,
+                                    'propertyName': widget.property.name,
+                                    'bookingId': _completedBookingId,
+                                    'averageRating':
+                                        widget.property.rating.toDouble(),
+                                    'reviewCount': widget.property.reviews,
+                                    'canReview': _canReview,
+                                    'hasReviewed': _hasReviewed,
+                                  },
+                                ),
+                                behavior: HitTestBehavior.opaque,
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.star_rounded,
+                                        size: 14, color: Color(0xFFFBBF24)),
+                                    const SizedBox(width: 3),
+                                    Text(
                                       '${widget.property.rating}  ·  ${widget.property.reviews} reviews',
                                       style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.gray600)),
-                                ],
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.gray600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const Spacer(),
-                            TextButton.icon(
-                              onPressed: () => Navigator.pushNamed(
-                                context,
-                                '/location',
-                                arguments: widget.property,
+                              const Spacer(),
+                              TextButton.icon(
+                                onPressed: () => Navigator.pushNamed(
+                                  context,
+                                  '/location',
+                                  arguments: widget.property,
+                                ),
+                                icon: const Icon(Icons.location_on_outlined,
+                                    size: 14),
+                                label: const Text('View location'),
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
                               ),
-                              icon: const Icon(Icons.location_on_outlined,
-                                  size: 14),
-                              label: const Text('View location'),
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

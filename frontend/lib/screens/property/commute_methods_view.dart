@@ -21,7 +21,8 @@ const Color _bg = Color(0xFFFAFAFA);
 const Color _dark = Color(0xFF111827);
 const Color _grey = Color(0xFF9CA3AF);
 const Color _surface = Colors.white;
-const Color _primary = Color(0xFF3F37C9); // Tenant Blue Theme
+const Color _primary = Color(0xFF087F73);
+const Color _primarySoft = Color(0xFFE8F4F1);
 
 // ─── Transport Mode ───────────────────────────────────────────────────────────
 
@@ -186,6 +187,11 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
 
   bool _fetchingLocation = true;
   _TransportMode _selectedMode = _TransportMode.drive;
+  String? _locationError;
+  Set<_TransportMode> _failedModes = {};
+  bool _searchLoading = false;
+  String? _searchError;
+  int _searchRequestId = 0;
 
   final _fromController = TextEditingController();
   final _toController = TextEditingController();
@@ -281,7 +287,9 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
 
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      _finishLoadingLocation('Location disabled');
+      _finishLoadingLocation(
+        error: 'Turn on location services to calculate travel times.',
+      );
       return;
     }
 
@@ -291,7 +299,9 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
     }
     if (permission == LocationPermission.deniedForever ||
         permission == LocationPermission.denied) {
-      _finishLoadingLocation('Permission denied');
+      _finishLoadingLocation(
+        error: 'Allow location access in your browser settings, then retry.',
+      );
       return;
     }
 
@@ -307,20 +317,24 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
       setState(() {
         _fromController.text = 'Current Location';
         _fetchingLocation = false;
+        _locationError = null;
       });
 
       _fitMapBounds();
       _fetchAllRoutes();
     } catch (e) {
-      _finishLoadingLocation('Location error');
+      _finishLoadingLocation(
+        error: 'Could not read your location. Check permissions and try again.',
+      );
     }
   }
 
-  void _finishLoadingLocation(String fallback) {
+  void _finishLoadingLocation({required String error}) {
     if (mounted) {
       setState(() {
         _fetchingLocation = false;
-        _fromController.text = fallback;
+        _fromController.text = 'Current location unavailable';
+        _locationError = error;
       });
       _fitMapBounds();
       _fetchAllRoutes();
@@ -335,6 +349,7 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
     if (origin == null || destination == null) return;
 
     setState(() => _isRouteLoading = true);
+    final failedModes = <_TransportMode>{};
 
     for (final modeData in _modes) {
       final cacheKey =
@@ -355,14 +370,29 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
           },
         );
         result = _routeFromMap(cached);
-      } catch (_) {}
+      } catch (_) {
+        failedModes.add(modeData.mode);
+      }
 
       if (mounted) setState(() => _routeCache[modeData.mode] = result);
     }
 
     _lastRoutedLocation = origin;
-    if (mounted) setState(() => _isRouteLoading = false);
+    if (mounted) {
+      setState(() {
+        _isRouteLoading = false;
+        _failedModes = failedModes;
+      });
+    }
     _fitMapBounds();
+  }
+
+  Future<void> _retryRoutes() async {
+    if (_locationNotifier.value == null) {
+      await _initializeData();
+      return;
+    }
+    await _fetchAllRoutes();
   }
 
   Future<void> _rerouteActive() async {
@@ -406,22 +436,46 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
 
   void _onSearchChanged(String query) {
     _debounceTimer?.cancel();
+    final requestId = ++_searchRequestId;
     if (query.isEmpty) {
-      setState(() => _filteredSuggestions = []);
+      setState(() {
+        _filteredSuggestions = [];
+        _searchLoading = false;
+        _searchError = null;
+      });
       return;
     }
 
+    setState(() {
+      _searchLoading = true;
+      _searchError = null;
+    });
     _debounceTimer = Timer(const Duration(milliseconds: 400), () async {
       try {
         final url = Uri.parse(
             'https://photon.komoot.io/api/?q=${Uri.encodeComponent(query)}&limit=5');
         final res = await http.get(url);
-        if (res.statusCode == 200 && mounted) {
-          final data = json.decode(res.body) as Map<String, dynamic>;
-          setState(() => _filteredSuggestions =
-              List<Map<String, dynamic>>.from(data['features']));
-        }
-      } catch (_) {}
+        if (!mounted || requestId != _searchRequestId) return;
+        if (res.statusCode != 200) throw StateError('Search unavailable');
+        final data = json.decode(res.body) as Map<String, dynamic>;
+        final features = List<Map<String, dynamic>>.from(
+            data['features'] as List? ?? const []);
+        setState(() {
+          _filteredSuggestions = features;
+          _searchLoading = false;
+          _searchError = features.isEmpty
+              ? 'No places found. Try a neighborhood or nearby landmark.'
+              : null;
+        });
+      } catch (_) {
+        if (!mounted || requestId != _searchRequestId) return;
+        setState(() {
+          _filteredSuggestions = [];
+          _searchLoading = false;
+          _searchError =
+              'Search is unavailable. Check your connection and try again.';
+        });
+      }
     });
   }
 
@@ -432,6 +486,14 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
     if (origin == null) return;
 
     if (_activeRoute == null) await _fetchAllRoutes();
+    if (!mounted || _activeRoute == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No route is available. Retry or choose another mode.'),
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _isNavigating = true;
@@ -619,7 +681,10 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
         initialCenter: _locationNotifier.value ?? destination,
         initialZoom: 14,
         interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag),
+            flags: InteractiveFlag.pinchZoom |
+                InteractiveFlag.drag |
+                InteractiveFlag.doubleTapZoom |
+                InteractiveFlag.scrollWheelZoom),
         onPositionChanged: (pos, hasGesture) {
           if (hasGesture && _isNavigating && !_isRecenterPending) {
             setState(() => _isRecenterPending = true);
@@ -748,7 +813,8 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
             behavior: HitTestBehavior.opaque,
             child: Container(
               padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(color: _bg, shape: BoxShape.circle),
+              decoration:
+                  const BoxDecoration(color: _bg, shape: BoxShape.circle),
               child: const Icon(PhosphorIconsRegular.caretLeft,
                   size: 20, color: _dark),
             ),
@@ -882,6 +948,8 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(vertical: 14),
                     ),
+                    cursorColor: _primary,
+                    textAlignVertical: TextAlignVertical.center,
                   ),
                 ),
                 if (_activeProperty != null || _toController.text.isNotEmpty)
@@ -924,8 +992,8 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                     contentPadding: EdgeInsets.zero,
                     leading: Container(
                       padding: const EdgeInsets.all(8),
-                      decoration:
-                          const BoxDecoration(color: _bg, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(
+                          color: _bg, shape: BoxShape.circle),
                       child: const Icon(PhosphorIconsRegular.mapPin,
                           color: _dark, size: 18),
                     ),
@@ -939,6 +1007,10 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                             style:
                                 GoogleFonts.poppins(fontSize: 12, color: _grey))
                         : null,
+                    hoverColor: _primarySoft,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     onTap: () {
                       FocusScope.of(context).unfocus();
                       final coords = _filteredSuggestions[i]['geometry']
@@ -955,6 +1027,59 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
                     },
                   );
                 },
+              ),
+            ),
+          if (_searchLoading)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _primary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Searching nearby places…',
+                    style: GoogleFonts.poppins(fontSize: 12, color: _grey),
+                  ),
+                ],
+              ),
+            )
+          else if (_searchError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _searchError!,
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: const Color(0xFFB42318),
+                      ),
+                    ),
+                  ),
+                  if (_toController.text.trim().isNotEmpty)
+                    IconButton(
+                      tooltip: 'Retry place search',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _onSearchChanged(_toController.text),
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                    ),
+                ],
+              ),
+            )
+          else if (_toController.text.trim().isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Search a place, then select a suggestion to preview its route.',
+                style: GoogleFonts.poppins(fontSize: 11, color: _grey),
               ),
             ),
         ],
@@ -1049,6 +1174,55 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
               );
             }).toList(),
           ),
+          const SizedBox(height: 12),
+          Text(
+            'Times are estimates from your current location. Matatu includes an estimated wait; actual travel conditions may vary.',
+            style: GoogleFonts.poppins(
+              color: _grey,
+              fontSize: 11,
+              height: 1.45,
+            ),
+          ),
+          if (!_isRouteLoading && _activeRoute == null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _primarySoft,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline_rounded,
+                      color: _primary, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _locationError ??
+                          (_failedModes.contains(_selectedMode)
+                              ? 'No ${_modes.firstWhere((mode) => mode.mode == _selectedMode).label.toLowerCase()} route is available. Check your connection or try another mode.'
+                              : 'Choose a destination to calculate travel times.'),
+                      style: GoogleFonts.poppins(
+                        color: _dark,
+                        fontSize: 11,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _retryRoutes,
+                    icon: const Icon(Icons.refresh_rounded, size: 15),
+                    label: const Text('Retry'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: _primary,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,

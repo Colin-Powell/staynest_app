@@ -11,7 +11,10 @@ router.post('/', async (req, res, next) => {
         const { idToken, role: requestedRole } = req.body;
         if (!idToken)
             return res.status(400).json({ error: 'idToken is required.' });
-        const ticket = await client.verifyIdToken({ idToken, audience: env.googleClientId });
+        const ticket = await client.verifyIdToken({
+            idToken,
+            audience: [...new Set([env.googleClientId, env.googleWebClientId])],
+        });
         const payload = ticket.getPayload();
         if (!payload || !payload.email || payload.email_verified !== true)
             return res.status(400).json({ error: 'Invalid or unverified Google token.' });

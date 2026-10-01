@@ -5,7 +5,6 @@ import 'package:property_app/models/review.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:intl/intl.dart';
-import 'property/write_review_view.dart';
 
 // NOTE: This file also defines ReviewsView/AllReviewsView/WriteReviewView.
 // Keep any named-parameter usages in this file consistent with these widget constructors.
@@ -87,29 +86,14 @@ class _ReviewsViewState extends State<ReviewsView>
       return;
     }
 
-    Navigator.push(
+    Navigator.pushNamed<bool>(
       context,
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            WriteReviewView(
-          propertyId: widget.propertyId,
-          propertyName: widget.propertyName,
-          bookingId: widget.bookingId!,
-        ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position:
-                  Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero)
-                      .animate(CurvedAnimation(
-                          parent: animation, curve: Curves.easeOutCubic)),
-              child: child,
-            ),
-          );
-        },
-      ),
+      '/write_review',
+      arguments: {
+        'propertyId': widget.propertyId,
+        'propertyName': widget.propertyName,
+        'bookingId': widget.bookingId,
+      },
     ).then((value) {
       if (value == true) {
         setState(() {
@@ -123,30 +107,15 @@ class _ReviewsViewState extends State<ReviewsView>
   void _navToAllReviews() {
     // Ensure bookingId is set for write-review FAB.
     // If bookingId is missing, FAB/submit will be disabled.
-    Navigator.push(
+    Navigator.pushNamed<bool>(
       context,
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (context, animation, secondaryAnimation) => AllReviewsView(
-          propertyId: widget.propertyId,
-          propertyName: widget.propertyName,
-
-          bookingId: widget.bookingId, // Pass bookingId down
-          hasReviewed: _hasReviewed,
-        ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position:
-                  Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero)
-                      .animate(CurvedAnimation(
-                          parent: animation, curve: Curves.easeOutCubic)),
-              child: child,
-            ),
-          );
-        },
-      ),
+      '/all_reviews',
+      arguments: {
+        'propertyId': widget.propertyId,
+        'propertyName': widget.propertyName,
+        'bookingId': widget.bookingId,
+        'hasReviewed': _hasReviewed,
+      },
     ).then((reviewSubmitted) {
       if (!mounted) return;
       setState(() {
@@ -498,29 +467,14 @@ class _AllReviewsViewState extends State<AllReviewsView> {
       return;
     }
 
-    Navigator.push(
+    Navigator.pushNamed<bool>(
       context,
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            WriteReviewView(
-          propertyId: widget.propertyId,
-          propertyName: widget.propertyName,
-          bookingId: widget.bookingId!,
-        ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position:
-                  Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero)
-                      .animate(CurvedAnimation(
-                          parent: animation, curve: Curves.easeOutCubic)),
-              child: child,
-            ),
-          );
-        },
-      ),
+      '/write_review',
+      arguments: {
+        'propertyId': widget.propertyId,
+        'propertyName': widget.propertyName,
+        'bookingId': widget.bookingId,
+      },
     ).then((value) {
       if (value == true) {
         setState(() {

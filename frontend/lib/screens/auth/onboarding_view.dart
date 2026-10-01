@@ -156,6 +156,11 @@ class _OnboardingViewState extends State<OnboardingView>
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 768;
+    if (isDesktop) {
+      return const SizedBox.shrink();
+    }
+
     final isLast = _current == _slides.length - 1;
     final isFirst = _current == 0;
 

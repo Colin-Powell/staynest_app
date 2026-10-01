@@ -117,76 +117,88 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
 
   @override
   Widget build(BuildContext context) {
-    final content = SafeArea(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isDesktop = constraints.maxWidth > 900;
-          if (isDesktop) {
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: _maxWebWidth),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 48),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildPageHeading(),
-                      const SizedBox(height: 28),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 55, child: _buildWalletSection()),
-                          const SizedBox(width: 32),
-                          Expanded(flex: 45, child: _buildSummaryCard()),
-                        ],
+    final content = Container(
+      color: _pageBackground,
+      child: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth > 900;
+            if (isDesktop) {
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: _maxWebWidth),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 48),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildPageHeading(),
+                        const SizedBox(height: 28),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 55, child: _buildWalletSection()),
+                            const SizedBox(width: 32),
+                            Expanded(
+                              flex: 45,
+                              child: Column(
+                                children: [
+                                  _buildSummaryCard(),
+                                  const SizedBox(height: 16),
+                                  _buildConfirmButton(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            return Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildPageHeading(),
+                        const SizedBox(height: 24),
+                        _buildSummaryCard(),
+                        const SizedBox(height: 24),
+                        _buildWalletSection(),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    14,
+                    20,
+                    14 + MediaQuery.of(context).padding.bottom,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: const Border(top: BorderSide(color: _dividerColor)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 14,
+                        offset: const Offset(0, -4),
                       ),
                     ],
                   ),
+                  child: _buildConfirmButton(),
                 ),
-              ),
+              ],
             );
-          }
-
-          return Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildPageHeading(),
-                      const SizedBox(height: 24),
-                      _buildSummaryCard(),
-                      const SizedBox(height: 24),
-                      _buildWalletSection(),
-                    ],
-                  ),
-                ),
-              ),
-              Container(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  14,
-                  20,
-                  14 + MediaQuery.of(context).padding.bottom,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: const Border(top: BorderSide(color: _dividerColor)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 14,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
-                ),
-                child: _buildConfirmButton(),
-              ),
-            ],
-          );
-        },
+          },
+        ),
       ),
     );
 
