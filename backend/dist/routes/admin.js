@@ -414,10 +414,10 @@ router.patch('/kyc/:id', requireAuth, authorize('admin'), async (req, res, next)
     try {
         const { id } = req.params;
         const { status, admin_notes } = req.body;
-        if (!status || !['approved', 'rejected', 'under_review', 'submitted'].includes(status)) {
+        if (!status || !['approved', 'rejected', 'under_review', 'submitted', 'more_info_required'].includes(status)) {
             return res.status(400).json({
                 success: false,
-                error: 'Invalid status. Must be approved, rejected, under_review, or submitted'
+                error: 'Invalid verification status.'
             });
         }
         const verificationRecord = await query(`
@@ -435,6 +435,7 @@ router.patch('/kyc/:id', requireAuth, authorize('admin'), async (req, res, next)
                 userId: verificationRecord.rows[0].user_id,
                 status: status,
                 adminNotes: admin_notes ?? null,
+                adminId: req.auth.id,
             });
             return res.json({
                 success: true,
@@ -447,6 +448,9 @@ router.patch('/kyc/:id', requireAuth, authorize('admin'), async (req, res, next)
       WHERE id = $3
       RETURNING *
     `, [status, admin_notes || null, id]);
+        if (status === 'more_info_required') {
+            await queueUserPush(verificationRecord.rows[0].user_id, 'More information required', admin_notes || 'Please update and resubmit your host verification application.', { type: 'verification_more_info_required', verificationId: id });
+        }
         res.json({
             success: true,
             data: updateRes.rows[0]

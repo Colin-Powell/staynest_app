@@ -25,10 +25,22 @@ const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 
 // --- MAIN SETTINGS PAGE ---
 
-class LandlordSettingsPage extends StatelessWidget {
-  const LandlordSettingsPage({super.key});
+class LandlordSettingsPage extends StatefulWidget {
+  final VoidCallback? onSwitchToTenantPortal;
 
-  // Smooth slide transition for navigating to subpages
+  const LandlordSettingsPage({
+    super.key,
+    this.onSwitchToTenantPortal,
+  });
+
+  @override
+  State<LandlordSettingsPage> createState() => _LandlordSettingsPageState();
+}
+
+class _LandlordSettingsPageState extends State<LandlordSettingsPage> {
+  int _selectedDesktopMenuIndex = 0;
+
+  // Smooth slide transition for navigating to subpages (Mobile only)
   void _navigateTo(BuildContext context, Widget page) {
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -52,8 +64,183 @@ class LandlordSettingsPage extends StatelessWidget {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _getRightPaneContent() {
+    switch (_selectedDesktopMenuIndex) {
+      case 0:
+        return const PersonalInfoPage();
+      case 1:
+        return const BusinessInfoPage();
+      case 2:
+        return const PaymentDetailsPage();
+      case 3:
+        return const NotificationSettingsPage();
+      case 4:
+        return const ChangePasswordPage();
+      case 5:
+        return const TwoFactorAuthPage();
+      case 6:
+        return HelpSupportView(
+            onBack: () {}); // Empty callback for inline desktop
+      case 7:
+        return const PrivacyPolicyPage();
+      default:
+        return const PersonalInfoPage();
+    }
+  }
+
+  // ─── DESKTOP LAYOUT (Split-Pane Design) ────────────────────────────────────
+  Widget _buildDesktopLayout(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bg,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1120),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 48, bottom: 48),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 1. Sidebar Navigation
+                  SizedBox(
+                    width: 320,
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding:
+                                const EdgeInsets.only(left: 16, bottom: 32),
+                            child: Text(
+                              'Settings',
+                              style: GoogleFonts.poppins(
+                                fontSize: 32,
+                                fontWeight: FontWeight.w700,
+                                color: _dark,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ),
+                          _DesktopSidebarItem(
+                            icon: PhosphorIconsRegular.user,
+                            label: 'Personal Information',
+                            isSelected: _selectedDesktopMenuIndex == 0,
+                            onTap: () =>
+                                setState(() => _selectedDesktopMenuIndex = 0),
+                          ),
+                          _DesktopSidebarItem(
+                            icon: PhosphorIconsRegular.trendUp,
+                            label: 'Performance & Insights',
+                            isSelected: false,
+                            onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        const LandlordAnalyticsPage())),
+                          ),
+                          _DesktopSidebarItem(
+                            icon: PhosphorIconsRegular.buildings,
+                            label: 'Business Information',
+                            isSelected: _selectedDesktopMenuIndex == 1,
+                            onTap: () =>
+                                setState(() => _selectedDesktopMenuIndex = 1),
+                          ),
+                          _DesktopSidebarItem(
+                            icon: PhosphorIconsRegular.wallet,
+                            label: 'Payment Details',
+                            isSelected: _selectedDesktopMenuIndex == 2,
+                            onTap: () =>
+                                setState(() => _selectedDesktopMenuIndex = 2),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 16),
+                            child: Divider(color: _grey.withOpacity(0.2)),
+                          ),
+                          _DesktopSidebarItem(
+                            icon: PhosphorIconsRegular.bell,
+                            label: 'Notification Settings',
+                            isSelected: _selectedDesktopMenuIndex == 3,
+                            onTap: () =>
+                                setState(() => _selectedDesktopMenuIndex = 3),
+                          ),
+                          _DesktopSidebarItem(
+                            icon: PhosphorIconsRegular.lockKey,
+                            label: 'Change Password',
+                            isSelected: _selectedDesktopMenuIndex == 4,
+                            onTap: () =>
+                                setState(() => _selectedDesktopMenuIndex = 4),
+                          ),
+                          _DesktopSidebarItem(
+                            icon: PhosphorIconsRegular.shieldCheck,
+                            label: 'Two-Factor Authentication',
+                            isSelected: _selectedDesktopMenuIndex == 5,
+                            onTap: () =>
+                                setState(() => _selectedDesktopMenuIndex = 5),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 16),
+                            child: Divider(color: _grey.withOpacity(0.2)),
+                          ),
+                          _DesktopSidebarItem(
+                            icon: PhosphorIconsRegular.question,
+                            label: 'Help & Support',
+                            isSelected: _selectedDesktopMenuIndex == 6,
+                            onTap: () =>
+                                setState(() => _selectedDesktopMenuIndex = 6),
+                          ),
+                          _DesktopSidebarItem(
+                            icon: PhosphorIconsRegular.fileText,
+                            label: 'Privacy Policy',
+                            isSelected: _selectedDesktopMenuIndex == 7,
+                            onTap: () =>
+                                setState(() => _selectedDesktopMenuIndex = 7),
+                          ),
+                          _DesktopSidebarItem(
+                            icon: PhosphorIconsRegular.arrowsLeftRight,
+                            label: 'Switch to Tenant Portal',
+                            isSelected: false,
+                            onTap: widget.onSwitchToTenantPortal ?? () {},
+                          ),
+                          _DesktopSidebarItem(
+                            icon: PhosphorIconsRegular.signOut,
+                            label: 'Logout',
+                            isSelected: false,
+                            isLogout: true,
+                            onTap: () {
+                              AppSession.logout();
+                              Navigator.of(context, rootNavigator: true)
+                                  .pushNamedAndRemoveUntil(
+                                      '/login', (route) => false);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Vertical Divider
+                  VerticalDivider(
+                      color: _grey.withOpacity(0.2), width: 1, thickness: 1),
+                  const SizedBox(width: 48),
+
+                  // 2. Main Content Area (Right Pane)
+                  Expanded(
+                    child: _getRightPaneContent(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── MOBILE LAYOUT (Preserved Logic) ───────────────────────────────────────
+  Widget _buildMobileLayout(BuildContext context) {
     final user = AppSession.currentUser;
 
     return Scaffold(
@@ -70,7 +257,7 @@ class LandlordSettingsPage extends StatelessWidget {
               Row(
                 children: [
                   const Icon(PhosphorIconsRegular.caretLeft,
-                      color: _dark, size: 28), // Or hide if it's a main tab
+                      color: _dark, size: 28),
                   const SizedBox(width: 16),
                   Text(
                     'Settings',
@@ -86,77 +273,102 @@ class LandlordSettingsPage extends StatelessWidget {
               const SizedBox(height: 32),
 
               // --- PROFILE CARD ---
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: _surface,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4)),
-                  ],
-                  border: Border.all(color: _grey.withOpacity(0.1)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: _grey.withOpacity(0.1)),
-                      ),
-                      child: ClipOval(
-                        child: AppSession.buildAvatar(
-                          AppSession.displayAvatar,
-                          width: 64,
-                          height: 64,
-                          fit: BoxFit.cover,
+              GestureDetector(
+                onTap: () => _navigateTo(context, const PersonalInfoPage()),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: _surface,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4)),
+                    ],
+                    border: Border.all(color: _grey.withOpacity(0.1)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: _grey.withOpacity(0.1)),
+                        ),
+                        child: ClipOval(
+                          child: AppSession.buildAvatar(
+                            AppSession.displayAvatar,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            AppSession.displayName,
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: _dark,
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              AppSession.displayName,
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: _dark,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'View and edit your profile',
-                            style: GoogleFonts.poppins(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: _grey,
+                            const SizedBox(height: 2),
+                            Text(
+                              'View and edit your profile',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: _grey,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: _green.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(PhosphorIconsRegular.pencilSimple,
-                          color: _green, size: 20),
-                    )
-                  ],
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: _green.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(PhosphorIconsRegular.pencilSimple,
+                            color: _green, size: 20),
+                      )
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 32),
+
+              if (AppSession.hasLandlordAccess &&
+                  widget.onSwitchToTenantPortal != null) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: widget.onSwitchToTenantPortal,
+                    icon: const Icon(PhosphorIconsRegular.arrowsLeftRight),
+                    label: Text('Switch to Tenant Portal',
+                        style:
+                            GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _green,
+                      side: BorderSide(color: _green.withOpacity(0.4)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 28),
+              ],
 
               // --- BUSINESS & PERFORMANCE ---
               Text(
@@ -395,6 +607,96 @@ class LandlordSettingsPage extends StatelessWidget {
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
+    if (isDesktop) {
+      return _buildDesktopLayout(context);
+    }
+    return _buildMobileLayout(context);
+  }
+}
+
+// ─── Desktop Sidebar Item Component ───────────────────────────────────────────
+
+class _DesktopSidebarItem extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final bool isSelected;
+  final bool isLogout;
+  final VoidCallback onTap;
+
+  const _DesktopSidebarItem({
+    required this.icon,
+    required this.label,
+    required this.isSelected,
+    this.isLogout = false,
+    required this.onTap,
+  });
+
+  @override
+  State<_DesktopSidebarItem> createState() => _DesktopSidebarItemState();
+}
+
+class _DesktopSidebarItemState extends State<_DesktopSidebarItem> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color iconColor = widget.isLogout
+        ? const Color(0xFFEF4444)
+        : widget.isSelected
+            ? _green
+            : _dark;
+
+    final Color textColor = widget.isLogout
+        ? const Color(0xFFEF4444)
+        : widget.isSelected
+            ? _green
+            : _dark;
+
+    final bool isActive = widget.isSelected || _isHovered;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: widget.isSelected
+                ? _green.withOpacity(0.12)
+                : _isHovered
+                    ? _grey.withOpacity(0.1)
+                    : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(widget.icon, size: 22, color: iconColor),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                    color: textColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // --- SHARED SUBPAGE LAYOUT ---
@@ -412,30 +714,42 @@ class SettingsPageLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
+
     return Scaffold(
-      backgroundColor: _bg,
-      extendBody: true,
-      bottomNavigationBar: bottomNavigationBar,
+      backgroundColor: _bg, // Blends seamlessly when rendered inline
+      extendBody: !isDesktop,
+      bottomNavigationBar: bottomNavigationBar != null
+          ? Padding(
+              padding: isDesktop
+                  ? const EdgeInsets.only(bottom: 24, top: 16)
+                  : EdgeInsets.zero,
+              child: bottomNavigationBar,
+            )
+          : null,
       body: SafeArea(
         bottom: false,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Custom Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+              padding: EdgeInsets.fromLTRB(isDesktop ? 0 : 24, 16, 24, 16),
               child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    behavior: HitTestBehavior.opaque,
-                    child: const Icon(PhosphorIconsRegular.caretLeft,
-                        color: _dark, size: 28),
-                  ),
-                  const SizedBox(width: 16),
+                  if (!isDesktop) ...[
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      behavior: HitTestBehavior.opaque,
+                      child: const Icon(PhosphorIconsRegular.caretLeft,
+                          color: _dark, size: 28),
+                    ),
+                    const SizedBox(width: 16),
+                  ],
                   Text(
                     title,
                     style: GoogleFonts.poppins(
-                      fontSize: 24,
+                      fontSize: isDesktop ? 32 : 24,
                       fontWeight: FontWeight.w700,
                       color: _dark,
                       letterSpacing: -0.5,
@@ -511,17 +825,21 @@ Widget _buildTextField(String label,
 // Shared UI helper for Save Buttons
 Widget _buildSaveButton(BuildContext context,
     {String text = "Save Changes", VoidCallback? onPressed}) {
+  final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
+
   return Container(
-    padding: EdgeInsets.fromLTRB(
-        24, 16, 24, MediaQuery.of(context).padding.bottom + 16),
+    padding: EdgeInsets.fromLTRB(isDesktop ? 0 : 24, 16, isDesktop ? 48 : 24,
+        isDesktop ? 0 : MediaQuery.of(context).padding.bottom + 16),
     decoration: BoxDecoration(
-      color: _surface,
-      boxShadow: [
-        BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, -4)),
-      ],
+      color: _bg,
+      boxShadow: isDesktop
+          ? []
+          : [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 20,
+                  offset: const Offset(0, -4)),
+            ],
     ),
     child: ElevatedButton(
       onPressed: onPressed ?? () => Navigator.pop(context),
@@ -649,7 +967,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated successfully')));
-      Navigator.pop(context);
+      if (Navigator.canPop(context)) Navigator.pop(context);
     } catch (err) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -670,6 +988,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
     return SettingsPageLayout(
       title: 'Personal Info',
       bottomNavigationBar: _buildSaveButton(
@@ -679,7 +998,8 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
       ),
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        padding:
+            EdgeInsets.symmetric(horizontal: isDesktop ? 0 : 24, vertical: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -721,15 +1041,22 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
               ],
             ),
             const SizedBox(height: 40),
-            _buildTextField('Full Name',
-                controller: _nameController,
-                prefixIcon: PhosphorIconsRegular.user),
-            _buildTextField('Email Address',
-                controller: _emailController,
-                prefixIcon: PhosphorIconsRegular.envelopeSimple),
-            _buildTextField('Phone Number',
-                controller: _phoneController,
-                prefixIcon: PhosphorIconsRegular.phone),
+            Padding(
+              padding: EdgeInsets.only(right: isDesktop ? 48 : 0),
+              child: Column(
+                children: [
+                  _buildTextField('Full Name',
+                      controller: _nameController,
+                      prefixIcon: PhosphorIconsRegular.user),
+                  _buildTextField('Email Address',
+                      controller: _emailController,
+                      prefixIcon: PhosphorIconsRegular.envelopeSimple),
+                  _buildTextField('Phone Number',
+                      controller: _phoneController,
+                      prefixIcon: PhosphorIconsRegular.phone),
+                ],
+              ),
+            ),
             const SizedBox(height: 40),
           ],
         ),
@@ -795,7 +1122,7 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Business info updated successfully')));
-      Navigator.pop(context);
+      if (Navigator.canPop(context)) Navigator.pop(context);
     } catch (err) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -807,6 +1134,7 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
     return SettingsPageLayout(
       title: 'Business Info',
       bottomNavigationBar: _buildSaveButton(
@@ -816,7 +1144,8 @@ class _BusinessInfoPageState extends State<BusinessInfoPage> {
       ),
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        padding:
+            EdgeInsets.fromLTRB(isDesktop ? 0 : 24, 8, isDesktop ? 48 : 24, 8),
         child: Column(
           children: [
             _buildTextField('Company / Agency Name',
@@ -892,7 +1221,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Notification settings updated')));
-        Navigator.pop(context);
+        if (Navigator.canPop(context)) Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -906,6 +1235,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
     return SettingsPageLayout(
       title: 'Notifications',
       bottomNavigationBar: _buildSaveButton(
@@ -915,7 +1245,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       ),
       child: ListView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        padding:
+            EdgeInsets.fromLTRB(isDesktop ? 0 : 24, 8, isDesktop ? 48 : 24, 8),
         children: [
           _buildSectionHeader('Email Notifications'),
           _buildSwitchTile(
@@ -1109,6 +1440,7 @@ class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
     return SettingsPageLayout(
       title: 'Payment Details',
       child: _isLoading
@@ -1118,7 +1450,8 @@ class _PaymentDetailsPageState extends State<PaymentDetailsPage> {
               color: _green,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+                padding: EdgeInsets.fromLTRB(
+                    isDesktop ? 0 : 24, 8, isDesktop ? 48 : 24, 32),
                 children: [
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -1346,11 +1679,13 @@ class PrivacyPolicyPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
     return SettingsPageLayout(
       title: 'Privacy Policy',
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+        padding:
+            EdgeInsets.fromLTRB(isDesktop ? 0 : 24, 8, isDesktop ? 48 : 24, 40),
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
@@ -1444,7 +1779,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       if (res['ok'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Password updated successfully')));
-        Navigator.pop(context);
+        if (Navigator.canPop(context)) Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1458,6 +1793,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
     return SettingsPageLayout(
       title: 'Change Password',
       bottomNavigationBar: _buildSaveButton(
@@ -1467,7 +1803,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       ),
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        padding:
+            EdgeInsets.fromLTRB(isDesktop ? 0 : 24, 8, isDesktop ? 48 : 24, 8),
         child: Column(
           children: [
             _buildTextField('Current Password',
@@ -1538,10 +1875,12 @@ class _TwoFactorAuthPageState extends State<TwoFactorAuthPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
     return SettingsPageLayout(
       title: 'Two-Factor Auth',
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        padding:
+            EdgeInsets.fromLTRB(isDesktop ? 0 : 24, 8, isDesktop ? 48 : 24, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

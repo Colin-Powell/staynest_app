@@ -21,8 +21,15 @@ const Color _green = Color(0xFF10B981); // Emerald Green
 
 class LandlordBookingsPage extends StatefulWidget {
   final VoidCallback? onBack;
+  final VoidCallback? onOpenCalendar;
+  final ValueChanged<Map<String, dynamic>>? onOpenBookingDetail;
 
-  const LandlordBookingsPage({super.key, this.onBack});
+  const LandlordBookingsPage({
+    super.key,
+    this.onBack,
+    this.onOpenCalendar,
+    this.onOpenBookingDetail,
+  });
 
   @override
   State<LandlordBookingsPage> createState() => _LandlordBookingsPageState();
@@ -114,6 +121,28 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
     });
   }
 
+  void _openCalendar() {
+    if (widget.onOpenCalendar != null) {
+      widget.onOpenCalendar!();
+      return;
+    }
+    Navigator.of(context).push(LandlordCalendarPage.route());
+  }
+
+  Future<void> _openBookingDetail(Map<String, dynamic> booking) async {
+    if (widget.onOpenBookingDetail != null) {
+      widget.onOpenBookingDetail!(booking);
+      return;
+    }
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LandlordBookingDetailPage(booking: booking),
+      ),
+    );
+    if (result == true) _loadBookings();
+  }
+
   String _formatDateString(String dateStr) {
     if (dateStr.isEmpty) return '';
     try {
@@ -141,7 +170,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
 
   // ─── UI BUILDERS ────────────────────────────────────────────────────────────
 
-  Widget _buildTab(String label) {
+  Widget _buildTab(String label, {bool isDesktop = false}) {
     final bool isActive = _selectedTab == label;
 
     return GestureDetector(
@@ -153,12 +182,24 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? _green : _surface,
+          color: isActive
+              ? (isDesktop ? _green.withOpacity(0.12) : _green)
+              : _surface,
           borderRadius: BorderRadius.circular(32),
           border: Border.all(
-            color: isActive ? _green : _grey.withOpacity(0.2),
+            color: isActive
+                ? (isDesktop ? Colors.transparent : _green)
+                : _grey.withOpacity(0.2),
             width: 1.5,
           ),
+          boxShadow: (isActive && !isDesktop) || !isDesktop
+              ? []
+              : [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4))
+                ],
         ),
         child: Center(
           child: Text(
@@ -166,7 +207,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-              color: isActive ? _surface : _dark,
+              color: isActive ? (isDesktop ? _green : _surface) : _dark,
             ),
           ),
         ),
@@ -174,10 +215,426 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
     );
   }
 
-  Widget _buildShimmerLoading() {
+  Widget _buildBookingCard(Map<String, dynamic> booking,
+      {bool isDesktop = false}) {
+    final status = booking['status'] as String? ?? 'Upcoming';
+    final statusColor =
+        statusColors[status]?['text'] ?? const Color(0xFF065F46);
+    final statusBg = statusColors[status]?['bg'] ?? const Color(0xFFD1FAE5);
+
+    return Container(
+      height: 124,
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: isDesktop ? 24 : 10,
+            offset: Offset(0, isDesktop ? 8 : 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Flush Image on the left
+          ClipRRect(
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(20),
+              bottomLeft: Radius.circular(20),
+            ),
+            child: buildPropertyImage(
+              booking['image'] ?? '',
+              width: 120,
+              height: double.infinity,
+              fit: BoxFit.cover,
+              errorPlaceholder: Container(
+                width: 120,
+                height: double.infinity,
+                color: _grey.withOpacity(0.1),
+                child: const Icon(PhosphorIconsRegular.house,
+                    color: _grey, size: 32),
+              ),
+            ),
+          ),
+
+          // Details on the right
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    booking['title'] ?? 'Booking',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: _dark,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${booking['location']} • ${booking['tenant_name']}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _grey,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  if ((booking['reviews'] as int? ?? 0) > 0)
+                    Row(
+                      children: [
+                        const Icon(PhosphorIconsFill.star,
+                            size: 12, color: Color(0xFFF59E0B)),
+                        const SizedBox(width: 4),
+                        Text(
+                          (booking['rating'] as double? ?? 0.0)
+                              .toStringAsFixed(1),
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _dark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  const Spacer(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Ksh. ${booking['price']}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: _dark,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            booking['date'],
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: _grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: statusBg,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          status,
+                          style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: statusColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── DESKTOP SPECIFIC LAYOUT ────────────────────────────────────────────────
+
+  Widget _buildDesktopShimmerLoading() {
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 480, // Keeps cards compact on ultra-wide screens
+          mainAxisExtent: 124, // Exact height of our booking cards
+          crossAxisSpacing: 24,
+          mainAxisSpacing: 24,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            return Container(
+              decoration: BoxDecoration(
+                color: _surface,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _grey.withOpacity(0.1)),
+              ),
+              child: Row(
+                children: [
+                  Shimmer.fromColors(
+                    baseColor: Colors.grey.shade200,
+                    highlightColor: Colors.grey.shade100,
+                    child: Container(
+                      width: 120,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius:
+                            BorderRadius.horizontal(left: Radius.circular(20)),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Shimmer.fromColors(
+                            baseColor: Colors.grey.shade200,
+                            highlightColor: Colors.grey.shade100,
+                            child: Container(
+                                width: double.infinity,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(4))),
+                          ),
+                          const SizedBox(height: 8),
+                          Shimmer.fromColors(
+                            baseColor: Colors.grey.shade200,
+                            highlightColor: Colors.grey.shade100,
+                            child: Container(
+                                width: 100,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(4))),
+                          ),
+                          const Spacer(),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Shimmer.fromColors(
+                                baseColor: Colors.grey.shade200,
+                                highlightColor: Colors.grey.shade100,
+                                child: Container(
+                                    width: 80,
+                                    height: 14,
+                                    decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius:
+                                            BorderRadius.circular(4))),
+                              ),
+                              Shimmer.fromColors(
+                                baseColor: Colors.grey.shade200,
+                                highlightColor: Colors.grey.shade100,
+                                child: Container(
+                                    width: 60,
+                                    height: 20,
+                                    decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius:
+                                            BorderRadius.circular(10))),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+          childCount: 8,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopLayout(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bg,
+      body: SafeArea(
+        bottom: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1280),
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // Header with integrated Calendar Button
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(32, 32, 32, 24),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'My Bookings',
+                          style: GoogleFonts.poppins(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w700,
+                            color: _dark,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        FilledButton.icon(
+                          onPressed: _openCalendar,
+                          icon: const Icon(PhosphorIconsRegular.calendarBlank,
+                              size: 18),
+                          label: Text(
+                            'View Calendar',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor:
+                                _dark, // Keeping consistency with mobile button color
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 18),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Filter Tabs
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 32),
+                    child: SizedBox(
+                      height: 40,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        itemCount: _tabs.length,
+                        itemBuilder: (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: _buildTab(_tabs[index], isDesktop: true),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Body content
+                if (_errorMessage != null)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(48),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFEF2F2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                                PhosphorIconsRegular.warningCircle,
+                                color: Color(0xFFB42318),
+                                size: 32),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _errorMessage!,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.poppins(
+                              color: _dark,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextButton(
+                            onPressed: _loadBookings,
+                            style: TextButton.styleFrom(
+                              foregroundColor: _green,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30)),
+                            ),
+                            child: Text('Retry',
+                                style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (_isLoading)
+                  _buildDesktopShimmerLoading()
+                else if (_filteredBookings.isEmpty)
+                  _buildEmptyState() // Reusing the same centered empty state
+                else
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      32,
+                      0,
+                      32,
+                      MediaQuery.of(context).padding.bottom + 48,
+                    ),
+                    sliver: SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent:
+                            480, // Ensure cards stay nicely packed
+                        mainAxisExtent: 124, // Exact card height
+                        crossAxisSpacing: 24,
+                        mainAxisSpacing: 24,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final booking = _filteredBookings[index];
+                          return GestureDetector(
+                            onTap: () => _openBookingDetail(booking),
+                            behavior: HitTestBehavior.opaque,
+                            child: _buildBookingCard(booking, isDesktop: true),
+                          );
+                        },
+                        childCount: _filteredBookings.length,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── MOBILE SPECIFIC LAYOUT ─────────────────────────────────────────────────
+
+  Widget _buildMobileShimmerLoading() {
     return SliverPadding(
       padding: EdgeInsets.fromLTRB(
-          24, 0, 24, MediaQuery.of(context).padding.bottom + 200),
+        24,
+        0,
+        24,
+        MediaQuery.of(context).padding.bottom + 200,
+      ),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, index) {
@@ -307,150 +764,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
     );
   }
 
-  Widget _buildBookingCard(Map<String, dynamic> booking) {
-    final status = booking['status'] as String? ?? 'Upcoming';
-    final statusColor =
-        statusColors[status]?['text'] ?? const Color(0xFF065F46);
-    final statusBg = statusColors[status]?['bg'] ?? const Color(0xFFD1FAE5);
-
-    return Container(
-      height: 124,
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Flush Image on the left
-          ClipRRect(
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(20),
-              bottomLeft: Radius.circular(20),
-            ),
-            child: buildPropertyImage(
-              booking['image'] ?? '',
-              width: 120,
-              height: double.infinity,
-              fit: BoxFit.cover,
-              errorPlaceholder: Container(
-                width: 120,
-                height: double.infinity,
-                color: _grey.withOpacity(0.1),
-                child: const Icon(PhosphorIconsRegular.house,
-                    color: _grey, size: 32),
-              ),
-            ),
-          ),
-
-          // Details on the right
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    booking['title'] ?? 'Booking',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: _dark,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${booking['location']} • ${booking['tenant_name']}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: _grey,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  if ((booking['reviews'] as int? ?? 0) > 0)
-                    Row(
-                      children: [
-                        const Icon(PhosphorIconsFill.star,
-                            size: 12, color: Color(0xFFF59E0B)),
-                        const SizedBox(width: 4),
-                        Text(
-                          (booking['rating'] as double? ?? 0.0)
-                              .toStringAsFixed(1),
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: _dark,
-                          ),
-                        ),
-                      ],
-                    ),
-                  const Spacer(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Ksh. ${booking['price']}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: _dark,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            booking['date'],
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: _grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: statusBg,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          status,
-                          style: GoogleFonts.poppins(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: statusColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildMobileLayout(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
@@ -488,7 +802,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                       itemBuilder: (context, index) {
                         return Padding(
                           padding: const EdgeInsets.only(right: 12),
-                          child: _buildTab(_tabs[index]),
+                          child: _buildTab(_tabs[index], isDesktop: false),
                         );
                       },
                     ),
@@ -530,14 +844,18 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                     ),
                   )
                 else if (_isLoading)
-                  _buildShimmerLoading()
+                  _buildMobileShimmerLoading()
                 else if (_filteredBookings.isEmpty)
                   _buildEmptyState()
                 else
                   SliverPadding(
                     // Large bottom padding ensures cards scroll freely above the floating button
                     padding: EdgeInsets.fromLTRB(
-                        24, 0, 24, MediaQuery.of(context).padding.bottom + 200),
+                      24,
+                      0,
+                      24,
+                      MediaQuery.of(context).padding.bottom + 200,
+                    ),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
@@ -545,19 +863,10 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 20),
                             child: GestureDetector(
-                              onTap: () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) => LandlordBookingDetailPage(
-                                          booking: booking)),
-                                );
-                                if (result == true) {
-                                  _loadBookings();
-                                }
-                              },
+                              onTap: () => _openBookingDetail(booking),
                               behavior: HitTestBehavior.opaque,
-                              child: _buildBookingCard(booking),
+                              child:
+                                  _buildBookingCard(booking, isDesktop: false),
                             ),
                           );
                         },
@@ -578,8 +887,7 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
                 height: 56,
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () =>
-                      Navigator.of(context).push(LandlordCalendarPage.route()),
+                  onPressed: _openCalendar,
                   icon: const Icon(PhosphorIconsRegular.calendarBlank,
                       size: 20, color: Colors.white),
                   label: Text(
@@ -605,5 +913,13 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
         ),
       ),
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.sizeOf(context).width >= 1100) {
+      return _buildDesktopLayout(context);
+    }
+    return _buildMobileLayout(context);
   }
 }

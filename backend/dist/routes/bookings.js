@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { pool, query } from '../db.js';
-import { requireAuth } from '../middleware/auth.js';
+import { authorize, requireAuth } from '../middleware/auth.js';
 import { queueUserPush } from '../services/queue.js';
 import { settleReferralReward } from '../services/referral_service.js';
 import { BOOKING_VIEWING_FEE_KES, completeBookingWithEscrow, createAndPayBookingFromWallet, refundExpiredBookingEscrows, settleEscrow, } from '../services/finance_service.js';
@@ -17,7 +17,7 @@ function isPropertyUnavailable(availabilityStatus, legacyStatus) {
     return unavailablePropertyStatuses.has(availability) ||
         (['', 'unknown'].includes(availability) && unavailablePropertyStatuses.has(legacy));
 }
-router.post('/pay-with-wallet', requireAuth, async (req, res, next) => {
+router.post('/pay-with-wallet', requireAuth, authorize('tenant'), async (req, res, next) => {
     const { propertyId, checkInDate, checkOutDate, notes } = req.body;
     const idempotencyKey = String(req.get('Idempotency-Key') ?? '').trim();
     if (!propertyId || !checkInDate || !checkOutDate || !idempotencyKey) {
@@ -73,7 +73,7 @@ router.post('/pay-with-wallet', requireAuth, async (req, res, next) => {
     }
 });
 // Create a new booking (tenant creates booking)
-router.post('/', requireAuth, async (req, res, next) => {
+router.post('/', requireAuth, authorize('tenant'), async (req, res, next) => {
     let client;
     try {
         client = await pool.connect();
@@ -158,7 +158,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
 });
 // Get bookings for tenant
-router.get('/tenant', requireAuth, async (req, res, next) => {
+router.get('/tenant', requireAuth, authorize('tenant'), async (req, res, next) => {
     try {
         await refundExpiredBookingEscrows();
         const result = await query(`SELECT b.id,
@@ -188,11 +188,12 @@ router.get('/tenant', requireAuth, async (req, res, next) => {
     }
 });
 // Get bookings for landlord
-router.get('/landlord', requireAuth, async (req, res, next) => {
+router.get('/landlord', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
     try {
         await refundExpiredBookingEscrows();
         const result = await query(`SELECT b.id,
               b.property_id,
+              b.landlord_id,
               b.tenant_id,
               b.check_in_date,
               b.check_out_date,
@@ -219,7 +220,7 @@ router.get('/landlord', requireAuth, async (req, res, next) => {
     }
 });
 // Confirm booking (landlord confirms)
-router.patch('/:id/confirm', requireAuth, async (req, res, next) => {
+router.patch('/:id/confirm', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
     try {
         const bookingId = req.params.id;
         // Verify the landlord owns this booking
@@ -249,7 +250,7 @@ router.patch('/:id/confirm', requireAuth, async (req, res, next) => {
     }
 });
 // Complete booking after the stay ends and release the held payment.
-router.patch('/:id/complete', requireAuth, async (req, res, next) => {
+router.patch('/:id/complete', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
     try {
         const booking = await completeBookingWithEscrow(req.params.id, req.auth.id);
         await settleReferralReward(req.params.id);
@@ -268,7 +269,7 @@ router.patch('/:id/complete', requireAuth, async (req, res, next) => {
     }
 });
 // Reject booking (landlord rejects)
-router.patch('/:id/reject', requireAuth, async (req, res, next) => {
+router.patch('/:id/reject', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
     try {
         const bookingId = req.params.id;
         const { reason } = req.body;
@@ -318,6 +319,17 @@ router.patch('/:id/cancel', requireAuth, async (req, res, next) => {
         const booking = checkResult.rows[0];
         const isLandlord = booking.landlord_id === req.auth.id;
         const isTenant = booking.tenant_id === req.auth.id;
+        if (isLandlord && !isTenant) {
+            const access = await query('SELECT role, roles, landlord_verified FROM users WHERE id = $1 LIMIT 1', [req.auth.id]);
+            const account = access.rows[0];
+            const roles = Array.isArray(account?.roles)
+                ? account.roles.map((role) => role.toLowerCase())
+                : [account?.role?.toLowerCase() ?? ''];
+            if (account?.landlord_verified !== true ||
+                !roles.some((role) => role === 'landlord' || role === 'host')) {
+                return res.status(403).json({ error: 'Approved landlord access is required.' });
+            }
+        }
         if (!isLandlord && !isTenant) {
             return res
                 .status(403)
@@ -353,6 +365,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
         const bookingId = req.params.id;
         const result = await query(`SELECT b.id,
               b.property_id,
+              b.landlord_id,
               b.tenant_id,
               b.check_in_date,
               b.check_out_date,
@@ -379,7 +392,20 @@ router.get('/:id', requireAuth, async (req, res, next) => {
         if (result.rowCount === 0) {
             return res.status(404).json({ error: 'Booking not found or access denied.' });
         }
-        res.json({ data: result.rows[0] });
+        const booking = result.rows[0];
+        if (booking.landlord_id === req.auth.id &&
+            booking.tenant_id !== req.auth.id) {
+            const access = await query('SELECT role, roles, landlord_verified FROM users WHERE id = $1 LIMIT 1', [req.auth.id]);
+            const account = access.rows[0];
+            const roles = Array.isArray(account?.roles)
+                ? account.roles.map((role) => role.toLowerCase())
+                : [account?.role?.toLowerCase() ?? ''];
+            if (account?.landlord_verified !== true ||
+                !roles.some((role) => role === 'landlord' || role === 'host')) {
+                return res.status(403).json({ error: 'Approved landlord access is required.' });
+            }
+        }
+        res.json({ data: booking });
     }
     catch (error) {
         next(error);

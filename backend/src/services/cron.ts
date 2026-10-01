@@ -15,6 +15,15 @@ import { queueUserPush } from './queue.js';
 import { sendAlertEmail } from './email.js';
 import { refundExpiredBookingEscrows } from './finance_service.js';
 
+const hostReminderFirstHours = Math.max(
+  1,
+  Number.parseInt(process.env.HOST_REMINDER_FIRST_HOURS ?? '24', 10) || 24,
+);
+const hostReminderSecondHours = Math.max(
+  hostReminderFirstHours + 1,
+  Number.parseInt(process.env.HOST_REMINDER_SECOND_HOURS ?? '72', 10) || 72,
+);
+
 // --- helpers ------------------------------------------------------------------
 
 function fmt(date: string | Date) {
@@ -236,6 +245,53 @@ async function sendWeeklyPerformanceDigest() {
   }
 }
 
+// --- Host application reminders (24h and 72h after last saved progress) ------
+
+async function sendHostApplicationReminders() {
+  try {
+    const due = await query(
+      `WITH due_applications AS (
+         SELECT id, user_id, reminder_stage
+         FROM verifications
+         WHERE status = 'draft'
+           AND ((reminder_stage = 0 AND updated_at <= now() - ($1 * INTERVAL '1 hour'))
+             OR (reminder_stage = 1 AND reminder_sent_at <= now() - (($2 - $1) * INTERVAL '1 hour')))
+         ORDER BY updated_at
+         FOR UPDATE SKIP LOCKED
+         LIMIT 100
+       )
+       UPDATE verifications v
+       SET reminder_stage = due_applications.reminder_stage + 1,
+           reminder_sent_at = now(),
+           updated_at = now()
+       FROM due_applications
+       WHERE v.id = due_applications.id
+       RETURNING v.id, v.user_id, v.reminder_stage`,
+      [hostReminderFirstHours, hostReminderSecondHours],
+    );
+
+    for (const application of due.rows) {
+      const isSecondReminder = application.reminder_stage >= 2;
+      await queueUserPush(
+        application.user_id,
+        'Finish your host verification',
+        isSecondReminder
+          ? 'Your host application is still incomplete. Continue verification when you are ready.'
+          : 'You started becoming a host. Continue verification to submit your application for review.',
+        {
+          type: 'host_verification_reminder',
+          verificationId: application.id,
+          reminderStage: String(application.reminder_stage),
+        },
+      );
+    }
+
+    console.log(`[cron] host verification reminders queued for ${due.rowCount} applications`);
+  } catch (err) {
+    console.error('[cron] host verification reminders failed:', err);
+  }
+}
+
 // --- Scheduler ----------------------------------------------------------------
 
 export function startCronJobs() {
@@ -254,6 +310,9 @@ export function startCronJobs() {
 
   // 5. Weekly landlord digest — every Monday 9:00 AM
   cron.schedule('0 9 * * 1', sendWeeklyPerformanceDigest, { timezone: 'Africa/Nairobi' });
+
+  // Host application reminders — evaluated hourly; each stage is persisted before queueing.
+  cron.schedule('0 * * * *', sendHostApplicationReminders, { timezone: 'Africa/Nairobi' });
 
   console.log('[cron] All scheduled jobs registered (timezone: Africa/Nairobi)');
 }

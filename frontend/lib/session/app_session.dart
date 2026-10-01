@@ -21,8 +21,17 @@ class AppSession {
   static const String _prefsKey = 'staynest.session';
 
   static String currentRole = 'tenant';
+  static String activePortal = 'tenant';
+  static List<String> accountRoles = ['tenant'];
+  static bool landlordVerified = false;
   static final ValueNotifier<String> currentRoleNotifier =
       ValueNotifier(currentRole);
+  static final ValueNotifier<int> hostApplicationRevision = ValueNotifier(0);
+
+  static void notifyHostApplicationChanged() {
+    hostApplicationRevision.value++;
+  }
+
   static Map<String, dynamic> get currentUser => <String, dynamic>{
         'id': currentUserId,
         'name': currentUserName,
@@ -30,6 +39,9 @@ class AppSession {
         'phone': currentUserPhone,
         'avatar': currentUserAvatar,
         'role': currentRole,
+        'active_portal': activePortal,
+        'roles': accountRoles,
+        'landlord_verified': landlordVerified,
         'verified': currentUserVerified,
       };
 
@@ -40,6 +52,7 @@ class AppSession {
 
   static void setRole(String role) {
     currentRole = role;
+    activePortal = role;
     currentRoleNotifier.value = role;
   }
 
@@ -269,6 +282,9 @@ class AppSession {
           'phone': currentUserPhone,
           'avatar': currentUserAvatar,
           'role': currentRole,
+          'active_portal': activePortal,
+          'roles': accountRoles,
+          'landlord_verified': landlordVerified,
           'verified': currentUserVerified,
           'email_verified': emailVerified,
           'referral_code': referralCode,
@@ -347,12 +363,32 @@ class AppSession {
   }
 
   static void updateCurrentUser(Map<String, dynamic> user) {
-    currentUserId = user['id']?.toString();
+    final incomingUserId = user['id']?.toString();
+    final isSameUser = currentUserId != null && currentUserId == incomingUserId;
+    currentUserId = incomingUserId;
     currentUserName = user['name']?.toString();
     currentUserEmail = user['email']?.toString();
     currentUserPhone = user['phone']?.toString();
     currentUserAvatar = user['avatar']?.toString();
-    currentRole = user['role']?.toString() ?? currentRole;
+    final userRole = user['role']?.toString() ?? currentRole;
+    final rawRoles = user['roles'];
+    if (rawRoles is List) {
+      accountRoles = rawRoles.map((role) => role.toString()).toSet().toList();
+    } else {
+      accountRoles = [userRole];
+    }
+    landlordVerified = user['landlord_verified'] == true;
+    final requestedPortal = user['active_portal']?.toString() ??
+        (isSameUser && accountRoles.contains(activePortal)
+            ? activePortal
+            : userRole);
+    currentRole = accountRoles.contains(requestedPortal)
+        ? requestedPortal
+        : accountRoles.contains(userRole)
+            ? userRole
+            : (accountRoles.isEmpty ? 'tenant' : accountRoles.first);
+    activePortal = currentRole;
+    currentRoleNotifier.value = currentRole;
     currentUserVerified = user['verified'] == true ||
         user['is_verified'] == true ||
         user['current_user_verified'] == true ||
@@ -372,6 +408,10 @@ class AppSession {
   static bool get isLandlord =>
       currentRole == 'landlord' || currentRole == 'host';
 
+  static bool get hasLandlordAccess =>
+      landlordVerified &&
+      accountRoles.any((role) => role == 'landlord' || role == 'host');
+
   static bool get isAdmin {
     final normalized = currentRole.toLowerCase();
     return normalized == 'admin' ||
@@ -381,6 +421,11 @@ class AppSession {
 
   static Future<void> reset() async {
     currentRole = 'tenant';
+    activePortal = 'tenant';
+    accountRoles = ['tenant'];
+    landlordVerified = false;
+    currentRoleNotifier.value = currentRole;
+    notifyHostApplicationChanged();
     isGuest = false;
     currentUserId = null;
     currentUserName = null;

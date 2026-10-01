@@ -22,8 +22,19 @@ const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 
 class LandlordPropertyManagementPage extends StatefulWidget {
   final Map<String, dynamic> property;
+  final VoidCallback? onBack;
+  final VoidCallback? onNavigateToBookings;
+  final VoidCallback? onOpenCalendar;
+  final ValueChanged<Map<String, dynamic>>? onEditProperty;
 
-  const LandlordPropertyManagementPage({super.key, required this.property});
+  const LandlordPropertyManagementPage({
+    super.key,
+    required this.property,
+    this.onBack,
+    this.onNavigateToBookings,
+    this.onOpenCalendar,
+    this.onEditProperty,
+  });
 
   @override
   State<LandlordPropertyManagementPage> createState() =>
@@ -124,6 +135,19 @@ class _LandlordPropertyManagementPageState
     }
   }
 
+  // ─── Actions & Logic ────────────────────────────────────────────────────────
+
+  Future<void> _shareProperty() async {
+    final propertyId = _property['id']?.toString() ?? '';
+    final link = 'https://staynest.top/properties/$propertyId';
+    await Share.share('${_property['title'] ?? 'StayNest property'}: $link');
+    await AnalyticsService.trackPropertyShare(propertyId);
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Listing shared.')));
+    }
+  }
+
   // ─── Modals & Dialogs ───────────────────────────────────────────────────────
 
   void _showActionSuccess(String message) {
@@ -173,6 +197,36 @@ class _LandlordPropertyManagementPageState
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _handleBack() {
+    if (widget.onBack != null) {
+      widget.onBack!();
+      return;
+    }
+    Navigator.of(context).maybePop();
+  }
+
+  void _handleBookingsNavigation() {
+    if (widget.onNavigateToBookings != null) {
+      widget.onNavigateToBookings!();
+      return;
+    }
+    Navigator.pushNamed(context, '/landlord_bookings');
+  }
+
+  void _handleCalendarNavigation() {
+    if (widget.onOpenCalendar != null) {
+      widget.onOpenCalendar!();
+      return;
+    }
+    Navigator.push(
+      context,
+      LandlordCalendarPage.route(
+        propertyId: _property['id']?.toString(),
+        propertyTitle: _property['title']?.toString() ?? '',
       ),
     );
   }
@@ -242,6 +296,10 @@ class _LandlordPropertyManagementPageState
     try {
       final property = await PropertiesApi.getPropertyById(propertyId);
       if (!mounted) return;
+      if (widget.onEditProperty != null) {
+        widget.onEditProperty!(property);
+        return;
+      }
       final updated = await Navigator.pushNamed<bool>(
         context,
         '/list_property',
@@ -370,15 +428,165 @@ class _LandlordPropertyManagementPageState
                 content: Text('Failed to update property status to $label.')),
           );
         }
-        if (context.mounted) Navigator.pop(context);
+        if (context.mounted) Navigator.of(context).maybePop();
       },
     );
   }
 
-  // ─── UI BUILDERS ─────────────────────────────────────────────────────────────
+  // ─── Main Scaffold Toggler ──────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
+    return isDesktop
+        ? _buildDesktopLayout(context)
+        : _buildMobileLayout(context);
+  }
+
+  // ─── Desktop Layout (Airbnb Split Style) ────────────────────────────────────
+
+  Widget _buildDesktopLayout(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        backgroundColor: _bg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leadingWidth: 80,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 24.0),
+          child: IconButton(
+            icon: const Icon(PhosphorIconsRegular.caretLeft,
+                color: _dark, size: 24),
+            onPressed: _handleBack,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(PhosphorIconsRegular.shareNetwork,
+                color: _dark, size: 24),
+            onPressed: _shareProperty,
+          ),
+          const SizedBox(width: 24),
+        ],
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1280),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(40, 16, 40, 40),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left Column (Sticky Image, Header, and Primary Actions)
+                SizedBox(
+                  width: 440,
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Property Image
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: SizedBox(
+                            height: 320,
+                            width: double.infinity,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                buildPropertyImage(
+                                  (_property['image_url'] ??
+                                          _property['image'] ??
+                                          '')
+                                      .toString(),
+                                  fit: BoxFit.cover,
+                                ),
+                                if (_isPreviewMode)
+                                  Positioned(
+                                    bottom: 24,
+                                    left: 24,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 8),
+                                      decoration: BoxDecoration(
+                                          color: _green,
+                                          borderRadius:
+                                              BorderRadius.circular(20)),
+                                      child: Text(
+                                        'PREVIEWING AS TENANT',
+                                        style: GoogleFonts.poppins(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 12),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        _buildHeaderSection(),
+                        const SizedBox(height: 24),
+                        _buildQuickActionShortcuts(),
+                        const SizedBox(height: 32),
+                        _buildBoostBanner(),
+                        const SizedBox(height: 32),
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: _confirmDelete,
+                            icon: const Icon(PhosphorIconsRegular.trash,
+                                color: Color(0xFFEF4444), size: 20),
+                            label: Text(
+                              'Remove Property from Portfolio',
+                              style: GoogleFonts.poppins(
+                                color: const Color(0xFFEF4444),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 48), // Layout Gutter
+
+                // Right Column (Scrollable Analytics & Booking Panels)
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildQuickSnapshot(),
+                        const SizedBox(height: 32),
+                        _buildBookingActionPanel(),
+                        const SizedBox(height: 32),
+                        _buildAvailabilityPreview(),
+                        const SizedBox(height: 32),
+                        _buildHotLeadsSection(),
+                        const SizedBox(height: 32),
+                        _buildLiveActivityFeed(),
+                        const SizedBox(height: 48),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Mobile Layout (Fully Preserved) ────────────────────────────────────────
+
+  Widget _buildMobileLayout(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg, // The scrollable background
       body: CustomScrollView(
@@ -394,7 +602,7 @@ class _LandlordPropertyManagementPageState
             leading: Padding(
               padding: const EdgeInsets.all(8.0),
               child: GestureDetector(
-                onTap: () => Navigator.pop(context),
+                onTap: _handleBack,
                 child: Container(
                   decoration: BoxDecoration(
                       color: _surface,
@@ -413,17 +621,7 @@ class _LandlordPropertyManagementPageState
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: GestureDetector(
-                  onTap: () async {
-                    final propertyId = _property['id']?.toString() ?? '';
-                    final link = 'https://staynest.top/properties/$propertyId';
-                    await Share.share(
-                        '${_property['title'] ?? 'StayNest property'}: $link');
-                    await AnalyticsService.trackPropertyShare(propertyId);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Listing shared.')));
-                    }
-                  },
+                  onTap: _shareProperty,
                   child: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
@@ -674,7 +872,7 @@ class _LandlordPropertyManagementPageState
           _ShortcutPill(
             icon: PhosphorIconsRegular.usersThree,
             label: 'Bookings',
-            onTap: () => Navigator.pushNamed(context, '/landlord_bookings'),
+            onTap: _handleBookingsNavigation,
           ),
           _ShortcutPill(
             icon: _isPreviewMode
@@ -763,7 +961,7 @@ class _LandlordPropertyManagementPageState
                 style: GoogleFonts.poppins(
                     fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
             GestureDetector(
-              onTap: () => Navigator.pushNamed(context, '/landlord_bookings'),
+              onTap: _handleBookingsNavigation,
               child: Text('View all',
                   style: GoogleFonts.poppins(
                       fontSize: 13,
@@ -922,11 +1120,7 @@ class _LandlordPropertyManagementPageState
                   style: GoogleFonts.poppins(
                       fontSize: 16, fontWeight: FontWeight.w700, color: _dark)),
               GestureDetector(
-                onTap: () => Navigator.push(
-                    context,
-                    LandlordCalendarPage.route(
-                        propertyId: _property['id'],
-                        propertyTitle: _property['title'] ?? '')),
+                onTap: _handleCalendarNavigation,
                 child: Text('Full Calendar',
                     style: GoogleFonts.poppins(
                         fontSize: 13,

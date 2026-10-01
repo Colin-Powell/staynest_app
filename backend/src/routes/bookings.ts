@@ -1,6 +1,6 @@
 ﻿import { Router, Request, Response, NextFunction } from 'express';
 import { pool, query } from '../db.js';
-import { requireAuth } from '../middleware/auth.js';
+import { authorize, requireAuth } from '../middleware/auth.js';
 import { queueUserPush } from '../services/queue.js';
 import { settleReferralReward } from '../services/referral_service.js';
 import {
@@ -26,7 +26,7 @@ function isPropertyUnavailable(availabilityStatus: unknown, legacyStatus: unknow
     (['', 'unknown'].includes(availability) && unavailablePropertyStatuses.has(legacy));
 }
 
-router.post('/pay-with-wallet', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/pay-with-wallet', requireAuth, authorize('tenant'), async (req: Request, res: Response, next: NextFunction) => {
   const { propertyId, checkInDate, checkOutDate, notes } = req.body as {
     propertyId?: string;
     checkInDate?: string;
@@ -101,7 +101,7 @@ router.post('/pay-with-wallet', requireAuth, async (req: Request, res: Response,
 });
 
 // Create a new booking (tenant creates booking)
-router.post('/', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/', requireAuth, authorize('tenant'), async (req: Request, res: Response, next: NextFunction) => {
   let client;
   try {
     client = await pool.connect();
@@ -216,7 +216,7 @@ router.post('/', requireAuth, async (req: Request, res: Response, next: NextFunc
 });
 
 // Get bookings for tenant
-router.get('/tenant', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.get('/tenant', requireAuth, authorize('tenant'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     await refundExpiredBookingEscrows();
 
@@ -251,13 +251,14 @@ router.get('/tenant', requireAuth, async (req: Request, res: Response, next: Nex
 });
 
 // Get bookings for landlord
-router.get('/landlord', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.get('/landlord', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     await refundExpiredBookingEscrows();
 
     const result = await query(
       `SELECT b.id,
               b.property_id,
+              b.landlord_id,
               b.tenant_id,
               b.check_in_date,
               b.check_out_date,
@@ -287,7 +288,7 @@ router.get('/landlord', requireAuth, async (req: Request, res: Response, next: N
 });
 
 // Confirm booking (landlord confirms)
-router.patch('/:id/confirm', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.patch('/:id/confirm', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const bookingId = req.params.id;
 
@@ -321,7 +322,7 @@ router.patch('/:id/confirm', requireAuth, async (req: Request, res: Response, ne
 });
 
 // Complete booking after the stay ends and release the held payment.
-router.patch('/:id/complete', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.patch('/:id/complete', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const booking = await completeBookingWithEscrow(req.params.id, req.auth!.id);
     await settleReferralReward(req.params.id);
@@ -338,7 +339,7 @@ router.patch('/:id/complete', requireAuth, async (req: Request, res: Response, n
 });
 
 // Reject booking (landlord rejects)
-router.patch('/:id/reject', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.patch('/:id/reject', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const bookingId = req.params.id;
     const { reason } = req.body as { reason?: string };
@@ -400,6 +401,21 @@ router.patch('/:id/cancel', requireAuth, async (req: Request, res: Response, nex
     const isLandlord = booking.landlord_id === req.auth!.id;
     const isTenant = booking.tenant_id === req.auth!.id;
 
+    if (isLandlord && !isTenant) {
+      const access = await query(
+        'SELECT role, roles, landlord_verified FROM users WHERE id = $1 LIMIT 1',
+        [req.auth!.id],
+      );
+      const account = access.rows[0];
+      const roles = Array.isArray(account?.roles)
+        ? account.roles.map((role: string) => role.toLowerCase())
+        : [account?.role?.toLowerCase() ?? ''];
+      if (account?.landlord_verified !== true ||
+          !roles.some((role: string) => role === 'landlord' || role === 'host')) {
+        return res.status(403).json({ error: 'Approved landlord access is required.' });
+      }
+    }
+
     if (!isLandlord && !isTenant) {
       return res
         .status(403)
@@ -440,6 +456,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response, next: NextFu
     const result = await query(
       `SELECT b.id,
               b.property_id,
+              b.landlord_id,
               b.tenant_id,
               b.check_in_date,
               b.check_out_date,
@@ -470,7 +487,24 @@ router.get('/:id', requireAuth, async (req: Request, res: Response, next: NextFu
       return res.status(404).json({ error: 'Booking not found or access denied.' });
     }
 
-    res.json({ data: result.rows[0] });
+    const booking = result.rows[0];
+    if (booking.landlord_id === req.auth!.id &&
+        booking.tenant_id !== req.auth!.id) {
+      const access = await query(
+        'SELECT role, roles, landlord_verified FROM users WHERE id = $1 LIMIT 1',
+        [req.auth!.id],
+      );
+      const account = access.rows[0];
+      const roles = Array.isArray(account?.roles)
+        ? account.roles.map((role: string) => role.toLowerCase())
+        : [account?.role?.toLowerCase() ?? ''];
+      if (account?.landlord_verified !== true ||
+          !roles.some((role: string) => role === 'landlord' || role === 'host')) {
+        return res.status(403).json({ error: 'Approved landlord access is required.' });
+      }
+    }
+
+    res.json({ data: booking });
   } catch (error) {
     next(error);
   }

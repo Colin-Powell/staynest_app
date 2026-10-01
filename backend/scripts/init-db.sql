@@ -80,12 +80,23 @@ CREATE TABLE IF NOT EXISTS users (
   phone text,
   password_hash text NOT NULL,
   role text NOT NULL DEFAULT 'tenant',
+  roles text[] NOT NULL DEFAULT ARRAY['tenant']::text[],
+  landlord_verified boolean NOT NULL DEFAULT false,
   avatar text,
   verified boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS roles text[] NOT NULL DEFAULT ARRAY['tenant']::text[];
+ALTER TABLE users ADD COLUMN IF NOT EXISTS landlord_verified boolean NOT NULL DEFAULT false;
+UPDATE users
+SET roles = CASE
+  WHEN role IN ('landlord', 'host') THEN ARRAY['tenant', role]::text[]
+  WHEN role = ANY(ARRAY['admin', 'super_admin', 'administrator']) THEN ARRAY[role]::text[]
+  ELSE ARRAY['tenant']::text[]
+END
+WHERE roles = ARRAY['tenant']::text[] AND role <> 'tenant';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS fcm_token text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS settings jsonb DEFAULT '{"push": true, "email": true, "two_factor": false}'::jsonb;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS business_name text;
@@ -246,9 +257,30 @@ CREATE TABLE IF NOT EXISTS verifications (
   documents jsonb, -- { id_photo: url, utility_bill: url, selfie: url }
   property_data jsonb, -- basic listing info supplied by landlord
   admin_notes text,
+  reminder_stage smallint NOT NULL DEFAULT 0,
+  reminder_sent_at timestamptz,
+  submitted_at timestamptz,
+  cancelled_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE verifications ADD COLUMN IF NOT EXISTS reminder_stage smallint NOT NULL DEFAULT 0;
+ALTER TABLE verifications ADD COLUMN IF NOT EXISTS reminder_sent_at timestamptz;
+ALTER TABLE verifications ADD COLUMN IF NOT EXISTS submitted_at timestamptz;
+ALTER TABLE verifications ADD COLUMN IF NOT EXISTS cancelled_at timestamptz;
+CREATE INDEX IF NOT EXISTS verifications_user_status_created_idx
+  ON verifications(user_id, status, created_at DESC);
+UPDATE users
+SET landlord_verified = true,
+    roles = CASE
+      WHEN 'landlord' = ANY(roles) THEN roles
+      ELSE array_append(roles, 'landlord')
+    END
+WHERE role IN ('landlord', 'host')
+  AND EXISTS (
+    SELECT 1 FROM verifications v
+    WHERE v.user_id = users.id AND v.status = 'approved'
+  );
 
 CREATE TABLE IF NOT EXISTS favorites (
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,

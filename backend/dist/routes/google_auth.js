@@ -8,7 +8,7 @@ const client = new OAuth2Client(env.googleClientId);
 // Exchange Google ID token for server JWT and user record
 router.post('/', async (req, res, next) => {
     try {
-        const { idToken, role: requestedRole } = req.body;
+        const { idToken } = req.body;
         if (!idToken)
             return res.status(400).json({ error: 'idToken is required.' });
         const ticket = await client.verifyIdToken({
@@ -22,19 +22,18 @@ router.post('/', async (req, res, next) => {
         const name = payload.name || '';
         const avatar = payload.picture || null;
         // Upsert user
-        const exists = await query('SELECT id, name, email, phone, role, verified, avatar FROM users WHERE email = $1 LIMIT 1', [email]);
+        const exists = await query('SELECT id, name, email, phone, role, roles, landlord_verified, verified, avatar FROM users WHERE email = $1 LIMIT 1', [email]);
         let user = exists.rows[0];
         if (!user) {
-            const newRole = (requestedRole === 'landlord' || requestedRole === 'tenant') ? requestedRole : 'tenant';
-            const result = await query(`INSERT INTO users (name, email, avatar, verified, password_hash, role) VALUES ($1, $2, $3, true, '*', $4) RETURNING id, name, email, phone, role, verified, avatar`, [name, email, avatar, newRole]);
+            const result = await query(`INSERT INTO users (name, email, avatar, verified, password_hash, role) VALUES ($1, $2, $3, true, '*', 'tenant') RETURNING id, name, email, phone, role, roles, landlord_verified, verified, avatar`, [name, email, avatar]);
             user = result.rows[0];
         }
         else {
             // update avatar/name if missing
-            const updateRes = await query(`UPDATE users SET name = COALESCE(NULLIF($1, ''), name), avatar = COALESCE(avatar, $2) WHERE id = $3 RETURNING id, name, email, phone, role, verified, avatar`, [name, avatar, user.id]);
+            const updateRes = await query(`UPDATE users SET name = COALESCE(NULLIF($1, ''), name), avatar = COALESCE(avatar, $2) WHERE id = $3 RETURNING id, name, email, phone, role, roles, landlord_verified, verified, avatar`, [name, avatar, user.id]);
             user = updateRes.rows[0];
         }
-        const accessToken = jwt.sign({ id: user.id, email: user.email, role: user.role, verified: user.verified }, env.jwtSecret, { expiresIn: '15m' });
+        const accessToken = jwt.sign({ id: user.id, email: user.email, role: user.role, roles: user.roles, landlord_verified: user.landlord_verified, verified: user.verified }, env.jwtSecret, { expiresIn: '15m' });
         const refreshToken = jwt.sign({ id: user.id }, env.jwtSecret, { expiresIn: '30d' });
         return res.json({ data: { token: accessToken, accessToken, refreshToken, user } });
     }

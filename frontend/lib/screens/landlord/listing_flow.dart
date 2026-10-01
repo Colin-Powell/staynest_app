@@ -70,8 +70,15 @@ class PickedVideo {
 
 class AddListingFlow extends StatefulWidget {
   final Map<String, dynamic>? property;
+  final VoidCallback? onClose;
+  final VoidCallback? onComplete;
 
-  const AddListingFlow({super.key, this.property});
+  const AddListingFlow({
+    super.key,
+    this.property,
+    this.onClose,
+    this.onComplete,
+  });
 
   bool get isEditing => property?['id'] != null;
 
@@ -723,8 +730,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
             ? "Your property details were updated successfully."
             : "Your property is now live and ready to be discovered.",
         onOk: () {
-          Navigator.pop(context);
-          Navigator.pop(context, true);
+          if (widget.onComplete != null) {
+            widget.onComplete!();
+          } else {
+            Navigator.pop(context, true);
+          }
         },
       );
     } catch (e) {
@@ -830,7 +840,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic);
     } else {
-      Navigator.pop(context);
+      if (widget.onClose != null) {
+        widget.onClose!();
+      } else {
+        Navigator.pop(context);
+      }
     }
   }
 
@@ -876,7 +890,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   }
 
   // ==========================================
-  // MAIN BUILDER
+  // MAIN BUILDERS
   // ==========================================
   @override
   Widget build(BuildContext context) {
@@ -886,6 +900,182 @@ class _AddListingFlowState extends State<AddListingFlow> {
           body: Center(child: CircularProgressIndicator(color: _green)));
     }
 
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
+    if (isDesktop) {
+      return _buildDesktopLayout();
+    }
+    return _buildMobileLayout();
+  }
+
+  Widget _buildDesktopLayout() {
+    return Scaffold(
+      backgroundColor: _bg,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 32),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // LEFT PANE: Sidebar Stepper
+                  SizedBox(
+                    width: 320,
+                    child: _buildDesktopSidebar(),
+                  ),
+                  const SizedBox(width: 48),
+                  // RIGHT PANE: Active Form Step
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: _grey.withOpacity(0.1)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: PageView(
+                          controller: _pageController,
+                          physics: const NeverScrollableScrollPhysics(),
+                          children: [
+                            _buildStep1BasicInfo(isDesktop: true),
+                            _buildStep2Location(isDesktop: true),
+                            _buildStep3Amenities(isDesktop: true),
+                            _buildStep4Photos(isDesktop: true),
+                            _buildStep5Pricing(isDesktop: true),
+                            _buildStep6Review(isDesktop: true),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopSidebar() {
+    final steps = [
+      'Basic Information',
+      'Location & Address',
+      'Property Features',
+      'Photos & Video',
+      'Pricing & Details',
+      'Review & Publish'
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () {
+            if (_currentStep > 1) {
+              _previousStep();
+            } else {
+              if (widget.onClose != null) {
+                widget.onClose!();
+              } else {
+                Navigator.pop(context);
+              }
+            }
+          },
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _surface,
+              shape: BoxShape.circle,
+              border: Border.all(color: _grey.withOpacity(0.2)),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4))
+              ],
+            ),
+            child: const Icon(PhosphorIconsRegular.caretLeft,
+                size: 20, color: _dark),
+          ),
+        ),
+        const SizedBox(height: 48),
+        Text(
+          widget.isEditing ? 'Edit Listing' : 'Add New Listing',
+          style: GoogleFonts.poppins(
+            fontSize: 32,
+            fontWeight: FontWeight.w700,
+            color: _dark,
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(height: 40),
+        ...List.generate(steps.length, (index) {
+          final stepNum = index + 1;
+          final isActive = stepNum == _currentStep;
+          final isPast = stepNum < _currentStep;
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 28),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isActive || isPast ? _green : _surface,
+                    border: isActive || isPast
+                        ? null
+                        : Border.all(color: _grey.withOpacity(0.3)),
+                    boxShadow: isActive
+                        ? [
+                            BoxShadow(
+                                color: _green.withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4))
+                          ]
+                        : [],
+                  ),
+                  child: Center(
+                    child: isPast
+                        ? const Icon(PhosphorIconsBold.check,
+                            color: _surface, size: 16)
+                        : Text(stepNum.toString(),
+                            style: GoogleFonts.poppins(
+                                color: isActive ? _surface : _grey,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14)),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  steps[index],
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                    color: isActive || isPast ? _dark : _grey,
+                  ),
+                )
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildMobileLayout() {
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -915,12 +1105,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
-                  _buildStep1BasicInfo(),
-                  _buildStep2Location(),
-                  _buildStep3Amenities(),
-                  _buildStep4Photos(),
-                  _buildStep5Pricing(),
-                  _buildStep6Review(),
+                  _buildStep1BasicInfo(isDesktop: false),
+                  _buildStep2Location(isDesktop: false),
+                  _buildStep3Amenities(isDesktop: false),
+                  _buildStep4Photos(isDesktop: false),
+                  _buildStep5Pricing(isDesktop: false),
+                  _buildStep6Review(isDesktop: false),
                 ],
               ),
             ),
@@ -969,10 +1159,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // ==========================================
   // STEP 1: Basic Information
   // ==========================================
-  Widget _buildStep1BasicInfo() {
+  Widget _buildStep1BasicInfo({bool isDesktop = false}) {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: EdgeInsets.all(isDesktop ? 48 : 24),
       child: Form(
         key: _step1Key,
         child: Column(
@@ -1048,7 +1238,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 'A modern and spacious 2-bedroom apartment\nin a secure compound and amenities',
                 maxLines: 5),
             const SizedBox(height: 48),
-            _buildNextButton('Next: Location', _nextStep),
+            _buildNextButton('Next: Location', _nextStep, isDesktop: isDesktop),
             const SizedBox(height: 24),
           ],
         ),
@@ -1084,10 +1274,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
     );
   }
 
-  Widget _buildStep2Location() {
+  Widget _buildStep2Location({bool isDesktop = false}) {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: EdgeInsets.all(isDesktop ? 48 : 24),
       child: Form(
         key: _step2Key,
         child: Column(
@@ -1211,9 +1401,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
                     child: Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: Image.asset('assets/images/mapsheet.webp',
-                          width: 90,
-                          height: 100,
-                          fit: BoxFit.contain), // Fixed Image Fit
+                          width: 90, height: 100, fit: BoxFit.contain),
                     ),
                   ),
                   Expanded(
@@ -1247,7 +1435,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
               ),
             ),
             const SizedBox(height: 48),
-            _buildNextButton('Next: Amenities', _nextStep),
+            _buildNextButton('Next: Amenities', _nextStep,
+                isDesktop: isDesktop),
             const SizedBox(height: 48),
           ],
         ),
@@ -1282,7 +1471,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // ==========================================
   // STEP 3: Amenities
   // ==========================================
-  Widget _buildStep3Amenities() {
+  Widget _buildStep3Amenities({bool isDesktop = false}) {
     final popular =
         PropertyTaxonomy.getPopularAttributes(propertyType: _propertyType);
     final allAttrs =
@@ -1298,7 +1487,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: EdgeInsets.all(isDesktop ? 48 : 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1423,7 +1612,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
             ],
           ),
           const SizedBox(height: 48),
-          _buildNextButton('Next: Photos', _nextStep),
+          _buildNextButton('Next: Photos', _nextStep, isDesktop: isDesktop),
           const SizedBox(height: 24),
         ],
       ),
@@ -1463,10 +1652,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // ==========================================
   // STEP 4: Photos & Video
   // ==========================================
-  Widget _buildStep4Photos() {
+  Widget _buildStep4Photos({bool isDesktop = false}) {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: EdgeInsets.all(isDesktop ? 48 : 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1483,8 +1672,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: isDesktop ? 3 : 2,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
                 childAspectRatio: 1),
@@ -1728,7 +1917,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
               style:
                   GoogleFonts.poppins(color: _grey, height: 1.6, fontSize: 14)),
           const SizedBox(height: 48),
-          _buildNextButton('Next: Pricing & Details', _nextStep),
+          _buildNextButton('Next: Pricing & Details', _nextStep,
+              isDesktop: isDesktop),
           const SizedBox(height: 24),
         ],
       ),
@@ -1738,10 +1928,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // ==========================================
   // STEP 5: Pricing and Details
   // ==========================================
-  Widget _buildStep5Pricing() {
+  Widget _buildStep5Pricing({bool isDesktop = false}) {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: EdgeInsets.all(isDesktop ? 48 : 24),
       child: Form(
         key: _step5Key,
         child: Column(
@@ -1804,7 +1994,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
               ),
             ),
             const SizedBox(height: 48),
-            _buildNextButton('Next: Review', _nextStep),
+            _buildNextButton('Next: Review', _nextStep, isDesktop: isDesktop),
             const SizedBox(height: 24),
           ],
         ),
@@ -1855,7 +2045,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   // ==========================================
   // STEP 6: Review & Publish
   // ==========================================
-  Widget _buildStep6Review() {
+  Widget _buildStep6Review({bool isDesktop = false}) {
     final selectedAmenities = [
       ..._selectedAttributes
           .map((id) => PropertyTaxonomy.getAttributeById(id)?.label ?? id),
@@ -1864,7 +2054,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: EdgeInsets.all(isDesktop ? 48 : 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2102,50 +2292,101 @@ class _AddListingFlowState extends State<AddListingFlow> {
                   GoogleFonts.poppins(color: _grey, height: 1.6, fontSize: 14)),
 
           const SizedBox(height: 48),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _saveDraft(showConfirmation: true),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    side: const BorderSide(color: _green, width: 1.5),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(32)),
+
+          if (isDesktop)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(
+                  width: 220,
+                  child: OutlinedButton(
+                    onPressed: () => _saveDraft(showConfirmation: true),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      side: const BorderSide(color: _green, width: 1.5),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(32)),
+                    ),
+                    child: Text('Save Draft',
+                        style: GoogleFonts.poppins(
+                            color: _green,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15)),
                   ),
-                  child: Text('Save Draft',
-                      style: GoogleFonts.poppins(
-                          color: _green,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14)),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _submitting ? null : _publishListing,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: _green,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(32)),
-                    elevation: 0,
+                const SizedBox(width: 16),
+                SizedBox(
+                  width: 220,
+                  child: ElevatedButton(
+                    onPressed: _submitting ? null : _publishListing,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      backgroundColor: _green,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(32)),
+                      elevation: 0,
+                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                color: _surface, strokeWidth: 2))
+                        : Text('Publish',
+                            style: GoogleFonts.poppins(
+                                color: _surface,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15)),
                   ),
-                  child: _submitting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              color: _surface, strokeWidth: 2))
-                      : Text('Publish',
-                          style: GoogleFonts.poppins(
-                              color: _surface,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14)),
                 ),
-              ),
-            ],
-          ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _saveDraft(showConfirmation: true),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: const BorderSide(color: _green, width: 1.5),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(32)),
+                    ),
+                    child: Text('Save Draft',
+                        style: GoogleFonts.poppins(
+                            color: _green,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14)),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _submitting ? null : _publishListing,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: _green,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(32)),
+                      elevation: 0,
+                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                color: _surface, strokeWidth: 2))
+                        : Text('Publish',
+                            style: GoogleFonts.poppins(
+                                color: _surface,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14)),
+                  ),
+                ),
+              ],
+            ),
+
           const SizedBox(height: 48),
         ],
       ),
@@ -2343,9 +2584,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
     );
   }
 
-  Widget _buildNextButton(String text, VoidCallback onPressed) {
-    return SizedBox(
-      width: double.infinity,
+  Widget _buildNextButton(String text, VoidCallback onPressed,
+      {bool isDesktop = false}) {
+    final btn = SizedBox(
+      width: isDesktop ? 260 : double.infinity,
       height: 56,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
@@ -2355,11 +2597,31 @@ class _AddListingFlowState extends State<AddListingFlow> {
           elevation: 0,
         ),
         onPressed: onPressed,
-        child: Text(text,
-            style: GoogleFonts.poppins(
-                color: _surface, fontWeight: FontWeight.w600, fontSize: 16)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(text,
+                style: GoogleFonts.poppins(
+                    color: _surface,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16)),
+            if (isDesktop) ...[
+              const SizedBox(width: 8),
+              const Icon(PhosphorIconsRegular.arrowRight,
+                  color: _surface, size: 20),
+            ]
+          ],
+        ),
       ),
     );
+
+    if (isDesktop) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: btn,
+      );
+    }
+    return btn;
   }
 }
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db.js';
-import { requireAuth } from '../middleware/auth.js';
+import { authorize, requireAuth } from '../middleware/auth.js';
 const router = Router();
 const normalizePhone = (value) => {
     const digits = value.replace(/\D/g, '');
@@ -29,7 +29,7 @@ const mapMethod = (row) => ({
     last_used: row.last_used,
     created_at: row.created_at,
 });
-router.get('/payment-methods', requireAuth, async (req, res, next) => {
+router.get('/payment-methods', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
     try {
         const result = await query(`SELECT *
        FROM landlord_payment_methods
@@ -41,7 +41,7 @@ router.get('/payment-methods', requireAuth, async (req, res, next) => {
         next(err);
     }
 });
-router.post('/payment-methods', requireAuth, async (req, res, next) => {
+router.post('/payment-methods', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
     try {
         const type = String(req.body?.type ?? '').trim().toLowerCase();
         const rawAccount = typeof req.body?.account_number === 'string' ? req.body.account_number.trim() : '';
@@ -99,7 +99,7 @@ router.post('/payment-methods', requireAuth, async (req, res, next) => {
         next(err);
     }
 });
-router.post('/payment-methods/:id/set-default', requireAuth, async (req, res, next) => {
+router.post('/payment-methods/:id/set-default', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
     try {
         const methodId = req.params.id;
         const methodResult = await query(`SELECT id FROM landlord_payment_methods WHERE id = $1 AND user_id = $2 LIMIT 1`, [methodId, req.auth.id]);
@@ -126,7 +126,7 @@ router.post('/payment-methods/:id/set-default', requireAuth, async (req, res, ne
         next(err);
     }
 });
-router.delete('/payment-methods/:id', requireAuth, async (req, res, next) => {
+router.delete('/payment-methods/:id', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
     try {
         const methodResult = await query(`SELECT id, is_default FROM landlord_payment_methods WHERE id = $1 AND user_id = $2 LIMIT 1`, [req.params.id, req.auth.id]);
         if (methodResult.rowCount === 0) {

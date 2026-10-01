@@ -27,12 +27,11 @@ const accessTokenTtlForRole = (role: string | undefined) => {
 // Register new user
 router.post('/register', async (req, res, next) => {
   try {
-    const { name, email, password, phone, role, referralCode } = req.body as {
+    const { name, email, password, phone, referralCode } = req.body as {
       name?: string;
       email?: string;
       password?: string;
       phone?: string;
-      role?: string;
       referralCode?: string;
     };
 
@@ -78,14 +77,11 @@ router.post('/register', async (req, res, next) => {
 
     const generatedReferralCode = `SN${randomBytes(5).toString('hex').toUpperCase()}`;
 
-    const allowedRoles = ['tenant', 'landlord', 'host'];
-    const userRole = (role && allowedRoles.includes(role.toLowerCase())) ? role.toLowerCase() : 'tenant';
-
     const result = await query(
       `INSERT INTO users (name, email, phone, password_hash, role, verified, referral_code, referred_by)
-       VALUES ($1, $2, $3, $4, $5, false, $6, $7)
-       RETURNING id, name, email, phone, role, verified, referral_code, wallet_balance`,
-      [name.trim(), normalizedEmail, normalizedPhone, hash, userRole, generatedReferralCode, referredBy],
+       VALUES ($1, $2, $3, $4, 'tenant', false, $5, $6)
+       RETURNING id, name, email, phone, role, roles, landlord_verified, verified, referral_code, wallet_balance`,
+      [name.trim(), normalizedEmail, normalizedPhone, hash, generatedReferralCode, referredBy],
     );
 
 
@@ -97,6 +93,8 @@ router.post('/register', async (req, res, next) => {
         id: created.id,
         email: created.email,
         role: created.role,
+        roles: created.roles,
+        landlord_verified: created.landlord_verified,
         verified: created.verified,
       },
       env.jwtSecret,
@@ -136,7 +134,7 @@ router.post('/change-email', requireAuth, async (req, res, next) => {
 
     const updated = await query(
       `UPDATE users SET email = $1, verified = false WHERE id = $2
-       RETURNING id, name, email, phone, avatar, role, verified`,
+        RETURNING id, name, email, phone, avatar, role, roles, landlord_verified, verified`,
       [email, req.auth!.id],
     );
     if ((updated.rowCount ?? 0) === 0) {
@@ -165,7 +163,7 @@ router.post('/refresh', async (req, res, next) => {
     }
 
     const result = await query(
-      'SELECT id, name, email, phone, avatar, role, verified, referral_code, wallet_balance FROM users WHERE id = $1 LIMIT 1',
+      'SELECT id, name, email, phone, avatar, role, roles, landlord_verified, verified, referral_code, wallet_balance FROM users WHERE id = $1 LIMIT 1',
       [payload.id],
     );
 
@@ -179,6 +177,8 @@ router.post('/refresh', async (req, res, next) => {
         id: user.id,
         email: user.email,
         role: user.role,
+        roles: user.roles,
+        landlord_verified: user.landlord_verified,
         verified: user.verified,
       },
       env.jwtSecret,
@@ -198,6 +198,8 @@ router.post('/refresh', async (req, res, next) => {
           phone: user.phone,
           avatar: user.avatar,
           role: user.role,
+          roles: user.roles,
+          landlord_verified: user.landlord_verified,
           verified: user.verified,
         },
       },
@@ -224,7 +226,7 @@ router.post('/verify', requireAuth, async (req, res, next) => {
       `UPDATE users
        SET verified = true
        WHERE id = $1
-       RETURNING id, name, email, role, avatar, verified`,
+      RETURNING id, name, email, role, roles, landlord_verified, avatar, verified`,
       [req.auth!.id],
     );
 
@@ -247,7 +249,7 @@ router.post('/login', async (req, res, next) => {
     }
 
     const result = await query(
-      'SELECT id, name, email, phone, avatar, password_hash, role, verified, referral_code, wallet_balance FROM users WHERE email = $1 LIMIT 1',
+      'SELECT id, name, email, phone, avatar, password_hash, role, roles, landlord_verified, verified, referral_code, wallet_balance FROM users WHERE email = $1 LIMIT 1',
       [email.trim().toLowerCase()],
     );
 
@@ -266,6 +268,8 @@ router.post('/login', async (req, res, next) => {
         id: user.id,
         email: user.email,
         role: user.role,
+        roles: user.roles,
+        landlord_verified: user.landlord_verified,
         verified: user.verified,
       },
       env.jwtSecret,
@@ -289,6 +293,8 @@ router.post('/login', async (req, res, next) => {
           phone: user.phone,
           avatar: user.avatar,
           role: user.role,
+          roles: user.roles,
+          landlord_verified: user.landlord_verified,
           verified: user.verified,
         },
       },

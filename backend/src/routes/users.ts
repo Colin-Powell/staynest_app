@@ -48,7 +48,7 @@ router.patch('/profile', requireAuth, async (req: Request, res: Response, next: 
            years_in_business = COALESCE($9, years_in_business),
            settings = COALESCE($10, settings)
          WHERE id = $11
-       RETURNING id, name, email, phone, avatar, role, verified, created_at, business_name, business_type, business_description, tax_id, years_in_business, settings`,
+      RETURNING id, name, email, phone, avatar, role, roles, landlord_verified, verified, created_at, business_name, business_type, business_description, tax_id, years_in_business, settings`,
       [
         name, email, phone, avatar,
         businessName, businessType, businessDescription,
@@ -77,7 +77,7 @@ router.get('/recent-contacts', requireAuth, async (_req: Request, res: Response,
 router.get('/me', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await query(
-      `SELECT id, name, email, phone, avatar, role, verified, created_at,
+      `SELECT id, name, email, phone, avatar, role, roles, landlord_verified, verified, created_at,
               business_name, business_type, business_description, tax_id,
               years_in_business, settings
        FROM users WHERE id = $1`,

@@ -24,7 +24,7 @@ const accessTokenTtlForRole = (role) => {
 // Register new user
 router.post('/register', async (req, res, next) => {
     try {
-        const { name, email, password, phone, role, referralCode } = req.body;
+        const { name, email, password, phone, referralCode } = req.body;
         if (!name || !email || !password || !phone) {
             return res.status(400).json({ error: 'Name, email, phone and password are required.' });
         }
@@ -56,16 +56,16 @@ router.post('/register', async (req, res, next) => {
             referredBy = referrer.rows[0].id;
         }
         const generatedReferralCode = `SN${randomBytes(5).toString('hex').toUpperCase()}`;
-        const allowedRoles = ['tenant', 'landlord', 'host'];
-        const userRole = (role && allowedRoles.includes(role.toLowerCase())) ? role.toLowerCase() : 'tenant';
         const result = await query(`INSERT INTO users (name, email, phone, password_hash, role, verified, referral_code, referred_by)
-       VALUES ($1, $2, $3, $4, $5, false, $6, $7)
-       RETURNING id, name, email, phone, role, verified, referral_code, wallet_balance`, [name.trim(), normalizedEmail, normalizedPhone, hash, userRole, generatedReferralCode, referredBy]);
+       VALUES ($1, $2, $3, $4, 'tenant', false, $5, $6)
+       RETURNING id, name, email, phone, role, roles, landlord_verified, verified, referral_code, wallet_balance`, [name.trim(), normalizedEmail, normalizedPhone, hash, generatedReferralCode, referredBy]);
         const created = result.rows[0];
         const accessToken = jwt.sign({
             id: created.id,
             email: created.email,
             role: created.role,
+            roles: created.roles,
+            landlord_verified: created.landlord_verified,
             verified: created.verified,
         }, env.jwtSecret, { expiresIn: accessTokenTtlForRole(created.role) });
         const refreshToken = jwt.sign({ id: created.id }, env.jwtSecret, { expiresIn: '30d' });
@@ -93,7 +93,7 @@ router.post('/change-email', requireAuth, async (req, res, next) => {
             return res.status(409).json({ error: 'Email already registered.' });
         }
         const updated = await query(`UPDATE users SET email = $1, verified = false WHERE id = $2
-       RETURNING id, name, email, phone, avatar, role, verified`, [email, req.auth.id]);
+        RETURNING id, name, email, phone, avatar, role, roles, landlord_verified, verified`, [email, req.auth.id]);
         if ((updated.rowCount ?? 0) === 0) {
             return res.status(404).json({ error: 'User not found.' });
         }
@@ -116,7 +116,7 @@ router.post('/refresh', async (req, res, next) => {
         if (!payload.id) {
             return res.status(401).json({ error: 'Invalid refresh token.' });
         }
-        const result = await query('SELECT id, name, email, phone, avatar, role, verified, referral_code, wallet_balance FROM users WHERE id = $1 LIMIT 1', [payload.id]);
+        const result = await query('SELECT id, name, email, phone, avatar, role, roles, landlord_verified, verified, referral_code, wallet_balance FROM users WHERE id = $1 LIMIT 1', [payload.id]);
         const user = result.rows[0];
         if (!user) {
             return res.status(401).json({ error: 'Invalid refresh token.' });
@@ -125,6 +125,8 @@ router.post('/refresh', async (req, res, next) => {
             id: user.id,
             email: user.email,
             role: user.role,
+            roles: user.roles,
+            landlord_verified: user.landlord_verified,
             verified: user.verified,
         }, env.jwtSecret, { expiresIn: accessTokenTtlForRole(user.role) });
         const nextRefreshToken = jwt.sign({ id: user.id }, env.jwtSecret, { expiresIn: '30d' });
@@ -140,6 +142,8 @@ router.post('/refresh', async (req, res, next) => {
                     phone: user.phone,
                     avatar: user.avatar,
                     role: user.role,
+                    roles: user.roles,
+                    landlord_verified: user.landlord_verified,
                     verified: user.verified,
                 },
             },
@@ -162,7 +166,7 @@ router.post('/verify', requireAuth, async (req, res, next) => {
         const result = await query(`UPDATE users
        SET verified = true
        WHERE id = $1
-       RETURNING id, name, email, role, avatar, verified`, [req.auth.id]);
+      RETURNING id, name, email, role, roles, landlord_verified, avatar, verified`, [req.auth.id]);
         if (result.rowCount === 0) {
             return res.status(404).json({ error: 'User not found.' });
         }
@@ -178,7 +182,7 @@ router.post('/login', async (req, res, next) => {
         if (!email || !password) {
             return res.status(400).json({ error: 'Email and password are required.' });
         }
-        const result = await query('SELECT id, name, email, phone, avatar, password_hash, role, verified, referral_code, wallet_balance FROM users WHERE email = $1 LIMIT 1', [email.trim().toLowerCase()]);
+        const result = await query('SELECT id, name, email, phone, avatar, password_hash, role, roles, landlord_verified, verified, referral_code, wallet_balance FROM users WHERE email = $1 LIMIT 1', [email.trim().toLowerCase()]);
         const user = result.rows[0];
         if (!user || !user.password_hash) {
             return res.status(401).json({ error: 'Invalid credentials.' });
@@ -191,6 +195,8 @@ router.post('/login', async (req, res, next) => {
             id: user.id,
             email: user.email,
             role: user.role,
+            roles: user.roles,
+            landlord_verified: user.landlord_verified,
             verified: user.verified,
         }, env.jwtSecret, { expiresIn: accessTokenTtlForRole(user.role) });
         const refreshToken = jwt.sign({ id: user.id }, env.jwtSecret, { expiresIn: '30d' });
@@ -206,6 +212,8 @@ router.post('/login', async (req, res, next) => {
                     phone: user.phone,
                     avatar: user.avatar,
                     role: user.role,
+                    roles: user.roles,
+                    landlord_verified: user.landlord_verified,
                     verified: user.verified,
                 },
             },

@@ -24,6 +24,7 @@ import 'app_theme.dart';
 import 'session/app_session.dart';
 import 'session/onboarding_prefs.dart';
 import 'screens/dashboard/landlord_bookings_page.dart';
+import 'screens/home/become_host_view.dart';
 import 'screens/privacy_policy.dart';
 import 'screens/auth/tenant_survey.dart';
 import 'repository/remote_database_repository.dart';
@@ -37,7 +38,6 @@ import 'services/fcm_service.dart';
 import 'services/message_service.dart';
 import 'services/notification_api.dart';
 import 'services/auth_service.dart';
-import 'services/verification_api.dart';
 import 'services/version_service.dart';
 import 'screens/super_admin/super_admin_shell.dart';
 import 'screens/super_admin/super_admin_login.dart';
@@ -122,6 +122,7 @@ class PropertyApp extends StatefulWidget {
 
 class _PropertyAppState extends State<PropertyApp> {
   late String _role;
+  bool _isCompletingModalLogin = false;
 
   @override
   void initState() {
@@ -181,56 +182,107 @@ class _PropertyAppState extends State<PropertyApp> {
   }
 
   Future<String> _resolveLandlordRoute() async {
-    if (!AppSession.isLandlord) return '/home';
-
     try {
-      final status = await VerificationApi.getVerificationStatus();
-      final isApproved =
-          status?['status']?.toString().toLowerCase() == 'approved';
-      if (isApproved) {
-        AppSession.currentUserVerified = true;
-        return '/landlord';
-      }
-      if (AppSession.currentUserVerified) return '/landlord';
-      return '/verification_center';
+      final user = await RemoteDatabaseRepository().loadCurrentUser();
+      AppSession.updateCurrentUser(user);
+      await AppSession.persistSession();
     } catch (_) {
-      return AppSession.currentUserVerified
-          ? '/landlord'
-          : '/verification_center';
+      // Persisted session roles remain the offline fallback; backend endpoints reauthorize.
     }
+    return AppSession.hasLandlordAccess ? '/landlord' : '/home';
+  }
+
+  Future<void> _switchActivePortal(String portal) async {
+    if (portal == 'landlord' && !AppSession.hasLandlordAccess) return;
+    final target = portal == 'landlord' ? '/landlord' : '/home';
+    AppSession.setRole(portal);
+    await AppSession.persistSession();
+    navigatorKey.currentState?.pushNamedAndRemoveUntil<void>(
+      target,
+      (route) => false,
+    );
+  }
+
+  void _scheduleLandlordPortalActivation() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !AppSession.hasLandlordAccess || AppSession.isLandlord) {
+        return;
+      }
+      AppSession.setRole('landlord');
+      unawaited(AppSession.persistSession());
+    });
+  }
+
+  Widget _landlordOnlyRoute(Widget Function() builder) {
+    if (AppSession.hasLandlordAccess) {
+      _scheduleLandlordPortalActivation();
+      return builder();
+    }
+    return AppShell(onRequireLogin: _showLoginModal);
+  }
+
+  Widget _landlordPortalRoute() {
+    if (!AppSession.hasLandlordAccess) {
+      return AppShell(onRequireLogin: _showLoginModal);
+    }
+    _scheduleLandlordPortalActivation();
+    return LandlordPortalView(
+      onSwitchToTenantPortal: () => _switchActivePortal('tenant'),
+    );
   }
 
   Future<void> _completeModalLogin(
     BuildContext dialogContext, {
     VoidCallback? onAuthenticated,
   }) async {
-    if (!AppSession.isEmailVerified) {
-      Navigator.of(dialogContext).pop();
-      navigatorKey.currentState?.pushNamed('/otp');
-      return;
+    if (_isCompletingModalLogin) return;
+    _isCompletingModalLogin = true;
+
+    try {
+      if (!AppSession.isEmailVerified) {
+        _closeLoginModal(dialogContext, routeName: '/otp');
+        return;
+      }
+
+      await AuthService.instance.syncFCMToken();
+      AppSession.isGuest = false;
+
+      if (AppSession.isAdmin) {
+        _closeLoginModal(dialogContext, routeName: '/super_admin');
+        return;
+      }
+
+      if (AppSession.isLandlord) {
+        final target = await _resolveLandlordRoute();
+        if (!mounted || !dialogContext.mounted) return;
+        _closeLoginModal(dialogContext, routeName: target);
+        return;
+      }
+
+      await _enforceTenantPreferencesIfMissing(dialogContext);
+      if (!mounted || !dialogContext.mounted) return;
+      _closeLoginModal(dialogContext, onClosed: onAuthenticated);
+    } finally {
+      _isCompletingModalLogin = false;
     }
+  }
 
-    await AuthService.instance.syncFCMToken();
-    AppSession.isGuest = false;
-
-    if (AppSession.isAdmin) {
-      Navigator.of(dialogContext).pop();
-      navigatorKey.currentState?.pushReplacementNamed('/super_admin');
-      return;
-    }
-
-    if (AppSession.isLandlord) {
-      final target = await _resolveLandlordRoute();
-      if (!mounted) return;
-      Navigator.of(dialogContext).pop();
-      navigatorKey.currentState?.pushReplacementNamed(target);
-      return;
-    }
-
-    await _enforceTenantPreferencesIfMissing(dialogContext);
-    if (!mounted || !dialogContext.mounted) return;
+  void _closeLoginModal(
+    BuildContext dialogContext, {
+    String? routeName,
+    VoidCallback? onClosed,
+  }) {
     Navigator.of(dialogContext).pop();
-    onAuthenticated?.call();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (routeName != null) {
+        navigatorKey.currentState?.pushNamedAndRemoveUntil<void>(
+          routeName,
+          (route) => false,
+        );
+      } else {
+        onClosed?.call();
+      }
+    });
   }
 
   Future<void> _completePageLogin(
@@ -366,24 +418,25 @@ class _PropertyAppState extends State<PropertyApp> {
         '/privacy': (context) => const PrivacyPolicyView(),
         '/home': (context) => AppShell(onRequireLogin: _showLoginModal),
         '/explore': (context) => AppShell(onRequireLogin: _showLoginModal),
-        '/landlord': (context) => LandlordPortalView(
-              onAddProperty: () =>
-                  Navigator.pushNamed(context, '/list_property'),
-            ),
-        '/dashboard': (context) => LandlordOverviewPage(
-              onLogout: () async {
-                await AppSession.reset();
-                if (context.mounted) {
-                  Navigator.pushReplacementNamed(context, '/');
-                }
-              },
-              onAddProperty: () =>
-                  Navigator.pushNamed(context, '/list_property'),
-              onViewVerification: () =>
-                  Navigator.pushNamed(context, '/verification_center'),
+        '/landlord': (context) => _landlordPortalRoute(),
+        '/dashboard': (context) => _landlordOnlyRoute(
+              () => LandlordOverviewPage(
+                onLogout: () async {
+                  await AppSession.reset();
+                  if (context.mounted) {
+                    Navigator.pushReplacementNamed(context, '/');
+                  }
+                },
+                onAddProperty: () =>
+                    Navigator.pushNamed(context, '/list_property'),
+                onViewVerification: () =>
+                    Navigator.pushNamed(context, '/verification_center'),
+              ),
             ),
         '/profile': (context) => ProfileView(
               onBack: () => Navigator.pop(context),
+              onBecomeHost: () => Navigator.pushNamed(context, '/become_host'),
+              onSwitchRole: () => _switchActivePortal('landlord'),
               onViewBookings: () {
                 if (AppSession.isLandlord) {
                   Navigator.pushNamed(context, '/landlord_bookings');
@@ -431,25 +484,38 @@ class _PropertyAppState extends State<PropertyApp> {
               onVerificationCenter: () =>
                   Navigator.pushNamed(context, '/verification_center'),
             ),
-        '/portal': (context) => LandlordPortalView(
-            onAddProperty: () =>
-                Navigator.pushNamed(context, '/list_property')),
+        '/portal': (context) => _landlordPortalRoute(),
+        '/become_host': (context) => AppSession.currentUserId == null
+            ? AppShell(onRequireLogin: _showLoginModal)
+            : BecomeHostView(
+                onBack: () => Navigator.maybePop(context),
+                onSubmitted: () {
+                  AppSession.notifyHostApplicationChanged();
+                  navigatorKey.currentState?.popUntil(
+                    (route) => route.settings.name == '/home' || route.isFirst,
+                  );
+                },
+                onSwitchToLandlord: () => _switchActivePortal('landlord'),
+              ),
         '/search': (context) => SearchView(
               onSelectProperty: (id) {},
               onShowMap: (properties, query) {},
               onOpenFilters: () {},
               activeFilters: const {},
             ),
-        '/landlord_properties': (context) => LandlordPropertiesView(
-            onAddProperty: () =>
-                Navigator.pushNamed(context, '/list_property')),
-        '/landlord_property_management': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments
-              as Map<String, dynamic>?;
-          return LandlordPropertyManagementPage(
-              property: args ?? <String, dynamic>{});
-        },
-        '/landlord_tenants': (context) => const LandlordTenantsPage(),
+        '/landlord_properties': (context) => _landlordOnlyRoute(
+              () => LandlordPropertiesView(
+                  onAddProperty: () =>
+                      Navigator.pushNamed(context, '/list_property')),
+            ),
+        '/landlord_property_management': (context) => _landlordOnlyRoute(() {
+              final args = ModalRoute.of(context)!.settings.arguments
+                  as Map<String, dynamic>?;
+              return LandlordPropertyManagementPage(
+                  property: args ?? <String, dynamic>{});
+            }),
+        '/landlord_tenants': (context) =>
+            _landlordOnlyRoute(() => const LandlordTenantsPage()),
         '/nearby': (context) => NearbyServicesView(
               onClose: () => Navigator.pop(context),
               onViewMap: () {
@@ -471,7 +537,8 @@ class _PropertyAppState extends State<PropertyApp> {
             MyBookingsViewScreen(onBack: () => Navigator.pop(context)),
         '/tenant_bookings': (context) =>
             TenantBookingsView(onBack: () => Navigator.pop(context)),
-        '/landlord_bookings': (context) => const LandlordBookingsPage(),
+        '/landlord_bookings': (context) =>
+            _landlordOnlyRoute(() => const LandlordBookingsPage()),
         '/help_support': (context) =>
             HelpSupportView(onBack: () => Navigator.pop(context)),
         '/settings': (context) => SettingView(
@@ -509,9 +576,11 @@ class _PropertyAppState extends State<PropertyApp> {
         '/tenant_profile': (context) => TenantProfileView(
               onBack: () => Navigator.pop(context),
             ),
-        '/list_property': (context) => AddListingFlow(
-            property: ModalRoute.of(context)?.settings.arguments
-                as Map<String, dynamic>?),
+        '/list_property': (context) => _landlordOnlyRoute(
+              () => AddListingFlow(
+                  property: ModalRoute.of(context)?.settings.arguments
+                      as Map<String, dynamic>?),
+            ),
         '/verification_center': (context) => const VerificationCenter(),
         '/super_admin': (context) => const SuperAdminShell(),
         '/referral': (context) => const ReferralView(),
@@ -623,6 +692,9 @@ class _PropertyAppState extends State<PropertyApp> {
             bookingId: arguments['bookingId']?.toString() ?? '',
           );
         case '/landlord_reviews':
+          if (!AppSession.hasLandlordAccess) {
+            return AppShell(onRequireLogin: _showLoginModal);
+          }
           return LandlordReviewsView(
             onClose: () => Navigator.of(context).pop(),
           );
@@ -999,6 +1071,17 @@ class _AppShellState extends State<AppShell> {
     if (s == _AppScreen.messages) _refreshDesktopCounts();
   }
 
+  Future<void> _switchToLandlordPortal() async {
+    if (!AppSession.hasLandlordAccess) return;
+    AppSession.setRole('landlord');
+    await AppSession.persistSession();
+    if (!mounted) return;
+    navigatorKey.currentState?.pushNamedAndRemoveUntil<void>(
+      '/landlord',
+      (route) => false,
+    );
+  }
+
   Future<void> _refreshDesktopCounts() async {
     if (AppSession.isGuest) return;
     try {
@@ -1122,6 +1205,17 @@ class _AppShellState extends State<AppShell> {
         return AboutView(onBack: _closeProfileHelper);
       case '/verification_center':
         return VerificationCenter(onBack: _closeProfileHelper);
+      case '/become_host':
+        return BecomeHostView(
+          onBack: _closeProfileHelper,
+          onSubmitted: () {
+            navigatorKey.currentState?.popUntil(
+              (route) => route.settings.name == '/home' || route.isFirst,
+            );
+            _closeProfileHelper();
+          },
+          onSwitchToLandlord: _switchToLandlordPortal,
+        );
       default:
         return const SizedBox.shrink();
     }
@@ -1608,6 +1702,8 @@ class _AppShellState extends State<AppShell> {
               ? null
               : _buildDesktopProfileHelper(),
           onCloseDesktopHelper: _closeProfileHelper,
+          onBecomeHost: () => _openProfileHelper('/become_host'),
+          onSwitchRole: _switchToLandlordPortal,
           onViewBookings: () => _openProfileHelper(AppSession.isLandlord
               ? '/landlord_bookings'
               : '/tenant_bookings'),

@@ -5,6 +5,38 @@ import 'package:property_app/session/app_session.dart';
 class VerificationApi {
   static final HttpJsonClient _client = HttpJsonClient();
 
+  static Future<Map<String, dynamic>> saveDraft(
+      Map<String, dynamic> payload) async {
+    final response = await _client.post(
+      Uri.parse('${AppSession.apiBaseUrl}/verifications/draft'),
+      body: payload,
+    );
+    final decoded = jsonDecode(response.body);
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return decoded as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> cancelApplication() async {
+    final response = await _client.post(
+      Uri.parse('${AppSession.apiBaseUrl}/verifications/cancel'),
+      body: const <String, dynamic>{},
+    );
+    final decoded = jsonDecode(response.body);
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return decoded as Map<String, dynamic>;
+  }
+
+  static Future<void> dismissDraftReminders() async {
+    await _client.post(
+      Uri.parse('${AppSession.apiBaseUrl}/verifications/dismiss-reminder'),
+      body: const <String, dynamic>{},
+    );
+  }
+
   /// Submit verification payload. `payload` should contain `documents` and optional `property`.
   static Future<Map<String, dynamic>> submitVerification(
       Map<String, dynamic> payload,

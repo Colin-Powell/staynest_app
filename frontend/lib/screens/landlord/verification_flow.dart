@@ -43,18 +43,45 @@ class VerificationSession {
 
   Map<String, String> adminRejections = {};
 
+  VerificationSession();
+
+  factory VerificationSession.fromApplication(
+      Map<String, dynamic>? application) {
+    final session = VerificationSession();
+    final rawDocuments = application?['documents'];
+    if (rawDocuments is Map) {
+      final documents = Map<String, dynamic>.from(rawDocuments);
+      session.idPhotoFrontUrl = documents['id_photo_front']?.toString();
+      session.idPhotoBackUrl = documents['id_photo_back']?.toString();
+      session.selfieUrl = documents['selfie']?.toString();
+      session.leaseAgreementUrl = documents['lease_agreement']?.toString();
+      session.proofOfAddressUrl = documents['proof_of_address']?.toString();
+      session.utilityBillUrl = documents['utility_bill']?.toString();
+    }
+    final adminNotes = application?['admin_notes']?.toString();
+    if (adminNotes != null && adminNotes.isNotEmpty) {
+      session.adminRejections['application'] = adminNotes;
+    }
+    return session;
+  }
+
   double get progress {
-    int completed = 0;
-    if (idPhotoFront != null) completed++;
-    if (idPhotoBack != null) completed++;
-    if (selfie != null) completed++;
-    return completed / 3; // Only ID + selfie are required for KYC approval
+    final completed = [
+      idPhotoFront != null || idPhotoFrontUrl != null,
+      idPhotoBack != null || idPhotoBackUrl != null,
+      selfie != null || selfieUrl != null,
+      leaseAgreement != null || leaseAgreementUrl != null,
+    ].where((isComplete) => isComplete).length;
+    return completed / 4;
   }
 
   Map<String, dynamic> toDocumentsMap() => {
         if (idPhotoFrontUrl != null) 'id_photo_front': idPhotoFrontUrl,
         if (idPhotoBackUrl != null) 'id_photo_back': idPhotoBackUrl,
         if (selfieUrl != null) 'selfie': selfieUrl,
+        if (leaseAgreementUrl != null) 'lease_agreement': leaseAgreementUrl,
+        if (proofOfAddressUrl != null) 'proof_of_address': proofOfAddressUrl,
+        if (utilityBillUrl != null) 'utility_bill': utilityBillUrl,
       };
 }
 
@@ -89,40 +116,42 @@ class _VerificationCenterState extends State<VerificationCenter> {
   @override
   Widget build(BuildContext context) {
     if (!AppSession.isEmailVerified) {
-      return Scaffold(
-        backgroundColor: _bg,
-        appBar: AppBar(
+      return _ResponsiveWrapper(
+        child: Scaffold(
           backgroundColor: _bg,
-          elevation: 0,
-          leading: GestureDetector(
-            onTap: _handleBack,
-            child: const Icon(PhosphorIconsRegular.caretLeft,
-                color: _dark, size: 24),
+          appBar: AppBar(
+            backgroundColor: _bg,
+            elevation: 0,
+            leading: GestureDetector(
+              onTap: _handleBack,
+              child: const Icon(PhosphorIconsRegular.caretLeft,
+                  color: _dark, size: 24),
+            ),
+            title: Text('Verify Email First',
+                style: GoogleFonts.poppins(
+                    color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
           ),
-          title: Text('Verify Email First',
-              style: GoogleFonts.poppins(
-                  color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(PhosphorIconsRegular.shieldSlash,
-                    size: 64, color: _grey),
-                const SizedBox(height: 16),
-                Text(
-                  'Please complete OTP email verification before starting landlord KYC.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(fontSize: 16, color: _grey),
-                ),
-                const SizedBox(height: 24),
-                PrimaryButton(
-                    text: 'Verify Now',
-                    onPressed: () =>
-                        Navigator.pushReplacementNamed(context, '/otp')),
-              ],
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(PhosphorIconsRegular.shieldSlash,
+                      size: 64, color: _grey),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Please complete OTP email verification before starting landlord KYC.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(fontSize: 16, color: _grey),
+                  ),
+                  const SizedBox(height: 24),
+                  PrimaryButton(
+                      text: 'Verify Now',
+                      onPressed: () =>
+                          Navigator.pushReplacementNamed(context, '/otp')),
+                ],
+              ),
             ),
           ),
         ),
@@ -130,157 +159,162 @@ class _VerificationCenterState extends State<VerificationCenter> {
     }
 
     if (!AppSession.isLandlord) {
-      return Scaffold(
-        backgroundColor: _bg,
-        appBar: AppBar(
+      return _ResponsiveWrapper(
+        child: Scaffold(
           backgroundColor: _bg,
-          elevation: 0,
-          leading: GestureDetector(
-            onTap: _handleBack,
-            child: const Icon(PhosphorIconsRegular.caretLeft,
-                color: _dark, size: 24),
+          appBar: AppBar(
+            backgroundColor: _bg,
+            elevation: 0,
+            leading: GestureDetector(
+              onTap: _handleBack,
+              child: const Icon(PhosphorIconsRegular.caretLeft,
+                  color: _dark, size: 24),
+            ),
+            title: Text('Access Denied',
+                style: GoogleFonts.poppins(
+                    color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
           ),
-          title: Text('Access Denied',
-              style: GoogleFonts.poppins(
-                  color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(PhosphorIconsRegular.shieldSlash,
-                    size: 64, color: _grey),
-                const SizedBox(height: 16),
-                Text(
-                  'Verification center is available for landlords only.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(fontSize: 16, color: _grey),
-                ),
-                const SizedBox(height: 24),
-                PrimaryButton(text: 'Go Back', onPressed: _handleBack),
-              ],
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(PhosphorIconsRegular.shieldSlash,
+                      size: 64, color: _grey),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Verification center is available for landlords only.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(fontSize: 16, color: _grey),
+                  ),
+                  const SizedBox(height: 24),
+                  PrimaryButton(text: 'Go Back', onPressed: _handleBack),
+                ],
+              ),
             ),
           ),
         ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
+    return _ResponsiveWrapper(
+      child: Scaffold(
         backgroundColor: _bg,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: GestureDetector(
-          onTap: _handleBack,
-          child: const Icon(PhosphorIconsRegular.caretLeft,
-              color: _dark, size: 28),
+        appBar: AppBar(
+          backgroundColor: _bg,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: GestureDetector(
+            onTap: _handleBack,
+            child: const Icon(PhosphorIconsRegular.caretLeft,
+                color: _dark, size: 28),
+          ),
+          title: Text('Verification Center',
+              style: GoogleFonts.poppins(
+                  color: _dark,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 22,
+                  letterSpacing: -0.5)),
         ),
-        title: Text('Verification Center',
-            style: GoogleFonts.poppins(
-                color: _dark,
-                fontWeight: FontWeight.w700,
-                fontSize: 22,
-                letterSpacing: -0.5)),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                            color: _green.withOpacity(0.1),
+                            shape: BoxShape.circle),
+                        child: const Icon(PhosphorIconsFill.shieldCheck,
+                            size: 80, color: _green),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                          'Complete verification to build trust with\ntenants and unlock premium features.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.poppins(
+                              fontSize: 15, color: _grey, height: 1.5)),
+                      const SizedBox(height: 48),
+                      _buildFeature(PhosphorIconsFill.sealCheck,
+                          'Verified Badge', 'Show tenants you are trustworthy'),
+                      _buildFeature(PhosphorIconsFill.eye, 'Higher Visibility',
+                          'Get featured in more searches'),
+                      _buildFeature(
+                          PhosphorIconsFill.lightning,
+                          'Faster Bookings',
+                          'Verified landlords get more bookings'),
+                      _buildFeature(PhosphorIconsFill.lockKey,
+                          'Secure Platform', 'We protect you and your tenants'),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
                 padding: const EdgeInsets.all(24),
-                physics: const BouncingScrollPhysics(),
+                decoration: BoxDecoration(
+                  color: _surface,
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 20,
+                        offset: const Offset(0, -4))
+                  ],
+                  border:
+                      Border(top: BorderSide(color: _grey.withOpacity(0.1))),
+                ),
                 child: Column(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                          color: _green.withOpacity(0.1),
-                          shape: BoxShape.circle),
-                      child: const Icon(PhosphorIconsFill.shieldCheck,
-                          size: 80, color: _green),
+                    PrimaryButton(
+                        text: 'Start Verification',
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => VerificationRequirementHub(
+                                    session: _session)))),
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: () async {
+                        try {
+                          final status =
+                              await VerificationApi.getVerificationStatus();
+                          if (!context.mounted) return;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => VerificationStatusView(
+                                statusData: status ?? {'status': 'not_started'},
+                              ),
+                            ),
+                          );
+                        } catch (_) {
+                          if (!context.mounted) return;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const VerificationStatusView(
+                                statusData: {'status': 'not_started'},
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: Text('Check Existing Status',
+                          style: GoogleFonts.poppins(
+                              color: _green,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600)),
                     ),
-                    const SizedBox(height: 24),
-                    Text(
-                        'Complete verification to build trust with\ntenants and unlock premium features.',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(
-                            fontSize: 15, color: _grey, height: 1.5)),
-                    const SizedBox(height: 48),
-                    _buildFeature(PhosphorIconsFill.sealCheck, 'Verified Badge',
-                        'Show tenants you are trustworthy'),
-                    _buildFeature(PhosphorIconsFill.eye, 'Higher Visibility',
-                        'Get featured in more searches'),
-                    _buildFeature(
-                        PhosphorIconsFill.lightning,
-                        'Faster Bookings',
-                        'Verified landlords get more bookings'),
-                    _buildFeature(PhosphorIconsFill.lockKey, 'Secure Platform',
-                        'We protect you and your tenants'),
                   ],
                 ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: _surface,
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 20,
-                      offset: const Offset(0, -4))
-                ],
-                border: Border(top: BorderSide(color: _grey.withOpacity(0.1))),
-              ),
-              child: Column(
-                children: [
-                  PrimaryButton(
-                      text: 'Start Verification',
-                      onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => VerificationRequirementHub(
-                                  session: _session)))),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () async {
-                      try {
-                        final status =
-                            await VerificationApi.getVerificationStatus();
-                        if (!context.mounted) return;
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => VerificationStatusView(
-                              statusData: status ?? {'status': 'not_started'},
-                            ),
-                          ),
-                        );
-                      } catch (_) {
-                        if (!context.mounted) return;
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const VerificationStatusView(
-                              statusData: {'status': 'not_started'},
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                    child: Text('Check Existing Status',
-                        style: GoogleFonts.poppins(
-                            color: _green,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -323,7 +357,14 @@ class _VerificationCenterState extends State<VerificationCenter> {
 // ==========================================
 class VerificationRequirementHub extends StatefulWidget {
   final VerificationSession session;
-  const VerificationRequirementHub({super.key, required this.session});
+  final VoidCallback? onSubmitted;
+  final VoidCallback? onClose;
+  const VerificationRequirementHub({
+    super.key,
+    required this.session,
+    this.onSubmitted,
+    this.onClose,
+  });
   @override
   State<VerificationRequirementHub> createState() =>
       _VerificationRequirementHubState();
@@ -331,125 +372,160 @@ class VerificationRequirementHub extends StatefulWidget {
 
 class _VerificationRequirementHubState
     extends State<VerificationRequirementHub> {
+  void _handleBack() {
+    if (widget.onClose != null) {
+      widget.onClose!();
+    } else {
+      Navigator.pop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    int idDocs = (widget.session.idPhotoFront != null ? 1 : 0) +
-        (widget.session.idPhotoBack != null ? 1 : 0) +
-        (widget.session.selfie != null ? 1 : 0);
+    final idDocs = [
+      widget.session.idPhotoFront != null ||
+          widget.session.idPhotoFrontUrl != null,
+      widget.session.idPhotoBack != null ||
+          widget.session.idPhotoBackUrl != null,
+      widget.session.selfie != null || widget.session.selfieUrl != null,
+    ].where((complete) => complete).length;
+    final identityComplete = idDocs == 3;
     String progressStr = '${(widget.session.progress * 100).toInt()}%';
 
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
+    return _ResponsiveWrapper(
+      child: Scaffold(
         backgroundColor: _bg,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: const Icon(PhosphorIconsRegular.caretLeft,
-              color: _dark, size: 28),
+        appBar: AppBar(
+          backgroundColor: _bg,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: GestureDetector(
+            onTap: _handleBack,
+            child: const Icon(PhosphorIconsRegular.caretLeft,
+                color: _dark, size: 28),
+          ),
+          toolbarHeight: 80,
+          title: Text('Requirements',
+              style: GoogleFonts.poppins(
+                  color: _dark,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 24,
+                  letterSpacing: -0.5)),
         ),
-        toolbarHeight: 80,
-        title: Text('Requirements',
-            style: GoogleFonts.poppins(
-                color: _dark,
-                fontWeight: FontWeight.w700,
-                fontSize: 24,
-                letterSpacing: -0.5)),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                        'Complete all mandatory steps below to get your profile verified.',
-                        style: GoogleFonts.poppins(color: _grey, fontSize: 15)),
-                    const SizedBox(height: 32),
-                    VerificationCard(
-                      icon: PhosphorIconsRegular.identificationCard,
-                      title: 'Identity Verification',
-                      subtitle: 'Verify your identity you\'re human',
-                      statusText: '$idDocs/3',
-                      isComplete: idDocs == 3,
-                      hasError: widget.session.adminRejections
-                          .containsKey('identity'),
-                      errorMessage: widget.session.adminRejections['identity'],
-                      onTap: () async {
-                        await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => VerificationStepFlow(
-                                    session: widget.session, initialPage: 0)));
-                        setState(() {});
-                      },
-                    ),
-                    const VerificationCard(
-                      icon: PhosphorIconsRegular.storefront,
-                      title: 'KYC Complete',
-                      subtitle: 'Identity and selfie check only',
-                      statusText: 'Active',
-                      isComplete: true,
-                      onTap: null,
-                    ),
-                    const SizedBox(height: 32),
-                    Text('Overall Progress',
-                        style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            color: _dark)),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: LinearProgressIndicator(
-                                value: widget.session.progress,
-                                backgroundColor: _grey.withOpacity(0.2),
-                                valueColor:
-                                    const AlwaysStoppedAnimation<Color>(_green),
-                                minHeight: 8),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                          'Complete all mandatory steps below to get your profile verified.',
+                          style:
+                              GoogleFonts.poppins(color: _grey, fontSize: 15)),
+                      const SizedBox(height: 32),
+                      VerificationCard(
+                        icon: PhosphorIconsRegular.identificationCard,
+                        title: 'Identity Verification',
+                        subtitle: 'Verify your identity you\'re human',
+                        statusText: '$idDocs/3',
+                        isComplete: idDocs == 3,
+                        hasError: widget.session.adminRejections
+                            .containsKey('identity'),
+                        errorMessage:
+                            widget.session.adminRejections['identity'],
+                        onTap: () async {
+                          await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => VerificationStepFlow(
+                                      session: widget.session,
+                                      initialPage: identityComplete ? 1 : 0,
+                                      onSubmitted: widget.onSubmitted)));
+                          setState(() {});
+                        },
+                      ),
+                      VerificationCard(
+                        icon: PhosphorIconsRegular.houseLine,
+                        title: 'Ownership or authorization proof',
+                        subtitle:
+                            'Lease, title, or written owner authorization',
+                        statusText: widget.session.leaseAgreementUrl != null
+                            ? 'Uploaded'
+                            : 'Required',
+                        isComplete: widget.session.leaseAgreement != null ||
+                            widget.session.leaseAgreementUrl != null,
+                        onTap: () async {
+                          await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => VerificationStepFlow(
+                                      session: widget.session,
+                                      initialPage: identityComplete ? 1 : 0,
+                                      onSubmitted: widget.onSubmitted)));
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                      const SizedBox(height: 32),
+                      Text('Overall Progress',
+                          style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                              color: _dark)),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: LinearProgressIndicator(
+                                  value: widget.session.progress,
+                                  backgroundColor: _grey.withOpacity(0.2),
+                                  valueColor:
+                                      const AlwaysStoppedAnimation<Color>(
+                                          _green),
+                                  minHeight: 8),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Text(progressStr,
-                            style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w700, color: _dark)),
-                      ],
-                    ),
-                  ],
+                          const SizedBox(width: 16),
+                          Text(progressStr,
+                              style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w700, color: _dark)),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SecureWatermark(),
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: _surface,
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 20,
-                      offset: const Offset(0, -4))
-                ],
-                border: Border(top: BorderSide(color: _grey.withOpacity(0.1))),
+              const SecureWatermark(),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: _surface,
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 20,
+                        offset: const Offset(0, -4))
+                  ],
+                  border:
+                      Border(top: BorderSide(color: _grey.withOpacity(0.1))),
+                ),
+                child: PrimaryButton(
+                    text: 'Continue',
+                    onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => VerificationStepFlow(
+                                session: widget.session,
+                                initialPage: identityComplete ? 1 : 0,
+                                onSubmitted: widget.onSubmitted)))),
               ),
-              child: PrimaryButton(
-                  text: 'Continue',
-                  enabled: widget.session.progress == 1.0,
-                  onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) =>
-                              VerificationStepFlow(session: widget.session)))),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -462,8 +538,12 @@ class _VerificationRequirementHubState
 class VerificationStepFlow extends StatefulWidget {
   final VerificationSession session;
   final int initialPage;
+  final VoidCallback? onSubmitted;
   const VerificationStepFlow(
-      {super.key, required this.session, this.initialPage = 0});
+      {super.key,
+      required this.session,
+      this.initialPage = 0,
+      this.onSubmitted});
   @override
   State<VerificationStepFlow> createState() => _VerificationStepFlowState();
 }
@@ -479,6 +559,7 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
   void initState() {
     super.initState();
     _currentPage = widget.initialPage;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _saveDraft());
   }
 
   @override
@@ -488,17 +569,45 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
   }
 
   bool get _identityComplete =>
-      widget.session.idPhotoFront != null &&
-      widget.session.idPhotoBack != null &&
-      widget.session.selfie != null;
-  bool get _allPagesComplete => _identityComplete;
+      (widget.session.idPhotoFront != null ||
+          widget.session.idPhotoFrontUrl != null) &&
+      (widget.session.idPhotoBack != null ||
+          widget.session.idPhotoBackUrl != null) &&
+      (widget.session.selfie != null || widget.session.selfieUrl != null);
+  bool get _authorizationComplete =>
+      widget.session.leaseAgreement != null ||
+      widget.session.leaseAgreementUrl != null;
+
+  Future<void> _saveDraft() async {
+    try {
+      await VerificationApi.saveDraft({
+        'documents': widget.session.toDocumentsMap(),
+        'property': <String, dynamic>{},
+      });
+    } catch (_) {
+      // Keep in-memory progress if the draft endpoint is temporarily unavailable.
+    }
+  }
 
   Future<void> _goNext() async {
     if (_isSubmitting) return;
 
-    if (!_allPagesComplete) {
+    if (_currentPage == 0 && !_identityComplete) {
       ModalUtils.showError(context, 'Incomplete Step',
           'Please upload all required identity documents before continuing.');
+      return;
+    }
+    if (_currentPage == 0) {
+      await _saveDraft();
+      await _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+      return;
+    }
+    if (!_authorizationComplete) {
+      ModalUtils.showError(context, 'Authorization document required',
+          'Upload a lease, title, or written authorization from the property owner.');
       return;
     }
 
@@ -528,8 +637,12 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
               backgroundColor: Color(0xFF059669),
             ),
           );
-          Navigator.pushNamedAndRemoveUntil(
-              context, '/portal', (route) => false);
+          if (widget.onSubmitted != null) {
+            widget.onSubmitted!();
+          } else {
+            Navigator.pushNamedAndRemoveUntil(
+                context, '/home', (route) => false);
+          }
           return;
         }
         Navigator.pushReplacement(
@@ -572,6 +685,7 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
     try {
       final url = await task.future;
       onSuccess(url);
+      await _saveDraft();
       if (mounted) Navigator.pop(context);
       ModalUtils.showSuccess(context, 'Document uploaded successfully!',
           autoClose: const Duration(milliseconds: 1200));
@@ -588,99 +702,166 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
+    return _ResponsiveWrapper(
+      child: Scaffold(
         backgroundColor: _bg,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: GestureDetector(
-            onTap: _goBack,
-            child: const Icon(PhosphorIconsRegular.caretLeft,
-                color: _dark, size: 28)),
-        title: Text(
-            _currentPage == 0
-                ? 'Identity Verification'
-                : 'Property Verification',
-            style: GoogleFonts.poppins(
-                color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Step ${_currentPage + 1} of 2',
-                      style: GoogleFonts.poppins(
-                          color: _grey,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600)),
-                  Text('${(widget.session.progress * 100).toInt()}% complete',
-                      style: GoogleFonts.poppins(
-                          color: _green,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (index) => setState(() => _currentPage = index),
-                children: [_buildIdentityPage()],
-              ),
-            ),
-            const SecureWatermark(),
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                  color: _surface,
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 20,
-                        offset: const Offset(0, -4))
-                  ],
-                  border:
-                      Border(top: BorderSide(color: _grey.withOpacity(0.1)))),
-              child: Row(
-                children: [
-                  if (_currentPage > 0)
-                    Expanded(
-                        child: OutlinedButton(
-                            onPressed: _goBack,
-                            style: OutlinedButton.styleFrom(
-                                side:
-                                    const BorderSide(color: _green, width: 1.5),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(32)),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16)),
-                            child: Text('Back',
-                                style: GoogleFonts.poppins(
-                                    color: _green,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600)))),
-                  if (_currentPage > 0) const SizedBox(width: 16),
-                  Expanded(
-                      flex: 2,
-                      child: PrimaryButton(
-                          text: _isSubmitting
-                              ? 'Submitting...'
-                              : (_currentPage == 0
-                                  ? 'Continue'
-                                  : 'Submit Verification'),
-                          enabled: !_isSubmitting,
-                          onPressed: _goNext)),
-                ],
-              ),
-            )
-          ],
+        appBar: AppBar(
+          backgroundColor: _bg,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: GestureDetector(
+              onTap: _goBack,
+              child: const Icon(PhosphorIconsRegular.caretLeft,
+                  color: _dark, size: 28)),
+          title: Text(
+              _currentPage == 0
+                  ? 'Identity Verification'
+                  : 'Ownership Authorization',
+              style: GoogleFonts.poppins(
+                  color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
         ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Step ${_currentPage + 1} of 2',
+                        style: GoogleFonts.poppins(
+                            color: _grey,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600)),
+                    Text('${(widget.session.progress * 100).toInt()}% complete',
+                        style: GoogleFonts.poppins(
+                            color: _green,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  onPageChanged: (index) =>
+                      setState(() => _currentPage = index),
+                  children: [
+                    _buildIdentityPage(),
+                    _buildAuthorizationPage(),
+                  ],
+                ),
+              ),
+              const SecureWatermark(),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                    color: _surface,
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 20,
+                          offset: const Offset(0, -4))
+                    ],
+                    border:
+                        Border(top: BorderSide(color: _grey.withOpacity(0.1)))),
+                child: Row(
+                  children: [
+                    if (_currentPage > 0)
+                      Expanded(
+                          child: OutlinedButton(
+                              onPressed: _goBack,
+                              style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(
+                                      color: _green, width: 1.5),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(32)),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 16)),
+                              child: Text('Back',
+                                  style: GoogleFonts.poppins(
+                                      color: _green,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600)))),
+                    if (_currentPage > 0) const SizedBox(width: 16),
+                    Expanded(
+                        flex: 2,
+                        child: PrimaryButton(
+                            text: _isSubmitting
+                                ? 'Submitting...'
+                                : (_currentPage == 0
+                                    ? 'Continue'
+                                    : 'Submit Verification'),
+                            enabled: !_isSubmitting,
+                            onPressed: _goNext)),
+                  ],
+                ),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAuthorizationPage() {
+    final isUploaded = widget.session.leaseAgreementUrl != null;
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Prove ownership or permission to host',
+              style: GoogleFonts.poppins(
+                  fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
+          const SizedBox(height: 8),
+          Text(
+              'Upload a lease, title document, or signed authorization from the property owner. This is required before StayNest can approve your host application.',
+              style:
+                  GoogleFonts.poppins(color: _grey, fontSize: 14, height: 1.5)),
+          const SizedBox(height: 24),
+          VerificationCard(
+            icon: PhosphorIconsRegular.fileText,
+            title: 'Ownership or authorization document',
+            subtitle: isUploaded
+                ? 'Document uploaded securely'
+                : 'Lease, title, or owner authorization',
+            statusText: isUploaded ? 'Uploaded' : 'Upload',
+            isComplete: isUploaded,
+            hasError:
+                widget.session.adminRejections.containsKey('leaseAgreement'),
+            errorMessage: widget.session.adminRejections['leaseAgreement'],
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DocumentCapture(
+                    title: 'Ownership or authorization document',
+                    subtitle:
+                        'Use a clear photo of a lease, title, or signed owner authorization',
+                    onFileCaptured: (file) async {
+                      widget.session.leaseAgreement = file;
+                      widget.session.adminRejections.remove('leaseAgreement');
+                      setState(() {});
+                      await _handleUpload(
+                        file,
+                        'leaseAgreement',
+                        (url) => widget.session.leaseAgreementUrl = url,
+                      );
+                    },
+                  ),
+                ),
+              );
+              if (mounted) setState(() {});
+            },
+          ),
+          const SizedBox(height: 8),
+          Text('Your document is reviewed only for verification purposes.',
+              style: GoogleFonts.poppins(color: _grey, fontSize: 12)),
+        ],
       ),
     );
   }
@@ -699,9 +880,12 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
             icon: PhosphorIconsRegular.identificationCard,
             title: 'National ID (Front)',
             subtitle: 'Clear photo of the front',
-            isComplete: widget.session.idPhotoFront != null,
-            statusText:
-                widget.session.idPhotoFront != null ? 'Approved' : 'Upload',
+            isComplete: widget.session.idPhotoFront != null ||
+                widget.session.idPhotoFrontUrl != null,
+            statusText: widget.session.idPhotoFront != null ||
+                    widget.session.idPhotoFrontUrl != null
+                ? 'Uploaded'
+                : 'Upload',
             hasError:
                 widget.session.adminRejections.containsKey('idPhotoFront'),
             errorMessage: widget.session.adminRejections['idPhotoFront'],
@@ -737,9 +921,12 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
             icon: PhosphorIconsRegular.identificationCard,
             title: 'National ID (Back)',
             subtitle: 'Clear photo of the back',
-            isComplete: widget.session.idPhotoBack != null,
-            statusText:
-                widget.session.idPhotoBack != null ? 'Approved' : 'Upload',
+            isComplete: widget.session.idPhotoBack != null ||
+                widget.session.idPhotoBackUrl != null,
+            statusText: widget.session.idPhotoBack != null ||
+                    widget.session.idPhotoBackUrl != null
+                ? 'Uploaded'
+                : 'Upload',
             hasError: widget.session.adminRejections.containsKey('idPhotoBack'),
             errorMessage: widget.session.adminRejections['idPhotoBack'],
             previewWidget: widget.session.idPhotoBack != null
@@ -771,8 +958,12 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
             icon: PhosphorIconsRegular.userFocus,
             title: 'Selfie with ID',
             subtitle: 'Live face verification',
-            isComplete: widget.session.selfie != null,
-            statusText: widget.session.selfie != null ? 'Approved' : 'Capture',
+            isComplete: widget.session.selfie != null ||
+                widget.session.selfieUrl != null,
+            statusText: widget.session.selfie != null ||
+                    widget.session.selfieUrl != null
+                ? 'Uploaded'
+                : 'Capture',
             hasError: widget.session.adminRejections.containsKey('selfie'),
             errorMessage: widget.session.adminRejections['selfie'],
             previewWidget: widget.session.selfie != null
@@ -923,133 +1114,137 @@ class _DocumentCaptureState extends State<DocumentCapture> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
+    return _ResponsiveWrapper(
+      child: Scaffold(
         backgroundColor: _bg,
-        elevation: 0,
-        leading: GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: const Icon(PhosphorIconsRegular.caretLeft,
-                color: _dark, size: 28)),
-        title: Text('Upload Document',
-            style: GoogleFonts.poppins(
-                color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.title,
-                        style: GoogleFonts.poppins(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: _dark,
-                            letterSpacing: -0.5)),
-                    const SizedBox(height: 8),
-                    Text(widget.subtitle,
-                        style: GoogleFonts.poppins(color: _grey, fontSize: 15)),
-                    const SizedBox(height: 32),
-                    if (_previewFile != null) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: _surface,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: _grey.withOpacity(0.15)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: Image.file(_previewFile!,
-                                  width: double.infinity,
-                                  height: 220,
-                                  fit: BoxFit.cover),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                if (_isUploading)
-                                  const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: _green,
-                                    ),
-                                  ),
-                                if (_isUploading) const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    _isUploading
-                                        ? 'Uploading securely...'
-                                        : 'Preview ready',
-                                    style: GoogleFonts.poppins(
-                                      color: _isUploading ? _green : _dark,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-                    GestureDetector(
-                      onTap: () => _chooseSource(context),
-                      child: CustomPaint(
-                        painter:
-                            DashedRectPainter(color: _grey.withOpacity(0.5)),
-                        child: Container(
+        appBar: AppBar(
+          backgroundColor: _bg,
+          elevation: 0,
+          leading: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: const Icon(PhosphorIconsRegular.caretLeft,
+                  color: _dark, size: 28)),
+          title: Text('Upload Document',
+              style: GoogleFonts.poppins(
+                  color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.title,
+                          style: GoogleFonts.poppins(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: _dark,
+                              letterSpacing: -0.5)),
+                      const SizedBox(height: 8),
+                      Text(widget.subtitle,
+                          style:
+                              GoogleFonts.poppins(color: _grey, fontSize: 15)),
+                      const SizedBox(height: 32),
+                      if (_previewFile != null) ...[
+                        Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 64),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                              color: _green.withOpacity(0.02),
-                              borderRadius: BorderRadius.circular(20)),
+                            color: _surface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: _grey.withOpacity(0.15)),
+                          ),
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                    color: _green.withOpacity(0.1),
-                                    shape: BoxShape.circle),
-                                child: const Icon(
-                                    PhosphorIconsRegular.cloudArrowUp,
-                                    size: 48,
-                                    color: _green),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Image.file(_previewFile!,
+                                    width: double.infinity,
+                                    height: 220,
+                                    fit: BoxFit.cover),
                               ),
-                              const SizedBox(height: 24),
-                              Text('Tap to choose a source',
-                                  style: GoogleFonts.poppins(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: _dark)),
-                              const SizedBox(height: 8),
-                              Text('Camera or gallery upload (auto-compressed)',
-                                  style: GoogleFonts.poppins(
-                                      color: _grey, fontSize: 13)),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  if (_isUploading)
+                                    const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: _green,
+                                      ),
+                                    ),
+                                  if (_isUploading) const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      _isUploading
+                                          ? 'Uploading securely...'
+                                          : 'Preview ready',
+                                      style: GoogleFonts.poppins(
+                                        color: _isUploading ? _green : _dark,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
+                        const SizedBox(height: 20),
+                      ],
+                      GestureDetector(
+                        onTap: () => _chooseSource(context),
+                        child: CustomPaint(
+                          painter:
+                              DashedRectPainter(color: _grey.withOpacity(0.5)),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 64),
+                            decoration: BoxDecoration(
+                                color: _green.withOpacity(0.02),
+                                borderRadius: BorderRadius.circular(20)),
+                            child: Column(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                      color: _green.withOpacity(0.1),
+                                      shape: BoxShape.circle),
+                                  child: const Icon(
+                                      PhosphorIconsRegular.cloudArrowUp,
+                                      size: 48,
+                                      color: _green),
+                                ),
+                                const SizedBox(height: 24),
+                                Text('Tap to choose a source',
+                                    style: GoogleFonts.poppins(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: _dark)),
+                                const SizedBox(height: 8),
+                                Text(
+                                    'Camera or gallery upload (auto-compressed)',
+                                    style: GoogleFonts.poppins(
+                                        color: _grey, fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SecureWatermark(),
-          ],
+              const SecureWatermark(),
+            ],
+          ),
         ),
       ),
     );
@@ -1138,85 +1333,88 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
+    return _ResponsiveWrapper(
+      child: Scaffold(
         backgroundColor: _bg,
-        elevation: 0,
-        leading: GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: const Icon(PhosphorIconsRegular.caretLeft,
-                color: _dark, size: 28)),
-        title: Text('Selfie Verification',
-            style: GoogleFonts.poppins(
-                color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text('Take a clear selfie',
-                        style: GoogleFonts.poppins(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: _dark,
-                            letterSpacing: -0.5)),
-                    const SizedBox(height: 8),
-                    Text('Position your face inside the frame',
-                        style: GoogleFonts.poppins(color: _grey, fontSize: 15)),
-                    const SizedBox(height: 48),
-                    Container(
-                      height: 320,
-                      width: 320,
-                      decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: _green, width: 4),
-                          color: _grey.withOpacity(0.1)),
-                      clipBehavior: Clip.hardEdge,
-                      child: _capturedImage != null
-                          ? Image.file(_capturedImage!, fit: BoxFit.cover)
-                          : (_cameraReady && _cameraController != null
-                              ? CameraPreview(_cameraController!)
-                              : const Center(
-                                  child: Icon(PhosphorIconsRegular.userFocus,
-                                      size: 80, color: _grey))),
-                    ),
-                    if (_isUploading) ...[
-                      const SizedBox(height: 24),
-                      const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: _green,
-                        ),
+        appBar: AppBar(
+          backgroundColor: _bg,
+          elevation: 0,
+          leading: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: const Icon(PhosphorIconsRegular.caretLeft,
+                  color: _dark, size: 28)),
+          title: Text('Selfie Verification',
+              style: GoogleFonts.poppins(
+                  color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text('Take a clear selfie',
+                          style: GoogleFonts.poppins(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: _dark,
+                              letterSpacing: -0.5)),
+                      const SizedBox(height: 8),
+                      Text('Position your face inside the frame',
+                          style:
+                              GoogleFonts.poppins(color: _grey, fontSize: 15)),
+                      const SizedBox(height: 48),
+                      Container(
+                        height: 320,
+                        width: 320,
+                        decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: _green, width: 4),
+                            color: _grey.withOpacity(0.1)),
+                        clipBehavior: Clip.hardEdge,
+                        child: _capturedImage != null
+                            ? Image.file(_capturedImage!, fit: BoxFit.cover)
+                            : (_cameraReady && _cameraController != null
+                                ? CameraPreview(_cameraController!)
+                                : const Center(
+                                    child: Icon(PhosphorIconsRegular.userFocus,
+                                        size: 80, color: _grey))),
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Uploading selfie securely...',
-                        style: GoogleFonts.poppins(
-                          color: _green,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
+                      if (_isUploading) ...[
+                        const SizedBox(height: 24),
+                        const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: _green,
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Uploading selfie securely...',
+                          style: GoogleFonts.poppins(
+                            color: _green,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-            Padding(
-                padding: const EdgeInsets.all(24),
-                child: PrimaryButton(
-                    text: _isUploading ? 'Uploading...' : 'Capture Selfie',
-                    onPressed: _isUploading ? () {} : _takeSelfie,
-                    enabled: !_isUploading))
-          ],
+              Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: PrimaryButton(
+                      text: _isUploading ? 'Uploading...' : 'Capture Selfie',
+                      onPressed: _isUploading ? () {} : _takeSelfie,
+                      enabled: !_isUploading))
+            ],
+          ),
         ),
       ),
     );
@@ -1236,8 +1434,6 @@ class VerificationStatusView extends StatelessWidget {
         statusData['status']?.toString().toLowerCase() ?? 'not_started';
 
     if (status == 'approved') {
-      AppSession.currentRole = 'landlord';
-      AppSession.currentUserVerified = true;
       if (statusData['user'] is Map<String, dynamic>) {
         AppSession.updateCurrentUser(statusData['user']);
       }
@@ -1256,59 +1452,61 @@ class _NotStartedScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFE0F2FE),
-                  shape: BoxShape.circle,
+    return _ResponsiveWrapper(
+      child: Scaffold(
+        backgroundColor: _bg,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFE0F2FE),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    PhosphorIconsFill.shieldCheck,
+                    size: 72,
+                    color: Color(0xFF2563EB),
+                  ),
                 ),
-                child: const Icon(
-                  PhosphorIconsFill.shieldCheck,
-                  size: 72,
-                  color: Color(0xFF2563EB),
+                const SizedBox(height: 32),
+                Text(
+                  'Verification not started',
+                  style: GoogleFonts.poppins(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: _dark,
+                    letterSpacing: -0.5,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 32),
-              Text(
-                'Verification not started',
-                style: GoogleFonts.poppins(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  color: _dark,
-                  letterSpacing: -0.5,
+                const SizedBox(height: 16),
+                Text(
+                  'You have no active landlord KYC yet. Start the verification process to unlock dashboard access and listings.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    color: _grey,
+                    fontSize: 15,
+                    height: 1.5,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'You have no active landlord KYC yet. Start the verification process to unlock dashboard access and listings.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  color: _grey,
-                  fontSize: 15,
-                  height: 1.5,
-                ),
-              ),
-              const Spacer(),
-              PrimaryButton(
-                text: 'Start Verification',
-                onPressed: () => Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => VerificationRequirementHub(
-                      session: VerificationSession(),
+                const Spacer(),
+                PrimaryButton(
+                  text: 'Start Verification',
+                  onPressed: () => Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => VerificationRequirementHub(
+                        session: VerificationSession(),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1322,78 +1520,82 @@ class _RejectedScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const Spacer(),
-              Container(
+    return _ResponsiveWrapper(
+      child: Scaffold(
+        backgroundColor: _bg,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                const Spacer(),
+                Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: const BoxDecoration(
+                        color: Color(0xFFFEF2F2), shape: BoxShape.circle),
+                    child: const Icon(PhosphorIconsFill.warningCircle,
+                        size: 80, color: Color(0xFFEF4444))),
+                const SizedBox(height: 32),
+                Text('Action Required',
+                    style: GoogleFonts.poppins(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        color: _dark,
+                        letterSpacing: -0.5)),
+                const SizedBox(height: 16),
+                Text(
+                    'We couldn\'t verify your account. Please fix the following issues and resubmit.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                        color: _grey, fontSize: 15, height: 1.5)),
+                const SizedBox(height: 40),
+                Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.all(24),
-                  decoration: const BoxDecoration(
-                      color: Color(0xFFFEF2F2), shape: BoxShape.circle),
-                  child: const Icon(PhosphorIconsFill.warningCircle,
-                      size: 80, color: Color(0xFFEF4444))),
-              const SizedBox(height: 32),
-              Text('Action Required',
-                  style: GoogleFonts.poppins(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      color: _dark,
-                      letterSpacing: -0.5)),
-              const SizedBox(height: 16),
-              Text(
-                  'We couldn\'t verify your account. Please fix the following issues and resubmit.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                      color: _grey, fontSize: 15, height: 1.5)),
-              const SizedBox(height: 40),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                    color: const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                        color: const Color(0xFFFCA5A5).withOpacity(0.5))),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Admin Notes:',
-                        style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF991B1B))),
-                    const SizedBox(height: 16),
-                    ...(rejections.isEmpty
-                            ? ['Certain documents were unclear or missing.']
-                            : rejections)
-                        .map((msg) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8.0),
-                              child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('• ',
-                                        style: TextStyle(
-                                            color: Color(0xFFEF4444),
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold)),
-                                    Expanded(
-                                        child: Text(msg.toString(),
-                                            style: GoogleFonts.poppins(
-                                                color: const Color(0xFF991B1B),
-                                                fontSize: 14))),
-                                  ]),
-                            )),
-                  ],
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: const Color(0xFFFCA5A5).withOpacity(0.5))),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Admin Notes:',
+                          style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF991B1B))),
+                      const SizedBox(height: 16),
+                      ...(rejections.isEmpty
+                              ? ['Certain documents were unclear or missing.']
+                              : rejections)
+                          .map((msg) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('• ',
+                                          style: TextStyle(
+                                              color: Color(0xFFEF4444),
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold)),
+                                      Expanded(
+                                          child: Text(msg.toString(),
+                                              style: GoogleFonts.poppins(
+                                                  color:
+                                                      const Color(0xFF991B1B),
+                                                  fontSize: 14))),
+                                    ]),
+                              )),
+                    ],
+                  ),
                 ),
-              ),
-              const Spacer(),
-              PrimaryButton(
-                  text: 'Fix & Resubmit',
-                  onPressed: () => Navigator.pop(context)),
-            ],
+                const Spacer(),
+                PrimaryButton(
+                    text: 'Fix & Resubmit',
+                    onPressed: () => Navigator.pop(context)),
+              ],
+            ),
           ),
         ),
       ),
@@ -1423,86 +1625,90 @@ class _ReviewScreen extends StatelessWidget {
         ? 'We have received your documents and are preparing them for review.'
         : 'Your application is currently being reviewed by the admin team.';
 
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
+    return _ResponsiveWrapper(
+      child: Scaffold(
         backgroundColor: _bg,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: Text('Verification Review',
-            style: GoogleFonts.poppins(
-                color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(heading,
-                        style: GoogleFonts.poppins(color: _grey, fontSize: 16)),
-                    const SizedBox(height: 8),
-                    Text(subheading,
-                        style: GoogleFonts.poppins(color: _grey, fontSize: 14)),
-                    const SizedBox(height: 48),
-                    _buildTimelineStep('Submitted', 'Information received',
-                        submittedComplete, status == 'submitted'),
-                    _buildTimelineStep(
-                        'Under Review',
-                        'Admin team is checking your documents',
-                        underReviewComplete,
-                        underReviewCurrent),
-                    _buildTimelineStep(
-                        'Approved', 'Pending final sign-off', false, false,
-                        isLast: true),
-                    const SizedBox(height: 64),
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                          color: _surface,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: _grey.withOpacity(0.1)),
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withOpacity(0.02),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4))
-                          ]),
-                      child: Column(
-                        children: [
-                          const Icon(PhosphorIconsRegular.clock,
-                              size: 32, color: _green),
-                          const SizedBox(height: 16),
-                          Text('Current stage',
-                              style: GoogleFonts.poppins(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: _dark)),
-                          const SizedBox(height: 8),
-                          Text(
-                              status == 'submitted'
-                                  ? 'Waiting for admin review.'
-                                  : 'Your documents are currently under review.',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.poppins(
-                                  color: _grey, fontSize: 14)),
-                        ],
+        appBar: AppBar(
+          backgroundColor: _bg,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          title: Text('Verification Review',
+              style: GoogleFonts.poppins(
+                  color: _dark, fontWeight: FontWeight.w700, fontSize: 20)),
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(heading,
+                          style:
+                              GoogleFonts.poppins(color: _grey, fontSize: 16)),
+                      const SizedBox(height: 8),
+                      Text(subheading,
+                          style:
+                              GoogleFonts.poppins(color: _grey, fontSize: 14)),
+                      const SizedBox(height: 48),
+                      _buildTimelineStep('Submitted', 'Information received',
+                          submittedComplete, status == 'submitted'),
+                      _buildTimelineStep(
+                          'Under Review',
+                          'Admin team is checking your documents',
+                          underReviewComplete,
+                          underReviewCurrent),
+                      _buildTimelineStep(
+                          'Approved', 'Pending final sign-off', false, false,
+                          isLast: true),
+                      const SizedBox(height: 64),
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                            color: _surface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: _grey.withOpacity(0.1)),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.black.withOpacity(0.02),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4))
+                            ]),
+                        child: Column(
+                          children: [
+                            const Icon(PhosphorIconsRegular.clock,
+                                size: 32, color: _green),
+                            const SizedBox(height: 16),
+                            Text('Current stage',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: _dark)),
+                            const SizedBox(height: 8),
+                            Text(
+                                status == 'submitted'
+                                    ? 'Waiting for admin review.'
+                                    : 'Your documents are currently under review.',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                    color: _grey, fontSize: 14)),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            Padding(
-                padding: const EdgeInsets.all(24),
-                child: PrimaryButton(
-                    text: 'Go to Dashboard',
-                    onPressed: () => Navigator.pushNamedAndRemoveUntil(
-                        context, '/portal', (route) => false))),
-          ],
+              Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: PrimaryButton(
+                      text: 'Go to Dashboard',
+                      onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                          context, '/portal', (route) => false))),
+            ],
+          ),
         ),
       ),
     );
@@ -1562,39 +1768,41 @@ class _SuccessScreen extends StatelessWidget {
   const _SuccessScreen();
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const Spacer(),
-              Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                      color: _green.withOpacity(0.1), shape: BoxShape.circle),
-                  child: const Icon(PhosphorIconsFill.shieldCheck,
-                      size: 80, color: _green)),
-              const SizedBox(height: 32),
-              Text('You\'re Verified!',
-                  style: GoogleFonts.poppins(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      color: _dark,
-                      letterSpacing: -0.5)),
-              const SizedBox(height: 16),
-              Text(
-                  'Congratulations! Your account has been\nsuccessfully verified and upgraded.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                      color: _grey, fontSize: 15, height: 1.5)),
-              const Spacer(),
-              PrimaryButton(
-                  text: 'Back to Login',
-                  onPressed: () => Navigator.pushNamedAndRemoveUntil(
-                      context, '/login', (route) => false))
-            ],
+    return _ResponsiveWrapper(
+      child: Scaffold(
+        backgroundColor: _bg,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                const Spacer(),
+                Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                        color: _green.withOpacity(0.1), shape: BoxShape.circle),
+                    child: const Icon(PhosphorIconsFill.shieldCheck,
+                        size: 80, color: _green)),
+                const SizedBox(height: 32),
+                Text('You\'re Verified!',
+                    style: GoogleFonts.poppins(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        color: _dark,
+                        letterSpacing: -0.5)),
+                const SizedBox(height: 16),
+                Text(
+                    'Congratulations! Your account has been\nsuccessfully verified and upgraded.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                        color: _grey, fontSize: 15, height: 1.5)),
+                const Spacer(),
+                PrimaryButton(
+                    text: 'Back to Login',
+                    onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                        context, '/login', (route) => false))
+              ],
+            ),
           ),
         ),
       ),
@@ -1605,6 +1813,47 @@ class _SuccessScreen extends StatelessWidget {
 // ==========================================
 // 7. SHARED COMPONENTS
 // ==========================================
+
+class _ResponsiveWrapper extends StatelessWidget {
+  final Widget child;
+  const _ResponsiveWrapper({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop =
+        MediaQuery.sizeOf(context).width >= 800; // Optimal for KYC modals
+    if (!isDesktop) return child;
+
+    return Scaffold(
+      backgroundColor:
+          const Color(0xFFE5E7EB), // Soft dim background around the modal
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 32.0),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 32,
+                    offset: const Offset(0, 16),
+                  )
+                ],
+              ),
+              clipBehavior: Clip
+                  .antiAlias, // Ensures inner Scaffold blends with border radius
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class PrimaryButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
@@ -1916,7 +2165,7 @@ class DashedRectPainter extends CustomPainter {
   DashedRectPainter({required this.color});
   @override
   void paint(Canvas canvas, Size size) {
-    double dashWidth = 8, dashSpace = 6, startX = 0;
+    double dashWidth = 8, dashSpace = 6;
     final paint = Paint()
       ..color = color
       ..strokeWidth = 2
