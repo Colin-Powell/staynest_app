@@ -10,7 +10,7 @@ class GoogleAuthService {
   GoogleAuthService._();
 
   static const _webClientId =
-      '193200636263-02mmqpu8fa9urq35p46432bdinilc29l.apps.googleusercontent.com';
+      '193200636263-vsbg83ntukhk0vcj8fkgtvfll3b4chk6.apps.googleusercontent.com';
   static const _serverClientId = String.fromEnvironment(
     'GOOGLE_CLIENT_ID',
     defaultValue: _webClientId,

@@ -103,7 +103,7 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
       setState(() => _processing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error.toString().replaceFirst('Exception: ', '')),
+          content: Text(BookingService.friendlyErrorMessage(error)),
           backgroundColor: StayNestColors.error,
         ),
       );

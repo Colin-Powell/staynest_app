@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/utils/app_downloads.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -164,7 +166,7 @@ class _SplashViewState extends State<SplashView> {
                 ),
               ),
 
-              const SizedBox(height: 28),
+              const SizedBox(height: 20),
 
               // ── Tagline ────────────────────────────────────────────────────
               Text(
@@ -266,6 +268,27 @@ class _SplashViewState extends State<SplashView> {
                   ),
                 ),
               ),
+
+              if (kIsWeb) ...[
+                SizedBox(
+                  height: 40,
+                  child: TextButton.icon(
+                    onPressed: () => launchAndroidAppDownload(context),
+                    icon: const Icon(Icons.android_rounded, size: 18),
+                    label: const Text('Download Android app'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      minimumSize: Size.zero,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
 
               const Spacer(flex: 1),
             ],

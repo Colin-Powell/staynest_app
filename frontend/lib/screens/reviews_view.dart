@@ -147,12 +147,11 @@ class _ReviewsViewState extends State<ReviewsView>
           );
         },
       ),
-    ).then((_) {
-      // Refresh in case a review was added in the AllReviewsView
+    ).then((reviewSubmitted) {
+      if (!mounted) return;
       setState(() {
+        if (reviewSubmitted == true) _hasReviewed = true;
         _reviewsFuture = _repo.fetchPropertyReviews(widget.propertyId);
-        // We don't have a direct result from AllReviewsView here, but the
-        // refresh in FutureBuilder will naturally hide elements if we relied on list length.
       });
     });
   }
@@ -538,7 +537,10 @@ class _AllReviewsViewState extends State<AllReviewsView> {
       backgroundColor: const Color(0xFFFFFFFF),
       body: Column(
         children: [
-          _Header(title: 'All Reviews', onBack: () => Navigator.pop(context)),
+          _Header(
+            title: 'All Reviews',
+            onBack: () => Navigator.pop(context, _hasReviewed),
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Row(

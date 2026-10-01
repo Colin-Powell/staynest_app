@@ -45,15 +45,18 @@ class _WriteReviewViewState extends State<WriteReviewView> {
     try {
       final repo = RemoteDatabaseRepository();
       // Using the POST /api/v1/properties/reviews endpoint
-      await repo.submitReview(
+      final review = await repo.submitReview(
         propertyId: widget.propertyId,
         rating: _rating,
         comment: trimmedComment,
         bookingId: widget.bookingId,
       );
+      if (review == null) {
+        throw StateError('We could not submit your review. Please try again.');
+      }
 
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Review submitted successfully!')),
         );
@@ -75,7 +78,8 @@ class _WriteReviewViewState extends State<WriteReviewView> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text('Review ${widget.propertyName}',
-            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w800)),
+            style: const TextStyle(
+                color: Colors.black, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(

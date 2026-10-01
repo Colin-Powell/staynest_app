@@ -63,6 +63,12 @@ class ImageUploadService {
     return xfile == null ? input : File(xfile.path);
   }
 
+  static Future<XFile> compressPickedImage(XFile input) async {
+    if (kIsWeb) return input;
+    final compressed = await compressImageFile(File(input.path));
+    return XFile(compressed.path, name: path.basename(compressed.path));
+  }
+
   static Future<List<File>> compressSelectedImages(List<File> selected) async {
     final futures = selected.map((file) => compute(_compressFile, file.path));
     return Future.wait(futures);
@@ -83,7 +89,7 @@ class ImageUploadService {
 
     void emitProgress() {
       onProgress(progressState.values.toList());
-        }
+    }
 
     Future<void> startUpload(File file) async {
       final task = UploadsService.uploadFileWithProgress(
@@ -95,7 +101,6 @@ class ImageUploadService {
           );
           emitProgress();
         },
-        
       );
       inProgress[file] = task;
       progressState[file] = progressState[file]!.copyWith(status: 'uploading');

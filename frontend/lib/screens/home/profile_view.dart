@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/session/onboarding_prefs.dart';
 import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
+import 'package:property_app/utils/app_downloads.dart';
 
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
@@ -304,6 +306,13 @@ class _ProfileViewState extends State<ProfileView>
                           onTap: () =>
                               widget.onSetting?.call('Notification Settings'),
                         ),
+                        if (kIsWeb)
+                          _DesktopSidebarItem(
+                            icon: Icons.android_rounded,
+                            label: 'Download Android app',
+                            isSelected: false,
+                            onTap: () => launchAndroidAppDownload(context),
+                          ),
                         if (AppSession.isLandlord) ...[
                           _DesktopSidebarItem(
                             icon: Icons.add_business_rounded,
@@ -734,10 +743,19 @@ class _ProfileViewState extends State<ProfileView>
                       onTap: () => widget.onSetting?.call('Help & Support'),
                     ),
                   ),
+                  if (kIsWeb)
+                    _buildStaggered(
+                      index: 10,
+                      child: _MenuItem(
+                        icon: Icons.android_rounded,
+                        label: 'Download Android app',
+                        onTap: () => launchAndroidAppDownload(context),
+                      ),
+                    ),
 
                   if (AppSession.isLandlord)
                     _buildStaggered(
-                      index: 10,
+                      index: 11,
                       child: _MenuItem(
                         icon: Icons.add_business_rounded,
                         label: 'List a Property',
@@ -748,7 +766,7 @@ class _ProfileViewState extends State<ProfileView>
                     ),
                   if (AppSession.isLandlord)
                     _buildStaggered(
-                      index: 11,
+                      index: 12,
                       child: _MenuItem(
                         icon: Icons.verified,
                         label: 'Verification Center',
@@ -762,7 +780,7 @@ class _ProfileViewState extends State<ProfileView>
 
                   // Logout Button
                   _buildStaggered(
-                    index: 12,
+                    index: 13,
                     child: _MenuItem(
                       icon: Icons.logout_rounded,
                       label: 'Logout',

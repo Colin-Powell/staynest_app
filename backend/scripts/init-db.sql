@@ -709,6 +709,11 @@ CREATE TABLE IF NOT EXISTS property_drafts (
   road text,
   landmark text,
   price numeric,
+  service_charges numeric,
+  security_deposit numeric,
+  minimum_stay text,
+  available_from date,
+  custom_feature_input text,
   bedrooms integer,
   bathrooms integer,
   area integer,
@@ -722,6 +727,11 @@ CREATE TABLE IF NOT EXISTS property_drafts (
 );
 CREATE INDEX IF NOT EXISTS idx_property_drafts_landlord ON property_drafts(landlord_id, updated_at DESC);
 ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS video_url text;
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS service_charges numeric;
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS security_deposit numeric;
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS minimum_stay text;
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS available_from date;
+ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS custom_feature_input text;
 
 -- Keep older production draft tables compatible with structured listing locations.
 ALTER TABLE property_drafts ADD COLUMN IF NOT EXISTS country text;

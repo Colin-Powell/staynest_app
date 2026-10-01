@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:image_picker/image_picker.dart';
@@ -42,7 +43,7 @@ String? _joinLocationParts(Iterable<String?> values) {
 }
 
 class PickedPhoto {
-  final File file;
+  final XFile? file;
   String? url;
   double progress;
   bool isUploading;
@@ -58,7 +59,7 @@ class PickedPhoto {
 }
 
 class PickedVideo {
-  final File file;
+  final XFile? file;
   String? url;
   bool isUploading;
   double progress;
@@ -136,6 +137,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
   String? _draftId;
   Future<void> _draftSaveQueue = Future<void>.value();
+  Timer? _draftSaveTimer;
+  bool _draftAutosaveEnabled = false;
+  bool _draftDirty = false;
 
   RemoteDatabaseRepository _buildRepo() {
     return RemoteDatabaseRepository(apiClient: HttpJsonClient());
@@ -144,11 +148,15 @@ class _AddListingFlowState extends State<AddListingFlow> {
   @override
   void initState() {
     super.initState();
-    _loadDraft();
+    unawaited(_loadDraft().then((_) {
+      if (mounted) _enableDraftAutosave();
+    }));
   }
 
   @override
   void dispose() {
+    _draftSaveTimer?.cancel();
+    if (_draftDirty) unawaited(_queueDraftSave());
     _pageController.dispose();
     _title.dispose();
     _description.dispose();
@@ -160,6 +168,35 @@ class _AddListingFlowState extends State<AddListingFlow> {
     _securityDeposit.dispose();
     _videoThumbnailController?.dispose();
     super.dispose();
+  }
+
+  void _enableDraftAutosave() {
+    if (widget.property != null) return;
+    _draftAutosaveEnabled = true;
+    for (final controller in [
+      _title,
+      _description,
+      _neighborhood,
+      _locationSearch,
+      _customFeatureController,
+      _rentPrice,
+      _serviceCharges,
+      _securityDeposit,
+    ]) {
+      controller.addListener(_scheduleDraftSave);
+    }
+  }
+
+  void _scheduleDraftSave() {
+    if (!_draftAutosaveEnabled) return;
+    _draftDirty = true;
+    unawaited(PropertyService.instance
+        .cacheDraftLocally(_buildDraftPayload(), draftId: _draftId));
+    _draftSaveTimer?.cancel();
+    _draftSaveTimer = Timer(const Duration(milliseconds: 450), () {
+      _draftSaveTimer = null;
+      unawaited(_queueDraftSave());
+    });
   }
 
   // ==========================================
@@ -177,6 +214,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
       _neighborhood.text = existing['address']?.toString() ?? '';
       _locationSearch.text = existing['address']?.toString() ?? '';
       _rentPrice.text = existing['price']?.toString() ?? '';
+      _serviceCharges.text = existing['service_charges']?.toString() ?? '';
+      _securityDeposit.text = existing['security_deposit']?.toString() ?? '';
+      _minimumStay = existing['minimum_stay']?.toString() ?? _minimumStay;
+      _availableFrom =
+          DateTime.tryParse(existing['available_from']?.toString() ?? '');
       _selectedLatitude = (existing['lat'] as num?)?.toDouble();
       _selectedLongitude = (existing['lng'] as num?)?.toDouble();
       _locationBiasLatitude = _selectedLatitude;
@@ -213,17 +255,17 @@ class _AddListingFlowState extends State<AddListingFlow> {
         for (final image in existingImages) {
           final url = image?.toString();
           if (url != null && url.isNotEmpty) {
-            _pickedPhotos.add(PickedPhoto(File(''), url: url, progress: 1.0));
+            _pickedPhotos.add(PickedPhoto(null, url: url, progress: 1.0));
           }
         }
       } else if (existing['image_url'] != null) {
-        _pickedPhotos.add(PickedPhoto(File(''),
+        _pickedPhotos.add(PickedPhoto(null,
             url: existing['image_url'].toString(), progress: 1.0));
       }
 
       final existingVideo = existing['video_url']?.toString();
       if (existingVideo != null && existingVideo.isNotEmpty) {
-        _pickedVideo = PickedVideo(File(''), url: existingVideo);
+        _pickedVideo = PickedVideo(null, url: existingVideo);
         // Load thumbnail for existing video
         _videoThumbnailController =
             VideoPlayerController.networkUrl(Uri.parse(existingVideo))
@@ -296,18 +338,25 @@ class _AddListingFlowState extends State<AddListingFlow> {
           );
         }
         _rentPrice.text = data['price']?.toString() ?? '';
+        _serviceCharges.text = data['service_charges']?.toString() ?? '';
+        _securityDeposit.text = data['security_deposit']?.toString() ?? '';
+        _minimumStay = data['minimum_stay']?.toString() ?? _minimumStay;
+        _availableFrom =
+            DateTime.tryParse(data['available_from']?.toString() ?? '');
+        _customFeatureController.text =
+            data['custom_feature_input']?.toString() ?? '';
         final draftPhotos = data['photos'];
         if (draftPhotos is List) {
           for (final photo in draftPhotos) {
             final url = photo?.toString();
             if (url != null && url.isNotEmpty) {
-              _pickedPhotos.add(PickedPhoto(File(''), url: url, progress: 1.0));
+              _pickedPhotos.add(PickedPhoto(null, url: url, progress: 1.0));
             }
           }
         }
         final draftVideo = data['video_url']?.toString();
         if (draftVideo != null && draftVideo.isNotEmpty) {
-          _pickedVideo = PickedVideo(File(''), url: draftVideo);
+          _pickedVideo = PickedVideo(null, url: draftVideo);
         }
         if (data['amenities'] is List) {
           for (final a in (data['amenities'] as List)) {
@@ -331,36 +380,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
   Future<void> _saveDraft({bool showConfirmation = true}) async {
     var savedRemotely = true;
     try {
-      final payload = {
-        'category': _propertyType,
-        'title': _title.text.trim(),
-        'description': _description.text.trim(),
-        'bedrooms': _bedrooms,
-        'bathrooms': _bathrooms,
-        'city': _selectedCity,
-        'address': _neighborhood.text.trim(),
-        'country': _selectedLocation?.country ?? _selectedCountry,
-        'county': _selectedLocation?.county,
-        'sub_county': _selectedLocation?.subCounty,
-        'ward': _selectedLocation?.ward,
-        'town': _selectedLocation?.town,
-        'neighborhood': _selectedLocation?.neighborhood,
-        'estate_village': _selectedLocation?.estateOrVillage,
-        'road': _selectedLocation?.road,
-        'landmark': _selectedLocation?.landmark,
-        'lat': _selectedLatitude,
-        'lng': _selectedLongitude,
-        'price': _rentPrice.text.trim().isEmpty ? null : _rentPrice.text.trim(),
-        'photos': _pickedPhotos
-            .where((photo) => photo.url != null && photo.url!.isNotEmpty)
-            .map((photo) => photo.url)
-            .toList(),
-        'video_url': _pickedVideo?.url,
-        'amenities': [
-          ..._selectedAttributes,
-          ..._customFeatures.map((c) => 'custom:$c')
-        ],
-      };
+      final payload = _buildDraftPayload();
       final data =
           await PropertyService.instance.saveDraft(payload, draftId: _draftId);
       if (data['id'] != null) _draftId = data['id'].toString();
@@ -379,7 +399,55 @@ class _AddListingFlowState extends State<AddListingFlow> {
     }
   }
 
+  Map<String, dynamic> _buildDraftPayload() {
+    return {
+      'category': _propertyType,
+      'title': _title.text.trim(),
+      'description': _description.text.trim(),
+      'bedrooms': _bedrooms,
+      'bathrooms': _bathrooms,
+      'city': _selectedCity,
+      'address': _neighborhood.text.trim().isNotEmpty
+          ? _neighborhood.text.trim()
+          : _locationSearch.text.trim(),
+      'country': _selectedLocation?.country ?? _selectedCountry,
+      'county': _selectedLocation?.county,
+      'sub_county': _selectedLocation?.subCounty,
+      'ward': _selectedLocation?.ward,
+      'town': _selectedLocation?.town,
+      'neighborhood': _selectedLocation?.neighborhood,
+      'estate_village': _selectedLocation?.estateOrVillage,
+      'road': _selectedLocation?.road,
+      'landmark': _selectedLocation?.landmark,
+      'lat': _selectedLatitude,
+      'lng': _selectedLongitude,
+      'price': _rentPrice.text.trim().isEmpty ? null : _rentPrice.text.trim(),
+      'service_charges': _serviceCharges.text.trim().isEmpty
+          ? null
+          : _serviceCharges.text.trim(),
+      'security_deposit': _securityDeposit.text.trim().isEmpty
+          ? null
+          : _securityDeposit.text.trim(),
+      'minimum_stay': _minimumStay,
+      'available_from': _availableFrom?.toIso8601String().split('T').first,
+      'custom_feature_input': _customFeatureController.text,
+      'area': (_bedrooms * 35).clamp(30, 500),
+      'photos': _pickedPhotos
+          .where((photo) => photo.url != null && photo.url!.isNotEmpty)
+          .map((photo) => photo.url)
+          .toList(),
+      'video_url': _pickedVideo?.url,
+      'amenities': [
+        ..._selectedAttributes,
+        ..._customFeatures.map((c) => 'custom:$c')
+      ],
+    };
+  }
+
   Future<void> _queueDraftSave() {
+    _draftSaveTimer?.cancel();
+    _draftSaveTimer = null;
+    _draftDirty = false;
     _draftSaveQueue = _draftSaveQueue.then((_) async {
       await _saveDraft(showConfirmation: false);
     });
@@ -427,15 +495,20 @@ class _AddListingFlowState extends State<AddListingFlow> {
   }
 
   Future<void> _uploadPickedPhoto(PickedPhoto photo) async {
+    final pickedFile = photo.file;
+    if (pickedFile == null) return;
+
     setState(() {
       photo.isUploading = true;
       photo.progress = 0.0;
+      photo.error = null;
     });
 
     try {
-      final compressed = await ImageUploadService.compressImageFile(photo.file);
+      final compressed =
+          await ImageUploadService.compressPickedImage(pickedFile);
       final task =
-          UploadsService.uploadFileWithProgress(compressed, (progress) {
+          UploadsService.uploadXFileWithProgress(compressed, (progress) {
         if (!mounted) return;
         setState(() => photo.progress = progress);
       });
@@ -462,8 +535,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
     final picked = await ImagePicker().pickVideo(source: ImageSource.gallery);
     if (picked == null) return;
 
-    final file = File(picked.path);
-    final controller = VideoPlayerController.file(file);
+    final controller = kIsWeb
+        ? VideoPlayerController.networkUrl(Uri.parse(picked.path))
+        : VideoPlayerController.file(File(picked.path));
 
     try {
       await controller.initialize();
@@ -479,10 +553,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
       setState(() {
         _videoThumbnailController?.dispose();
         _videoThumbnailController = controller;
-        _pickedVideo = PickedVideo(file, isUploading: true, progress: 0.0);
+        _pickedVideo = PickedVideo(picked, isUploading: true, progress: 0.0);
       });
 
-      final task = UploadsService.uploadFileWithProgress(file, (progress) {
+      final task = UploadsService.uploadXFileWithProgress(picked, (progress) {
         if (mounted) {
           setState(() {
             _pickedVideo?.progress = progress;
@@ -501,7 +575,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _pickedVideo = null);
+        setState(() {
+          _pickedVideo = null;
+          _scheduleDraftSave();
+        });
         ModalUtils.showError(context, 'Video Upload Failed',
             'We could not process that video. Please try another clip.');
       }
@@ -784,7 +861,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
         child: child!,
       ),
     );
-    if (picked != null && mounted) setState(() => _availableFrom = picked);
+    if (picked != null && mounted) {
+      setState(() => _availableFrom = picked);
+      _scheduleDraftSave();
+    }
   }
 
   // ==========================================
@@ -927,8 +1007,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
                       _buildCounter(
                           () => setState(() {
                                 if (_bedrooms > 0) _bedrooms--;
+                                _scheduleDraftSave();
                               }),
-                          () => setState(() => _bedrooms++),
+                          () => setState(() {
+                                _bedrooms++;
+                                _scheduleDraftSave();
+                              }),
                           _bedrooms),
                     ])),
                 const SizedBox(width: 16),
@@ -940,8 +1024,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
                       _buildCounter(
                           () => setState(() {
                                 if (_bathrooms > 0) _bathrooms--;
+                                _scheduleDraftSave();
                               }),
-                          () => setState(() => _bathrooms++),
+                          () => setState(() {
+                                _bathrooms++;
+                                _scheduleDraftSave();
+                              }),
                           _bathrooms),
                     ])),
               ],
@@ -1269,8 +1357,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
                     IconButton(
                       icon: const Icon(PhosphorIconsRegular.x,
                           size: 16, color: _grey),
-                      onPressed: () =>
-                          setState(() => _customFeatures.remove(c)),
+                      onPressed: () => setState(() {
+                        _customFeatures.remove(c);
+                        _scheduleDraftSave();
+                      }),
                     ),
                   ],
                 ),
@@ -1302,6 +1392,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
                       setState(() {
                         _customFeatures.add(v.trim());
                         _customFeatureController.clear();
+                        _scheduleDraftSave();
                       });
                     }
                   },
@@ -1316,6 +1407,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
                     setState(() {
                       _customFeatures.add(_customFeatureController.text.trim());
                       _customFeatureController.clear();
+                      _scheduleDraftSave();
                     });
                   }
                 },
@@ -1354,6 +1446,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
           } else {
             _selectedAttributes.remove(attr.id);
           }
+          _scheduleDraftSave();
         });
       },
     );
@@ -1396,7 +1489,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
                         await ImagePicker().pickMultiImage(imageQuality: 75);
                     if (picked.isNotEmpty) {
                       for (final x in picked) {
-                        final photo = PickedPhoto(File(x.path));
+                        final photo = PickedPhoto(x);
                         setState(() => _pickedPhotos.add(photo));
                         _uploadPickedPhoto(photo);
                       }
@@ -1434,7 +1527,13 @@ class _AddListingFlowState extends State<AddListingFlow> {
                     borderRadius: BorderRadius.circular(20),
                     child: photo.url != null
                         ? buildPropertyImage(photo.url!, fit: BoxFit.cover)
-                        : Image.file(photo.file, fit: BoxFit.cover),
+                        : photo.file == null
+                            ? const SizedBox.shrink()
+                            : kIsWeb
+                                ? Image.network(photo.file!.path,
+                                    fit: BoxFit.cover)
+                                : Image.file(File(photo.file!.path),
+                                    fit: BoxFit.cover),
                   ),
                   if (photo.isUploading)
                     Container(
@@ -1454,16 +1553,34 @@ class _AddListingFlowState extends State<AddListingFlow> {
                       decoration: BoxDecoration(
                           color: Colors.black45,
                           borderRadius: BorderRadius.circular(20)),
-                      child: const Center(
-                          child: Icon(PhosphorIconsRegular.warningCircle,
-                              color: Colors.redAccent, size: 32)),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Tooltip(
+                              message: photo.error!,
+                              child: const Icon(
+                                PhosphorIconsRegular.warningCircle,
+                                color: Colors.redAccent,
+                                size: 32,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => _uploadPickedPhoto(photo),
+                              child: const Text('Retry upload'),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   Positioned(
                     top: 8,
                     right: 8,
                     child: GestureDetector(
-                      onTap: () =>
-                          setState(() => _pickedPhotos.removeAt(index)),
+                      onTap: () => setState(() {
+                        _pickedPhotos.removeAt(index);
+                        _scheduleDraftSave();
+                      }),
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
@@ -1554,7 +1671,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
                             onTap: () {
                               _videoThumbnailController?.dispose();
                               _videoThumbnailController = null;
-                              setState(() => _pickedVideo = null);
+                              setState(() {
+                                _pickedVideo = null;
+                                _scheduleDraftSave();
+                              });
                             },
                             child: Container(
                               padding: const EdgeInsets.all(6),
@@ -1640,8 +1760,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
               value: _minimumStay,
               items: ['1 Month', '3 Months', '6 Months', '1 Year'],
               hint: 'Select Minimum Stay',
-              onChanged: (val) =>
-                  setState(() => _minimumStay = val ?? '6 Months'),
+              onChanged: (val) => setState(() {
+                _minimumStay = val ?? '6 Months';
+                _scheduleDraftSave();
+              }),
             ),
             const SizedBox(height: 20),
             _buildLabel('Available From'),
@@ -1773,10 +1895,21 @@ class _AddListingFlowState extends State<AddListingFlow> {
                               width: 120,
                               height: double.infinity,
                               fit: BoxFit.cover)
-                          : Image.file(_pickedPhotos.first.file,
-                              width: 120,
-                              height: double.infinity,
-                              fit: BoxFit.cover))
+                          : _pickedPhotos.first.file == null
+                              ? Container(color: _greyLight)
+                              : kIsWeb
+                                  ? Image.network(
+                                      _pickedPhotos.first.file!.path,
+                                      width: 120,
+                                      height: double.infinity,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Image.file(
+                                      File(_pickedPhotos.first.file!.path),
+                                      width: 120,
+                                      height: double.infinity,
+                                      fit: BoxFit.cover,
+                                    ))
                       : Container(
                           width: 120,
                           color: _greyLight,
@@ -2055,7 +2188,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
   Widget _buildPropertyTypeChip(String label, String imagePath) {
     bool isSelected = _propertyType == label;
     return GestureDetector(
-      onTap: () => setState(() => _propertyType = label),
+      onTap: () => setState(() {
+        _propertyType = label;
+        _scheduleDraftSave();
+      }),
       child: Container(
         padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
         decoration: BoxDecoration(

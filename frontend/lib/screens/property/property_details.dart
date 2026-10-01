@@ -11,6 +11,7 @@ import 'package:property_app/models/property.dart';
 import 'package:property_app/models/property_taxonomy.dart';
 import 'package:property_app/models/review.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
+import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
@@ -73,7 +74,10 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   bool _showLandlordDetails = false;
   bool _isDesktopScrolled = false;
   bool _loadingReviews = true;
-  final bool _hasReviewed = false;
+  bool _hasReviewed = false;
+  bool _checkingBooking = true;
+  bool _hasBookingHistory = false;
+  String? _activeBookingStatus;
 
   List<Review> _reviews = [];
   List<Property> _landlordProperties = [];
@@ -117,9 +121,63 @@ class _PropertyDetailsState extends State<PropertyDetails> {
 
   Future<void> _checkBookingEligibility() async {
     if (AppSession.isGuest) {
+      if (mounted) setState(() => _checkingBooking = false);
       return;
     }
+
+    try {
+      final bookings = await BookingService.fetchBookings();
+      var hasBookingHistory = false;
+      String? activeBookingStatus;
+      for (final booking in bookings) {
+        if (booking is! Map ||
+            booking['property_id']?.toString() != widget.property.id) {
+          continue;
+        }
+        hasBookingHistory = true;
+        final status = booking['status']?.toString().toLowerCase();
+        if (const {'pending', 'confirmed'}.contains(status)) {
+          activeBookingStatus = status;
+          break;
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _hasBookingHistory = hasBookingHistory;
+          _activeBookingStatus = activeBookingStatus;
+          _checkingBooking = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _checkingBooking = false);
+    }
+
+    try {
+      final eligibility = await RemoteDatabaseRepository()
+          .getReviewEligibility(widget.property.id);
+      if (!mounted) return;
+      setState(() {
+        _eligibleBookingId = eligibility['bookingId']?.toString();
+        _hasReviewed = eligibility['reviewExists'] == true;
+      });
+    } catch (_) {}
   }
+
+  String get _bookingButtonLabel {
+    if (_checkingBooking) return 'Checking booking...';
+    if (_activeBookingStatus == 'pending') return 'Request pending';
+    if (_activeBookingStatus == 'confirmed') return 'Already booked';
+    if (_hasBookingHistory) return 'Book again';
+    if (!widget.property.isAvailableForBooking) {
+      return widget.property.availabilityLabel;
+    }
+    return 'Reserve';
+  }
+
+  bool get _canStartBooking =>
+      !_checkingBooking &&
+      _activeBookingStatus == null &&
+      widget.property.isAvailableForBooking;
 
   Future<void> _fetchReviews() async {
     setState(() => _loadingReviews = true);
@@ -199,6 +257,16 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   }
 
   void _handleBookTap() {
+    if (_checkingBooking) return;
+    if (_activeBookingStatus != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('You already have an active booking for this property.'),
+        ),
+      );
+      return;
+    }
     if (!widget.property.isAvailableForBooking) return;
     if (AppSession.isGuest) {
       widget.onRequireAuthentication?.call(onAuthenticated: _openBooking);
@@ -218,6 +286,27 @@ class _PropertyDetailsState extends State<PropertyDetails> {
         builder: (_) => BookingView(propertyId: widget.property.id),
       ),
     );
+  }
+
+  void _openReviews() {
+    Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReviewsView(
+          propertyId: widget.property.id,
+          propertyName: widget.property.name,
+          averageRating: _avgRating,
+          reviewCount: _reviewCount,
+          canReview: _eligibleBookingId != null && !_hasReviewed,
+          hasReviewed: _hasReviewed,
+          bookingId: _eligibleBookingId,
+        ),
+      ),
+    ).then((_) {
+      if (!mounted) return;
+      _fetchReviews();
+      _checkBookingEligibility();
+    });
   }
 
   @override
@@ -288,7 +377,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                             const SizedBox(width: 16),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: _handleBookTap,
+                                onPressed:
+                                    _canStartBooking ? _handleBookTap : null,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: _stayNestPrimary,
                                   padding:
@@ -297,7 +387,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12)),
                                 ),
-                                child: Text('Reserve',
+                                child: Text(_bookingButtonLabel,
                                     style: GoogleFonts.poppins(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w600,
@@ -951,7 +1041,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
           SizedBox(
             height: 44,
             child: FilledButton(
-              onPressed: _handleBookTap,
+              onPressed: _canStartBooking ? _handleBookTap : null,
               style: FilledButton.styleFrom(
                 backgroundColor: _stayNestPrimary,
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -960,7 +1050,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                     borderRadius: BorderRadius.circular(8)),
               ),
               child: Text(
-                'Reserve',
+                _bookingButtonLabel,
                 style: GoogleFonts.poppins(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -1031,13 +1121,16 @@ class _PropertyDetailsState extends State<PropertyDetails> {
             width: double.infinity,
             height: 52,
             child: FilledButton(
-              onPressed: _handleBookTap,
+              onPressed: _canStartBooking ? _handleBookTap : null,
               style: FilledButton.styleFrom(
                 backgroundColor: _stayNestPrimary,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
-              child: Text('Book this property',
+              child: Text(
+                  _bookingButtonLabel == 'Reserve'
+                      ? 'Book this property'
+                      : _bookingButtonLabel,
                   style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -1362,6 +1455,23 @@ class _PropertyDetailsState extends State<PropertyDetails> {
         const SizedBox(height: 8),
         Text('Exact location provided after booking.',
             style: GoogleFonts.poppins(fontSize: 16, color: _dark)),
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          onPressed: widget.onViewLocation ??
+              () => Navigator.pushNamed(
+                    context,
+                    '/location',
+                    arguments: widget.property,
+                  ),
+          icon: const Icon(PhosphorIconsRegular.mapPin),
+          label: const Text('View location'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _dark,
+            side: const BorderSide(color: _dividerColor),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
       ],
     );
   }
@@ -1735,6 +1845,26 @@ class _PropertyDetailsState extends State<PropertyDetails> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text('Reviews',
+                  style: GoogleFonts.poppins(
+                      fontSize: 22, fontWeight: FontWeight.w600, color: _dark)),
+            ),
+            TextButton.icon(
+              onPressed: _openReviews,
+              icon: Icon(
+                _eligibleBookingId != null && !_hasReviewed
+                    ? PhosphorIconsRegular.pencilSimple
+                    : PhosphorIconsRegular.chatCircleText,
+              ),
+              label: Text(_eligibleBookingId != null && !_hasReviewed
+                  ? 'Add a review'
+                  : 'View reviews'),
+            ),
+          ],
+        ),
         if (_loadingReviews)
           const Center(
               child: Padding(
@@ -1842,20 +1972,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
                     setState(() => _showAllReviews = !_showAllReviews);
                     return;
                   }
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ReviewsView(
-                        propertyId: widget.property.id,
-                        propertyName: widget.property.name,
-                        averageRating: _avgRating,
-                        reviewCount: _reviewCount,
-                        canReview: _eligibleBookingId != null,
-                        hasReviewed: _hasReviewed,
-                        bookingId: _eligibleBookingId,
-                      ),
-                    ),
-                  ).then((_) => _fetchReviews());
+                  _openReviews();
                 },
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),

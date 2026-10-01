@@ -269,8 +269,8 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                       const SizedBox(height: 48), // Padding if no back button
 
                     // --- Header ---
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.end,
                       children: [
                         Text(
                           'Welcome Back ',
@@ -461,12 +461,15 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                                     height: 24,
                                   ),
                                   const SizedBox(width: 12),
-                                  Text(
-                                    'Continue with Google',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: _textDark,
+                                  Flexible(
+                                    child: Text(
+                                      'Continue with Google',
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: _textDark,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -476,8 +479,9 @@ class _LoginViewState extends State<LoginView> with TickerProviderStateMixin {
                     const SizedBox(height: 32),
 
                     // --- Sign Up Prompt ---
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 4,
                       children: [
                         Text(
                           "Don't have an account? ",

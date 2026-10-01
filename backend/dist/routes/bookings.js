@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query } from '../db.js';
+import { pool, query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { queueUserPush } from '../services/queue.js';
 import { settleReferralReward } from '../services/referral_service.js';
@@ -69,7 +69,9 @@ router.post('/pay-with-wallet', requireAuth, async (req, res, next) => {
 });
 // Create a new booking (tenant creates booking)
 router.post('/', requireAuth, async (req, res, next) => {
+    let client;
     try {
+        client = await pool.connect();
         const { propertyId, checkInDate, checkOutDate, notes } = req.body;
         if (!propertyId || !checkInDate || !checkOutDate) {
             return res.status(400).json({
@@ -77,21 +79,21 @@ router.post('/', requireAuth, async (req, res, next) => {
             });
         }
         let bookingData;
-        await query('BEGIN');
+        await client.query('BEGIN');
         try {
             // Lock the property row to prevent concurrent booking races
-            const propResult = await query('SELECT id, landlord_id, price, status, availability_status FROM properties WHERE id = $1 FOR UPDATE', [propertyId]);
+            const propResult = await client.query('SELECT id, landlord_id, price, status, availability_status FROM properties WHERE id = $1 FOR UPDATE', [propertyId]);
             if (propResult.rowCount === 0) {
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 return res.status(404).json({ error: 'Property not found.' });
             }
             const landlordId = propResult.rows[0].landlord_id;
             if (isPropertyUnavailable(propResult.rows[0].availability_status, propResult.rows[0].status)) {
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 return res.status(409).json({ error: 'Property is not available for booking.' });
             }
             if (!landlordId) {
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 return res.status(400).json({ error: 'Property has no landlord assigned.' });
             }
             // Calculate nights and server-side totalPrice
@@ -100,32 +102,32 @@ router.post('/', requireAuth, async (req, res, next) => {
             if (!Number.isFinite(cIn.getTime()) ||
                 !Number.isFinite(cOut.getTime()) ||
                 cOut <= cIn) {
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 return res.status(400).json({ error: 'Invalid booking date range.' });
             }
             const calculatedTotalPrice = BOOKING_VIEWING_FEE_KES;
             // Availability Engine: Check for overlapping confirmed bookings
-            const overlapCheck = await query(`SELECT id FROM bookings 
+            const overlapCheck = await client.query(`SELECT id FROM bookings 
          WHERE property_id = $1 
          AND status = 'confirmed'
          AND (check_in_date, check_out_date) OVERLAPS ($2::date, $3::date)`, [propertyId, checkInDate, checkOutDate]);
             if (overlapCheck.rowCount > 0) {
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 return res.status(409).json({ error: 'Property is already booked for these dates.' });
             }
             // Strict Idempotency Check
-            const existingBooking = await query(`SELECT id FROM bookings 
+            const existingBooking = await client.query(`SELECT id FROM bookings 
          WHERE property_id = $1 AND tenant_id = $2 AND status IN ('pending', 'confirmed')`, [propertyId, req.auth.id]);
             if (existingBooking.rowCount > 0) {
-                await query('ROLLBACK');
-                return res.status(400).json({ error: 'You already have an active booking or request for this property.' });
+                await client.query('ROLLBACK');
+                return res.status(409).json({ error: 'You already have an active booking or request for this property.' });
             }
             // Create booking
-            const bookingResult = await query(`INSERT INTO bookings (property_id, tenant_id, landlord_id, check_in_date, check_out_date, status, total_price, notes)
+            const bookingResult = await client.query(`INSERT INTO bookings (property_id, tenant_id, landlord_id, check_in_date, check_out_date, status, total_price, notes)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING id, property_id, tenant_id, landlord_id, check_in_date, check_out_date, status, total_price, notes, created_at`, [propertyId, req.auth.id, landlordId, checkInDate, checkOutDate, 'pending', calculatedTotalPrice, notes || null]);
             bookingData = bookingResult.rows[0];
-            await query('COMMIT');
+            await client.query('COMMIT');
             try {
                 const tenantRes = await query('SELECT name FROM users WHERE id = $1 LIMIT 1', [req.auth.id]);
                 const pRes = await query('SELECT title FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
@@ -138,13 +140,16 @@ router.post('/', requireAuth, async (req, res, next) => {
             }
         }
         catch (dbErr) {
-            await query('ROLLBACK');
+            await client.query('ROLLBACK');
             throw dbErr;
         }
         res.status(201).json({ data: bookingData });
     }
     catch (error) {
         next(error);
+    }
+    finally {
+        client?.release();
     }
 });
 // Get bookings for tenant

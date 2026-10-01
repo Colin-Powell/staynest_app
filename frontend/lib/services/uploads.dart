@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 
+import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import 'package:property_app/session/app_session.dart';
@@ -21,15 +22,17 @@ class UploadCancelledException implements Exception {
 
 class UploadsService {
   /// Uploads a single file synchronously to the backend /uploads endpoint.
-  static Future<String> uploadFile(File file, {String? token, String? idempotencyKey}) async {
+  static Future<String> uploadFile(File file,
+      {String? token, String? idempotencyKey}) async {
     final base = AppSession.apiBaseUrl;
     final uri = Uri.parse("$base/uploads");
     bool tokenRefreshed = false;
-    
+
     while (true) {
       final request = http.MultipartRequest('POST', uri);
       if ((token ?? AppSession.apiToken) != null) {
-        request.headers['Authorization'] = 'Bearer ${token ?? AppSession.apiToken}';
+        request.headers['Authorization'] =
+            'Bearer ${token ?? AppSession.apiToken}';
       }
       if (idempotencyKey != null) {
         request.headers['Idempotency-Key'] = idempotencyKey;
@@ -39,13 +42,13 @@ class UploadsService {
 
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
-      
+
       if (response.statusCode == 401 && !tokenRefreshed) {
         tokenRefreshed = true;
         try {
           await HttpJsonClient().refreshAccessTokenIfPossible();
-            token = null;
-            continue;
+          token = null;
+          continue;
         } catch (_) {}
       }
 
@@ -67,6 +70,17 @@ class UploadsService {
   static UploadTask uploadFileWithProgress(
       File file, void Function(double) onProgress,
       {String? token, String? idempotencyKey}) {
+    return uploadXFileWithProgress(
+      XFile(file.path),
+      onProgress,
+      token: token,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  static UploadTask uploadXFileWithProgress(
+      XFile file, void Function(double) onProgress,
+      {String? token, String? idempotencyKey}) {
     final client = http.Client();
     final completer = Completer<String>();
     bool isCancelled = false;
@@ -74,7 +88,7 @@ class UploadsService {
     () async {
       final base = AppSession.apiBaseUrl;
       final uri = Uri.parse("$base/uploads/async");
-      
+
       try {
         final total = await file.length();
         String? jobId;
@@ -83,15 +97,17 @@ class UploadsService {
         while (true) {
           final request = http.MultipartRequest('POST', uri);
           if ((token ?? AppSession.apiToken) != null) {
-            request.headers['Authorization'] = 'Bearer ${token ?? AppSession.apiToken}';
+            request.headers['Authorization'] =
+                'Bearer ${token ?? AppSession.apiToken}';
           }
           if (idempotencyKey != null) {
             request.headers['Idempotency-Key'] = idempotencyKey;
           }
 
           int bytesSent = 0;
-          final stream = file.openRead().transform(StreamTransformer.fromHandlers(
-              handleData: (List<int> data, EventSink<List<int>> sink) {
+          final stream = file.openRead().transform(
+              StreamTransformer.fromHandlers(
+                  handleData: (List<int> data, EventSink<List<int>> sink) {
             bytesSent += data.length;
             try {
               onProgress((bytesSent / total) * 0.8);
@@ -100,7 +116,7 @@ class UploadsService {
           }));
 
           final multipart = http.MultipartFile('file', stream, total,
-              filename: path.basename(file.path));
+              filename: path.basename(file.name));
           request.files.add(multipart);
 
           final streamed = await client.send(request);
@@ -110,15 +126,17 @@ class UploadsService {
             tokenRefreshed = true;
             try {
               await HttpJsonClient().refreshAccessTokenIfPossible();
-            token = null;
-            continue;
+              token = null;
+              continue;
             } catch (_) {
-              throw Exception('Async Upload failed: 401 Unauthorized (Refresh failed)');
+              throw Exception(
+                  'Async Upload failed: 401 Unauthorized (Refresh failed)');
             }
           }
 
           if (response.statusCode < 200 || response.statusCode >= 300) {
-            throw Exception('Async Upload failed:  ');
+            throw Exception(
+                'Async upload failed (${response.statusCode}): ${response.body}');
           }
 
           final decoded = jsonDecode(response.body) as Map<String, dynamic>;
@@ -136,15 +154,16 @@ class UploadsService {
         bool pollTokenRefreshed = false;
 
         while (!isCancelled) {
-          if (attempts >= maxAttempts) throw Exception('Upload timed out while processing');
+          if (attempts >= maxAttempts)
+            throw Exception('Upload timed out while processing');
           attempts++;
           await Future.delayed(const Duration(seconds: 2));
           if (isCancelled) break;
-          
-          final jobRes = await client.get(
-            Uri.parse("$base/uploads/job/$jobId"),
-            headers: {'Authorization': 'Bearer ${token ?? AppSession.apiToken}'}
-          );
+
+          final jobRes = await client.get(Uri.parse("$base/uploads/job/$jobId"),
+              headers: {
+                'Authorization': 'Bearer ${token ?? AppSession.apiToken}'
+              });
 
           if (jobRes.statusCode == 401 && !pollTokenRefreshed) {
             pollTokenRefreshed = true;
@@ -155,30 +174,33 @@ class UploadsService {
               continue;
             } catch (_) {}
           }
-          
+
           if (jobRes.statusCode == 200) {
             final jobData = jsonDecode(jobRes.body)['data'];
             final status = jobData['status'];
-            
+
             if (status == 'completed') {
-               finalUrl = jobData['result']['url'] ?? jobData['result']['secure_url'];
-               break;
+              finalUrl =
+                  jobData['result']['url'] ?? jobData['result']['secure_url'];
+              break;
             } else if (status == 'failed') {
-               throw Exception('Background processing failed: ');
+              throw Exception(
+                  'Background media processing failed: ${jobData['error'] ?? 'unknown error'}');
             } else {
-               try {
-                  onProgress(0.9); // Processing...
-               } catch (_) {}
+              try {
+                onProgress(0.9); // Processing...
+              } catch (_) {}
             }
           }
         }
-        
+
         if (isCancelled) {
           throw UploadCancelledException();
         }
 
-        if (finalUrl == null) throw Exception('Job finished but no URL was returned');
-        
+        if (finalUrl == null)
+          throw Exception('Job finished but no URL was returned');
+
         try {
           onProgress(1.0);
         } catch (_) {}

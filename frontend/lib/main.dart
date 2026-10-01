@@ -232,7 +232,10 @@ class _PropertyAppState extends State<PropertyApp> {
     onAuthenticated?.call();
   }
 
-  Future<void> _completePageLogin(BuildContext context) async {
+  Future<void> _completePageLogin(
+    BuildContext context, {
+    VoidCallback? onAuthenticated,
+  }) async {
     if (!AppSession.isEmailVerified) {
       Navigator.pushReplacementNamed(context, '/otp');
       return;
@@ -253,18 +256,20 @@ class _PropertyAppState extends State<PropertyApp> {
     await _enforceTenantPreferencesIfMissing(context);
     if (!context.mounted) return;
     Navigator.pushReplacementNamed(context, '/home');
+    onAuthenticated?.call();
   }
 
   Future<void> _completeGoogleSignIn(
     BuildContext context, {
     required bool isDesktopModal,
+    VoidCallback? onAuthenticated,
   }) async {
     final success = await GoogleAuthService.instance.signInWithGoogle();
     if (!success) throw Exception('Sign in failed');
     if (isDesktopModal) {
-      await _completeModalLogin(context);
+      await _completeModalLogin(context, onAuthenticated: onAuthenticated);
     } else {
-      await _completePageLogin(context);
+      await _completePageLogin(context, onAuthenticated: onAuthenticated);
     }
   }
 
@@ -272,6 +277,14 @@ class _PropertyAppState extends State<PropertyApp> {
     BuildContext context, {
     VoidCallback? onAuthenticated,
   }) async {
+    if (MediaQuery.sizeOf(context).width < 768) {
+      await Navigator.of(context, rootNavigator: true).pushNamed<void>(
+        '/login',
+        arguments: onAuthenticated,
+      );
+      return;
+    }
+
     await showDialog<void>(
       context: context,
       useRootNavigator: true,
@@ -507,7 +520,10 @@ class _PropertyAppState extends State<PropertyApp> {
         },
         '/amenities': (context) =>
             AmenitiesView(onClose: () => Navigator.pop(context)),
-        '/location': (context) => LocationView(
+        '/location': (context) {
+          final property = ModalRoute.of(context)?.settings.arguments;
+          return LocationView(
+            property: property is Property ? property : null,
             onClose: () => Navigator.pop(context),
             onNearbyPlaces: () {
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -516,9 +532,13 @@ class _PropertyAppState extends State<PropertyApp> {
             },
             onGetDirections: () {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                Navigator.pushNamed(context, '/commute');
+                Navigator.pushNamed(context, '/commute', arguments: {
+                  if (property is Property) 'targetProperty': property,
+                });
               });
-            }),
+            },
+          );
+        },
         '/landlord_info': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
           return LandlordInfoView(
@@ -578,15 +598,37 @@ class _PropertyAppState extends State<PropertyApp> {
     };
     if (!authRoutes.contains(settings.name)) return null;
 
+    final navigatorContext = navigatorKey.currentContext;
+    final isDesktop = navigatorContext != null &&
+        MediaQuery.sizeOf(navigatorContext).width >= 768;
+    if (!isDesktop) {
+      return MaterialPageRoute<void>(
+        settings: settings,
+        builder: (context) => _buildAuthScreen(
+          settings.name!,
+          context,
+          false,
+          onAuthenticated: settings.arguments is VoidCallback
+              ? settings.arguments as VoidCallback
+              : null,
+        ),
+      );
+    }
+
     return PageRouteBuilder<void>(
       settings: settings,
       opaque: false,
       barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.4),
       pageBuilder: (context, animation, secondaryAnimation) {
-        final isDesktop = MediaQuery.sizeOf(context).width >= 768;
-        final screen = _buildAuthScreen(settings.name!, context, isDesktop);
-        if (!isDesktop) return screen;
+        final screen = _buildAuthScreen(
+          settings.name!,
+          context,
+          true,
+          onAuthenticated: settings.arguments is VoidCallback
+              ? settings.arguments as VoidCallback
+              : null,
+        );
 
         final size = MediaQuery.sizeOf(context);
         final width = (size.width - 48).clamp(360.0, 600.0).toDouble();
@@ -618,16 +660,24 @@ class _PropertyAppState extends State<PropertyApp> {
     );
   }
 
-  Widget _buildAuthScreen(String route, BuildContext context, bool isDesktop) {
+  Widget _buildAuthScreen(
+    String route,
+    BuildContext context,
+    bool isDesktop, {
+    VoidCallback? onAuthenticated,
+  }) {
     switch (route) {
       case '/login':
         return LoginView(
           onLogin: () => isDesktop
-              ? _completeModalLogin(context)
-              : _completePageLogin(context),
+              ? _completeModalLogin(context, onAuthenticated: onAuthenticated)
+              : _completePageLogin(context, onAuthenticated: onAuthenticated),
           onRegister: () => Navigator.pushNamed(context, '/register'),
-          onGoogleSignIn: () =>
-              _completeGoogleSignIn(context, isDesktopModal: isDesktop),
+          onGoogleSignIn: () => _completeGoogleSignIn(
+            context,
+            isDesktopModal: isDesktop,
+            onAuthenticated: onAuthenticated,
+          ),
         );
       case '/register':
         return RoleSelectionView(
@@ -639,8 +689,10 @@ class _PropertyAppState extends State<PropertyApp> {
         );
       case '/register_form':
         return RegisterView(
-          onGoogleSignIn: () =>
-              _completeGoogleSignIn(context, isDesktopModal: isDesktop),
+          onGoogleSignIn: () => _completeGoogleSignIn(
+            context,
+            isDesktopModal: isDesktop,
+          ),
         );
       case '/otp':
         return const OtpView();
@@ -1371,14 +1423,17 @@ class _AppShellState extends State<AppShell> {
   }
 
   List<Widget> _buildOverlays() => [
-        if (_selectedPropertyId != null) _buildPropertyDetailsOverlay(),
+        if (_selectedPropertyId != null && _bookingPropertyId == null)
+          _buildPropertyDetailsOverlay(),
         if (_bookingPropertyId != null)
-          BookingView(
-            key: ValueKey(_bookingPropertyId),
-            propertyId: _bookingPropertyId!,
-            embedded: true,
-            onBack: () => setState(() => _bookingPropertyId = null),
-            onComplete: _finishBookingInShell,
+          Positioned.fill(
+            child: BookingView(
+              key: ValueKey(_bookingPropertyId),
+              propertyId: _bookingPropertyId!,
+              embedded: true,
+              onBack: () => setState(() => _bookingPropertyId = null),
+              onComplete: _finishBookingInShell,
+            ),
           ),
         if (_showPhotoGallery) _buildPhotoGalleryOverlay(),
         if (_showAmenities) _buildAmenitiesOverlay(),
@@ -1530,9 +1585,7 @@ class _AppShellState extends State<AppShell> {
         onViewLocation: _openLocation,
         onViewLandlord: _openLandlordInfo,
         onMessage: (userId, name, avatar) => _openChat(userId, name, avatar),
-        onBookNow: MediaQuery.sizeOf(context).width >= 768
-            ? () => setState(() => _bookingPropertyId = property.id)
-            : null,
+        onBookNow: () => setState(() => _bookingPropertyId = property.id),
         onRequireAuthentication: _requireAuthentication,
       ),
     );
@@ -1609,8 +1662,9 @@ class _AppShellState extends State<AppShell> {
         onGetDirections: () {
           _closeLocation();
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            Navigator.pushNamed(context, '/commute',
-                arguments: <String, dynamic>{'property': _activeProperty});
+            Navigator.pushNamed(context, '/commute', arguments: {
+              'targetProperty': _activeProperty,
+            });
           });
         },
       ),

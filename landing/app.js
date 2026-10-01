@@ -16,7 +16,7 @@ function closeModal() { modal.classList.remove('flex'); modal.classList.add('hid
   el.addEventListener('click', (e)=>{
     e.preventDefault();
     // Replace URL below with your hosted APK path
-    const apkUrl = '/downloads/staynest.apk';
+    const apkUrl = 'https://github.com/Colin-Powell/staynest_app/releases/latest/download/staynest-android.apk';
     window.location.href = apkUrl;
   });
 });

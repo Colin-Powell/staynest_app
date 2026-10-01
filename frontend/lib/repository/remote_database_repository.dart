@@ -359,7 +359,11 @@ class RemoteDatabaseRepository {
       Uri.parse(
           '${AppSession.apiBaseUrl}/properties/$propertyId/review-eligibility'),
     );
-    return _decodeData(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Could not check review eligibility.');
+    }
+    return Map<String, dynamic>.from(
+        jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   // -------------------- Auth / Onboarding --------------------

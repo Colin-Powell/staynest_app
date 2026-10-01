@@ -1,0 +1,73 @@
+name: Release Android APK
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        working-directory: frontend
+        run: flutter pub get
+
+      - name: Validate Android signing secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64" || { echo "::error::Configure ANDROID_KEYSTORE_BASE64."; exit 1; }
+          test -n "$ANDROID_KEY_ALIAS" || { echo "::error::Configure ANDROID_KEY_ALIAS."; exit 1; }
+          test -n "$ANDROID_KEY_PASSWORD" || { echo "::error::Configure ANDROID_KEY_PASSWORD."; exit 1; }
+          test -n "$ANDROID_STORE_PASSWORD" || { echo "::error::Configure ANDROID_STORE_PASSWORD."; exit 1; }
+
+      - name: Configure Android release signing
+        working-directory: frontend/android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > upload-keystore.jks
+          {
+            printf 'storeFile=../upload-keystore.jks\n'
+            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+            printf 'storePassword=%s\n' "$ANDROID_STORE_PASSWORD"
+          } > key.properties
+
+      - name: Build arm64 Android release
+        working-directory: frontend
+        run: flutter build apk --release --flavor consumer --target-platform android-arm64
+
+      - name: Prepare release asset
+        run: |
+          mkdir -p release-assets
+          cp frontend/build/app/outputs/flutter-apk/app-consumer-release.apk release-assets/staynest-android.apk
+
+      - name: Attach APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/staynest-android.apk

@@ -715,23 +715,7 @@ class _BookingViewState extends State<BookingView> {
   }
 
   String _bookingErrorMessage(Object error) {
-    final message = error.toString().toLowerCase();
-    if (message.contains('already booked') ||
-        message.contains('not available') ||
-        message.contains('overlap')) {
-      return 'These dates are no longer available. Please choose different dates.';
-    }
-    if (message.contains('already have an active booking') ||
-        message.contains('duplicate')) {
-      return 'You already have an active booking request for this property.';
-    }
-    if (message.contains('property not found')) {
-      return 'This property is no longer available.';
-    }
-    if (message.contains('no landlord')) {
-      return 'This property cannot accept bookings right now.';
-    }
-    return 'We could not submit your booking. Please try again.';
+    return BookingService.friendlyErrorMessage(error);
   }
 
   Widget _buildDayCell(int day,

@@ -6,6 +6,30 @@ class BookingService {
   static String get _baseUrl => '${AppSession.apiBaseUrl}/bookings';
   static final HttpJsonClient _client = HttpJsonClient();
 
+  static String friendlyErrorMessage(Object error) {
+    final message = error.toString().toLowerCase();
+    if (message.contains('already have an active booking') ||
+        message.contains('active booking') ||
+        message.contains('duplicate')) {
+      return 'You already have an active booking request for this property. Open My Bookings to view it.';
+    }
+    if (message.contains('already booked') ||
+        message.contains('not available') ||
+        message.contains('overlap')) {
+      return 'Those dates are no longer available. Please choose different dates.';
+    }
+    if (message.contains('insufficient wallet balance')) {
+      return 'Your wallet balance is too low. Add funds and try again.';
+    }
+    if (message.contains('property not found')) {
+      return 'This property is no longer available.';
+    }
+    if (message.contains('no landlord') || message.contains('own property')) {
+      return 'This property cannot accept your booking.';
+    }
+    return 'We could not submit your booking. Please try again.';
+  }
+
   /// Creates a new booking request for a tenant
   static Future<Map<String, dynamic>> createBooking({
     required String propertyId,

@@ -26,6 +26,11 @@ class PropertyService {
     await prefs.setString(_localDraftKey, jsonEncode(data));
   }
 
+  Future<void> cacheDraftLocally(Map<String, dynamic> payload,
+      {String? draftId}) {
+    return _cacheDraft(payload, draftId: draftId);
+  }
+
   Future<Map<String, dynamic>?> _readCachedDraft() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_localDraftKey);
@@ -46,10 +51,10 @@ class PropertyService {
 
   Future<Map<String, dynamic>> saveDraft(Map<String, dynamic> payload,
       {String? draftId}) async {
+    await cacheDraftLocally(payload, draftId: draftId);
+
     final token = AppSession.apiToken;
     if (token == null) throw Exception('Not authenticated');
-
-    await _cacheDraft(payload, draftId: draftId);
 
     final uri = draftId != null
         ? Uri.parse('$baseUrl/drafts/$draftId')
@@ -75,7 +80,10 @@ class PropertyService {
 
   Future<List<Map<String, dynamic>>> getDrafts() async {
     final token = AppSession.apiToken;
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) {
+      final cached = await _readCachedDraft();
+      return cached == null ? [] : [cached];
+    }
 
     try {
       final response = await http.get(Uri.parse('$baseUrl/drafts'), headers: {
