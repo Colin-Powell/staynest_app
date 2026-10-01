@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { randomUUID } from 'node:crypto';
 import { env } from '../config.js';
 import { emailQueue } from './emailQueue.js';
 import { cache } from './cache.js';
@@ -74,7 +75,7 @@ export async function queueOtpEmail(to, code) {
     const normalizedEmail = to.trim().toLowerCase();
     console.info(`[OTP] adding email job for ${normalizedEmail}`);
     await emailQueue.add('otp-email', { to: normalizedEmail, code }, {
-        jobId: `otp-${normalizedEmail}-${code}`,
+        jobId: `otp-${randomUUID()}`,
         attempts: 4,
         backoff: { type: 'exponential', delay: 2000 },
         removeOnComplete: { age: 15 * 60, count: 1000 },

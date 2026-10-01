@@ -1,4 +1,4 @@
-import { Job, Worker } from 'bullmq';
+import { Job, UnrecoverableError, Worker } from 'bullmq';
 import { env } from '../config.js';
 import { sendOtpEmail } from '../services/email.js';
 
@@ -8,7 +8,19 @@ export const emailWorker = new Worker(
   'email-delivery',
   async (job: Job<{ to: string; code: string }>) => {
     if (job.name !== 'otp-email') return;
-    await sendOtpEmail(job.data.to, job.data.code);
+    try {
+      await sendOtpEmail(job.data.to, job.data.code);
+    } catch (error) {
+      const smtpError = error as NodeJS.ErrnoException & {
+        responseCode?: number;
+      };
+      if (smtpError.code === 'EAUTH' || smtpError.responseCode === 535) {
+        throw new UnrecoverableError(
+          'SMTP authentication failed. Check the email worker SMTP credentials.',
+        );
+      }
+      throw error;
+    }
   },
   { connection, concurrency: 3 },
 );
