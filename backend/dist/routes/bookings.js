@@ -5,7 +5,12 @@ import { queueUserPush } from '../services/queue.js';
 import { settleReferralReward } from '../services/referral_service.js';
 import { BOOKING_VIEWING_FEE_KES, completeBookingWithEscrow, createAndPayBookingFromWallet, refundExpiredBookingEscrows, settleEscrow, } from '../services/finance_service.js';
 const router = Router();
-const unavailablePropertyStatuses = new Set(['fully_booked', 'rented', 'maintenance']);
+const unavailablePropertyStatuses = new Set([
+    'fully_booked',
+    'unavailable',
+    'rented',
+    'maintenance',
+]);
 function isPropertyUnavailable(availabilityStatus, legacyStatus) {
     const availability = String(availabilityStatus ?? '').toLowerCase();
     const legacy = String(legacyStatus ?? '').toLowerCase();

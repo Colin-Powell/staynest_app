@@ -147,12 +147,14 @@ class Property {
 
   bool get isAvailableForBooking => !const {
         'fully_booked',
+        'unavailable',
         'rented',
         'maintenance'
       }.contains(availabilityStatus.toLowerCase());
 
   String get availabilityLabel => switch (availabilityStatus.toLowerCase()) {
         'fully_booked' => 'Fully booked',
+        'unavailable' => 'Temporarily unavailable',
         'rented' => 'Rented out',
         'maintenance' => 'Under maintenance',
         'pending_booking' => 'Booking pending',
@@ -188,6 +190,7 @@ class Property {
       'available',
       'pending_booking',
       'fully_booked',
+      'unavailable',
       'rented',
       'maintenance',
     };

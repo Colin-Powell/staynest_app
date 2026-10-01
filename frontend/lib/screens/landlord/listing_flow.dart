@@ -684,6 +684,14 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'bedrooms': _bedrooms,
         'bathrooms': _bathrooms,
         'area': estimatedArea,
+        'service_charges': _serviceCharges.text.trim().isEmpty
+            ? null
+            : _serviceCharges.text.trim(),
+        'security_deposit': _securityDeposit.text.trim().isEmpty
+            ? null
+            : _securityDeposit.text.trim(),
+        'minimum_stay': _minimumStay,
+        'available_from': _availableFrom?.toIso8601String().split('T').first,
         'image_url': uploadedUrls.first,
         'images': uploadedUrls,
         'video_url': _pickedVideo?.url,
@@ -716,7 +724,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
             : "Your property is now live and ready to be discovered.",
         onOk: () {
           Navigator.pop(context);
-          Navigator.pop(context);
+          Navigator.pop(context, true);
         },
       );
     } catch (e) {

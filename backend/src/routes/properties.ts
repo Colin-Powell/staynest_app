@@ -36,7 +36,7 @@ function normalizePropertyRow(property: Record<string, unknown>): Record<string,
   }
 
   const availabilityStatus = String(property.availability_status ?? '').toLowerCase();
-  const legacyAvailability = ['available', 'pending_booking', 'fully_booked', 'rented', 'maintenance'];
+  const legacyAvailability = ['available', 'pending_booking', 'fully_booked', 'unavailable', 'rented', 'maintenance'];
   if (!availabilityStatus || availabilityStatus === 'unknown') {
     property.availability_status = legacyAvailability.includes(String(property.status).toLowerCase())
       ? property.status
@@ -600,7 +600,7 @@ router.patch('/:id/status', requireAuth, authorize('landlord', 'host'), async (r
 
     console.log(`[PropertyStatusUpdate] Request to update property ${propertyId} to status "${status}" by user ${userId}`);
 
-    const allowedStatuses = ['available', 'pending_booking', 'fully_booked', 'rented', 'maintenance'];
+    const allowedStatuses = ['available', 'pending_booking', 'fully_booked', 'unavailable', 'rented', 'maintenance'];
     if (typeof status !== 'string' || !allowedStatuses.includes(status)) {
       return res.status(400).json({ error: `Status must be one of: ${allowedStatuses.join(', ')}.` });
     }
@@ -860,6 +860,10 @@ function createPropertyInsertArgs(body: Record<string, unknown>) {
     road,
     landmark,
     price,
+    service_charges,
+    security_deposit,
+    minimum_stay,
+    available_from,
     bedrooms,
     bathrooms,
     area,
@@ -890,6 +894,16 @@ function createPropertyInsertArgs(body: Record<string, unknown>) {
     typeof road === 'string' ? road : null,
     typeof landmark === 'string' ? landmark : null,
     Number(price),
+    service_charges == null || service_charges === ''
+      ? null
+      : Number(service_charges),
+    security_deposit == null || security_deposit === ''
+      ? null
+      : Number(security_deposit),
+    typeof minimum_stay === 'string' ? minimum_stay : null,
+    typeof available_from === 'string' && available_from
+      ? available_from
+      : null,
     Number(bedrooms),
     Number(bathrooms),
     Number(area),
@@ -966,9 +980,9 @@ async function handleCreateProperty(req: Request, res: Response, next: NextFunct
     );
 
     const result = await query(
-      `INSERT INTO properties (title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, landlord_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20::jsonb, $21, $22::jsonb, $23, $24, $25, $26)
-       RETURNING id, title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, status`,
+      `INSERT INTO properties (title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, service_charges, security_deposit, minimum_stay, available_from, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, landlord_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb, $25, $26::jsonb, $27, $28, $29, $30)
+       RETURNING id, title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, service_charges, security_deposit, minimum_stay, available_from, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, status, availability_status`,
       insertArgs,
     );
 
@@ -1016,7 +1030,7 @@ router.post('/from-listing', requireAuth, authorize('landlord', 'host'), async (
 
 router.put('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const fields = ['title', 'description', 'category', 'city', 'address', 'country', 'county', 'sub_county', 'ward', 'town', 'neighborhood', 'estate_village', 'road', 'landmark', 'price', 'bedrooms', 'bathrooms', 'area', 'image_url', 'images', 'video_url', 'amenities', 'lat', 'lng'];
+    const fields = ['title', 'description', 'category', 'city', 'address', 'country', 'county', 'sub_county', 'ward', 'town', 'neighborhood', 'estate_village', 'road', 'landmark', 'price', 'service_charges', 'security_deposit', 'minimum_stay', 'available_from', 'bedrooms', 'bathrooms', 'area', 'image_url', 'images', 'video_url', 'amenities', 'lat', 'lng'];
     const updates: string[] = [];
     const values: unknown[] = [];
     for (const field of fields) {

@@ -157,7 +157,9 @@ class RemoteDatabaseRepository {
       Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId'),
       body: listingPayload,
     );
+    await CacheEngine.instance.invalidate(CacheKeys.propertyDetail(propertyId));
     await CacheEngine.instance.invalidate(CacheKeys.propertyList);
+    await CacheEngine.instance.invalidate('landlord_props_me');
   }
 
   Future<void> submitVerification({

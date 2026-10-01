@@ -107,7 +107,12 @@ export async function createAndPayBookingFromWallet(input) {
         if (property.landlord_id === input.tenantId) {
             throw new Error('Landlords cannot book their own property.');
         }
-        const unavailableStatuses = ['fully_booked', 'rented', 'maintenance'];
+        const unavailableStatuses = [
+            'fully_booked',
+            'unavailable',
+            'rented',
+            'maintenance',
+        ];
         const availabilityStatus = String(property.availability_status ?? '').toLowerCase();
         const legacyStatus = String(property.status ?? '').toLowerCase();
         if (unavailableStatuses.includes(availabilityStatus) ||

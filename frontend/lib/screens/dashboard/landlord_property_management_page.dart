@@ -242,12 +242,16 @@ class _LandlordPropertyManagementPageState
     try {
       final property = await PropertiesApi.getPropertyById(propertyId);
       if (!mounted) return;
-      final updated = await Navigator.pushNamed(
+      final updated = await Navigator.pushNamed<bool>(
         context,
         '/list_property',
         arguments: property,
       );
       if (updated == true && mounted) {
+        final refreshedProperty =
+            await PropertiesApi.getPropertyById(propertyId);
+        if (!mounted) return;
+        setState(() => _property.addAll(refreshedProperty));
         await _fetchInitialData();
       }
     } catch (error) {
@@ -280,6 +284,8 @@ class _LandlordPropertyManagementPageState
             _buildStatusOption('Available', _green),
             _buildStatusOption('Pending booking', const Color(0xFFF59E0B)),
             _buildStatusOption('Fully booked', const Color(0xFF3B82F6)),
+            _buildStatusOption(
+                'Temporarily unavailable', const Color(0xFF64748B)),
             _buildStatusOption('Rented', _grey),
             _buildStatusOption('Under maintenance', const Color(0xFFEF4444)),
             const SizedBox(height: 20),
@@ -334,7 +340,7 @@ class _LandlordPropertyManagementPageState
           style: GoogleFonts.poppins(
               fontWeight: FontWeight.w500, color: _dark, fontSize: 15)),
       onTap: () async {
-        if (label == 'Rented') {
+        if (label == 'Rented' || label == 'Temporarily unavailable') {
           final confirmed = await _showStatusConfirmationDialog(label);
           if (!confirmed) return;
         }
@@ -343,6 +349,7 @@ class _LandlordPropertyManagementPageState
           'Available': 'available',
           'Pending booking': 'pending_booking',
           'Fully booked': 'fully_booked',
+          'Temporarily unavailable': 'unavailable',
           'Rented': 'rented',
           'Under maintenance': 'maintenance',
         }[label];
@@ -612,13 +619,11 @@ class _LandlordPropertyManagementPageState
                   'available': 'Available',
                   'pending_booking': 'Pending booking',
                   'fully_booked': 'Fully booked',
+                  'unavailable': 'Temporarily unavailable',
                   'rented': 'Rented',
                   'maintenance': 'Under maintenance',
-                }[(_property['availability_status'] ?? _property['status'])
-                    ?.toString()] ??
-                ((_property['availability_status'] ?? _property['status'])
-                        ?.toString() ??
-                    'Available'),
+                }[_property['availability_status']?.toString().toLowerCase()] ??
+                'Available',
           ),
         ),
       ],

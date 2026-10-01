@@ -12,7 +12,12 @@ import {
 } from '../services/finance_service.js';
 
 const router = Router();
-const unavailablePropertyStatuses = new Set(['fully_booked', 'rented', 'maintenance']);
+const unavailablePropertyStatuses = new Set([
+  'fully_booked',
+  'unavailable',
+  'rented',
+  'maintenance',
+]);
 
 function isPropertyUnavailable(availabilityStatus: unknown, legacyStatus: unknown): boolean {
   const availability = String(availabilityStatus ?? '').toLowerCase();

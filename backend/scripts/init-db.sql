@@ -158,6 +158,10 @@ CREATE TABLE IF NOT EXISTS properties (
   category text NOT NULL,
   city text NOT NULL,
   price numeric NOT NULL,
+  service_charges numeric,
+  security_deposit numeric,
+  minimum_stay text,
+  available_from date,
   bedrooms integer NOT NULL DEFAULT 1,
   bathrooms integer NOT NULL DEFAULT 1,
   area integer NOT NULL DEFAULT 0,
@@ -188,6 +192,10 @@ CREATE TABLE IF NOT EXISTS properties (
 -- Ensure lat/lng columns exist for older databases
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS lat numeric;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS lng numeric;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS service_charges numeric;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS security_deposit numeric;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS minimum_stay text;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS available_from date;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS images jsonb DEFAULT '[]'::jsonb;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS video_url text;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS amenities jsonb DEFAULT '[]'::jsonb;
