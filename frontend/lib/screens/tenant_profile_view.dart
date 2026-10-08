@@ -348,8 +348,8 @@ class _TenantProfileViewState extends State<TenantProfileView> {
   }
 
   Widget _buildSectionDivider() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 40),
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 40),
       child: Divider(color: _divider, height: 1, thickness: 1),
     );
   }

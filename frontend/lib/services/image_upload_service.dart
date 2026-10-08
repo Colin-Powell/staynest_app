@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
@@ -64,7 +65,27 @@ class ImageUploadService {
   }
 
   static Future<XFile> compressPickedImage(XFile input) async {
-    if (kIsWeb) return input;
+    if (kIsWeb) {
+      final originalBytes = await input.readAsBytes();
+      final decoded = img.decodeImage(originalBytes);
+      if (decoded == null) return input;
+
+      final oriented = img.bakeOrientation(decoded);
+      final resized = oriented.width > 1280 || oriented.height > 1280
+          ? img.copyResize(
+              oriented,
+              width: oriented.width >= oriented.height ? 1280 : null,
+              height: oriented.height > oriented.width ? 1280 : null,
+            )
+          : oriented;
+      final jpegBytes = img.encodeJpg(resized, quality: 80);
+      if (jpegBytes.length >= originalBytes.length) return input;
+
+      final name = input.name.isEmpty
+          ? 'selfie.jpg'
+          : '${path.basenameWithoutExtension(input.name)}.jpg';
+      return XFile.fromData(jpegBytes, name: name, mimeType: 'image/jpeg');
+    }
     final compressed = await compressImageFile(File(input.path));
     return XFile(compressed.path, name: path.basename(compressed.path));
   }

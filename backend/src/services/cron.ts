@@ -1,4 +1,4 @@
-﻿/**
+/**
  * cron.ts — StayNest scheduled background jobs
  *
  * Jobs:
@@ -7,12 +7,17 @@
  *  3. Stale booking alerts   — daily 6 PM  — landlord with pending >48h
  *  4. Unread message nudge   — every 2h    — users with unread >1h
  *  5. Weekly perf digest     — Mon 9 AM    — landlord email + push
+ *  6. Host application reminders — hourly — draft verifications with personalized step tracking
  */
 
 import cron from 'node-cron';
 import { query } from '../db.js';
 import { queueUserPush } from './queue.js';
-import { sendAlertEmail } from './email.js';
+import {
+  sendAlertEmail,
+  sendVerificationReminderEmail,
+  sendWeeklyLandlordDigestEmail,
+} from './email.js';
 import { refundExpiredBookingEscrows } from './finance_service.js';
 
 const hostReminderFirstHours = Math.max(
@@ -29,6 +34,20 @@ const hostReminderSecondHours = Math.max(
 function fmt(date: string | Date) {
   const d = new Date(date);
   return d.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+/**
+ * Resolves the human-readable labels for missing verification steps from a
+ * partially-completed `documents` JSONB object.
+ */
+function getMissingVerificationSteps(documents: Record<string, unknown> | null): string[] {
+  const docs = documents ?? {};
+  const missing: string[] = [];
+  if (!docs['id_photo_front']) missing.push('National ID (Front)');
+  if (!docs['id_photo_back']) missing.push('National ID (Back)');
+  if (!docs['selfie']) missing.push('Selfie with ID');
+  if (!docs['lease_agreement']) missing.push('Ownership / Authorization Document');
+  return missing;
 }
 
 // --- 1. Check-in reminders (daily 7 AM) --------------------------------------
@@ -120,7 +139,7 @@ async function sendStalePendingAlerts() {
       const n = parseInt(row.pending_count);
       await queueUserPush(
         row.landlord_id,
-        '? Pending Booking Requests',
+        '⏳ Pending Booking Requests',
         `You have ${n} pending booking request${n === 1 ? '' : 's'} waiting for your response.`,
         { type: 'stale_pending' }
       );
@@ -203,38 +222,57 @@ async function sendWeeklyPerformanceDigest() {
            FROM bookings b
            JOIN properties p2 ON p2.id = b.property_id
            WHERE p2.landlord_id = u.id AND b.status = 'confirmed' AND b.created_at > now() - INTERVAL '7 days'
-         ) AS revenue
+         ) AS revenue,
+         (
+           SELECT COUNT(p2.id)
+           FROM properties p2
+           WHERE p2.landlord_id = u.id AND COALESCE(p2.status, 'pending_review') = 'approved'
+         ) AS active_listings,
+         (
+           SELECT COUNT(b.id)
+           FROM bookings b
+           JOIN properties p2 ON p2.id = b.property_id
+           WHERE p2.landlord_id = u.id AND b.status = 'pending'
+         ) AS pending_bookings,
+         (
+           SELECT ROUND(AVG(p2.average_rating)::numeric, 1)
+           FROM properties p2
+           WHERE p2.landlord_id = u.id AND p2.average_rating > 0
+         ) AS average_rating
        FROM users u
-       WHERE EXISTS (SELECT 1 FROM properties p WHERE p.landlord_id = u.id)`,
+       WHERE EXISTS (SELECT 1 FROM properties p WHERE p.landlord_id = u.id)
+         AND u.email IS NOT NULL`,
       [],
     );
 
     for (const row of res.rows) {
-      const { landlord_id, landlord_name, landlord_email, views, new_bookings, revenue } = row;
+      const {
+        landlord_id, landlord_name, landlord_email,
+        views, new_bookings, revenue, active_listings, pending_bookings, average_rating,
+      } = row;
 
-      const subject = `Your Weekly StayNest Report`;
-      const html = `
-        <h2>Hello ${landlord_name},</h2>
-        <p>Here's your StayNest performance for the past 7 days:</p>
-        <table style="border-collapse:collapse; width:100%; max-width:400px;">
-          <tr><td style="padding:8px;font-weight:bold;">Property Views</td><td style="padding:8px;">${views}</td></tr>
-          <tr style="background:#f9fafb;"><td style="padding:8px;font-weight:bold;">New Bookings</td><td style="padding:8px;">${new_bookings}</td></tr>
-          <tr><td style="padding:8px;font-weight:bold;">Booking Revenue</td><td style="padding:8px;">Ksh ${Number(revenue).toLocaleString()}</td></tr>
-        </table>
-        <p style="margin-top:24px;">Log in to <a href="https://staynest.top">StayNest</a> to view detailed analytics.</p>
-        <p style="color:#9ca3af;font-size:12px;">You're receiving this because you have an active StayNest landlord account.</p>
-      `;
-
+      // Send rich email
       try {
-        await sendAlertEmail(landlord_email, subject, `Views: ${views}, Bookings: ${new_bookings}, Revenue: Ksh ${revenue}`, html);
+        await sendWeeklyLandlordDigestEmail(landlord_email, landlord_name, {
+          views: Number(views) || 0,
+          newBookings: Number(new_bookings) || 0,
+          revenue: Number(revenue) || 0,
+          activeListings: Number(active_listings) || 0,
+          pendingBookings: Number(pending_bookings) || 0,
+          averageRating: average_rating ? Number(average_rating) : undefined,
+        });
       } catch (emailErr) {
         console.error(`[cron] weekly digest email failed for ${landlord_email}:`, emailErr);
       }
 
+      // Push notification
+      const pendingNote = Number(pending_bookings) > 0
+        ? ` · ${pending_bookings} pending`
+        : '';
       await queueUserPush(
         landlord_id,
-        'Weekly Report Ready',
-        `Last 7 days: ${views} views, ${new_bookings} bookings, Ksh ${Number(revenue).toLocaleString()} revenue.`,
+        '📊 Weekly Report Ready',
+        `Last 7 days: ${views} views, ${new_bookings} bookings, Ksh ${Number(revenue).toLocaleString()} revenue${pendingNote}.`,
         { type: 'weekly_digest' }
       );
     }
@@ -245,18 +283,19 @@ async function sendWeeklyPerformanceDigest() {
   }
 }
 
-// --- Host application reminders (24h and 72h after last saved progress) ------
+// --- 6. Host application reminders (24h and 72h after last saved progress) ---
 
 async function sendHostApplicationReminders() {
   try {
+    // Atomically advance reminder_stage and return the user's documents + email
     const due = await query(
       `WITH due_applications AS (
-         SELECT id, user_id, reminder_stage
-         FROM verifications
-         WHERE status = 'draft'
-           AND ((reminder_stage = 0 AND updated_at <= now() - ($1 * INTERVAL '1 hour'))
-             OR (reminder_stage = 1 AND reminder_sent_at <= now() - (($2 - $1) * INTERVAL '1 hour')))
-         ORDER BY updated_at
+         SELECT v.id, v.user_id, v.reminder_stage, v.documents
+         FROM verifications v
+         WHERE v.status = 'draft'
+           AND ((v.reminder_stage = 0 AND v.updated_at <= now() - ($1 * INTERVAL '1 hour'))
+             OR (v.reminder_stage = 1 AND v.reminder_sent_at <= now() - (($2 - $1) * INTERVAL '1 hour')))
+         ORDER BY v.updated_at
          FOR UPDATE SKIP LOCKED
          LIMIT 100
        )
@@ -266,24 +305,63 @@ async function sendHostApplicationReminders() {
            updated_at = now()
        FROM due_applications
        WHERE v.id = due_applications.id
-       RETURNING v.id, v.user_id, v.reminder_stage`,
+       RETURNING v.id, v.user_id, v.reminder_stage, due_applications.documents`,
       [hostReminderFirstHours, hostReminderSecondHours],
     );
 
     for (const application of due.rows) {
-      const isSecondReminder = application.reminder_stage >= 2;
+      const { id: verificationId, user_id: userId, reminder_stage: newStage, documents } = application;
+      const isSecondReminder = newStage >= 2;
+
+      // Resolve missing steps
+      const docsMap = (typeof documents === 'string' ? JSON.parse(documents) : documents) ?? {};
+      const missingSteps = getMissingVerificationSteps(docsMap as Record<string, unknown>);
+
+      // Look up user email + name
+      let userEmail: string | null = null;
+      let userName = 'there';
+      try {
+        const userRes = await query(
+          'SELECT email, name FROM users WHERE id = $1 LIMIT 1',
+          [userId],
+        );
+        if (userRes.rows[0]) {
+          userEmail = userRes.rows[0].email;
+          userName = userRes.rows[0].name || 'there';
+        }
+      } catch (_) {
+        // continue — push still works without email
+      }
+
+      // Push notification with step info
+      const stepLabel = missingSteps.length > 0
+        ? `${missingSteps.length} step${missingSteps.length > 1 ? 's' : ''} remaining: ${missingSteps.slice(0, 2).join(', ')}${missingSteps.length > 2 ? '...' : ''}`
+        : 'Almost done — submit your verification';
+
       await queueUserPush(
-        application.user_id,
-        'Finish your host verification',
-        isSecondReminder
-          ? 'Your host application is still incomplete. Continue verification when you are ready.'
-          : 'You started becoming a host. Continue verification to submit your application for review.',
+        userId,
+        isSecondReminder ? '⏰ Final reminder: Finish host verification' : '📋 Finish your host verification',
+        stepLabel,
         {
           type: 'host_verification_reminder',
-          verificationId: application.id,
-          reminderStage: String(application.reminder_stage),
+          verificationId,
+          reminderStage: String(newStage),
         },
       );
+
+      // Send targeted email if we have an address
+      if (userEmail && missingSteps.length > 0) {
+        try {
+          await sendVerificationReminderEmail(
+            userEmail,
+            userName,
+            missingSteps,
+            newStage,
+          );
+        } catch (emailErr) {
+          console.error(`[cron] verification reminder email failed for userId=${userId}:`, emailErr);
+        }
+      }
     }
 
     console.log(`[cron] host verification reminders queued for ${due.rowCount} applications`);
@@ -311,9 +389,8 @@ export function startCronJobs() {
   // 5. Weekly landlord digest — every Monday 9:00 AM
   cron.schedule('0 9 * * 1', sendWeeklyPerformanceDigest, { timezone: 'Africa/Nairobi' });
 
-  // Host application reminders — evaluated hourly; each stage is persisted before queueing.
+  // 6. Host application reminders — evaluated hourly
   cron.schedule('0 * * * *', sendHostApplicationReminders, { timezone: 'Africa/Nairobi' });
 
   console.log('[cron] All scheduled jobs registered (timezone: Africa/Nairobi)');
 }
-

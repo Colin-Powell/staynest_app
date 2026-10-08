@@ -476,11 +476,9 @@ class _PropertyCardState extends State<_PropertyCard>
 
   @override
   Widget build(BuildContext context) {
-    // Generate dummy visual data if missing from model
-    final isDraft = widget.property.name.toLowerCase().contains('single room'); // Placeholder logic
-    final statusText = isDraft ? 'Draft' : 'Published';
-    final statusBgColor = isDraft ? _grey.withOpacity(0.15) : _green.withOpacity(0.15);
-    final statusTextColor = isDraft ? _dark : _green;
+    // Generate accurate status based on real property data
+    final statusText = widget.property.availabilityLabel;
+    final isAvailable = widget.property.availabilityStatus.toLowerCase() == 'available';
 
     return FadeTransition(
       opacity: _fadeAnim,
@@ -489,7 +487,12 @@ class _PropertyCardState extends State<_PropertyCard>
         child: GestureDetector(
           onTap: () {
             AnalyticsService.logListingInteraction('property_click', listingId: widget.property.id);
-            Navigator.pushNamed(context, '/booking', arguments: <String, String>{'propertyId': widget.property.id});
+            // Landlords manage properties; they do not book them
+            Navigator.pushNamed(
+              context, 
+              '/landlord_property_management', 
+              arguments: <String, dynamic>{'propertyId': widget.property.id}
+            );
           },
           behavior: HitTestBehavior.opaque,
           child: Column(
@@ -518,7 +521,7 @@ class _PropertyCardState extends State<_PropertyCard>
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: isDraft ? Colors.white.withOpacity(0.9) : _green,
+                        color: isAvailable ? _green : Colors.white.withOpacity(0.95),
                         borderRadius: BorderRadius.circular(8),
                         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)],
                       ),
@@ -527,7 +530,7 @@ class _PropertyCardState extends State<_PropertyCard>
                         style: GoogleFonts.poppins(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          color: isDraft ? _dark : Colors.white,
+                          color: isAvailable ? Colors.white : _dark,
                         ),
                       ),
                     ),

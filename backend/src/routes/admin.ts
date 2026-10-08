@@ -638,14 +638,49 @@ router.get('/overview', requireAuth, authorize('admin'), async (_req: Request, r
       GROUP BY DATE(created_at) ORDER BY DATE(created_at) ASC LIMIT 7
     `);
 
+    // Richer overview stats
+    const [
+      activeListingsRes,
+      pendingBookingsRes,
+      draftVerificationsRes,
+      newUsersWeekRes,
+      weeklyBookingsRes,
+      pendingPropertiesRes,
+      verificationFunnelRes,
+    ] = await Promise.all([
+      query(`SELECT COUNT(*)::int AS count FROM properties WHERE COALESCE(status, 'pending_review') = 'approved'`),
+      query(`SELECT COUNT(*)::int AS count FROM bookings WHERE status = 'pending'`),
+      query(`SELECT COUNT(*)::int AS count FROM verifications WHERE status = 'draft'`),
+      query(`SELECT COUNT(*)::int AS count FROM users WHERE created_at > now() - interval '7 days'`),
+      query(`SELECT COUNT(*)::int AS count FROM bookings WHERE status = 'confirmed' AND created_at > now() - interval '7 days'`),
+      query(`SELECT COUNT(*)::int AS count FROM properties WHERE COALESCE(status, 'pending_review') = 'pending_review'`),
+      query(`SELECT
+        COUNT(*) FILTER (WHERE status = 'draft')::int AS draft,
+        COUNT(*) FILTER (WHERE status = 'submitted')::int AS submitted,
+        COUNT(*) FILTER (WHERE status = 'under_review')::int AS under_review,
+        COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
+        COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected
+      FROM verifications`),
+    ]);
+
     res.json({
       success: true,
       data: {
+        // Core KPIs
         totalUsers: usersRes.rows[0].count,
         totalProperties: propsRes.rows[0].count,
         pendingVerifications: pendingKycRes.rows[0].count,
         totalRevenue: parseFloat(revenueRes.rows[0].total) || 0,
         monthlyRevenue: parseFloat(monthlyRevRes.rows[0].total) || 0,
+        // Enriched stats
+        activeListings: activeListingsRes.rows[0].count,
+        pendingBookings: pendingBookingsRes.rows[0].count,
+        draftVerifications: draftVerificationsRes.rows[0].count,
+        newUsersThisWeek: newUsersWeekRes.rows[0].count,
+        weeklyConfirmedBookings: weeklyBookingsRes.rows[0].count,
+        pendingProperties: pendingPropertiesRes.rows[0].count,
+        verificationFunnel: verificationFunnelRes.rows[0] ?? {},
+        // Charts
         chartData: chartRes.rows,
         backlogData: backlogRes.rows,
         verificationData: verificationRes.rows,
@@ -659,6 +694,7 @@ router.get('/overview', requireAuth, authorize('admin'), async (_req: Request, r
   } catch (err) {
     next(err);
   }
-});
+
 
 export default router;
+

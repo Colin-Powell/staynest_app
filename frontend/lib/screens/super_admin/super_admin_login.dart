@@ -35,6 +35,7 @@ class _SuperAdminLoginViewState extends State<SuperAdminLoginView> {
       final user = await repo.authenticate(
         _emailCtrl.text.trim(),
         _passwordCtrl.text,
+        portal: 'admin',
       );
 
       if (user == null) {

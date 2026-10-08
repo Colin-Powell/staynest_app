@@ -510,8 +510,7 @@ class _NotificationItem extends StatelessWidget {
       {required this.title,
       required this.time,
       required this.icon,
-      required this.unread,
-      this.iconColor});
+      required this.unread, this.iconColor});
 
   @override
   Widget build(BuildContext context) {

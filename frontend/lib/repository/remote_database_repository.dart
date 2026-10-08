@@ -371,11 +371,12 @@ class RemoteDatabaseRepository {
   // -------------------- Auth / Onboarding --------------------
   Future<Map<String, dynamic>?> authenticate(
     String email,
-    String password,
-  ) async {
+    String password, {
+    String? portal,
+  }) async {
     final response = await apiClient.post(
       Uri.parse('${AppSession.apiBaseUrl}/auth/login'),
-      body: {'email': email, 'password': password},
+      body: {'email': email, 'password': password, if (portal != null) 'portal': portal},
     );
 
     if (response.statusCode == 401 || response.statusCode == 404) {

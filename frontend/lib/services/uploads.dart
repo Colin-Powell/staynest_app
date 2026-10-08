@@ -88,20 +88,25 @@ class UploadsService {
     String? token,
     String? idempotencyKey,
   }) {
-    final client = http.Client();
     final completer = Completer<String>();
     var isCancelled = false;
+    // Keep a reference so the cancel callback can abort
+    http.Client? activeClient;
 
     () async {
+      http.Client? client;
       try {
         if (!await AppSession.ensureWebSessionAlive()) {
           throw Exception('Web session expired. Please log in again.');
         }
-        final total = await file.length();
         final webBytes = kIsWeb ? await file.readAsBytes() : null;
+        final total = webBytes?.length ?? await file.length();
         var tokenRefreshed = false;
 
         while (!isCancelled) {
+          client = http.Client();
+          activeClient = client;
+
           final request = http.MultipartRequest(
             'POST',
             Uri.parse('${AppSession.apiBaseUrl}/uploads'),
@@ -116,11 +121,12 @@ class UploadsService {
 
           final http.MultipartFile multipart;
           if (webBytes != null) {
+            // Web: bytes already in memory — report 75% progress immediately
             onProgress(0.75);
             multipart = http.MultipartFile.fromBytes(
               'file',
               webBytes,
-              filename: file.name,
+              filename: file.name.isNotEmpty ? file.name : 'selfie.jpg',
             );
           } else {
             var bytesSent = 0;
@@ -142,8 +148,14 @@ class UploadsService {
           }
           request.files.add(multipart);
 
+          // Send and fully read the response before closing the client
           final streamed = await client.send(request);
           final response = await http.Response.fromStream(streamed);
+          // Close the per-request client immediately after body is read
+          client.close();
+          client = null;
+          activeClient = null;
+
           if (response.statusCode == 401 && !tokenRefreshed) {
             tokenRefreshed = true;
             await HttpJsonClient().refreshAccessTokenIfPossible();
@@ -169,13 +181,15 @@ class UploadsService {
       } catch (error, stackTrace) {
         if (!completer.isCompleted) completer.completeError(error, stackTrace);
       } finally {
-        client.close();
+        client?.close();
+        activeClient = null;
       }
     }();
 
     return UploadTask(completer.future, () {
       isCancelled = true;
-      client.close();
+      activeClient?.close();
+      activeClient = null;
       if (!completer.isCompleted) {
         completer.completeError(UploadCancelledException());
       }

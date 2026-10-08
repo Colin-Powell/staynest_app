@@ -10,7 +10,9 @@ export const emailWorker = new Worker('email-delivery', async (job) => {
     }
     catch (error) {
         const smtpError = error;
-        if (smtpError.code === 'EAUTH' || smtpError.responseCode === 535) {
+        if (smtpError.code === 'EAUTH' ||
+            smtpError.responseCode === 535 ||
+            (error instanceof Error && error.message.startsWith('SMTP is not configured.'))) {
             throw new UnrecoverableError('SMTP authentication failed. Check the email worker SMTP credentials.');
         }
         throw error;

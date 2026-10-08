@@ -1294,27 +1294,38 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
   bool _initializingCamera = false;
   bool _isUploading = false;
 
+  /// On web the `camera` plugin is not supported — use ImagePicker only.
+  bool get _useNativeCamera => !kIsWeb;
+
   Future<void> _takeSelfie() async {
     try {
       XFile? xfile;
-      if (_cameraReady &&
+
+      if (_useNativeCamera &&
+          _cameraReady &&
           _cameraController != null &&
           _cameraController!.value.isInitialized) {
+        // Native app: use the in-screen camera preview
         xfile = await _cameraController!.takePicture();
       } else {
+        // Web or native fallback: open system camera via ImagePicker
         xfile = await ImagePicker().pickImage(
-            source: ImageSource.camera,
-            imageQuality: 78,
-            maxWidth: 1024,
-            maxHeight: 1024,
-            preferredCameraDevice: CameraDevice.front);
+          source: ImageSource.camera,
+          imageQuality: 78,
+          maxWidth: 1024,
+          maxHeight: 1024,
+          preferredCameraDevice: CameraDevice.front,
+        );
       }
+
       if (xfile == null) return;
 
-      if (!kIsWeb && !await File(xfile.path).exists()) throw Exception();
-      final compressedFile =
-          await ImageUploadService.compressPickedImage(xfile);
+      // On native ensure the file was written to disk
+      if (!kIsWeb && !await File(xfile.path).exists()) throw Exception('File not found');
 
+      final compressedFile = await ImageUploadService.compressPickedImage(xfile);
+
+      if (!mounted) return;
       setState(() {
         _capturedImage = compressedFile;
         _isUploading = true;
@@ -1323,14 +1334,44 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
       if (!mounted) return;
       Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isUploading = false);
       ModalUtils.showError(context, 'Capture Error',
-          "Failed to capture selfie. Please try again.");
+          'Failed to capture selfie. Please try again or upload from your gallery.');
+    }
+  }
+
+  /// Web/desktop alternative: pick from file system gallery
+  Future<void> _pickFromGallery() async {
+    try {
+      final xfile = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 84,
+        maxWidth: 1600,
+        maxHeight: 1600,
+      );
+      if (xfile == null) return;
+
+      final compressedFile = await ImageUploadService.compressPickedImage(xfile);
+      if (!mounted) return;
+      setState(() {
+        _capturedImage = compressedFile;
+        _isUploading = true;
+      });
+      await widget.onFileCaptured(_capturedImage!);
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploading = false);
+      ModalUtils.showError(context, 'Upload Error',
+          'Failed to upload image. Please try again.');
     }
   }
 
   Future<void> _initCamera() async {
-    if (_initializingCamera) return;
+    // Camera plugin is not supported on web — skip entirely
+    if (kIsWeb || _initializingCamera) return;
     _initializingCamera = true;
     try {
       final cameras = await availableCameras();
@@ -1343,7 +1384,7 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
       if (!mounted) return;
       setState(() => _cameraReady = true);
     } catch (_) {
-      setState(() => _cameraReady = false);
+      if (mounted) setState(() => _cameraReady = false);
     } finally {
       _initializingCamera = false;
     }
@@ -1352,7 +1393,7 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
   @override
   void initState() {
     super.initState();
-    _initCamera();
+    if (!kIsWeb) _initCamera();
   }
 
   @override
@@ -1393,9 +1434,14 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
                               color: _dark,
                               letterSpacing: -0.5)),
                       const SizedBox(height: 8),
-                      Text('Position your face inside the frame',
-                          style:
-                              GoogleFonts.poppins(color: _grey, fontSize: 15)),
+                      Text(
+                        kIsWeb
+                            ? 'Use your device camera or upload a clear photo of your face'
+                            : 'Position your face inside the frame',
+                        style: GoogleFonts.poppins(
+                            color: _grey, fontSize: 15),
+                        textAlign: TextAlign.center,
+                      ),
                       const SizedBox(height: 48),
                       Container(
                         height: 320,
@@ -1408,11 +1454,13 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
                         child: _capturedImage != null
                             ? _buildXFileImage(_capturedImage!,
                                 fit: BoxFit.cover)
-                            : (_cameraReady && _cameraController != null
+                            : (!kIsWeb && _cameraReady && _cameraController != null
                                 ? CameraPreview(_cameraController!)
                                 : const Center(
-                                    child: Icon(PhosphorIconsRegular.userFocus,
-                                        size: 80, color: _grey))),
+                                    child: Icon(
+                                        PhosphorIconsRegular.userFocus,
+                                        size: 80,
+                                        color: _grey))),
                       ),
                       if (_isUploading) ...[
                         const SizedBox(height: 24),
@@ -1439,11 +1487,35 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
                 ),
               ),
               Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: PrimaryButton(
-                      text: _isUploading ? 'Uploading...' : 'Capture Selfie',
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                child: Column(
+                  children: [
+                    PrimaryButton(
+                      text: _isUploading
+                          ? 'Uploading...'
+                          : (kIsWeb ? 'Open Camera' : 'Capture Selfie'),
                       onPressed: _isUploading ? () {} : _takeSelfie,
-                      enabled: !_isUploading))
+                      enabled: !_isUploading,
+                    ),
+                    // On web, always show a gallery/file fallback
+                    if (kIsWeb) ...[
+                      const SizedBox(height: 12),
+                      TextButton.icon(
+                        onPressed: _isUploading ? null : _pickFromGallery,
+                        icon: const Icon(PhosphorIconsRegular.imageSquare,
+                            color: _green, size: 18),
+                        label: Text(
+                          'Upload from files instead',
+                          style: GoogleFonts.poppins(
+                              color: _green,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
         ),

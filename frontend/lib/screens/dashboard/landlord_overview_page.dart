@@ -980,8 +980,8 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                           children: [
                             Container(
                               padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFEF2F2),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFEF2F2),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(PhosphorIconsRegular.warningCircle,

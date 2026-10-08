@@ -722,10 +722,9 @@ class _GlassContainer extends StatelessWidget {
   const _GlassContainer({
     required this.child,
     this.padding = EdgeInsets.zero,
-    this.borderRadius,
     required this.blur,
     required this.opacity,
-    required this.borderWidth,
+    required this.borderWidth, this.borderRadius,
   });
 
   @override
