@@ -365,9 +365,18 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
       builder: (dialogContext) {
         final size = MediaQuery.sizeOf(dialogContext);
         return Dialog(
-          child: SizedBox(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+          child: Container(
             width: (size.width - 48).clamp(320.0, 560.0).toDouble(),
             height: (size.height - 48).clamp(420.0, 760.0).toDouble(),
+            decoration: BoxDecoration(
+              color: Theme.of(dialogContext).dialogBackgroundColor,
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+            clipBehavior: Clip.antiAlias,
             child: LoginView(
               onLogin: () => _completeModalLogin(
                 dialogContext,
