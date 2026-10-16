@@ -127,6 +127,8 @@ ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS idempotency_key varchar
 ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS status varchar(20) NOT NULL DEFAULT 'posted';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_transactions_idempotency
   ON wallet_transactions(idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_transactions_idempotency_key
+  ON wallet_transactions(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user_created
   ON wallet_transactions(user_id, created_at DESC);
 

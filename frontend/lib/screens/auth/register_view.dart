@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
+import 'package:property_app/services/google_sign_in_button_wrapper.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/utils/api_result.dart';
@@ -354,49 +356,73 @@ class _RegisterViewState extends State<RegisterView>
                   const SizedBox(height: 32),
 
                   // --- Google Button ---
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton(
-                      onPressed:
-                          _isGoogleSigningIn ? null : _handleGoogleSignIn,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: _textDark,
-                        side: const BorderSide(color: _textDark, width: 1.2),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: _isGoogleSigningIn
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                valueColor: AlwaysStoppedAnimation(_textDark),
-                              ),
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SvgPicture.asset(
-                                  'assets/images/google.svg',
-                                  width: 24,
-                                  height: 24,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Continue with Google',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: _textDark,
-                                  ),
-                                ),
-                              ],
+                  // Web: the Google Identity Services SDK only allows
+                  // sign-in through the button it renders itself, so the
+                  // deprecated custom `signIn` trigger is replaced by the
+                  // SDK-rendered button on web. Other platforms keep the
+                  // custom button, which calls authenticate() internally.
+                  if (kIsWeb)
+                    SizedBox(
+                      width: double.infinity,
+                      child: renderGoogleSignInButton(
+                        onSignedIn: _handleGoogleSignIn,
+                        onError: () {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  'Google Sign-In failed. Please try again.'),
+                              backgroundColor: _errorColor,
+                              behavior: SnackBarBehavior.floating,
                             ),
+                          );
+                        },
+                      ),
+                    )
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: OutlinedButton(
+                        onPressed:
+                            _isGoogleSigningIn ? null : _handleGoogleSignIn,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _textDark,
+                          side: const BorderSide(color: _textDark, width: 1.2),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: _isGoogleSigningIn
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  valueColor: AlwaysStoppedAnimation(_textDark),
+                                ),
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SvgPicture.asset(
+                                    'assets/images/google.svg',
+                                    width: 24,
+                                    height: 24,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'Continue with Google',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _textDark,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 32),
 
                   // --- Login Prompt ---

@@ -14,7 +14,7 @@ class HowItWorksView extends StatefulWidget {
     required this.details,
   });
 
-  // 🚀 FIX: Use this in main.dart to securely cast the return type to Widget
+  // FIX: Use this in main.dart to securely cast the return type to Widget
   static Widget buildRoute(BuildContext context) {
     final args = ModalRoute.of(context)?.settings.arguments;
     return HowItWorksView.fromArguments(args);

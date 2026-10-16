@@ -178,7 +178,7 @@ router.post('/verify', requireAuth, async (req, res, next) => {
 });
 router.post('/login', async (req, res, next) => {
     try {
-        const { email, password } = req.body;
+        const { email, password, portal } = req.body;
         if (!email || !password) {
             return res.status(400).json({ error: 'Email and password are required.' });
         }
@@ -190,6 +190,11 @@ router.post('/login', async (req, res, next) => {
         const isValid = await bcrypt.compare(password, user.password_hash);
         if (!isValid) {
             return res.status(401).json({ error: 'Invalid credentials.' });
+        }
+        const isAdmin = ['admin', 'super_admin', 'administrator'].includes((user.role || '').toLowerCase());
+        const isRequestingAdminPortal = portal === 'admin';
+        if (isAdmin && !isRequestingAdminPortal) {
+            return res.status(403).json({ error: 'Access denied. Admin accounts can only log in via the admin dashboard.' });
         }
         const accessToken = jwt.sign({
             id: user.id,

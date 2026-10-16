@@ -14,7 +14,6 @@ import cron from 'node-cron';
 import { query } from '../db.js';
 import { queueUserPush } from './queue.js';
 import {
-  sendAlertEmail,
   sendVerificationReminderEmail,
   sendWeeklyLandlordDigestEmail,
 } from './email.js';

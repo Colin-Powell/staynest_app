@@ -45,3 +45,13 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+# Android memory heap dumps (Crucial!)
+*.hprof
+frontend/android/**/*.hprof
+
+# Backend compiled files
+backend/dist/
+
+# Gradle build cache & reports
+frontend/android/.gradle/
+frontend/android/build/

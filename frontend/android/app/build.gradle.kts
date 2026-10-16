@@ -28,15 +28,13 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
+    // Using the version-compatible kotlinOptions block with correct assignment syntax
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.rashoti.staynest"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -62,7 +60,10 @@ android {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String?
             keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = keystoreProperties["storeFile"]?.let { file(it) }
+            // Anchored explicitly to look into the root's app directory where upload-keystore.jks lives
+            storeFile = (keystoreProperties["storeFile"] as String?)?.let { 
+                rootProject.file("app/$it") 
+            }
             storePassword = keystoreProperties["storePassword"] as String?
         }
     }
@@ -71,6 +72,10 @@ android {
         release {
             // 3. Link the signing configuration to your release build type
             signingConfig = signingConfigs.getByName("release")
+            
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }

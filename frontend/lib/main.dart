@@ -338,8 +338,10 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
     required bool isDesktopModal,
     VoidCallback? onAuthenticated,
   }) async {
-    final success = await GoogleAuthService.instance.signInWithGoogle();
-    if (!success) throw Exception('Sign in failed');
+    final success = await GoogleAuthService.instance.signInWithGoogle(
+      role: AppSession.currentRole,
+    );
+    if (!success) return;
     if (isDesktopModal) {
       await _completeModalLogin(context, onAuthenticated: onAuthenticated);
     } else {

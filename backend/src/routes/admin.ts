@@ -694,7 +694,8 @@ router.get('/overview', requireAuth, authorize('admin'), async (_req: Request, r
   } catch (err) {
     next(err);
   }
-
+});
 
 export default router;
+
 

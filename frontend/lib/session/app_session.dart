@@ -21,6 +21,7 @@ class AppSession {
   static const String _prefsKey = 'staynest.session';
 
   static String currentRole = 'tenant';
+  static String get role => currentRole;
   static String activePortal = 'tenant';
   static List<String> accountRoles = ['tenant'];
   static bool landlordVerified = false;
