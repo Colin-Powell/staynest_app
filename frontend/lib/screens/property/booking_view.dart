@@ -662,6 +662,9 @@ class _BookingViewState extends State<BookingView> {
     }
 
     setState(() => _isSubmitting = true);
+    AnalyticsService.logEvent(AnalyticsEvents.beginCheckout, {
+      'listing_id': widget.propertyId,
+    });
 
     bool checkoutComplete = false;
     String? errorMessage;
@@ -689,6 +692,9 @@ class _BookingViewState extends State<BookingView> {
     if (mounted) {
       setState(() => _isSubmitting = false);
       if (checkoutComplete) {
+        AnalyticsService.logEvent(AnalyticsEvents.bookingCompleted, {
+          'listing_id': widget.propertyId,
+        });
         if (widget.embedded) {
           setState(() => _showConfirmation = true);
         } else {

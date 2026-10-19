@@ -6,7 +6,6 @@ import 'package:shimmer/shimmer.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/services/property_service.dart';
 import 'package:property_app/widgets/property_image.dart';
-import 'package:property_app/services/analytics/analytics_service.dart';
 
 // ─── Landlord Design System Constants ─────────────────────────────────────────
 const Color _bg = Color(0xFFFAFAFA);
@@ -456,7 +455,6 @@ class _PropertyCardState extends State<_PropertyCard>
 
     Future.delayed(widget.delay, () {
       if (mounted) {
-        AnalyticsService.logListingInteraction('property_impression', listingId: widget.property.id);
         _entryController.forward();
       }
     });
@@ -486,7 +484,6 @@ class _PropertyCardState extends State<_PropertyCard>
         position: _slideAnim,
         child: GestureDetector(
           onTap: () {
-            AnalyticsService.logListingInteraction('property_click', listingId: widget.property.id);
             // Landlords manage properties; they do not book them
             Navigator.pushNamed(
               context, 

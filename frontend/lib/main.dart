@@ -94,10 +94,9 @@ Future<void> main() async {
     debugPrint('dotenv load failed: $err');
   }
 
+  await _initializeFirebaseAsync();
   await AppSession.restoreSession();
   await AppSession.initializeAppInfo();
-
-  await _initializeFirebaseAsync();
   if (AppSession.currentUserId != null) {
     AuthService.instance.syncFCMToken();
   }
@@ -1096,6 +1095,7 @@ class _AppShellState extends State<AppShell> {
       _requireAuthentication(onAuthenticated: () => _goTo(s));
       return;
     }
+    AnalyticsService.logScreenView(s.name);
     setState(() {
       _screen = s;
       _showDesktopNotifications = false;
@@ -1454,19 +1454,39 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  void _openPhotoGallery() => setState(() => _showPhotoGallery = true);
+  void _openPhotoGallery() {
+    AnalyticsService.logScreenView('photo_gallery');
+    setState(() => _showPhotoGallery = true);
+  }
   void _closePhotoGallery() => setState(() => _showPhotoGallery = false);
 
-  void _openAmenities() => setState(() => _showAmenities = true);
+  void _openAmenities() {
+    AnalyticsService.logScreenView('amenities');
+    setState(() => _showAmenities = true);
+  }
   void _closeAmenities() => setState(() => _showAmenities = false);
 
-  void _openLocation() => setState(() => _showLocation = true);
+  void _openLocation() {
+    AnalyticsService.logScreenView('location');
+    setState(() => _showLocation = true);
+  }
   void _closeLocation() => setState(() => _showLocation = false);
 
-  void _openLandlordInfo() => setState(() => _showLandlordInfo = true);
+  void _openLandlordInfo() {
+    AnalyticsService.logScreenView('landlord_info');
+    setState(() => _showLandlordInfo = true);
+  }
   void _closeLandlordInfo() => setState(() => _showLandlordInfo = false);
 
   Future<void> _openProperty(Property initialProperty) async {
+    AnalyticsService.logScreenView('property_details');
+    AnalyticsService.trackPropertyView(
+      initialProperty.id,
+      source: 'app_shell',
+      propertyType: initialProperty.category,
+      location: initialProperty.location,
+    );
+
     setState(() {
       _selectedPropertyId = initialProperty.id;
       _selectedProperty = initialProperty;

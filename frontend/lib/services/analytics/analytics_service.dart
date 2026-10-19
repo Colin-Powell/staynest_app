@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/widgets.dart';
 import 'package:property_app/services/properties_api.dart';
@@ -38,6 +39,8 @@ class AnalyticsEvents {
   static const String landlordContacted = 'landlord_contacted';
 
   static const String listingClick = 'listing_click';
+  static const String beginCheckout = 'begin_checkout';
+  static const String bookingCompleted = 'booking_completed';
 }
 
 class AnalyticsParameters {
@@ -65,40 +68,60 @@ class AnalyticsParameters {
 }
 
 class AnalyticsService {
-  static final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
+  static FirebaseAnalytics? _analyticsInstance;
+  static bool _initialized = false;
+
+  static FirebaseAnalytics? get _analytics {
+    if (!_initialized || Firebase.apps.isEmpty) return null;
+    return _analyticsInstance ??= FirebaseAnalytics.instance;
+  }
 
   static Future<void> initialize() async {
     try {
+      _initialized = true;
       await setUserId(AppSession.currentUserId);
-    } catch (e) {
-      debugPrint('Firebase Analytics initialization failed: ');
+    } catch (e, stackTrace) {
+      debugPrint('Firebase Analytics initialization failed: $e\n$stackTrace');
     }
   }
 
   static Future<void> setUserId(String? userId) async {
     try {
-      await _analytics.setUserId(id: userId);
+      final analytics = _analytics;
+      if (analytics == null) return;
+      await analytics.setUserId(id: userId);
     } catch (e) {
-      debugPrint('Firebase Analytics user reset failed: ');
+      debugPrint('Firebase Analytics user reset failed: $e');
     }
   }
 
   static Future<void> logEvent(String name,
       [Map<String, Object?>? parameters]) async {
     try {
+      final analytics = _analytics;
+      if (analytics == null) return;
+
       final safeParams = <String, Object>{};
       parameters?.forEach((key, value) {
         if (value != null) {
-          if (value is String || value is num || value is bool) {
-            safeParams[key] = value;
+          final cleanKey = key.trim().replaceAll(' ', '_');
+          final safeKey =
+              cleanKey.length > 40 ? cleanKey.substring(0, 40) : cleanKey;
+
+          if (value is num) {
+            safeParams[safeKey] = value;
+          } else if (value is bool) {
+            safeParams[safeKey] = value ? 1 : 0;
           } else {
-            safeParams[key] = value.toString();
+            final str = value.toString();
+            safeParams[safeKey] =
+                str.length > 100 ? str.substring(0, 100) : str;
           }
         }
       });
-      await _analytics.logEvent(name: name, parameters: safeParams);
+      await analytics.logEvent(name: name, parameters: safeParams);
     } catch (e) {
-      debugPrint('Analytics logEvent failed: ');
+      debugPrint('Analytics logEvent failed ($name): $e');
     }
   }
 
@@ -110,12 +133,14 @@ class AnalyticsService {
   static Future<void> logScreenView(String screenName,
       [String? screenClass]) async {
     try {
-      await _analytics.logScreenView(
+      final analytics = _analytics;
+      if (analytics == null) return;
+      await analytics.logScreenView(
         screenName: screenName,
         screenClass: screenClass ?? screenName,
       );
     } catch (e) {
-      debugPrint('Analytics logScreenView failed: ');
+      debugPrint('Analytics logScreenView failed ($screenName): $e');
     }
   }
 
@@ -123,11 +148,13 @@ class AnalyticsService {
     String? searchTerm,
     String? location,
     String? propertyType,
+    int? resultCount,
   }) async {
     await logEvent(AnalyticsEvents.search, {
       AnalyticsParameters.searchTerm: searchTerm,
       AnalyticsParameters.location: location,
       AnalyticsParameters.propertyType: propertyType,
+      if (resultCount != null) AnalyticsParameters.resultCount: resultCount,
     });
   }
 
@@ -141,7 +168,11 @@ class AnalyticsService {
     int? position,
   }) async {
     if (eventName == AnalyticsEvents.listingView) {
-      PropertiesApi.recordPropertyView(listingId);
+      try {
+        await PropertiesApi.recordPropertyView(listingId);
+      } catch (e) {
+        debugPrint('PropertiesApi.recordPropertyView failed: $e');
+      }
     }
 
     await logEvent(eventName, {
@@ -167,7 +198,21 @@ class AnalyticsService {
     );
   }
 
-  static void trackPropertyView(String propertyId, {required String source}) {}
+  static Future<void> trackPropertyView(
+    String propertyId, {
+    required String source,
+    String? propertyType,
+    String? location,
+  }) async {
+    if (propertyId.isEmpty) return;
+    await logListingInteraction(
+      AnalyticsEvents.listingView,
+      listingId: propertyId,
+      source: source,
+      propertyType: propertyType,
+      location: location,
+    );
+  }
 }
 
 class AnalyticsObserver extends RouteObserver<PageRoute<dynamic>> {
@@ -177,7 +222,7 @@ class AnalyticsObserver extends RouteObserver<PageRoute<dynamic>> {
       if (screenName.startsWith('/')) {
         screenName = screenName.substring(1);
       }
-      if (screenName.isEmpty) screenName = 'home';
+      if (screenName.isEmpty) screenName = 'splash';
       AnalyticsService.logScreenView(screenName);
     }
   }

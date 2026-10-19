@@ -7,7 +7,6 @@ import 'package:property_app/models/property.dart';
 import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/utils/property_mapper.dart';
 import 'package:property_app/widgets/property_image.dart';
-import 'package:property_app/services/analytics/analytics_service.dart';
 import 'landlord_dashboard_service.dart';
 
 // ─── Landlord Design System Constants ─────────────────────────────────────────
@@ -670,9 +669,6 @@ class _PropertyGridCardState extends State<_PropertyGridCard>
 
     Future.delayed(widget.delay, () {
       if (mounted) {
-        AnalyticsService.logListingInteraction(
-            AnalyticsEvents.listingImpression,
-            listingId: widget.property.id);
         _entryController.forward();
       }
     });
@@ -734,8 +730,6 @@ class _PropertyGridCardState extends State<_PropertyGridCard>
         position: _slideAnim,
         child: GestureDetector(
           onTap: () {
-            AnalyticsService.logListingInteraction('property_click',
-                listingId: widget.property.id);
             final propertyPayload = <String, dynamic>{
               'id': widget.property.id,
               'title': widget.property.name,

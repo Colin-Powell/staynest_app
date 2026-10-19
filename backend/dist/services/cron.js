@@ -197,7 +197,7 @@ async function sendWeeklyPerformanceDigest() {
             const pendingNote = Number(pending_bookings) > 0
                 ? ` · ${pending_bookings} pending`
                 : '';
-            await queueUserPush(landlord_id, '📊 Weekly Report Ready', `Last 7 days: ${views} views, ${new_bookings} bookings, Ksh ${Number(revenue).toLocaleString()} revenue${pendingNote}.`, { type: 'weekly_digest' });
+            await queueUserPush(landlord_id, ' Weekly Report Ready', `Last 7 days: ${views} views, ${new_bookings} bookings, Ksh ${Number(revenue).toLocaleString()} revenue${pendingNote}.`, { type: 'weekly_digest' });
         }
         console.log(`[cron] weekly digest sent to ${res.rowCount} landlords`);
     }
@@ -249,7 +249,7 @@ async function sendHostApplicationReminders() {
             const stepLabel = missingSteps.length > 0
                 ? `${missingSteps.length} step${missingSteps.length > 1 ? 's' : ''} remaining: ${missingSteps.slice(0, 2).join(', ')}${missingSteps.length > 2 ? '...' : ''}`
                 : 'Almost done — submit your verification';
-            await queueUserPush(userId, isSecondReminder ? '⏰ Final reminder: Finish host verification' : '📋 Finish your host verification', stepLabel, {
+            await queueUserPush(userId, isSecondReminder ? ' Final reminder: Finish host verification' : '📋 Finish your host verification', stepLabel, {
                 type: 'host_verification_reminder',
                 verificationId,
                 reminderStage: String(newStage),

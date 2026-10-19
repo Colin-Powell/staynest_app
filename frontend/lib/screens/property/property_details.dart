@@ -233,6 +233,11 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   }
 
   void _handleMessageTap() {
+    AnalyticsService.logListingInteraction(
+      AnalyticsEvents.listingContact,
+      listingId: widget.property.id,
+      source: 'chat',
+    );
     if (AppSession.isGuest) {
       widget.onRequireAuthentication?.call(
         onAuthenticated: () => widget.onMessage?.call(

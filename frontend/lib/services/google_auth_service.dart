@@ -154,7 +154,11 @@ class GoogleAuthService {
       final data = body['data'];
       AppSession.apiToken =
           data['token']?.toString() ?? data['accessToken']?.toString();
-      AnalyticsService.logAuthEvent(AnalyticsEvents.login, method: 'google');
+      final isNewUser = data['isNewUser'] == true;
+      AnalyticsService.logAuthEvent(
+        isNewUser ? AnalyticsEvents.signUp : AnalyticsEvents.login,
+        method: 'google',
+      );
       AppSession.refreshToken = data['refreshToken']?.toString();
       AppSession.updateCurrentUser(data['user']);
       await AppSession.persistSession();

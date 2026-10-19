@@ -503,6 +503,12 @@ class AppSession {
     discoveryLongitude = null;
     discoveryLocationId = null;
     discoveryCampusId = null;
+    if (currentUserId != null) {
+      await AnalyticsService.logAuthEvent(
+        AnalyticsEvents.logout,
+        method: expired ? 'session_expired' : 'manual',
+      );
+    }
     await AnalyticsService.setUserId(null);
     apiToken = null;
     refreshToken = null;

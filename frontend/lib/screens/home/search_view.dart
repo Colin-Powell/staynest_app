@@ -67,6 +67,7 @@ class _SearchViewState extends State<SearchView> {
   List<Property> _all = [];
   bool _loading = true;
   bool _hasError = false;
+  final Set<String> _impressedPropertyIds = {};
 
   @override
   void initState() {
@@ -135,6 +136,12 @@ class _SearchViewState extends State<SearchView> {
         radiusKm: 2,
       );
       if (!mounted) return;
+      _impressedPropertyIds.clear();
+      AnalyticsService.logSearch(
+        searchTerm: suggestion.displayName,
+        location: suggestion.displayName,
+        resultCount: nearby.length,
+      );
       setState(() {
         _all = nearby;
         _loading = false;
@@ -461,7 +468,7 @@ class _SearchViewState extends State<SearchView> {
       child: VisibilityDetector(
         key: Key('search_impression_${property.id}'),
         onVisibilityChanged: (info) {
-          if (info.visibleFraction > 0.5) {
+          if (info.visibleFraction > 0.5 && _impressedPropertyIds.add(property.id)) {
             AnalyticsService.logListingInteraction(
                 AnalyticsEvents.listingImpression,
                 listingId: property.id);
@@ -475,14 +482,7 @@ class _SearchViewState extends State<SearchView> {
             isGrid: true,
             onTap: () => widget.onSelectProperty?.call(property),
             onRequireAuthentication: widget.onRequireAuthentication,
-            onFavoriteChanged: (isSaved) {
-              if (isSaved) {
-                AnalyticsService.logListingInteraction(
-                  AnalyticsEvents.listingSave,
-                  listingId: property.id,
-                );
-              }
-            },
+            onFavoriteChanged: null,
           ),
         ),
       ),

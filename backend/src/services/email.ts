@@ -232,7 +232,7 @@ export async function sendVerificationReminderEmail(
   const completedSteps = totalSteps - missingSteps.length;
 
   const subject = reminderStage >= 2
-    ? `⏰ Final reminder — complete your StayNest host verification`
+    ? ` Final reminder — complete your StayNest host verification`
     : `📋 You're ${completedSteps}/${totalSteps} steps done — finish verifying your StayNest account`;
 
   const urgencyText = reminderStage >= 2
@@ -497,7 +497,7 @@ export async function sendWeeklyLandlordDigestEmail(
   ensureTransporter();
 
   const firstName = (landlordName?.trim() || 'Landlord').split(' ')[0];
-  const subject = `📊 Your StayNest weekly report — ${new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}`;
+  const subject = ` Your StayNest weekly report — ${new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}`;
 
   const ratingDisplay = stats.averageRating
     ? `<span style="color:#F59E0B;">★</span> ${stats.averageRating.toFixed(1)}`

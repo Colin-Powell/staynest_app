@@ -197,6 +197,8 @@ class RemoteDatabaseRepository {
     await apiClient.delete(
       Uri.parse('${AppSession.apiBaseUrl}/users/$userId/favorites/$propertyId'),
     );
+    AnalyticsService.logListingInteraction(AnalyticsEvents.listingUnsave,
+        listingId: propertyId);
   }
 
   Future<List<Map<String, dynamic>>> loadFavoritesForUser(String userId) async {

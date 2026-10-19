@@ -270,7 +270,7 @@ async function sendWeeklyPerformanceDigest() {
         : '';
       await queueUserPush(
         landlord_id,
-        '📊 Weekly Report Ready',
+        ' Weekly Report Ready',
         `Last 7 days: ${views} views, ${new_bookings} bookings, Ksh ${Number(revenue).toLocaleString()} revenue${pendingNote}.`,
         { type: 'weekly_digest' }
       );
@@ -339,7 +339,7 @@ async function sendHostApplicationReminders() {
 
       await queueUserPush(
         userId,
-        isSecondReminder ? '⏰ Final reminder: Finish host verification' : '📋 Finish your host verification',
+        isSecondReminder ? ' Final reminder: Finish host verification' : '📋 Finish your host verification',
         stepLabel,
         {
           type: 'host_verification_reminder',

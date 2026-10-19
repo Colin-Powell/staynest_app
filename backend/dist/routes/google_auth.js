@@ -33,6 +33,7 @@ router.post('/', async (req, res, next) => {
         // Upsert user
         const exists = await query('SELECT id, name, email, phone, role, roles, landlord_verified, verified, avatar FROM users WHERE email = $1 LIMIT 1', [email]);
         let user = exists.rows[0];
+        const isNewUser = !user;
         if (!user) {
             const result = await query(`INSERT INTO users (name, email, avatar, verified, password_hash, role)
          VALUES ($1, $2, $3, true, '*', $4)
@@ -59,7 +60,7 @@ router.post('/', async (req, res, next) => {
             verified: user.verified,
         }, env.jwtSecret, { expiresIn: '15m' });
         const refreshToken = jwt.sign({ id: user.id }, env.jwtSecret, { expiresIn: '30d' });
-        return res.json({ data: { token: accessToken, accessToken, refreshToken, user } });
+        return res.json({ data: { token: accessToken, accessToken, refreshToken, user, isNewUser } });
     }
     catch (err) {
         next(err);

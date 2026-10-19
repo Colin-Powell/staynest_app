@@ -41,6 +41,7 @@ router.post('/', async (req, res, next) => {
       [email]
     );
     let user = exists.rows[0];
+    const isNewUser = !user;
     if (!user) {
       const result = await query(
         `INSERT INTO users (name, email, avatar, verified, password_hash, role)
@@ -78,7 +79,7 @@ router.post('/', async (req, res, next) => {
     );
     const refreshToken = jwt.sign({ id: user.id }, env.jwtSecret, { expiresIn: '30d' });
 
-    return res.json({ data: { token: accessToken, accessToken, refreshToken, user } });
+    return res.json({ data: { token: accessToken, accessToken, refreshToken, user, isNewUser } });
   } catch (err) {
     next(err);
   }
