@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:intl/intl.dart';
@@ -15,6 +14,7 @@ import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
+import 'package:property_app/utils/property_links.dart';
 import 'package:property_app/widgets/property_image.dart';
 
 import 'amenities_view.dart';
@@ -226,10 +226,17 @@ class _PropertyDetailsState extends State<PropertyDetails> {
     }
   }
 
-  void _shareProperty() async {
-    final link = 'https://staynest.top/properties/${widget.property.id}';
-    await Share.share('${widget.property.name} on StayNest: $link');
-    await AnalyticsService.trackPropertyShare(widget.property.id);
+  Future<void> _shareProperty() async {
+    final shared = await PropertyLinks.showShareOptions(
+      context,
+      propertyId: widget.property.id,
+      propertyName: widget.property.name,
+      imagePath: widget.property.images.isNotEmpty
+          ? widget.property.images.first
+          : widget.property.image,
+      shareText: '${widget.property.name} on StayNest',
+    );
+    if (shared) await AnalyticsService.trackPropertyShare(widget.property.id);
   }
 
   void _handleMessageTap() {

@@ -30,6 +30,20 @@ class BookingService {
     return 'We could not submit your booking. Please try again.';
   }
 
+  static Future<Map<String, dynamic>> fetchBookingFee(String propertyId) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/fee').replace(queryParameters: {
+        'propertyId': propertyId,
+      }),
+    );
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 200) {
+      throw Exception(
+          decoded['error']?.toString() ?? 'Could not load booking fee.');
+    }
+    return Map<String, dynamic>.from(decoded['data'] as Map);
+  }
+
   /// Creates a new booking request for a tenant
   static Future<Map<String, dynamic>> createBooking({
     required String propertyId,

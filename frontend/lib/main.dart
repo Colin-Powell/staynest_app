@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -84,6 +85,7 @@ Future<void> _initializeFirebaseAsync() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb) usePathUrlStrategy();
   await OnboardingPrefs.init();
 
   try {
@@ -425,8 +427,13 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
           child: child ?? const SizedBox.shrink(),
         );
       },
-      initialRoute:
-          kIsWeb && AppSession.webSessionExpiredAtStartup ? '/login' : '/',
+      initialRoute: kIsWeb &&
+              Uri.base.pathSegments.isNotEmpty &&
+              Uri.base.pathSegments.first == 'properties'
+          ? Uri.base.path
+          : kIsWeb && AppSession.webSessionExpiredAtStartup
+              ? '/login'
+              : '/',
       routes: {
         '/': (context) {
           final isDesktop = MediaQuery.sizeOf(context).width >= 768;
@@ -681,9 +688,38 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
         '/notification_settings': (context) => const NotificationSettingsView(),
       },
       onGenerateRoute: (settings) =>
+          _buildPropertyRoute(settings) ??
           _buildReviewRoute(settings) ??
           _buildMessageModalRoute(settings) ??
           _buildAuthRoute(settings),
+    );
+  }
+
+  Route<dynamic>? _buildPropertyRoute(RouteSettings settings) {
+    final routeName = settings.name;
+    if (routeName == null) return null;
+
+    final segments = Uri.parse(routeName).pathSegments;
+    if (segments.length == 1 && segments.first == 'properties') {
+      return MaterialPageRoute<void>(
+        settings: settings,
+        builder: (_) => AppShell(onRequireLogin: _showLoginModal),
+      );
+    }
+    if (segments.length != 2 || segments.first != 'properties') return null;
+
+    final initialProperty =
+        settings.arguments is Property ? settings.arguments as Property : null;
+    return MaterialPageRoute<void>(
+      settings: settings,
+      builder: (context) => _PropertyLinkPage(
+        propertyId: segments[1],
+        initialProperty: initialProperty,
+        onRequireAuthentication: ({onAuthenticated}) => _showLoginModal(
+          context,
+          onAuthenticated: onAuthenticated,
+        ),
+      ),
     );
   }
 
@@ -1037,6 +1073,114 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
 // ─────────────────────────────────────────────────────────────────────────────
 // Responsive App Shell (Tenant View)
 // ─────────────────────────────────────────────────────────────────────────────
+
+class _PropertyLinkPage extends StatefulWidget {
+  final String propertyId;
+  final Property? initialProperty;
+  final Future<void> Function({VoidCallback? onAuthenticated})?
+      onRequireAuthentication;
+
+  const _PropertyLinkPage({
+    required this.propertyId,
+    this.initialProperty,
+    this.onRequireAuthentication,
+  });
+
+  @override
+  State<_PropertyLinkPage> createState() => _PropertyLinkPageState();
+}
+
+class _PropertyLinkPageState extends State<_PropertyLinkPage> {
+  late final Future<Property?> _propertyFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _propertyFuture =
+        PropertyService.instance.fetchPropertyById(widget.propertyId);
+    if (widget.initialProperty == null) {
+      AnalyticsService.logScreenView('property_details');
+      AnalyticsService.trackPropertyView(widget.propertyId,
+          source: 'shared_link');
+    }
+  }
+
+  void _goBack() {
+    if (widget.initialProperty != null && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+    }
+  }
+
+  void _openGallery(Property property) {
+    final photos = property.images.isNotEmpty
+        ? property.images
+        : (property.image.isNotEmpty ? [property.image] : null);
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (routeContext) => PhotoGalleryView(
+          onClose: () => Navigator.of(routeContext).pop(),
+          photos: photos,
+          videoUrl: property.videoUrl,
+        ),
+      ),
+    );
+  }
+
+  void _openAmenities(Property property) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (routeContext) => AmenitiesView(
+          amenities: property.amenities,
+          customFeatures: property.customFeatures,
+          onClose: () => Navigator.of(routeContext).pop(),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Property?>(
+      future: _propertyFuture,
+      initialData: widget.initialProperty,
+      builder: (context, snapshot) {
+        final property = snapshot.data ?? widget.initialProperty;
+        if (property == null &&
+            snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (property == null) {
+          return Scaffold(
+            appBar: AppBar(leading: BackButton(onPressed: _goBack)),
+            body:
+                const Center(child: Text('This property could not be found.')),
+          );
+        }
+
+        return PropertyDetails(
+          key: ValueKey(property.id),
+          property: property,
+          onBack: _goBack,
+          onViewGallery: () => _openGallery(property),
+          onViewAmenities: () => _openAmenities(property),
+          onViewLocation: () => Navigator.of(context).pushNamed(
+            '/location',
+            arguments: property,
+          ),
+          onViewLandlord: () => Navigator.of(context).pushNamed(
+            '/landlord_info',
+            arguments: property,
+          ),
+          onRequireAuthentication: widget.onRequireAuthentication,
+        );
+      },
+    );
+  }
+}
 
 enum _AppScreen { home, search, map, saved, messages, profile }
 
@@ -1458,24 +1602,28 @@ class _AppShellState extends State<AppShell> {
     AnalyticsService.logScreenView('photo_gallery');
     setState(() => _showPhotoGallery = true);
   }
+
   void _closePhotoGallery() => setState(() => _showPhotoGallery = false);
 
   void _openAmenities() {
     AnalyticsService.logScreenView('amenities');
     setState(() => _showAmenities = true);
   }
+
   void _closeAmenities() => setState(() => _showAmenities = false);
 
   void _openLocation() {
     AnalyticsService.logScreenView('location');
     setState(() => _showLocation = true);
   }
+
   void _closeLocation() => setState(() => _showLocation = false);
 
   void _openLandlordInfo() {
     AnalyticsService.logScreenView('landlord_info');
     setState(() => _showLandlordInfo = true);
   }
+
   void _closeLandlordInfo() => setState(() => _showLandlordInfo = false);
 
   Future<void> _openProperty(Property initialProperty) async {
@@ -1486,6 +1634,14 @@ class _AppShellState extends State<AppShell> {
       propertyType: initialProperty.category,
       location: initialProperty.location,
     );
+
+    if (kIsWeb) {
+      await Navigator.of(context, rootNavigator: true).pushNamed<void>(
+        '/properties/${Uri.encodeComponent(initialProperty.id)}',
+        arguments: initialProperty,
+      );
+      return;
+    }
 
     setState(() {
       _selectedPropertyId = initialProperty.id;

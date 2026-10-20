@@ -45,18 +45,50 @@ class PropertyPaymentPage extends StatefulWidget {
 }
 
 class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
-  static const int _viewingFee = 500;
   bool _processing = false;
   bool _loadingWallet = true;
+  bool _loadingFee = true;
   String? _walletError;
+  String? _feeError;
   double _walletBalance = 0;
+  double _bookingFee = 0;
+  double _feePercent = 0;
 
-  int get _total => _viewingFee;
+  double get _total => _bookingFee;
 
   @override
   void initState() {
     super.initState();
     _loadWallet();
+    _loadBookingFee();
+  }
+
+  Future<void> _loadBookingFee() async {
+    setState(() {
+      _loadingFee = true;
+      _feeError = null;
+    });
+    try {
+      final quote = await BookingService.fetchBookingFee(widget.property.id);
+      final amount = quote['amount'];
+      final feePercent = quote['feePercent'];
+      if (amount is! num || feePercent is! num || amount < 0) {
+        throw Exception('Invalid booking fee quote.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _bookingFee = amount.toDouble();
+        _feePercent = feePercent.toDouble();
+        _loadingFee = false;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _loadingFee = false;
+          _feeError = error.toString().replaceFirst('Exception: ', '');
+        });
+      }
+    }
   }
 
   Future<void> _loadWallet() async {
@@ -81,7 +113,13 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
   }
 
   Future<void> _confirmPayment() async {
-    if (_processing || _loadingWallet || _walletBalance < _total) return;
+    if (_processing ||
+        _loadingWallet ||
+        _loadingFee ||
+        _feeError != null ||
+        _walletBalance < _total) {
+      return;
+    }
     setState(() => _processing = true);
     try {
       await BookingService.createAndPayFromWallet(
@@ -263,7 +301,8 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
   }
 
   Widget _buildWalletSection() {
-    final hasEnoughFunds = _walletBalance >= _total;
+    final hasEnoughFunds =
+        !_loadingFee && _feeError == null && _walletBalance >= _total;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -345,6 +384,18 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
             ),
             const SizedBox(height: 16),
           ],
+          if (_feeError != null) ...[
+            Text(
+              'Booking fee unavailable. Please retry.',
+              style: GoogleFonts.poppins(
+                  fontSize: 12, color: StayNestColors.error),
+            ),
+            TextButton(
+              onPressed: _loadBookingFee,
+              child: const Text('Retry fee'),
+            ),
+            const SizedBox(height: 12),
+          ],
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -367,7 +418,10 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
                 ),
             ],
           ),
-          if (!_loadingWallet && !hasEnoughFunds) ...[
+          if (!_loadingWallet &&
+              !_loadingFee &&
+              _feeError == null &&
+              !hasEnoughFunds) ...[
             const SizedBox(height: 14),
             Text(
               'Add Ksh ${(_total - _walletBalance).toStringAsFixed(2)} to continue.',
@@ -425,7 +479,11 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
         width: double.infinity,
         height: 56,
         child: ElevatedButton(
-          onPressed: _processing || _loadingWallet || _walletBalance < _total
+          onPressed: _processing ||
+                  _loadingWallet ||
+                  _loadingFee ||
+                  _feeError != null ||
+                  _walletBalance < _total
               ? null
               : _confirmPayment,
           style: ElevatedButton.styleFrom(
@@ -442,9 +500,11 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
                       strokeWidth: 2.5, color: Colors.white),
                 )
               : Text(
-                  _loadingWallet
-                      ? 'Checking wallet...'
-                      : 'Pay Ksh ${_total.toStringAsFixed(2)}',
+                  _loadingFee
+                      ? 'Loading fee...'
+                      : _loadingWallet
+                          ? 'Checking wallet...'
+                          : 'Pay Ksh ${_total.toStringAsFixed(2)}',
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -563,8 +623,10 @@ class _PropertyPaymentPageState extends State<PropertyPaymentPage> {
           ),
           const SizedBox(height: 16),
           _buildPriceRow(
-            'Viewing booking fee',
-            'Ksh ${_viewingFee.toStringAsFixed(2)}',
+            'Platform fee (${_feePercent.toStringAsFixed(0)}%)',
+            _loadingFee
+                ? 'Loading...'
+                : 'Ksh ${_bookingFee.toStringAsFixed(2)}',
           ),
           const SizedBox(height: 10),
           Text(

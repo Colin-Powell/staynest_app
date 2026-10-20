@@ -7,6 +7,7 @@ import { pool } from '../db.js';
 import { initiateB2CPayout } from '../services/mpesa.js';
 import { recordAdminAudit } from '../services/audit_service.js';
 import { queueUserPush } from '../services/queue.js';
+import { defaultPlatformSettings, ensurePlatformSettings, } from '../services/platform_settings_service.js';
 const router = Router();
 router.post('/notifications/test', requireAuth, authorize('admin'), async (req, res, next) => {
     try {
@@ -111,33 +112,7 @@ router.get('/audit-logs', requireAuth, authorize('admin'), async (_req, res, nex
         next(error);
     }
 });
-const defaultPlatformSettings = {
-    general: {
-        requireManualKyc: true,
-        autoApproveListings: false,
-        globalFee: 10,
-        defaultCurrency: 'Ksh.',
-    },
-    security: {
-        enforce2FA: true,
-        maintenanceMode: false,
-    },
-};
 const settingKeys = new Set(Object.keys(defaultPlatformSettings));
-const ensurePlatformSettings = async () => {
-    await query(`
-    CREATE TABLE IF NOT EXISTS platform_settings (
-      key VARCHAR(255) PRIMARY KEY,
-      value JSONB NOT NULL,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-    for (const [key, value] of Object.entries(defaultPlatformSettings)) {
-        await query(`INSERT INTO platform_settings (key, value)
-       VALUES ($1, $2::jsonb)
-       ON CONFLICT (key) DO NOTHING`, [key, JSON.stringify(value)]);
-    }
-};
 router.get('/settings', requireAuth, authorize('admin'), async (_req, res, next) => {
     try {
         await ensurePlatformSettings();

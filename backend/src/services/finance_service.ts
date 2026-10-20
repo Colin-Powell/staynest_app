@@ -1,5 +1,7 @@
 import { PoolClient } from 'pg';
 import { pool } from '../db.js';
+import { calculatePlatformBookingFee } from './booking_fee.js';
+import { getGeneralPlatformSettings } from './platform_settings_service.js';
 
 type LedgerEntry = {
   userId: string;
@@ -10,8 +12,6 @@ type LedgerEntry = {
   referenceId?: string;
   idempotencyKey: string;
 };
-
-export const BOOKING_VIEWING_FEE_KES = 500;
 
 type BookingEscrowRecord = {
   id: string;
@@ -128,6 +128,7 @@ export async function createAndPayBookingFromWallet(input: {
   amount: number;
   created: boolean;
 }> {
+  const platformSettings = await getGeneralPlatformSettings();
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -223,10 +224,10 @@ export async function createAndPayBookingFromWallet(input: {
       'SELECT wallet_balance FROM users WHERE id = $1 FOR UPDATE',
       [input.tenantId],
     );
-    const amount = BOOKING_VIEWING_FEE_KES;
-    if (!Number.isFinite(amount) || amount <= 0) {
-      throw new Error('The booking total is invalid.');
-    }
+    const amount = calculatePlatformBookingFee(
+      Number(property.price),
+      platformSettings.globalFee,
+    );
     if (Number(userResult.rows[0]?.wallet_balance ?? 0) < amount) {
       throw new Error('Insufficient wallet balance. Add funds and try again.');
     }

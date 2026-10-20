@@ -3,13 +3,14 @@ import { pool, query } from '../db.js';
 import { authorize, requireAuth } from '../middleware/auth.js';
 import { queueUserPush } from '../services/queue.js';
 import { settleReferralReward } from '../services/referral_service.js';
+import { calculatePlatformBookingFee } from '../services/booking_fee.js';
 import {
-  BOOKING_VIEWING_FEE_KES,
   completeBookingWithEscrow,
   createAndPayBookingFromWallet,
   refundExpiredBookingEscrows,
   settleEscrow,
 } from '../services/finance_service.js';
+import { getGeneralPlatformSettings } from '../services/platform_settings_service.js';
 
 const router = Router();
 const unavailablePropertyStatuses = new Set([
@@ -25,6 +26,36 @@ function isPropertyUnavailable(availabilityStatus: unknown, legacyStatus: unknow
   return unavailablePropertyStatuses.has(availability) ||
     (['', 'unknown'].includes(availability) && unavailablePropertyStatuses.has(legacy));
 }
+
+router.get('/fee', requireAuth, authorize('tenant'), async (req: Request, res: Response, next: NextFunction) => {
+  const propertyId = String(req.query.propertyId ?? '').trim();
+  if (!propertyId) {
+    return res.status(400).json({ error: 'propertyId is required.' });
+  }
+
+  try {
+    const [propertyResult, settings] = await Promise.all([
+      query('SELECT price FROM properties WHERE id = $1 LIMIT 1', [propertyId]),
+      getGeneralPlatformSettings(),
+    ]);
+    if (propertyResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Property not found.' });
+    }
+
+    const baseAmount = Number(propertyResult.rows[0].price);
+    const amount = calculatePlatformBookingFee(baseAmount, settings.globalFee);
+    return res.json({
+      data: {
+        amount,
+        baseAmount,
+        feePercent: settings.globalFee,
+        currency: settings.defaultCurrency,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.post('/pay-with-wallet', requireAuth, authorize('tenant'), async (req: Request, res: Response, next: NextFunction) => {
   const { propertyId, checkInDate, checkOutDate, notes } = req.body as {
@@ -87,7 +118,7 @@ router.post('/pay-with-wallet', requireAuth, authorize('tenant'), async (req: Re
     if (message.includes('already booked') || message.includes('active booking') || message.includes('not available')) {
       return res.status(409).json({ error: message });
     }
-    if (message.includes('Invalid booking date') || message.includes('total is invalid')) {
+    if (message.includes('Invalid booking date') || message.includes('booking fee is invalid')) {
       return res.status(400).json({ error: message });
     }
     if (message.includes('Property not found')) {
@@ -104,6 +135,7 @@ router.post('/pay-with-wallet', requireAuth, authorize('tenant'), async (req: Re
 router.post('/', requireAuth, authorize('tenant'), async (req: Request, res: Response, next: NextFunction) => {
   let client;
   try {
+    const platformSettings = await getGeneralPlatformSettings();
     client = await pool.connect();
     const { propertyId, checkInDate, checkOutDate, notes } = req.body as {
       propertyId?: string;
@@ -157,7 +189,10 @@ router.post('/', requireAuth, authorize('tenant'), async (req: Request, res: Res
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'Invalid booking date range.' });
       }
-      const calculatedTotalPrice = BOOKING_VIEWING_FEE_KES;
+      const calculatedTotalPrice = calculatePlatformBookingFee(
+        Number(propResult.rows[0].price),
+        platformSettings.globalFee,
+      );
 
       // Availability Engine: Check for overlapping confirmed bookings
       const overlapCheck = await client.query(

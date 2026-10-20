@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:property_app/utils/responsive_modal_sheet.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:shimmer/shimmer.dart';
@@ -9,6 +8,7 @@ import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/utils/property_links.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'boost_listing_modal.dart';
 import 'landlord_calendar_page.dart';
@@ -139,13 +139,15 @@ class _LandlordPropertyManagementPageState
 
   Future<void> _shareProperty() async {
     final propertyId = _property['id']?.toString() ?? '';
-    final link = 'https://staynest.top/properties/$propertyId';
-    await Share.share('${_property['title'] ?? 'StayNest property'}: $link');
-    await AnalyticsService.trackPropertyShare(propertyId);
-    if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Listing shared.')));
-    }
+    final shared = await PropertyLinks.showShareOptions(
+      context,
+      propertyId: propertyId,
+      propertyName: _property['title']?.toString() ?? 'StayNest property',
+      imagePath:
+          (_property['image_url'] ?? _property['image'] ?? '').toString(),
+      shareText: _property['title']?.toString() ?? 'StayNest property',
+    );
+    if (shared) await AnalyticsService.trackPropertyShare(propertyId);
   }
 
   // ─── Modals & Dialogs ───────────────────────────────────────────────────────
