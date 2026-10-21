@@ -196,10 +196,11 @@ CREATE TABLE IF NOT EXISTS properties (
   landmark text,
   landlord_id uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
+  published_at timestamptz,
   average_rating numeric DEFAULT 0,
   review_count integer DEFAULT 0,
   status text NOT NULL DEFAULT 'pending_review',
-  availability_status text NOT NULL DEFAULT 'available'
+  availability_status text NOT NULL DEFAULT 'unknown'
 );
 
 -- Ensure lat/lng columns exist for older databases
@@ -217,6 +218,7 @@ ALTER TABLE properties ADD COLUMN IF NOT EXISTS average_rating numeric DEFAULT 0
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS review_count integer DEFAULT 0;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS status text;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS availability_status text DEFAULT 'unknown';
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS published_at timestamptz;
 UPDATE properties
 SET availability_status = status
 WHERE status IN ('available', 'pending_booking', 'fully_booked', 'rented', 'maintenance')
@@ -224,9 +226,9 @@ WHERE status IN ('available', 'pending_booking', 'fully_booked', 'rented', 'main
 UPDATE properties
 SET status = 'approved'
 WHERE status IN ('available', 'pending_booking', 'fully_booked', 'rented', 'maintenance');
-ALTER TABLE properties ALTER COLUMN availability_status SET DEFAULT 'available';
-UPDATE properties SET availability_status = 'available'
-WHERE availability_status IS NULL OR availability_status = 'unknown';
+ALTER TABLE properties ALTER COLUMN availability_status SET DEFAULT 'unknown';
+UPDATE properties SET availability_status = 'unknown'
+WHERE availability_status IS NULL;
 ALTER TABLE properties ALTER COLUMN availability_status SET NOT NULL;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS country text;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS county text;
@@ -250,6 +252,7 @@ ALTER TABLE properties ADD COLUMN IF NOT EXISTS location_accuracy_m numeric;
 ALTER TABLE properties ADD COLUMN IF NOT EXISTS campus_id uuid REFERENCES locations(id);
 
 CREATE INDEX IF NOT EXISTS properties_status_availability_updated_idx ON properties (status, availability_status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS properties_published_at_idx ON properties (published_at DESC) WHERE status = 'approved';
 CREATE INDEX IF NOT EXISTS properties_campus_type_status_idx ON properties (campus_id, property_type_id, status);
 
 CREATE TABLE IF NOT EXISTS verifications (

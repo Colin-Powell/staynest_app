@@ -103,6 +103,14 @@ Property mapApiProperty(Map<String, dynamic> json) {
         .toList(),
     description: json['description']?.toString() ?? '',
     agent: agent,
+    moderationStatus: json['status']?.toString().toLowerCase() ?? 'unknown',
+    publishedAt: json['published_at'] == null
+        ? null
+        : DateTime.tryParse(json['published_at'].toString()),
+    availabilityStatus: normalizePropertyAvailabilityStatus(
+      json['availability_status'],
+      json['status'],
+    ),
     viewedAt: json['viewed_at'] != null
         ? DateTime.tryParse(json['viewed_at'].toString())
         : null,

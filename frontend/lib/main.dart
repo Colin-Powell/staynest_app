@@ -519,8 +519,17 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
                   Navigator.pushReplacementNamed(context, '/');
                 }
               },
-              onListProperty: () =>
-                  Navigator.pushNamed(context, '/list_property'),
+              onListProperty: () {
+                if (AppSession.currentUserId == null) {
+                  _showLoginModal(
+                    context,
+                    onAuthenticated: () =>
+                        navigatorKey.currentState?.pushNamed('/become_host'),
+                  );
+                } else {
+                  Navigator.pushNamed(context, '/become_host');
+                }
+              },
               onVerificationCenter: () =>
                   Navigator.pushNamed(context, '/verification_center'),
             ),
@@ -1211,6 +1220,7 @@ class _AppShellState extends State<AppShell> {
   bool _isMessageSelectionMode = false;
   bool _showDesktopNotifications = false;
   bool _showDesktopMessages = false;
+  bool _hostEntryBusy = false;
   String? _desktopProfileHelperRoute;
   int _unreadNotificationCount = 0;
   int _unreadMessageCount = 0;
@@ -1476,13 +1486,48 @@ class _AppShellState extends State<AppShell> {
   Future<void> _openLogin() => _requireAuthentication();
 
   void _openHostListing() {
+    if (_hostEntryBusy) return;
+    _hostEntryBusy = true;
+
     if (AppSession.isGuest) {
-      _requireAuthentication(
-        onAuthenticated: () => Navigator.pushNamed(context, '/list_property'),
+      unawaited(
+        _requireAuthentication(
+          onAuthenticated: () => unawaited(_resolveHostEntry()),
+        ).whenComplete(() {
+          if (AppSession.isGuest) _hostEntryBusy = false;
+        }),
       );
       return;
     }
-    Navigator.pushNamed(context, '/list_property');
+
+    unawaited(_resolveHostEntry());
+  }
+
+  Future<void> _resolveHostEntry() async {
+    try {
+      final user = await RemoteDatabaseRepository().loadCurrentUser();
+      AppSession.updateCurrentUser(user);
+      await AppSession.persistSession();
+
+      final target =
+          AppSession.hasLandlordAccess ? '/landlord' : '/verification_center';
+      navigatorKey.currentState?.pushNamed(target);
+    } catch (_) {
+      final messengerContext = navigatorKey.currentContext;
+      if (messengerContext != null) {
+        ScaffoldMessenger.maybeOf(messengerContext)?.showSnackBar(
+          SnackBar(
+            content: const Text('Could not check host verification status.'),
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: _openHostListing,
+            ),
+          ),
+        );
+      }
+    } finally {
+      _hostEntryBusy = false;
+    }
   }
 
   Future<void> _requireAuthentication({VoidCallback? onAuthenticated}) async {
@@ -1949,7 +1994,7 @@ class _AppShellState extends State<AppShell> {
             await AppSession.reset();
             if (context.mounted) Navigator.pushReplacementNamed(context, '/');
           },
-          onListProperty: () => Navigator.pushNamed(context, '/list_property'),
+          onListProperty: _openHostListing,
           onVerificationCenter: () =>
               _openProfileHelper('/verification_center'),
         );

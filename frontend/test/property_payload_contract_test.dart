@@ -1,5 +1,7 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:property_app/utils/property_mapper.dart';
+import 'package:property_app/utils/property_links.dart';
 
 void main() {
   test(
@@ -34,5 +36,28 @@ void main() {
     expect(property.agent.name, 'Jane Doe');
     expect(property.agent.propertyCount, 3);
     expect(property.agent.responseTimeSeconds, 7200);
+  });
+
+  test('moderation and availability remain separate in mapped properties', () {
+    final property = mapApiProperty({
+      'id': 'approved-with-unknown-availability',
+      'status': 'approved',
+      'availability_status': 'unknown',
+      'published_at': '2026-10-18T12:00:00.000Z',
+    });
+
+    expect(property.moderationStatus, 'approved');
+    expect(property.availabilityStatus, 'unknown');
+    expect(property.isAvailableForBooking, isFalse);
+    expect(property.publishedAt, DateTime.utc(2026, 10, 18, 12));
+  });
+
+  test('property share URL uses the configured frontend origin', () {
+    dotenv.testLoad(fileInput: 'FRONTEND_URL=https://app.example.test');
+
+    expect(
+      PropertyLinks.forProperty('property-123'),
+      'https://app.example.test/properties/property-123',
+    );
   });
 }

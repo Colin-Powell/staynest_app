@@ -1,4 +1,5 @@
 import { query } from '../db.js';
+import { buildTrendingPropertiesQuery, NEW_LISTING_WINDOW_DAYS, TRENDING_MIN_UNIQUE_TENANTS, TRENDING_WINDOW_DAYS, } from './discovery_rules.js';
 const APPROVED = "COALESCE(p.status, 'pending_review') = 'approved'";
 function distanceSql(latParam, lngParam) {
     return `(6371 * 2 * ASIN(SQRT(
@@ -140,8 +141,8 @@ export class FeedService {
                 : resolved.category && resolved.category !== 'All'
                     ? `Closest ${resolved.category}`
                     : 'Closest Places', hasNearbyItems
-                ? `Available within ${radiusKm} km`
-                : `No listings within ${radiusKm} km; showing closest available properties`, 'nearby_radius_v2', nearbyItems));
+                ? `Listings within ${radiusKm} km`
+                : `No listings within ${radiusKm} km; showing the closest listings`, 'nearby_radius_v2', nearbyItems));
         }
         {
             const params = [];
@@ -149,25 +150,18 @@ export class FeedService {
             params.push(limit);
             const result = await query(`SELECT p.* FROM properties p
          WHERE ${filters.join(' AND ')}
-         ORDER BY p.created_at DESC, p.id
+           AND p.published_at IS NOT NULL
+           AND p.published_at >= NOW() - INTERVAL '${NEW_LISTING_WINDOW_DAYS} days'
+         ORDER BY p.published_at DESC, p.id
          LIMIT $${params.length}`, params);
-            addSection(section('new_listings', 'property_carousel', 'New on StayNest', 'Recently added properties', 'fresh_created_at_v2', result.rows));
+            addSection(section('new_listings', 'property_carousel', 'New on StayNest', `Approved in the last ${NEW_LISTING_WINDOW_DAYS} days`, 'approved_published_at_v1', result.rows));
         }
         {
             const params = [];
             const filters = filtersFor(resolved, params, []);
             params.push(limit);
-            const result = await query(`SELECT p.*, COALESCE(pa.velocity_score, 0) AS velocity_score,
-                COALESCE(pa.engagement_score, 0) AS engagement_score
-           FROM properties p
-           LEFT JOIN property_analytics pa ON pa.property_id = p.id
-          WHERE ${filters.join(' AND ')}
-          ORDER BY COALESCE(pa.velocity_score, 0) DESC,
-                   COALESCE(pa.engagement_score, 0) DESC,
-                   COALESCE(p.average_rating, 0) DESC,
-                   p.created_at DESC, p.id
-          LIMIT $${params.length}`, params);
-            addSection(section('trending_now', 'property_grid', resolved.anchorLat != null ? 'Trending Near You' : 'Trending Now', 'Popular properties with recent engagement', 'trending_velocity_v2', result.rows));
+            const result = await query(buildTrendingPropertiesQuery(filters.join(' AND '), params.length), params);
+            addSection(section('trending_now', 'property_grid', resolved.anchorLat != null ? 'Trending Near You' : 'Trending Now', `At least ${TRENDING_MIN_UNIQUE_TENANTS} tenants engaged in the last ${TRENDING_WINDOW_DAYS} days`, 'deduplicated_tenant_engagement_per_exposure_v1', result.rows));
         }
         if (sections.length === 0) {
             const params = [];

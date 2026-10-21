@@ -41,10 +41,11 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
     super.initState();
     _entryController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 300));
-    _fadeAnim = CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
+    _fadeAnim =
+        CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
     _scaleAnim = Tween<double>(begin: 0.95, end: 1.0).animate(
         CurvedAnimation(parent: _entryController, curve: Curves.easeOutCubic));
-    
+
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.toLowerCase();
@@ -63,18 +64,20 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
 
   List<Property> get _visibleProperties {
     List<Property> filtered = _properties;
-    
+
     if (_selectedCategory != 'All') {
-      filtered = filtered.where((p) => p.category == _selectedCategory).toList();
+      filtered =
+          filtered.where((p) => p.category == _selectedCategory).toList();
     }
-    
+
     if (_searchQuery.isNotEmpty) {
-      filtered = filtered.where((p) => 
-        p.name.toLowerCase().contains(_searchQuery) || 
-        p.location.toLowerCase().contains(_searchQuery)
-      ).toList();
+      filtered = filtered
+          .where((p) =>
+              p.name.toLowerCase().contains(_searchQuery) ||
+              p.location.toLowerCase().contains(_searchQuery))
+          .toList();
     }
-    
+
     return filtered;
   }
 
@@ -93,7 +96,8 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
     if (c.contains('apartment')) return 'assets/images/apartments.webp';
     if (c.contains('bedsitter')) return 'assets/images/bedsitter.webp';
     if (c.contains('single')) return 'assets/images/singleroom.webp';
-    if (c.contains('one bedroom') || c.contains('1 bedroom')) return 'assets/images/onebedroom.webp';
+    if (c.contains('one bedroom') || c.contains('1 bedroom'))
+      return 'assets/images/onebedroom.webp';
     return 'assets/images/all.webp'; // Fallback
   }
 
@@ -108,7 +112,7 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
 
   Widget _buildCategoryPills() {
     final tabs = _categoryTabs;
-    
+
     return SizedBox(
       height: 52,
       child: ListView.separated(
@@ -121,7 +125,7 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
           final tab = tabs[index];
           final isSelected = _selectedCategory == tab;
           final imagePath = _getCategoryAsset(tab);
-          
+
           return GestureDetector(
             onTap: () {
               setState(() {
@@ -130,7 +134,8 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
+              padding:
+                  const EdgeInsets.only(left: 6, right: 16, top: 6, bottom: 6),
               decoration: BoxDecoration(
                 color: _surface,
                 borderRadius: BorderRadius.circular(30),
@@ -138,7 +143,14 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
                   color: isSelected ? _dark : _grey.withOpacity(0.2),
                   width: isSelected ? 2.0 : 1.5,
                 ),
-                boxShadow: isSelected ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))] : [],
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2))
+                      ]
+                    : [],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -159,7 +171,8 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
                     tab,
                     style: GoogleFonts.poppins(
                       fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.w600,
                       color: isSelected ? _dark : _grey,
                     ),
                   ),
@@ -179,23 +192,29 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
         color: _surface,
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Row(
         children: [
           const Padding(
             padding: EdgeInsets.only(left: 16),
-            child: Icon(PhosphorIconsRegular.magnifyingGlass, color: _dark, size: 22),
+            child: Icon(PhosphorIconsRegular.magnifyingGlass,
+                color: _dark, size: 22),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: _searchController,
-              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: _dark),
+              style: GoogleFonts.poppins(
+                  fontSize: 14, fontWeight: FontWeight.w500, color: _dark),
               decoration: InputDecoration(
                 hintText: 'Search listings',
-                hintStyle: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w400, color: _grey),
+                hintStyle: GoogleFonts.poppins(
+                    fontSize: 14, fontWeight: FontWeight.w400, color: _grey),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
@@ -242,21 +261,37 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Shimmer.fromColors(
-                  baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
+                  baseColor: Colors.grey.shade200,
+                  highlightColor: Colors.grey.shade100,
                   child: AspectRatio(
                     aspectRatio: 1,
-                    child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16))),
+                    child: Container(
+                        decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16))),
                   ),
                 ),
                 const SizedBox(height: 12),
                 Shimmer.fromColors(
-                  baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                  child: Container(height: 14, width: double.infinity, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                  baseColor: Colors.grey.shade200,
+                  highlightColor: Colors.grey.shade100,
+                  child: Container(
+                      height: 14,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4))),
                 ),
                 const SizedBox(height: 8),
                 Shimmer.fromColors(
-                  baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                  child: Container(height: 12, width: 80, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                  baseColor: Colors.grey.shade200,
+                  highlightColor: Colors.grey.shade100,
+                  child: Container(
+                      height: 12,
+                      width: 80,
+                      decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4))),
                 ),
               ],
             );
@@ -304,19 +339,27 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
                               decoration: BoxDecoration(
                                 color: _surface,
                                 shape: BoxShape.circle,
-                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: Colors.black.withOpacity(0.04),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4))
+                                ],
                               ),
                               child: Stack(
                                 alignment: Alignment.center,
                                 children: [
-                                  const Icon(PhosphorIconsRegular.bell, color: _dark, size: 22),
+                                  const Icon(PhosphorIconsRegular.bell,
+                                      color: _dark, size: 22),
                                   Positioned(
                                     top: 10,
                                     right: 12,
                                     child: Container(
                                       width: 8,
                                       height: 8,
-                                      decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
+                                      decoration: const BoxDecoration(
+                                          color: Color(0xFFEF4444),
+                                          shape: BoxShape.circle),
                                     ),
                                   )
                                 ],
@@ -353,11 +396,17 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
                           child: Center(
                             child: Column(
                               children: [
-                                const Icon(PhosphorIconsRegular.houseLine, size: 64, color: _grey),
+                                const Icon(PhosphorIconsRegular.houseLine,
+                                    size: 64, color: _grey),
                                 const SizedBox(height: 16),
-                                Text('No properties found', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
+                                Text('No properties found',
+                                    style: GoogleFonts.poppins(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        color: _dark)),
                                 const SizedBox(height: 8),
-                                Text('Try adjusting your search or filters.', style: GoogleFonts.poppins(color: _grey)),
+                                Text('Try adjusting your search or filters.',
+                                    style: GoogleFonts.poppins(color: _grey)),
                               ],
                             ),
                           ),
@@ -365,9 +414,11 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
                       )
                     else
                       SliverPadding(
-                        padding: EdgeInsets.fromLTRB(24, 0, 24, MediaQuery.of(context).padding.bottom + 120),
+                        padding: EdgeInsets.fromLTRB(24, 0, 24,
+                            MediaQuery.of(context).padding.bottom + 120),
                         sliver: SliverGrid(
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
                             crossAxisSpacing: 16,
                             mainAxisSpacing: 24,
@@ -379,6 +430,7 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
                               return _PropertyCard(
                                 property: property,
                                 delay: Duration(milliseconds: 60 * index),
+                                onAfterManage: _loadProperties,
                               );
                             },
                             childCount: _visibleProperties.length,
@@ -393,7 +445,8 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
 
           // ─── Floating Action Button ───
           Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 32, // Safely above bottom nav
+            bottom: MediaQuery.of(context).padding.bottom +
+                32, // Safely above bottom nav
             left: 24,
             right: 24,
             child: SizedBox(
@@ -401,7 +454,8 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: widget.onAddProperty,
-                icon: const Icon(PhosphorIconsRegular.plus, size: 20, color: Colors.white),
+                icon: const Icon(PhosphorIconsRegular.plus,
+                    size: 20, color: Colors.white),
                 label: Text(
                   'Add New Property',
                   style: GoogleFonts.poppins(
@@ -415,7 +469,8 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
                   foregroundColor: Colors.white,
                   elevation: 8,
                   shadowColor: Colors.black.withOpacity(0.3),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(32)),
                 ),
               ),
             ),
@@ -431,8 +486,13 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
 class _PropertyCard extends StatefulWidget {
   final Property property;
   final Duration delay;
+  final VoidCallback onAfterManage;
 
-  const _PropertyCard({required this.property, required this.delay});
+  const _PropertyCard({
+    required this.property,
+    required this.delay,
+    required this.onAfterManage,
+  });
 
   @override
   State<_PropertyCard> createState() => _PropertyCardState();
@@ -449,9 +509,11 @@ class _PropertyCardState extends State<_PropertyCard>
     super.initState();
     _entryController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 400));
-    _fadeAnim = CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
+    _fadeAnim =
+        CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _entryController, curve: Curves.easeOutCubic));
+        .animate(CurvedAnimation(
+            parent: _entryController, curve: Curves.easeOutCubic));
 
     Future.delayed(widget.delay, () {
       if (mounted) {
@@ -476,20 +538,28 @@ class _PropertyCardState extends State<_PropertyCard>
   Widget build(BuildContext context) {
     // Generate accurate status based on real property data
     final statusText = widget.property.availabilityLabel;
-    final isAvailable = widget.property.availabilityStatus.toLowerCase() == 'available';
+    final isAvailable =
+        widget.property.availabilityStatus.toLowerCase() == 'available';
+    final moderationLabel = switch (widget.property.moderationStatus) {
+      'approved' => 'Published',
+      'pending_review' => 'Pending approval',
+      'rejected' => 'Rejected',
+      _ => '',
+    };
 
     return FadeTransition(
       opacity: _fadeAnim,
       child: SlideTransition(
         position: _slideAnim,
         child: GestureDetector(
-          onTap: () {
+          onTap: () async {
             // Landlords manage properties; they do not book them
-            Navigator.pushNamed(
-              context, 
-              '/landlord_property_management', 
-              arguments: <String, dynamic>{'propertyId': widget.property.id}
+            await Navigator.pushNamed<void>(
+              context,
+              '/landlord_property_management',
+              arguments: <String, dynamic>{'propertyId': widget.property.id},
             );
+            if (mounted) widget.onAfterManage();
           },
           behavior: HitTestBehavior.opaque,
           child: Column(
@@ -507,7 +577,10 @@ class _PropertyCardState extends State<_PropertyCard>
                         width: double.infinity,
                         height: double.infinity,
                         fit: BoxFit.cover,
-                        errorPlaceholder: Container(color: _grey.withOpacity(0.1), child: const Icon(PhosphorIconsRegular.house, color: _grey, size: 32)),
+                        errorPlaceholder: Container(
+                            color: _grey.withOpacity(0.1),
+                            child: const Icon(PhosphorIconsRegular.house,
+                                color: _grey, size: 32)),
                       ),
                     ),
                   ),
@@ -516,11 +589,18 @@ class _PropertyCardState extends State<_PropertyCard>
                     top: 10,
                     right: 10,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: isAvailable ? _green : Colors.white.withOpacity(0.95),
+                        color: isAvailable
+                            ? _green
+                            : Colors.white.withOpacity(0.95),
                         borderRadius: BorderRadius.circular(8),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)],
+                        boxShadow: [
+                          BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 4)
+                        ],
                       ),
                       child: Text(
                         statusText,
@@ -535,7 +615,7 @@ class _PropertyCardState extends State<_PropertyCard>
                 ],
               ),
               const SizedBox(height: 12),
-              
+
               // 2. Details Section
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -553,16 +633,6 @@ class _PropertyCardState extends State<_PropertyCard>
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  Row(
-                    children: [
-                      const Icon(PhosphorIconsFill.eye, size: 12, color: _grey),
-                      const SizedBox(width: 4),
-                      Text(
-                        '1.2k', // Mock data from original
-                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: _grey),
-                      ),
-                    ],
-                  ),
                 ],
               ),
               const SizedBox(height: 2),
@@ -579,6 +649,21 @@ class _PropertyCardState extends State<_PropertyCard>
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              if (moderationLabel.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  moderationLabel,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: widget.property.moderationStatus == 'approved'
+                        ? _green
+                        : widget.property.moderationStatus == 'rejected'
+                            ? const Color(0xFFB91C1C)
+                            : const Color(0xFFB45309),
+                  ),
+                ),
+              ],
               const SizedBox(height: 6),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,

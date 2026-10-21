@@ -484,7 +484,7 @@ router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (r
     const { id } = req.params;
     const { status } = req.body;
 
-    const validStatuses = ['pending_review', 'approved', 'rejected', 'available', 'rented', 'maintenance'];
+    const validStatuses = ['pending_review', 'approved', 'rejected'];
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -494,12 +494,21 @@ router.patch('/properties/:id/status', requireAuth, authorize('admin'), async (r
 
     const updateRes = await query(`
       UPDATE properties
-      SET status = $1
+      SET status = $1,
+          published_at = CASE
+            WHEN $1 = 'approved' THEN NOW()
+            ELSE published_at
+          END
       WHERE id = $2
+        AND status IS DISTINCT FROM $1
       RETURNING *
     `, [status, id]);
 
     if (updateRes.rows.length === 0) {
+      const existing = await query('SELECT * FROM properties WHERE id = $1 LIMIT 1', [id]);
+      if (existing.rows.length > 0) {
+        return res.json({ success: true, data: existing.rows[0] });
+      }
       return res.status(404).json({
         success: false,
         error: 'Property not found'

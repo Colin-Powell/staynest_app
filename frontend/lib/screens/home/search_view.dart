@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:visibility_detector/visibility_detector.dart';
 
 import 'package:property_app/models/property.dart';
 import 'package:property_app/session/app_session.dart';
@@ -67,7 +66,6 @@ class _SearchViewState extends State<SearchView> {
   List<Property> _all = [];
   bool _loading = true;
   bool _hasError = false;
-  final Set<String> _impressedPropertyIds = {};
 
   @override
   void initState() {
@@ -136,7 +134,6 @@ class _SearchViewState extends State<SearchView> {
         radiusKm: 2,
       );
       if (!mounted) return;
-      _impressedPropertyIds.clear();
       AnalyticsService.logSearch(
         searchTerm: suggestion.displayName,
         location: suggestion.displayName,
@@ -465,25 +462,15 @@ class _SearchViewState extends State<SearchView> {
           child: Opacity(opacity: value, child: child),
         );
       },
-      child: VisibilityDetector(
-        key: Key('search_impression_${property.id}'),
-        onVisibilityChanged: (info) {
-          if (info.visibleFraction > 0.5 && _impressedPropertyIds.add(property.id)) {
-            AnalyticsService.logListingInteraction(
-                AnalyticsEvents.listingImpression,
-                listingId: property.id);
-          }
-        },
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: PropertyCard(
-            property: property,
-            isHorizontal: false,
-            isGrid: true,
-            onTap: () => widget.onSelectProperty?.call(property),
-            onRequireAuthentication: widget.onRequireAuthentication,
-            onFavoriteChanged: null,
-          ),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: PropertyCard(
+          property: property,
+          isHorizontal: false,
+          isGrid: true,
+          onTap: () => widget.onSelectProperty?.call(property),
+          onRequireAuthentication: widget.onRequireAuthentication,
+          onFavoriteChanged: null,
         ),
       ),
     );

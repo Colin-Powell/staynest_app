@@ -1,3 +1,27 @@
+const _propertyAvailabilityStatuses = {
+  'available',
+  'pending_booking',
+  'fully_booked',
+  'unavailable',
+  'rented',
+  'maintenance',
+};
+
+String normalizePropertyAvailabilityStatus(
+  dynamic availabilityStatus,
+  dynamic legacyStatus,
+) {
+  final availability = availabilityStatus?.toString().toLowerCase();
+  if (availability != null &&
+      availability.isNotEmpty &&
+      availability != 'unknown') {
+    return availability;
+  }
+
+  final legacy = legacyStatus?.toString().toLowerCase();
+  return _propertyAvailabilityStatuses.contains(legacy) ? legacy! : 'unknown';
+}
+
 class PropertyModel {
   final String id;
   final String category;
@@ -121,6 +145,8 @@ class Property {
   final String description;
   final Agent agent;
   final DateTime? viewedAt;
+  final String moderationStatus;
+  final DateTime? publishedAt;
   final String availabilityStatus;
 
   const Property({
@@ -142,15 +168,13 @@ class Property {
     required this.description,
     required this.agent,
     this.viewedAt,
-    this.availabilityStatus = 'available',
+    this.moderationStatus = 'unknown',
+    this.publishedAt,
+    this.availabilityStatus = 'unknown',
   }) : images = images ?? const [];
 
-  bool get isAvailableForBooking => !const {
-        'fully_booked',
-        'unavailable',
-        'rented',
-        'maintenance'
-      }.contains(availabilityStatus.toLowerCase());
+  bool get isAvailableForBooking => const {'available', 'pending_booking'}
+      .contains(availabilityStatus.toLowerCase());
 
   String get availabilityLabel => switch (availabilityStatus.toLowerCase()) {
         'fully_booked' => 'Fully booked',
@@ -158,7 +182,8 @@ class Property {
         'rented' => 'Rented out',
         'maintenance' => 'Under maintenance',
         'pending_booking' => 'Booking pending',
-        _ => 'Available',
+        'available' => 'Available',
+        _ => 'Availability not confirmed',
       };
 
   factory Property.fromJson(Map<String, dynamic> json) {
@@ -183,24 +208,14 @@ class Property {
     final amenitiesList = json['amenities'] is List
         ? List<String>.from(json['amenities'] as List)
         : <String>[];
-    final legacyStatus = (json['status'] ?? '').toString().toLowerCase();
-    final rawAvailabilityStatus =
-        json['availability_status']?.toString().toLowerCase();
-    const occupancyStatuses = {
-      'available',
-      'pending_booking',
-      'fully_booked',
-      'unavailable',
-      'rented',
-      'maintenance',
-    };
-    final availabilityStatus = rawAvailabilityStatus == null ||
-            rawAvailabilityStatus.isEmpty ||
-            rawAvailabilityStatus == 'unknown'
-        ? (occupancyStatuses.contains(legacyStatus)
-            ? legacyStatus
-            : 'available')
-        : rawAvailabilityStatus;
+    final availabilityStatus = normalizePropertyAvailabilityStatus(
+      json['availability_status'],
+      json['status'],
+    );
+    final publishedAtValue = json['published_at'];
+    final publishedAt = publishedAtValue == null
+        ? null
+        : DateTime.tryParse(publishedAtValue.toString());
 
     return Property(
       id: (json['id'] ?? '').toString(),
@@ -229,6 +244,8 @@ class Property {
       ),
       amenities: amenitiesList,
       description: (json['description'] ?? '').toString(),
+      moderationStatus: (json['status'] ?? 'unknown').toString().toLowerCase(),
+      publishedAt: publishedAt,
       availabilityStatus: availabilityStatus,
       agent: Agent(
         userId: (json['landlord_id'] ?? '').toString(),

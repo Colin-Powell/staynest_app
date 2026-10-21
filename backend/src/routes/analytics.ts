@@ -1,16 +1,77 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { query } from '../db.js';
-import { requireAuth } from '../middleware/auth.js';
+import { pool, query } from '../db.js';
+import { authorize, requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 
+router.post('/impression', requireAuth, authorize('tenant'), async (req: Request, res: Response, next: NextFunction) => {
+  const propertyId = typeof req.body?.propertyId === 'string'
+    ? req.body.propertyId.trim()
+    : '';
+  const uuidV4ish = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+  if (!uuidV4ish.test(propertyId)) {
+    return res.status(400).json({ error: 'Invalid propertyId.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const property = await client.query(
+      `SELECT landlord_id FROM properties
+        WHERE id = $1 AND COALESCE(status, 'pending_review') = 'approved'
+        LIMIT 1`,
+      [propertyId],
+    );
+    if (property.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Property not found.' });
+    }
+    if (property.rows[0].landlord_id === req.auth!.id) {
+      await client.query('COMMIT');
+      return res.json({ ok: true, ignored: true, reason: 'landlord_own_property' });
+    }
+
+    await client.query(
+      `SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`,
+      [propertyId, `${req.auth!.id}:property_impression`],
+    );
+    const prior = await client.query(
+      `SELECT 1 FROM engagement_events
+        WHERE user_id = $1 AND property_id = $2
+          AND event_type = 'property_impression'
+          AND created_at >= CURRENT_DATE
+        LIMIT 1`,
+      [req.auth!.id, propertyId],
+    );
+    if (prior.rows.length > 0) {
+      await client.query('COMMIT');
+      return res.json({ ok: true, ignored: true, reason: 'duplicate_impression_today' });
+    }
+
+    await client.query(
+      `INSERT INTO engagement_events (user_id, property_id, event_type, metadata)
+       VALUES ($1, $2, 'property_impression', $3::jsonb)`,
+      [req.auth!.id, propertyId, JSON.stringify({ source: 'visible_property_card' })],
+    );
+    await client.query(
+      `INSERT INTO property_analytics (property_id, impressions, updated_at)
+       VALUES ($1, 1, NOW())
+       ON CONFLICT (property_id) DO UPDATE
+         SET impressions = property_analytics.impressions + 1,
+             updated_at = NOW()`,
+      [propertyId],
+    );
+    await client.query('COMMIT');
+    return res.status(201).json({ ok: true, eventType: 'property_impression' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
 const EVENT_WEIGHTS: Record<string, number> = {
-  property_impression: 0.1,
-  featured_property_impression: 0.1,
-  map_property_impression: 0.1,
-  saved_property_impression: 0.1,
-  owner_property_impression: 0.1,
-  recommended_property_impression: 0.1,
   property_view: 1,
   property_detail_view: 1,
   property_click: 2,
@@ -23,12 +84,6 @@ const EVENT_WEIGHTS: Record<string, number> = {
 };
 
 const METRIC_COLUMNS: Record<string, string> = {
-  property_impression: 'impressions',
-  featured_property_impression: 'impressions',
-  map_property_impression: 'impressions',
-  saved_property_impression: 'impressions',
-  owner_property_impression: 'impressions',
-  recommended_property_impression: 'impressions',
   property_view: 'views',
   property_detail_view: 'views',
   property_click: 'clicks',
@@ -51,7 +106,10 @@ function toNumber(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
-router.post('/track', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/track', requireAuth, authorize('tenant'), async (req: Request, res: Response, next: NextFunction) => {
+  if (req.auth?.role?.toLowerCase() !== 'tenant') {
+    return res.status(403).json({ error: 'Only tenant portal interactions are countable.' });
+  }
   const logPrefix = `[AnalyticsTrack]`;
   const { eventType, propertyId } = req.body as { eventType?: string; propertyId?: string };
   console.log(`${logPrefix} start userId=${req.auth?.id} eventType=${eventType} propertyId=${propertyId}`);
@@ -64,6 +122,7 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
     return res.status(400).json({ error: 'Invalid propertyId' });
   }
 
+  const client = await pool.connect();
   try {
     const {
       eventType,
@@ -89,12 +148,9 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
     }
 
     const isViewEvent = eventType === 'property_view' || eventType === 'property_detail_view';
-    if (isViewEvent && req.auth?.role?.toLowerCase() !== 'tenant') {
-      return res.status(403).json({ error: 'Only tenant portal views are countable.' });
-    }
 
-    const propertyExists = await query('SELECT landlord_id FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
-    if (propertyExists.rowCount === 0) {
+    const propertyExists = await client.query('SELECT landlord_id FROM properties WHERE id = $1 LIMIT 1', [propertyId]);
+    if (propertyExists.rows.length === 0) {
       return res.status(404).json({ error: 'Property not found.' });
     }
 
@@ -103,7 +159,7 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
       return res.status(200).json({ ok: true, ignored: true, reason: 'landlord_own_property' });
     }
 
-    await query('BEGIN');
+    await client.query('BEGIN');
     try {
       const isSaveEvent = eventType === 'property_save';
       const isImpressionEvent = eventType.includes('impression');
@@ -115,21 +171,21 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
         const checkQuery = userId
           ? `SELECT 1 FROM engagement_events WHERE user_id = $1 AND property_id = $2 AND event_type = $3 LIMIT 1`
           : `SELECT 1 FROM engagement_events WHERE session_id = $1 AND property_id = $2 AND event_type = $3 LIMIT 1`;
-        const priorCheck = await query(checkQuery, [checkVal, propertyId, eventType]);
-        isFirstEverAction = (priorCheck.rowCount ?? 0) === 0;
+        const priorCheck = await client.query(checkQuery, [checkVal, propertyId, eventType]);
+        isFirstEverAction = priorCheck.rows.length === 0;
       }
 
       if (isViewEvent) {
         // One view per property per day
-        const uniqueView = await query(
+        const uniqueView = await client.query(
           `INSERT INTO property_unique_views (property_id, user_id, viewed_date)
            VALUES ($1, $2, CURRENT_DATE)
            ON CONFLICT (property_id, user_id, viewed_date) DO NOTHING
            RETURNING property_id`,
           [propertyId, userId],
         );
-        if ((uniqueView.rowCount ?? 0) === 0) {
-          await query('ROLLBACK');
+        if (uniqueView.rows.length === 0) {
+          await client.query('ROLLBACK');
           return res.status(200).json({ ok: true, ignored: true, reason: 'duplicate_view_today' });
         }
       } else if (isImpressionEvent) {
@@ -137,20 +193,20 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
           const checkQuery = userId 
             ? `SELECT 1 FROM engagement_events WHERE user_id = $1 AND property_id = $2 AND event_type = $3 AND created_at >= CURRENT_DATE LIMIT 1`
             : `SELECT 1 FROM engagement_events WHERE session_id = $1 AND property_id = $2 AND event_type = $3 AND created_at >= CURRENT_DATE LIMIT 1`;
-          const prior = await query(checkQuery, [checkVal, propertyId, eventType]);
-          if ((prior.rowCount ?? 0) > 0) {
-            await query('ROLLBACK');
+          const prior = await client.query(checkQuery, [checkVal, propertyId, eventType]);
+          if (prior.rows.length > 0) {
+            await client.query('ROLLBACK');
             return res.status(200).json({ ok: true, ignored: true, reason: 'duplicate_impression_today' });
           }
         }
       } else if (isSaveEvent) {
         if (!isFirstEverAction) {
-          await query('ROLLBACK');
+          await client.query('ROLLBACK');
           return res.status(200).json({ ok: true, ignored: true, reason: 'already_saved' });
         }
       }
 
-      await query(
+      await client.query(
         `INSERT INTO engagement_events (user_id, property_id, event_type, session_id, metadata, created_at)
          VALUES ($1, $2, $3, $4, $5, NOW())`,
         [userId, propertyId, eventType, sessionId ?? null, metadata],
@@ -163,14 +219,14 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
       const uniqueInc = (isViewEvent && isFirstEverAction) ? 1 : 0;
       const metricInc = 1;
 
-      await query(
+      await client.query(
         `INSERT INTO property_analytics (property_id, views, unique_views, impressions, clicks, saves, shares, chats, booking_requested, bookings_confirmed, bookings_completed, engagement_score, last_event_at, updated_at)
          VALUES ($1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NOW(), NOW())
          ON CONFLICT (property_id) DO NOTHING`,
         [propertyId],
       );
 
-      await query(
+      await client.query(
         `UPDATE property_analytics
          SET ${column ? `${column} = property_analytics.${column} + $4,` : ''}
            unique_views = property_analytics.unique_views + $2,
@@ -181,14 +237,16 @@ router.post('/track', requireAuth, async (req: Request, res: Response, next: Nex
         [propertyId, uniqueInc, score, metricInc],
       );
 
-      await query('COMMIT');
+      await client.query('COMMIT');
       res.status(201).json({ ok: true, eventType, uniqueInc });
     } catch (error) {
-      await query('ROLLBACK');
+      await client.query('ROLLBACK');
       throw error;
     }
   } catch (error) {
     next(error);
+  } finally {
+    client.release();
   }
 });
 

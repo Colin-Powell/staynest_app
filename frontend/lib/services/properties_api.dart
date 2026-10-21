@@ -46,6 +46,13 @@ class PropertiesApi {
     });
   }
 
+  static Future<void> recordPropertyImpression(String propertyId) async {
+    final client = _client();
+    await client.postJson('/analytics/impression', body: {
+      'propertyId': propertyId,
+    });
+  }
+
   static Future<void> recordPropertyView(String propertyId) async {
     try {
       final client = _client();

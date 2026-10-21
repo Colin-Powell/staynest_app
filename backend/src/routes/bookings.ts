@@ -11,20 +11,12 @@ import {
   settleEscrow,
 } from '../services/finance_service.js';
 import { getGeneralPlatformSettings } from '../services/platform_settings_service.js';
+import { isPropertyBookable } from '../services/property_availability.js';
 
 const router = Router();
-const unavailablePropertyStatuses = new Set([
-  'fully_booked',
-  'unavailable',
-  'rented',
-  'maintenance',
-]);
 
 function isPropertyUnavailable(availabilityStatus: unknown, legacyStatus: unknown): boolean {
-  const availability = String(availabilityStatus ?? '').toLowerCase();
-  const legacy = String(legacyStatus ?? '').toLowerCase();
-  return unavailablePropertyStatuses.has(availability) ||
-    (['', 'unknown'].includes(availability) && unavailablePropertyStatuses.has(legacy));
+  return !isPropertyBookable(availabilityStatus, legacyStatus);
 }
 
 router.get('/fee', requireAuth, authorize('tenant'), async (req: Request, res: Response, next: NextFunction) => {

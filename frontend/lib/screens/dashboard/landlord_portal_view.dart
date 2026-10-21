@@ -48,6 +48,7 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   String? _calendarPropertyId;
   String? _calendarPropertyTitle;
   String _bookingDetailReturnNav = 'Bookings';
+  int _propertiesRefreshRevision = 0;
   bool _isChatOpen = false;
   Map<String, dynamic>? _verificationStatus;
   bool _isLoadingStatus = true;
@@ -81,6 +82,13 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
     setState(() {
       _propertyDetail = null;
       _selectedNav = 'Properties';
+    });
+  }
+
+  void _handlePropertyUpdated(Map<String, dynamic> property) {
+    setState(() {
+      _propertyDetail?.addAll(property);
+      _propertiesRefreshRevision++;
     });
   }
 
@@ -364,6 +372,16 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   // ─── State Getters ───────────────────────────────────────────────────────────
 
   bool get _isLandlordRole => AppSession.hasLandlordAccess;
+  bool get _isKycApproved =>
+      _verificationStatus?['status']?.toString().toLowerCase() == 'approved';
+  bool get _showPortalNavigation =>
+      !_isLoadingStatus &&
+      _isLandlordRole &&
+      _isKycApproved &&
+      !_isChatOpen &&
+      MediaQuery.viewInsetsOf(context).bottom == 0 &&
+      const {'Dashboard', 'Properties', 'Bookings', 'Settings'}
+          .contains(_selectedNav);
 
   // ─── Page Routing ────────────────────────────────────────────────────────────
 
@@ -373,6 +391,7 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
         return LandlordPropertyManagementPage(
           property: _propertyDetail ?? <String, dynamic>{},
           onBack: _closePropertyManagement,
+          onPropertyUpdated: _handlePropertyUpdated,
           onNavigateToBookings: () => setState(() => _selectedNav = 'Bookings'),
           onOpenCalendar: () => _openCalendar(
             propertyId: _propertyDetail?['id']?.toString(),
@@ -445,14 +464,13 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
 
     if (!_isLandlordRole) return _buildUnauthorizedView();
 
-    final isKycApproved = _verificationStatus != null &&
-        _verificationStatus!['status']?.toString().toLowerCase() == 'approved';
-    if (!isKycApproved) {
+    if (!_isKycApproved) {
       return _buildPendingVerificationDashboard(isDesktop: isDesktop);
     }
 
     if (_selectedNav == 'Properties') {
       return LandlordPropertiesPage(
+        key: ValueKey(_propertiesRefreshRevision),
         onAddProperty: _openListingFlow,
         onOpenProperty: _openPropertyManagement,
       );
@@ -462,6 +480,7 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
       return LandlordPropertyManagementPage(
         property: _propertyDetail ?? <String, dynamic>{},
         onBack: _closePropertyManagement,
+        onPropertyUpdated: _handlePropertyUpdated,
         onNavigateToBookings: () => setState(() => _selectedNav = 'Bookings'),
         onOpenCalendar: () => _openCalendar(
           propertyId: _propertyDetail?['id']?.toString(),
@@ -665,7 +684,7 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
               child: _buildBodyContent(),
             ),
           ),
-          if (!_isChatOpen)
+          if (_showPortalNavigation)
             Align(
               alignment: Alignment.bottomCenter,
               child: _buildSolidBottomNav(),
@@ -688,83 +707,86 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 88,
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 88,
-                          height: 88,
-                          decoration: BoxDecoration(
-                            color: _surface,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.04),
-                                blurRadius: 24,
-                                offset: const Offset(0, 8),
-                              )
-                            ],
-                          ),
-                          child: Center(
-                            child: Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: _green.withValues(alpha: 0.12),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                PhosphorIconsFill.buildings,
-                                color: _green,
-                                size: 24,
+                  if (_showPortalNavigation) ...[
+                    SizedBox(
+                      width: 88,
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 88,
+                            height: 88,
+                            decoration: BoxDecoration(
+                              color: _surface,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.04),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 8),
+                                )
+                              ],
+                            ),
+                            child: Center(
+                              child: Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: _green.withValues(alpha: 0.12),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  PhosphorIconsFill.buildings,
+                                  color: _green,
+                                  size: 24,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          width: 88,
-                          padding: const EdgeInsets.symmetric(vertical: 24),
-                          decoration: BoxDecoration(
-                            color: _surface,
-                            borderRadius: BorderRadius.circular(44),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.04),
-                                blurRadius: 24,
-                                offset: const Offset(0, 8),
-                              )
-                            ],
+                          const Spacer(),
+                          Container(
+                            width: 88,
+                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            decoration: BoxDecoration(
+                              color: _surface,
+                              borderRadius: BorderRadius.circular(44),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.04),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 8),
+                                )
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildDesktopNavItem(
+                                    PhosphorIconsRegular.house, 'Dashboard'),
+                                const SizedBox(height: 16),
+                                _buildDesktopNavItem(
+                                    PhosphorIconsRegular.buildings,
+                                    'Properties'),
+                                const SizedBox(height: 16),
+                                _buildDesktopNavItem(
+                                    PhosphorIconsRegular.calendarCheck,
+                                    'Bookings'),
+                                const SizedBox(height: 16),
+                                _buildDesktopNavItem(
+                                    PhosphorIconsRegular.chatTeardrop,
+                                    'Messages'),
+                                const SizedBox(height: 16),
+                                _buildDesktopNavItem(
+                                    PhosphorIconsRegular.user, 'Settings',
+                                    displayLabel: 'Profile'),
+                              ],
+                            ),
                           ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildDesktopNavItem(
-                                  PhosphorIconsRegular.house, 'Dashboard'),
-                              const SizedBox(height: 16),
-                              _buildDesktopNavItem(
-                                  PhosphorIconsRegular.buildings, 'Properties'),
-                              const SizedBox(height: 16),
-                              _buildDesktopNavItem(
-                                  PhosphorIconsRegular.calendarCheck,
-                                  'Bookings'),
-                              const SizedBox(height: 16),
-                              _buildDesktopNavItem(
-                                  PhosphorIconsRegular.chatTeardrop,
-                                  'Messages'),
-                              const SizedBox(height: 16),
-                              _buildDesktopNavItem(
-                                  PhosphorIconsRegular.user, 'Settings',
-                                  displayLabel: 'Profile'),
-                            ],
-                          ),
-                        ),
-                        const Spacer(),
-                      ],
+                          const Spacer(),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 24),
+                    const SizedBox(width: 24),
+                  ],
                   Expanded(
                     child: Column(
                       children: [
@@ -1057,7 +1079,11 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
 
   Widget _buildSolidBottomNav() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 32, left: 24, right: 24),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).padding.bottom + 16,
+        left: 24,
+        right: 24,
+      ),
       child: Container(
         decoration: BoxDecoration(
           color: _surface,

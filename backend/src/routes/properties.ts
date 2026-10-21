@@ -6,6 +6,10 @@ import { requireAuth, authorize } from '../middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../config.js';
 import { queueUserPush } from '../services/queue.js';
+import {
+  isPropertyAvailabilityStatus,
+  PROPERTY_AVAILABILITY_STATUSES,
+} from '../services/property_availability.js';
 
 async function getCache<T>(key: string): Promise<T | null> {
   const raw = await cache.get(`cache:${key}`);
@@ -36,11 +40,10 @@ function normalizePropertyRow(property: Record<string, unknown>): Record<string,
   }
 
   const availabilityStatus = String(property.availability_status ?? '').toLowerCase();
-  const legacyAvailability = ['available', 'pending_booking', 'fully_booked', 'unavailable', 'rented', 'maintenance'];
   if (!availabilityStatus || availabilityStatus === 'unknown') {
-    property.availability_status = legacyAvailability.includes(String(property.status).toLowerCase())
+    property.availability_status = isPropertyAvailabilityStatus(String(property.status).toLowerCase())
       ? property.status
-      : 'available';
+      : 'unknown';
   }
 
   // FIX 1: null guard — pg returns null for empty jsonb, not undefined
@@ -108,6 +111,7 @@ const PROPERTY_SELECT = `p.id,
               p.lng,
               p.status,
               p.availability_status,
+              p.published_at,
               u.id AS landlord_id,
               u.name AS landlord_name,
               u.email AS landlord_email,
@@ -358,15 +362,6 @@ router.post('/:id/view', requireAuth, async (req: Request, res) => {
       [userId, propertyId],
     );
 
-    // Property views are already tracked by the analytics pipeline using the
-    // engagement_events + property_unique_views tables. Recording a legacy row in
-    // the removed `analytics` table causes runtime failures on migrated databases.
-    await query(
-      `INSERT INTO engagement_events (user_id, property_id, event_type, metadata, created_at)
-       VALUES ($1, $2, 'property_view', '{"source":"recently_viewed"}', NOW())`,
-      [userId, propertyId],
-    );
-
     return res.json({ data: { success: true } });
   } catch (err) {
     console.error('Error recording view:', err);
@@ -600,15 +595,19 @@ router.patch('/:id/status', requireAuth, authorize('landlord', 'host'), async (r
 
     console.log(`[PropertyStatusUpdate] Request to update property ${propertyId} to status "${status}" by user ${userId}`);
 
-    const allowedStatuses = ['available', 'pending_booking', 'fully_booked', 'unavailable', 'rented', 'maintenance'];
-    if (typeof status !== 'string' || !allowedStatuses.includes(status)) {
-      return res.status(400).json({ error: `Status must be one of: ${allowedStatuses.join(', ')}.` });
+    if (!isPropertyAvailabilityStatus(status)) {
+      return res.status(400).json({
+        error: `Status must be one of: ${PROPERTY_AVAILABILITY_STATUSES.join(', ')}.`,
+      });
     }
 
     console.log(`[PropertyStatusUpdate] Query Params: status=${status}, propertyId=${propertyId}, userId=${userId}`);
 
     const result = await query(
-      'UPDATE properties SET availability_status = $1 WHERE id = $2 AND landlord_id = $3 RETURNING *',
+      `UPDATE properties
+          SET availability_status = $1, updated_at = NOW()
+        WHERE id = $2 AND landlord_id = $3
+        RETURNING *`,
       [status, propertyId, userId],
     );
 
@@ -620,8 +619,8 @@ router.patch('/:id/status', requireAuth, authorize('landlord', 'host'), async (r
     }
 
     console.log(`[PropertyStatusUpdate] Successfully updated property ${propertyId}`);
-    clearCachePattern('properties.');
-    clearCachePattern('/api/properties');
+    await clearCachePattern('properties.');
+    await clearCachePattern('/api/properties');
     res.json({ data: normalizePropertyRow(result.rows[0] as Record<string, unknown>) });
   } catch (error) {
     const propertyId = req.params.id;

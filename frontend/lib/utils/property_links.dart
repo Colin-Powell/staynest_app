@@ -74,6 +74,21 @@ class PropertyLinks {
 
     if (!context.mounted || action == null) return false;
     if (action == _PropertyShareAction.copy) {
+      return _copyLink(context, link);
+    }
+
+    try {
+      final result = await Share.share('$shareText: $link');
+      if (result.status == ShareResultStatus.success) return true;
+      if (result.status == ShareResultStatus.dismissed) return false;
+    } catch (_) {
+      // Fall back to the clipboard if the platform share action is unavailable.
+    }
+    return _copyLink(context, link);
+  }
+
+  static Future<bool> _copyLink(BuildContext context, String link) async {
+    try {
       await Clipboard.setData(ClipboardData(text: link));
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -81,10 +96,14 @@ class PropertyLinks {
         );
       }
       return true;
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not copy the property link')),
+        );
+      }
+      return false;
     }
-
-    await Share.share('$shareText: $link');
-    return true;
   }
 
   static Widget _buildShareContent(

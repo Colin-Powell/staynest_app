@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/models/property.dart';
@@ -6,6 +8,10 @@ import 'package:property_app/theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
+import 'package:property_app/services/properties_api.dart';
+import 'package:property_app/utils/property_links.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 class PropertyCard extends StatefulWidget {
   final Property property;
@@ -41,7 +47,28 @@ class PropertyCard extends StatefulWidget {
 }
 
 class _PropertyCardState extends State<PropertyCard> {
+  String? _impressedPropertyId;
+
   bool get _isSaved => AppSession.isSaved(widget.property.id);
+
+  void _recordImpression(double visibleFraction) {
+    final property = widget.property;
+    if (visibleFraction <= 0.5 ||
+        _impressedPropertyId == property.id ||
+        AppSession.isGuest ||
+        AppSession.isLandlord ||
+        property.moderationStatus != 'approved') {
+      return;
+    }
+    _impressedPropertyId = property.id;
+    unawaited(PropertiesApi.recordPropertyImpression(property.id));
+    unawaited(
+      AnalyticsService.logListingInteraction(
+        AnalyticsEvents.listingImpression,
+        listingId: property.id,
+      ),
+    );
+  }
 
   Future<void> _toggleSave() async {
     if (AppSession.isGuest) {
@@ -88,6 +115,26 @@ class _PropertyCardState extends State<PropertyCard> {
     if (mounted && synced) widget.onFavoriteChanged?.call(!wasSaved);
   }
 
+  Future<void> _shareProperty() async {
+    final property = widget.property;
+    try {
+      final shared = await PropertyLinks.showShareOptions(
+        context,
+        propertyId: property.id,
+        propertyName: property.name,
+        imagePath: property.image,
+        shareText: '${property.name} on StayNest',
+      );
+      if (shared) await AnalyticsService.trackPropertyShare(property.id);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not share this property.')),
+        );
+      }
+    }
+  }
+
   Future<void> _showLoginPrompt() async {
     await showDialog<void>(
       context: context,
@@ -115,38 +162,42 @@ class _PropertyCardState extends State<PropertyCard> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: widget.onTap,
-      child: Container(
-        // Dynamic sizing: fixed width for horizontal lists, fills parent width for grids/vertical lists
-        width: widget.isHorizontal ? widget.width : null,
-        margin: EdgeInsets.only(
-          right: widget.isHorizontal ? 20 : 0,
-          bottom: widget.isGrid ? 0 : 24,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize:
-              MainAxisSize.min, // Ensures card tightens dynamically to fit text
-          children: [
-            if (widget.isGrid)
-              AspectRatio(
-                aspectRatio: widget.imageAspectRatio,
-                child: _buildImageContainer(),
-              )
-            else if (widget.isHorizontal)
-              Expanded(child: _buildImageContainer())
-            else
-              AspectRatio(
-                aspectRatio: widget.imageAspectRatio,
-                child: _buildImageContainer(),
-              ),
+    return VisibilityDetector(
+      key: ValueKey('property_card_${widget.property.id}'),
+      onVisibilityChanged: (info) => _recordImpression(info.visibleFraction),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          // Dynamic sizing: fixed width for horizontal lists, fills parent width for grids/vertical lists
+          width: widget.isHorizontal ? widget.width : null,
+          margin: EdgeInsets.only(
+            right: widget.isHorizontal ? 20 : 0,
+            bottom: widget.isGrid ? 0 : 24,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize
+                .min, // Ensures card tightens dynamically to fit text
+            children: [
+              if (widget.isGrid)
+                AspectRatio(
+                  aspectRatio: widget.imageAspectRatio,
+                  child: _buildImageContainer(),
+                )
+              else if (widget.isHorizontal)
+                Expanded(child: _buildImageContainer())
+              else
+                AspectRatio(
+                  aspectRatio: widget.imageAspectRatio,
+                  child: _buildImageContainer(),
+                ),
 
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-            // Text Details Layout
-            _buildDetails(),
-          ],
+              // Text Details Layout
+              _buildDetails(),
+            ],
+          ),
         ),
       ),
     );
@@ -189,16 +240,18 @@ class _PropertyCardState extends State<PropertyCard> {
           Positioned(
             top: 12,
             right: 12,
-            child: widget.detailsAction == null
-                ? widget.imageAction ?? _buildFavoriteButton()
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      widget.detailsAction!,
-                      const SizedBox(width: 8),
-                      widget.imageAction ?? _buildFavoriteButton(),
-                    ],
-                  ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.detailsAction != null) ...[
+                  widget.detailsAction!,
+                  const SizedBox(width: 8),
+                ],
+                _buildShareButton(),
+                const SizedBox(width: 8),
+                widget.imageAction ?? _buildFavoriteButton(),
+              ],
+            ),
           ),
         ],
       ),
@@ -226,32 +279,22 @@ class _PropertyCardState extends State<PropertyCard> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            Row(
-              children: [
-                const Icon(Icons.star_rounded,
-                    size: 16, color: AppColors.gray900),
-                const SizedBox(width: 4),
-                Text(
-                  property.rating > 0
-                      ? property.rating.toStringAsFixed(1)
-                      : "New",
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.gray900,
-                  ),
-                ),
-                if (property.reviews > 0) ...[
+            if (property.rating > 0 && property.reviews > 0)
+              Row(
+                children: [
+                  const Icon(Icons.star_rounded,
+                      size: 16, color: AppColors.gray900),
+                  const SizedBox(width: 4),
                   Text(
-                    ' (${property.reviews})',
+                    '${property.rating.toStringAsFixed(1)} (${property.reviews})',
                     style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      color: AppColors.gray500,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.gray900,
                     ),
                   ),
                 ],
-              ],
-            ),
+              ),
           ],
         ),
         const SizedBox(height: 2),
@@ -328,6 +371,32 @@ class _PropertyCardState extends State<PropertyCard> {
     );
   }
 
+  Widget _buildShareButton() {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.9),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: IconButton(
+        tooltip: 'Share property',
+        onPressed: _shareProperty,
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+        icon: const Icon(Icons.ios_share_rounded, size: 16),
+      ),
+    );
+  }
+
   Widget _buildHighlights(List<String> amenities) {
     if (amenities.isEmpty) return const SizedBox.shrink();
 
@@ -361,15 +430,17 @@ class _PropertyCardState extends State<PropertyCard> {
   }
 
   Widget _buildBadge() {
-    final isUnavailable = !widget.property.isAvailableForBooking;
-    final text = isUnavailable
-        ? widget.property.availabilityLabel
-        : widget.badgeLabel ??
-            (widget.property.rating >= 4.8
-                ? 'Student Favourite'
-                : widget.property.rating == 0
-                    ? 'New'
-                    : '');
+    final availabilityStatus = widget.property.availabilityStatus.toLowerCase();
+    final isUnavailable = const {
+      'fully_booked',
+      'unavailable',
+      'rented',
+      'maintenance',
+    }.contains(availabilityStatus);
+    final text =
+        availabilityStatus == 'unknown' || availabilityStatus == 'available'
+            ? widget.badgeLabel ?? ''
+            : widget.property.availabilityLabel;
 
     if (text.isEmpty) return const SizedBox.shrink();
 

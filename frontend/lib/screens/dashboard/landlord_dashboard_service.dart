@@ -128,20 +128,36 @@ class LandlordDashboardService {
     }
   }
 
-  static Future<bool> updatePropertyStatus(
+  static Future<Map<String, dynamic>> updatePropertyStatus(
       String propertyId, String status) async {
+    final response = await _client.patch(
+      Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId/status'),
+      body: jsonEncode({'status': status}),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      var message = 'Could not update property availability.';
+      try {
+        final body = jsonDecode(response.body);
+        if (body is Map && body['error'] != null) {
+          message = body['error'].toString();
+        }
+      } catch (_) {}
+      throw Exception(message);
+    }
+
+    final decoded = jsonDecode(response.body);
+    final data = decoded is Map ? decoded['data'] : null;
+    if (data is! Map) {
+      throw Exception('The server did not return the updated property.');
+    }
+
     try {
-      await _client.patch(
-          Uri.parse('${AppSession.apiBaseUrl}/properties/$propertyId/status'),
-          body: jsonEncode({'status': status}));
       await CacheEngine.instance
           .invalidate(CacheKeys.propertyDetail(propertyId));
       await CacheEngine.instance.invalidate(CacheKeys.propertyList);
       await CacheEngine.instance.invalidate('landlord_props_me');
-      return true;
-    } catch (e) {
-      return false;
-    }
+    } catch (_) {}
+    return Map<String, dynamic>.from(data);
   }
 
   static Future<bool> updateBookingStatus(

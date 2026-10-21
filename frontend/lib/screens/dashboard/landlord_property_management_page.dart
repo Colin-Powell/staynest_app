@@ -26,6 +26,7 @@ class LandlordPropertyManagementPage extends StatefulWidget {
   final VoidCallback? onNavigateToBookings;
   final VoidCallback? onOpenCalendar;
   final ValueChanged<Map<String, dynamic>>? onEditProperty;
+  final ValueChanged<Map<String, dynamic>>? onPropertyUpdated;
 
   const LandlordPropertyManagementPage({
     super.key,
@@ -34,6 +35,7 @@ class LandlordPropertyManagementPage extends StatefulWidget {
     this.onNavigateToBookings,
     this.onOpenCalendar,
     this.onEditProperty,
+    this.onPropertyUpdated,
   });
 
   @override
@@ -322,8 +324,8 @@ class _LandlordPropertyManagementPageState
     }
   }
 
-  void _showStatusPicker() async {
-    showResponsiveModalSheet<void>(
+  void _showStatusPicker() {
+    showResponsiveModalSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
@@ -341,97 +343,165 @@ class _LandlordPropertyManagementPageState
                     color: _grey.withOpacity(0.3),
                     borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 24),
-            _buildStatusOption('Available', _green),
-            _buildStatusOption('Pending booking', const Color(0xFFF59E0B)),
-            _buildStatusOption('Fully booked', const Color(0xFF3B82F6)),
+            _buildStatusOption('Available', 'available', _green),
             _buildStatusOption(
-                'Temporarily unavailable', const Color(0xFF64748B)),
-            _buildStatusOption('Rented', _grey),
-            _buildStatusOption('Under maintenance', const Color(0xFFEF4444)),
+                'Pending booking', 'pending_booking', const Color(0xFFF59E0B)),
+            _buildStatusOption(
+                'Fully booked', 'fully_booked', const Color(0xFF3B82F6)),
+            _buildStatusOption('Temporarily unavailable', 'unavailable',
+                const Color(0xFF64748B)),
+            _buildStatusOption('Rented', 'rented', _grey),
+            _buildStatusOption(
+                'Under maintenance', 'maintenance', const Color(0xFFEF4444)),
             const SizedBox(height: 20),
           ],
+        ),
+      ),
+    ).then((statusCode) {
+      if (statusCode != null && mounted) {
+        _confirmAvailabilityChange(statusCode);
+      }
+    });
+  }
+
+  Future<void> _confirmAvailabilityChange(String statusCode) async {
+    final propertyId = (_property['id'] ?? _property['propertyId'])?.toString();
+    if (propertyId == null || propertyId.isEmpty) return;
+
+    const labels = {
+      'available': 'Available',
+      'pending_booking': 'Pending booking',
+      'fully_booked': 'Fully booked',
+      'unavailable': 'Temporarily unavailable',
+      'rented': 'Rented',
+      'maintenance': 'Under maintenance',
+    };
+    const effects = {
+      'available':
+          'Tenants can see this listing as available and request a booking.',
+      'pending_booking': 'Tenants will see that a booking request is pending.',
+      'fully_booked': 'New booking requests will be blocked for this listing.',
+      'unavailable':
+          'Tenants will see this listing as unavailable and cannot request it.',
+      'rented':
+          'Tenants will see this listing as rented and cannot request it.',
+      'maintenance':
+          'Tenants will see this listing as under maintenance and cannot request it.',
+    };
+    final nextLabel = labels[statusCode];
+    final currentStatus = _property['availability_status']?.toString();
+    final currentLabel = labels[currentStatus] ?? 'Unknown';
+    if (nextLabel == null || currentStatus == statusCode) {
+      return;
+    }
+
+    var saving = false;
+    String? errorMessage;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => PopScope(
+          canPop: !saving,
+          child: AlertDialog(
+            backgroundColor: _surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Text('Change property availability?',
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700, color: _dark)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_property['title']?.toString() ?? 'This property',
+                    style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600, color: _dark)),
+                const SizedBox(height: 10),
+                Text(
+                  '$currentLabel  →  $nextLabel',
+                  style: GoogleFonts.poppins(color: _green),
+                ),
+                const SizedBox(height: 10),
+                Text(effects[statusCode]!,
+                    style: GoogleFonts.poppins(
+                        color: _grey, fontSize: 13, height: 1.45)),
+                if (errorMessage != null) ...[
+                  const SizedBox(height: 12),
+                  Text(errorMessage!,
+                      style: GoogleFonts.poppins(
+                          color: const Color(0xFFB91C1C), fontSize: 13)),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed:
+                    saving ? null : () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: saving
+                    ? null
+                    : () async {
+                        setDialogState(() {
+                          saving = true;
+                          errorMessage = null;
+                        });
+                        try {
+                          final updated = await LandlordDashboardService
+                              .updatePropertyStatus(
+                            propertyId,
+                            statusCode,
+                          );
+                          if (!mounted || !dialogContext.mounted) return;
+                          setState(() => _property.addAll(updated));
+                          widget.onPropertyUpdated?.call(updated);
+                          Navigator.of(dialogContext).pop();
+                          ScaffoldMessenger.of(context)
+                            ..hideCurrentSnackBar()
+                            ..showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Property marked as $nextLabel.',
+                                ),
+                              ),
+                            );
+                        } catch (error) {
+                          if (!dialogContext.mounted) return;
+                          setDialogState(() {
+                            saving = false;
+                            errorMessage = error
+                                .toString()
+                                .replaceFirst('Exception: ', '');
+                          });
+                        }
+                      },
+                style: FilledButton.styleFrom(backgroundColor: _green),
+                child: saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Confirm'),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Future<bool> _showStatusConfirmationDialog(String status) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: _surface,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            title: Text('Mark as $status?',
-                style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w700,
-                    color: _dark,
-                    letterSpacing: -0.5)),
-            content: Text(
-                'This will update the availability shown to tenants and prevent new booking requests. Are you sure?',
-                style: GoogleFonts.poppins(color: _grey, fontSize: 14)),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text('Cancel',
-                      style: GoogleFonts.poppins(
-                          color: _dark, fontWeight: FontWeight.w600))),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: _green,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16))),
-                child: Text('Confirm',
-                    style: GoogleFonts.poppins(
-                        color: _surface, fontWeight: FontWeight.w700)),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
-  Widget _buildStatusOption(String label, Color color) {
+  Widget _buildStatusOption(String label, String statusCode, Color color) {
     return ListTile(
       leading: Icon(PhosphorIconsFill.circle, color: color, size: 16),
       title: Text(label,
           style: GoogleFonts.poppins(
               fontWeight: FontWeight.w500, color: _dark, fontSize: 15)),
-      onTap: () async {
-        if (label == 'Rented' || label == 'Temporarily unavailable') {
-          final confirmed = await _showStatusConfirmationDialog(label);
-          if (!confirmed) return;
-        }
-
-        final statusCode = {
-          'Available': 'available',
-          'Pending booking': 'pending_booking',
-          'Fully booked': 'fully_booked',
-          'Temporarily unavailable': 'unavailable',
-          'Rented': 'rented',
-          'Under maintenance': 'maintenance',
-        }[label];
-        if (statusCode == null) return;
-
-        final propertyId =
-            (_property['id'] ?? _property['propertyId'])?.toString();
-        if (propertyId == null || propertyId.isEmpty) return;
-
-        final success = await LandlordDashboardService.updatePropertyStatus(
-            propertyId, statusCode);
-        if (success && mounted) {
-          setState(() => _property['availability_status'] = statusCode);
-          _showActionSuccess('Property status updated to $label.');
-        } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('Failed to update property status to $label.')),
-          );
-        }
-        if (context.mounted) Navigator.of(context).maybePop();
-      },
+      onTap: () => Navigator.of(context).pop(statusCode),
     );
   }
 
@@ -848,7 +918,7 @@ class _LandlordPropertyManagementPageState
           ),
           const SizedBox(width: 6),
           Text(
-            isHealthy ? 'Trending' : 'Needs Work',
+            isHealthy ? 'Healthy' : 'Needs Work',
             style: GoogleFonts.poppins(
               fontSize: 11,
               fontWeight: FontWeight.w700,
