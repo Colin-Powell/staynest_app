@@ -11,6 +11,7 @@ import 'package:property_app/models/property_taxonomy.dart';
 import 'package:property_app/models/review.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/services/booking_service.dart';
+import 'package:property_app/services/message_service.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
@@ -36,7 +37,7 @@ class PropertyDetails extends StatefulWidget {
   final VoidCallback? onViewLocation;
   final VoidCallback? onViewLandlord;
   final VoidCallback? onBookNow;
-  final Function(String userId, String name, String avatar)? onMessage;
+  final ValueChanged<ConversationModel>? onMessage;
   final Future<void> Function({VoidCallback? onAuthenticated})?
       onRequireAuthentication;
 
@@ -77,6 +78,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   bool _checkingBooking = true;
   bool _hasBookingHistory = false;
   String? _activeBookingStatus;
+  bool _startingConversation = false;
 
   List<Review> _reviews = [];
   List<Property> _landlordProperties = [];
@@ -239,31 +241,59 @@ class _PropertyDetailsState extends State<PropertyDetails> {
     if (shared) await AnalyticsService.trackPropertyShare(widget.property.id);
   }
 
-  void _handleMessageTap() {
+  Future<void> _handleMessageTap() async {
+    if (_startingConversation) return;
     AnalyticsService.logListingInteraction(
       AnalyticsEvents.listingContact,
       listingId: widget.property.id,
       source: 'chat',
     );
     if (AppSession.isGuest) {
-      widget.onRequireAuthentication?.call(
-        onAuthenticated: () => widget.onMessage?.call(
-          widget.property.agent.userId,
-          widget.property.agent.name,
-          widget.property.agent.avatar,
-        ),
-      );
+      widget.onRequireAuthentication
+          ?.call(onAuthenticated: _startPropertyConversation);
       return;
     }
-    if (widget.onMessage != null) {
-      widget.onMessage!(widget.property.agent.userId,
-          widget.property.agent.name, widget.property.agent.avatar);
-    } else {
-      Navigator.pushNamed(context, '/chat', arguments: <String, String>{
-        'userId': widget.property.agent.userId,
-        'name': widget.property.agent.name,
-        'avatar': widget.property.agent.avatar,
-      });
+    await _startPropertyConversation();
+  }
+
+  Future<void> _startPropertyConversation() async {
+    if (_startingConversation) return;
+    setState(() => _startingConversation = true);
+    try {
+      final conversation = await MessageService.instance
+          .initiatePropertyConversation(widget.property.id);
+      if (!mounted) return;
+      if (widget.onMessage != null) {
+        widget.onMessage!(conversation);
+      } else {
+        Navigator.pushNamed(context, '/chat', arguments: {
+          'userId': conversation.userId,
+          'name': conversation.userName,
+          'avatar': conversation.userAvatar ?? '',
+          'conversationId': conversation.conversationId,
+          'contextType': conversation.contextType,
+          if (conversation.property != null)
+            'property': {
+              'id': conversation.property!.id,
+              'title': conversation.property!.title,
+              'location': conversation.property!.location,
+              'image_url': conversation.property!.imageUrl,
+              'price': conversation.property!.price,
+              'availability_status': conversation.property!.availabilityStatus,
+            },
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Could not start a conversation about this property.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _startingConversation = false);
     }
   }
 

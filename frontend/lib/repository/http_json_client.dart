@@ -153,8 +153,9 @@ class HttpJsonClient {
   Future<http.Response> get(
     Uri uri, {
     Map<String, String>? headers,
+    bool bypassCache = false,
   }) async {
-    final ttl = CacheEngine.requestTtl(uri);
+    final ttl = bypassCache ? null : CacheEngine.requestTtl(uri);
     Future<http.Response> fetch() => _sendWithOptionalRetry(
           () async => _client.get(uri, headers: {..._authHeaders, ...?headers}),
         );

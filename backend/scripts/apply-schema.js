@@ -23,9 +23,14 @@ async function applySchema() {
   });
 
   try {
-    const schemaPath = path.join(__dirname, 'init-db.sql');
-    const sql = fs.readFileSync(schemaPath, 'utf8');
-    await pool.query(sql);
+    for (const schemaFile of [
+      'init-db.sql',
+      'add-message-conversations.sql',
+    ]) {
+      const schemaPath = path.join(__dirname, schemaFile);
+      const sql = fs.readFileSync(schemaPath, 'utf8');
+      await pool.query(sql);
+    }
     console.log('✅ Schema applied successfully');
   } catch (err) {
     console.error(' Failed to apply schema:', err.message);

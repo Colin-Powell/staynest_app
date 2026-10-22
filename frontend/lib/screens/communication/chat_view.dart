@@ -6,6 +6,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/services/message_service.dart';
+import 'package:property_app/widgets/property_conversation_header.dart';
 import 'package:uuid/uuid.dart';
 import 'package:property_app/models/communication_models.dart';
 import 'package:property_app/utils/presence_format.dart';
@@ -23,6 +24,8 @@ class ChatView extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback? onCall;
   final String userId;
+  final String? conversationId;
+  final ConversationModel? initialConversation;
   final String name;
   final String avatar;
   final bool isOnline;
@@ -32,6 +35,8 @@ class ChatView extends StatefulWidget {
     super.key,
     required this.onBack,
     required this.userId,
+    this.conversationId,
+    this.initialConversation,
     required this.name,
     required this.avatar,
     this.isOnline = false,
@@ -65,6 +70,11 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   Timer? _presenceRefreshTimer;
 
   final List<ChatMessage> _messages = [];
+  late String _peerUserId;
+  ConversationModel? _conversation;
+
+  String? get _activeConversationId =>
+      widget.conversationId ?? _conversation?.conversationId;
 
   // Selection Mode State
   bool _isSelectionMode = false;
@@ -73,10 +83,13 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _peerUserId = widget.userId;
+    _conversation = widget.initialConversation;
     _isOtherOnline = widget.isOnline;
     _lastSeenAt = widget.lastSeenAt;
-    final latestPresence =
-        SocketService.instance.latestPresenceFor(widget.userId);
+    final latestPresence = _peerUserId.isEmpty
+        ? null
+        : SocketService.instance.latestPresenceFor(_peerUserId);
     if (latestPresence != null) {
       _isOtherOnline = latestPresence['online'] == true;
       _lastSeenAt = DateTime.tryParse(
@@ -116,16 +129,11 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
     _fetchMessages();
 
-    // State action: mark messages from this conversation partner as read
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      try {
-        await MessageService.instance.markAsRead([widget.userId]);
-      } catch (_) {}
-    });
-
     // Listen to socket messages
     _socketSubscription = SocketService.instance.messages.listen((msg) {
-      if (msg.from != widget.userId) return;
+      if (msg.from != _peerUserId ||
+          (_activeConversationId != null &&
+              msg.conversationId != _activeConversationId)) return;
 
       final socketId = msg.id.trim();
       final socketText = msg.text.trim();
@@ -151,13 +159,13 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     });
 
     _typingSubscription = SocketService.instance.typing.listen((data) {
-      if (data['userId'] == widget.userId) {
+      if (data['userId'] == _peerUserId) {
         if (mounted) setState(() => _isOtherTyping = data['isTyping'] == true);
       }
     });
 
     _presenceSubscription = SocketService.instance.presence.listen((data) {
-      if (data['userId']?.toString() != widget.userId || !mounted) return;
+      if (data['userId']?.toString() != _peerUserId || !mounted) return;
       setState(() {
         _isOtherOnline = data['online'] == true;
         _lastSeenAt = DateTime.tryParse(data['lastSeenAt']?.toString() ?? '');
@@ -195,10 +203,13 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   void _handleTypingStatus() {
     if (_typingDebounce?.isActive ?? false) _typingDebounce!.cancel();
 
-    SocketService.instance.sendTyping(to: widget.userId, isTyping: true);
+    if (_peerUserId.isEmpty) return;
+    SocketService.instance.sendTyping(to: _peerUserId, isTyping: true);
 
     _typingDebounce = Timer(const Duration(milliseconds: 1500), () {
-      SocketService.instance.sendTyping(to: widget.userId, isTyping: false);
+      if (_peerUserId.isNotEmpty) {
+        SocketService.instance.sendTyping(to: _peerUserId, isTyping: false);
+      }
     });
   }
 
@@ -231,14 +242,29 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
   Future<void> _performSave(String messageId, String text) async {
     try {
-      final realId = await MessageService.instance
-          .saveMessage(toUserId: widget.userId, text: text);
+      final savedMessage = await MessageService.instance.saveMessage(
+        toUserId: _peerUserId,
+        text: text,
+        conversationId: _activeConversationId,
+      );
       if (!mounted) return;
+      if (_conversation?.conversationId == null &&
+          savedMessage.conversationId != null) {
+        _conversation = _conversation?.copyWith(
+              conversationId: savedMessage.conversationId,
+            ) ??
+            ConversationModel(
+              conversationId: savedMessage.conversationId,
+              userId: _peerUserId,
+              userName: widget.name,
+              userAvatar: widget.avatar,
+            );
+      }
       final idx = _messages.indexWhere((m) => m.id == messageId);
       if (idx != -1) {
         setState(() {
-          _messages[idx] =
-              _messages[idx].copyWith(id: realId, status: MessageStatus.sent);
+          _messages[idx] = _messages[idx]
+              .copyWith(id: savedMessage.id, status: MessageStatus.sent);
         });
       }
     } catch (err) {
@@ -266,8 +292,24 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
   Future<void> _fetchMessages() async {
     try {
-      final messages =
-          await MessageService.instance.fetchConversation(widget.userId);
+      final conversationId = _activeConversationId;
+      final List<MessageModel> messages;
+      if (conversationId != null && conversationId.isNotEmpty) {
+        final history =
+            await MessageService.instance.fetchConversationById(conversationId);
+        _conversation = history.conversation;
+        _peerUserId = history.conversation.userId;
+        messages = history.messages;
+      } else {
+        final history =
+            await MessageService.instance.fetchGeneralConversationHistory(
+          _peerUserId,
+          userName: widget.name,
+          userAvatar: widget.avatar,
+        );
+        _conversation = history.conversation;
+        messages = history.messages;
+      }
       if (!mounted) return;
 
       messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
@@ -276,9 +318,9 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
         for (final msg in messages) {
           final chatMsg = ChatMessage(
             id: msg.id,
-            sender: msg.fromUserId == widget.userId
-                ? ChatSender.them
-                : ChatSender.me,
+            sender: msg.fromUserId == (AppSession.currentUserId ?? '')
+                ? ChatSender.me
+                : ChatSender.them,
             text: msg.text,
             time: _formatTime(msg.createdAt.millisecondsSinceEpoch),
           );
@@ -288,13 +330,33 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
           }
         }
       });
+      await MessageService.instance.markAsRead(
+        _activeConversationId == null ? [_peerUserId] : const [],
+        conversationIds:
+            _activeConversationId == null ? const [] : [_activeConversationId!],
+      );
       _scrollToBottom();
     } catch (err) {
       setState(() {});
     }
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool force = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        final pos = _scrollController.position;
+        final isNearBottom = (pos.maxScrollExtent - pos.pixels) <= 150;
+        if (force || isNearBottom) {
+          _scrollController.animateTo(
+            pos.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      }
+    });
+  }
+  void _oldScrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -403,6 +465,9 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                           ? _buildSelectionHeader()
                           : _buildNormalHeader(),
                     ),
+                    if (_conversation?.property != null)
+                      PropertyConversationHeader(
+                          property: _conversation!.property!),
                     Expanded(child: _buildChatArea()),
                     // If not selecting, show normal input area. We use a transparent box to keep scroll positioning identical when hidden
                     AnimatedCrossFade(
@@ -428,6 +493,8 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   // ─── Headers ────────────────────────────────────────────────────────────────
 
   Widget _buildNormalHeader() {
+    final displayName = _conversation?.userName ?? widget.name;
+    final displayAvatar = _conversation?.userAvatar ?? widget.avatar;
     return Container(
       key: const ValueKey('normal_header'),
       padding: const EdgeInsets.fromLTRB(20, 16, 24, 16),
@@ -446,7 +513,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
           const SizedBox(width: 16),
           ClipOval(
             child: AppSession.buildAvatar(
-              widget.avatar,
+              displayAvatar,
               width: 48,
               height: 48,
               fit: BoxFit.cover,
@@ -458,7 +525,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.name,
+                  displayName,
                   style: GoogleFonts.poppins(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
@@ -591,7 +658,10 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
         final Widget bubble = msg.sender == ChatSender.me
             ? _MyBubble(message: msg, onRetry: () => _retryMessage(msg))
-            : _TheirBubble(message: msg, avatar: widget.avatar);
+            : _TheirBubble(
+                message: msg,
+                avatar: _conversation?.userAvatar ?? widget.avatar,
+              );
 
         return _buildStaggered(
           index: index,

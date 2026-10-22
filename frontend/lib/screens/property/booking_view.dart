@@ -656,8 +656,7 @@ class _BookingViewState extends State<BookingView> {
   Future<void> _submitBooking() async {
     if (_selectedRange == null || _isSubmitting || _property == null) return;
 
-    if (widget.embedded) {
-      setState(() => _showPayment = true);
+    if (false) {
       return;
     }
 
@@ -669,24 +668,37 @@ class _BookingViewState extends State<BookingView> {
     bool checkoutComplete = false;
     String? errorMessage;
     try {
-      checkoutComplete = await Navigator.push<bool>(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PropertyPaymentPage(
-                property: _property!,
-                checkIn: _selectedRange!.start,
-                checkOut: _selectedRange!.end,
-                selectedTime: _selectedTime,
-                notes: _notesController.text.trim().isEmpty
-                    ? null
-                    : _notesController.text.trim(),
-                idempotencyKey: _idempotencyKey,
+      await BookingService.createBooking(
+        propertyId: widget.propertyId,
+        checkIn: _selectedRange!.start,
+        checkOut: _selectedRange!.end,
+        totalPrice: (_property?.price ?? 0).toDouble(),
+        notes: _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
+        idempotencyKey: _idempotencyKey,
+      );
+      checkoutComplete = true;
+      if (false)
+        checkoutComplete = await Navigator.push<bool>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PropertyPaymentPage(
+                  property: _property!,
+                  checkIn: _selectedRange!.start,
+                  checkOut: _selectedRange!.end,
+                  selectedTime: _selectedTime,
+                  notes: _notesController.text.trim().isEmpty
+                      ? null
+                      : _notesController.text.trim(),
+                  idempotencyKey: _idempotencyKey,
+                ),
               ),
-            ),
-          ) ??
-          false;
+            ) ??
+            false;
     } catch (error) {
       errorMessage = _bookingErrorMessage(error);
+      _load();
     }
 
     if (mounted) {
@@ -695,6 +707,7 @@ class _BookingViewState extends State<BookingView> {
         AnalyticsService.logEvent(AnalyticsEvents.bookingCompleted, {
           'listing_id': widget.propertyId,
         });
+
         if (widget.embedded) {
           setState(() => _showConfirmation = true);
         } else {
@@ -1010,7 +1023,7 @@ class _BookingViewState extends State<BookingView> {
                       ),
                     )
                   : Text(
-                      'Continue to payment',
+                      'Submit Booking Request',
                       style: GoogleFonts.poppins(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
@@ -1046,7 +1059,7 @@ class _BookingViewState extends State<BookingView> {
 
   @override
   Widget build(BuildContext context) {
-    if (_showPayment && _property != null && _selectedRange != null) {
+    if (false && _showPayment && _property != null && _selectedRange != null) {
       return PropertyPaymentPage(
         property: _property!,
         checkIn: _selectedRange!.start,
@@ -1363,7 +1376,7 @@ class _BookingViewState extends State<BookingView> {
                                       child: CircularProgressIndicator(
                                           color: Colors.white,
                                           strokeWidth: 2.5))
-                                  : Text('Confirm Booking',
+                                  : Text('Submit Booking Request',
                                       style: GoogleFonts.poppins(
                                           color: Colors.white,
                                           fontSize: 16,
@@ -1418,7 +1431,7 @@ class BookingConfirmedPage extends StatelessWidget {
         ),
         const SizedBox(height: 32),
         Text(
-          'Payment received',
+          'Booking request submitted!',
           textAlign: TextAlign.center,
           style: GoogleFonts.poppins(
             fontSize: 28,
@@ -1428,7 +1441,7 @@ class BookingConfirmedPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          'Your paid booking request has been sent to the host for approval.',
+          'The host will review your request and get back to you.',
           textAlign: TextAlign.center,
           style: GoogleFonts.poppins(
             fontSize: 15,

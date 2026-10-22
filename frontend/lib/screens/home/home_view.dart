@@ -286,7 +286,7 @@ class _HomeViewState extends State<HomeView> {
 
                       return sliverWidgets;
                     }(),
-                  if (kIsWeb) const SliverToBoxAdapter(child: AppFooter()),
+
                   const SliverToBoxAdapter(child: SizedBox(height: 120)),
                 ],
               ),

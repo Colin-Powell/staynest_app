@@ -2,7 +2,7 @@ import { PoolClient } from 'pg';
 import { pool } from '../db.js';
 import { calculatePlatformBookingFee } from './booking_fee.js';
 import { getGeneralPlatformSettings } from './platform_settings_service.js';
-import { isPropertyBookable } from './property_availability.js';
+import { isPropertyBookable, getPropertyIneligibilityReason } from './property_availability.js';
 
 type LedgerEntry = {
   userId: string;
@@ -181,7 +181,8 @@ export async function createAndPayBookingFromWallet(input: {
       throw new Error('Landlords cannot book their own property.');
     }
     if (!isPropertyBookable(property.availability_status, property.status)) {
-      throw new Error('Property is not available for booking.');
+      const reason = getPropertyIneligibilityReason(property.availability_status, property.status);
+      throw new Error(reason ?? 'This property is currently unavailable and cannot accept new booking requests.');
     }
 
     const overlap = await client.query(

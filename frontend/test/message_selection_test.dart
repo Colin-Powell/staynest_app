@@ -53,4 +53,42 @@ void main() {
 
     expect(selected, isNull);
   });
+
+  test('selects a property-specific thread when a partner has multiple chats',
+      () {
+    final propertyA = ConversationModel.fromJson({
+      'conversation_id': 'thread-a',
+      'user_id': 'landlord',
+      'user_name': 'Host',
+      'context_type': 'property',
+      'property': {
+        'id': 'property-a',
+        'title': 'Coast apartment',
+        'location': 'Kilifi',
+        'price': 18000,
+        'availability_status': 'available',
+      },
+    });
+    final propertyB = ConversationModel.fromJson({
+      'conversation_id': 'thread-b',
+      'user_id': 'landlord',
+      'user_name': 'Host',
+      'context_type': 'property',
+      'property': {'id': 'property-b', 'title': 'Nairobi studio'},
+    });
+
+    final selected = selectConversation<ConversationModel>(
+      conversations: [propertyA, propertyB],
+      userIdOf: (conversation) => conversation.userId,
+      unreadCountOf: (conversation) => conversation.unreadCount,
+      selectedUserId: 'landlord',
+      selectedConversationId: 'thread-b',
+      conversationIdOf: (conversation) => conversation.conversationId ?? '',
+    );
+
+    expect(selected?.conversationId, 'thread-b');
+    expect(propertyA.property?.id, 'property-a');
+    expect(propertyA.property?.location, 'Kilifi');
+    expect(propertyA.property?.price, 18000);
+  });
 }

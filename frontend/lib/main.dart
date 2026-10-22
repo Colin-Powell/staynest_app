@@ -260,16 +260,31 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
   }
 
   Widget _publicInfoPageWithFooter(Widget page) {
-    if (!kIsWeb) return page;
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          Expanded(child: page),
-          const AppFooter(),
-        ],
-      ),
+    return Builder(
+      builder: (context) {
+        final isDesktop = kIsWeb && MediaQuery.sizeOf(context).width >= 768;
+        if (!isDesktop) return page;
+        return Scaffold(
+          backgroundColor: Colors.white,
+          body: Column(
+            children: [
+              Expanded(child: page),
+              const AppFooter(),
+            ],
+          ),
+        );
+      },
     );
+    if (false)
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: Column(
+          children: [
+            Expanded(child: page),
+            const AppFooter(),
+          ],
+        ),
+      );
   }
 
   Future<void> _completeModalLogin(
@@ -429,7 +444,7 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
     final appTheme = AppTheme.themeForRole(_role);
 
     return MaterialApp(
-      title: 'Property App',
+      title: 'StayNest',
       navigatorKey: navigatorKey,
       navigatorObservers: [AnalyticsObserver()],
       debugShowCheckedModeBanner: false,
@@ -450,9 +465,13 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
               Uri.base.pathSegments.isNotEmpty &&
               Uri.base.pathSegments.first == 'properties'
           ? Uri.base.path
-          : kIsWeb && AppSession.webSessionExpiredAtStartup
-              ? '/login'
-              : '/',
+          : kIsWeb &&
+                  Uri.base.pathSegments.length == 2 &&
+                  Uri.base.pathSegments.first == 'chat'
+              ? Uri.base.path
+              : kIsWeb && AppSession.webSessionExpiredAtStartup
+                  ? '/login'
+                  : '/',
       routes: {
         '/': (context) {
           final isDesktop = MediaQuery.sizeOf(context).width >= 768;
@@ -819,8 +838,42 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
       barrierColor: Colors.black.withValues(alpha: 0.4),
       pageBuilder: (context, animation, secondaryAnimation) {
         final size = MediaQuery.sizeOf(context);
+        final isChatDesktop = size.width >= 768;
         final width = (size.width - 64).clamp(480.0, 1040.0).toDouble();
         final height = (size.height - 64).clamp(420.0, 900.0).toDouble();
+        final content = buildScreen(context);
+        if (isChatDesktop) {
+          return Align(
+            alignment: Alignment.bottomRight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 24, bottom: 24),
+              child: Material(
+                elevation: 16,
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                clipBehavior: Clip.antiAlias,
+                child: Container(
+                  width: (size.width - 48).clamp(360.0, 460.0),
+                  height: (size.height - 48).clamp(480.0, 680.0),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                    border:
+                        Border.all(color: Colors.black.withValues(alpha: 0.1)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.14),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: content,
+                ),
+              ),
+            ),
+          );
+        }
         return Center(
           child: Dialog(
             insetPadding: EdgeInsets.zero,
@@ -898,8 +951,42 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
         );
 
         final size = MediaQuery.sizeOf(context);
+        final isChatDesktop = size.width >= 768;
         final width = (size.width - 48).clamp(360.0, 600.0).toDouble();
         final height = (size.height - 48).clamp(360.0, 820.0).toDouble();
+        final content = screen;
+        if (isChatDesktop) {
+          return Align(
+            alignment: Alignment.bottomRight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 24, bottom: 24),
+              child: Material(
+                elevation: 16,
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                clipBehavior: Clip.antiAlias,
+                child: Container(
+                  width: (size.width - 48).clamp(360.0, 460.0),
+                  height: (size.height - 48).clamp(480.0, 680.0),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                    border:
+                        Border.all(color: Colors.black.withValues(alpha: 0.1)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.14),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: content,
+                ),
+              ),
+            ),
+          );
+        }
         return Center(
           child: Dialog(
             insetPadding: EdgeInsets.zero,
@@ -982,9 +1069,16 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
   }
 
   Route<dynamic>? _buildMessageModalRoute(RouteSettings settings) {
-    if (settings.name != '/chat' && settings.name != '/messages') return null;
+    final directConversationMatch =
+        RegExp(r'^/chat/([0-9a-f-]+)$', caseSensitive: false)
+            .firstMatch(settings.name ?? '');
+    if (settings.name != '/chat' &&
+        settings.name != '/messages' &&
+        directConversationMatch == null) {
+      return null;
+    }
 
-    final isChat = settings.name == '/chat';
+    final isChat = settings.name == '/chat' || directConversationMatch != null;
     final rawArguments = settings.arguments;
     final arguments = rawArguments is Map ? rawArguments : const {};
 
@@ -995,6 +1089,7 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
       barrierColor: Colors.black.withValues(alpha: 0.36),
       pageBuilder: (context, animation, secondaryAnimation) {
         final size = MediaQuery.sizeOf(context);
+        final isChatDesktop = size.width >= 768;
         final inset = size.width < 768 ? 8.0 : 24.0;
         final width = (size.width - inset * 2)
             .clamp(0.0, isChat ? 680.0 : 860.0)
@@ -1010,6 +1105,13 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
             userId: arguments['userId']?.toString() ?? '',
             name: arguments['name']?.toString() ?? 'Agent',
             avatar: arguments['avatar']?.toString() ?? '',
+            conversationId: directConversationMatch?.group(1) ??
+                arguments['conversationId']?.toString(),
+            initialConversation: arguments['conversation'] is Map
+                ? ConversationModel.fromJson(
+                    Map<String, dynamic>.from(arguments['conversation'] as Map),
+                  )
+                : null,
             isOnline: arguments['isOnline'] == true,
             lastSeenAt: DateTime.tryParse(
               arguments['lastSeenAt']?.toString() ?? '',
@@ -1063,15 +1165,20 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
         } else {
           content = MessagesViewScreen(
             onClose: () => Navigator.of(context).pop(),
-            onSelectChat: (userId, name, avatar, isOnline, lastSeenAt) {
+            onSelectChat:
+                (userId, name, avatar, isOnline, lastSeenAt, conversation) {
               Navigator.of(context).pop();
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 navigatorKey.currentState?.pushNamed(
-                  '/chat',
+                  conversation?.conversationId == null
+                      ? '/chat'
+                      : '/chat/${conversation!.conversationId}',
                   arguments: {
                     'userId': userId,
                     'name': name,
                     'avatar': avatar ?? '',
+                    if (conversation?.conversationId != null)
+                      'conversationId': conversation!.conversationId,
                     'isOnline': isOnline,
                     'lastSeenAt': lastSeenAt?.toIso8601String(),
                   },
@@ -1081,6 +1188,38 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
           );
         }
 
+        if (isChatDesktop) {
+          return Align(
+            alignment: Alignment.bottomRight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 24, bottom: 24),
+              child: Material(
+                elevation: 16,
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                clipBehavior: Clip.antiAlias,
+                child: Container(
+                  width: (size.width - 48).clamp(360.0, 460.0),
+                  height: (size.height - 48).clamp(480.0, 680.0),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                    border:
+                        Border.all(color: Colors.black.withValues(alpha: 0.1)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.14),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: content,
+                ),
+              ),
+            ),
+          );
+        }
         return Center(
           child: Dialog(
             insetPadding: EdgeInsets.zero,
@@ -1471,7 +1610,8 @@ class _AppShellState extends State<AppShell> {
               onSelectionModeChanged: (isSelecting) {
                 setState(() => _isMessageSelectionMode = isSelecting);
               },
-              onSelectChat: (userId, name, avatar, isOnline, lastSeenAt) {
+              onSelectChat:
+                  (userId, name, avatar, isOnline, lastSeenAt, conversation) {
                 closeSheet();
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _openChat(
@@ -1480,6 +1620,8 @@ class _AppShellState extends State<AppShell> {
                     avatar,
                     isOnline: isOnline,
                     lastSeenAt: lastSeenAt,
+                    conversationId: conversation?.conversationId,
+                    conversation: conversation,
                   );
                 });
               },
@@ -1766,15 +1908,37 @@ class _AppShellState extends State<AppShell> {
     String userId,
     String name,
     String? avatar, {
+    String? conversationId,
+    ConversationModel? conversation,
     bool isOnline = false,
     DateTime? lastSeenAt,
   }) {
     Navigator.of(context, rootNavigator: true).pushNamed(
-      '/chat',
+      conversationId == null ? '/chat' : '/chat/$conversationId',
       arguments: {
         'userId': userId,
         'name': name,
         'avatar': avatar ?? '',
+        if (conversationId != null) 'conversationId': conversationId,
+        if (conversation != null)
+          'conversation': {
+            'conversation_id': conversation.conversationId,
+            'context_type': conversation.contextType,
+            'property': conversation.property == null
+                ? null
+                : {
+                    'id': conversation.property!.id,
+                    'title': conversation.property!.title,
+                    'location': conversation.property!.location,
+                    'image_url': conversation.property!.imageUrl,
+                    'price': conversation.property!.price,
+                    'availability_status':
+                        conversation.property!.availabilityStatus,
+                  },
+            'user_id': conversation.userId,
+            'user_name': conversation.userName,
+            'user_avatar': conversation.userAvatar,
+          },
         'isOnline': isOnline,
         'lastSeenAt': lastSeenAt?.toIso8601String(),
       },
@@ -1882,8 +2046,8 @@ class _AppShellState extends State<AppShell> {
                     borderRadius: BorderRadius.circular(16),
                     child: MessagesViewScreen(
                       onClose: _closeDesktopPanels,
-                      onSelectChat:
-                          (userId, name, avatarUrl, isOnline, lastSeenAt) {
+                      onSelectChat: (userId, name, avatarUrl, isOnline,
+                          lastSeenAt, conversation) {
                         _closeDesktopPanels();
                         _openChat(
                           userId,
@@ -1891,6 +2055,8 @@ class _AppShellState extends State<AppShell> {
                           avatarUrl,
                           isOnline: isOnline,
                           lastSeenAt: lastSeenAt,
+                          conversationId: conversation?.conversationId,
+                          conversation: conversation,
                         );
                       },
                     ),
@@ -2094,7 +2260,13 @@ class _AppShellState extends State<AppShell> {
         onViewAmenities: _openAmenities,
         onViewLocation: _openLocation,
         onViewLandlord: _openLandlordInfo,
-        onMessage: (userId, name, avatar) => _openChat(userId, name, avatar),
+        onMessage: (conversation) => _openChat(
+          conversation.userId,
+          conversation.userName,
+          conversation.userAvatar,
+          conversationId: conversation.conversationId,
+          conversation: conversation,
+        ),
         onBookNow: () => setState(() => _bookingPropertyId = property.id),
         onRequireAuthentication: _requireAuthentication,
       ),

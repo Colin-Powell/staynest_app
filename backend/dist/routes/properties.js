@@ -806,7 +806,89 @@ router.post('/', requireAuth, authorize('landlord', 'host'), async (req, res, ne
 router.post('/from-listing', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
     await handleCreateProperty(req, res, next, 'PropertyCreateFromListing');
 });
-router.put('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
+const handleUpdateProperty = async (req, res, next) => {
+    try {
+        const propRes = await query(`SELECT * FROM properties WHERE id = $1`, [req.params.id]);
+        if (propRes.rowCount === 0) {
+            return res.status(404).json({ error: 'Property not found.' });
+        }
+        const currentProp = propRes.rows[0];
+        const isOwner = currentProp.landlord_id === req.auth?.id;
+        const isAdmin = req.auth?.role === 'admin' || req.auth?.role === 'super_admin';
+        if (!isOwner && !isAdmin) {
+            return res.status(403).json({ error: 'You are not authorized to edit this property.' });
+        }
+        const numericFields = ['price', 'service_charges', 'security_deposit', 'bedrooms', 'bathrooms', 'area', 'lat', 'lng'];
+        const stringFields = [
+            'title', 'description', 'category', 'city', 'address', 'country', 'county',
+            'sub_county', 'ward', 'town', 'neighborhood', 'estate_village', 'road',
+            'landmark', 'minimum_stay', 'available_from', 'image_url', 'video_url'
+        ];
+        const jsonFields = ['images', 'amenities'];
+        const updates = [];
+        const values = [];
+        for (const field of stringFields) {
+            if (req.body[field] !== undefined) {
+                values.push(req.body[field] === null || req.body[field] === '' ? null : String(req.body[field]).trim());
+                updates.push(`${field} = $${values.length}`);
+            }
+        }
+        for (const field of numericFields) {
+            if (req.body[field] !== undefined) {
+                if (req.body[field] === null || req.body[field] === '') {
+                    values.push(null);
+                    updates.push(`${field} = $${values.length}`);
+                }
+                else {
+                    const num = Number(req.body[field]);
+                    if (Number.isFinite(num)) {
+                        values.push(num);
+                        updates.push(`${field} = $${values.length}`);
+                    }
+                }
+            }
+        }
+        for (const field of jsonFields) {
+            if (req.body[field] !== undefined) {
+                const val = req.body[field];
+                const jsonStr = typeof val === 'string' ? val : JSON.stringify(val);
+                values.push(jsonStr);
+                updates.push(`${field} = $${values.length}::jsonb`);
+            }
+        }
+        if (req.body.availability_status !== undefined) {
+            const allowed = ['available', 'unavailable', 'pending_booking', 'rented', 'maintenance', 'fully_booked'];
+            if (allowed.includes(req.body.availability_status)) {
+                values.push(req.body.availability_status);
+                updates.push(`availability_status = $${values.length}`);
+            }
+        }
+        if (isAdmin && req.body.status !== undefined) {
+            const allowedStatus = ['approved', 'pending_review', 'rejected', 'suspended'];
+            if (allowedStatus.includes(req.body.status)) {
+                values.push(req.body.status);
+                updates.push(`status = $${values.length}`);
+            }
+        }
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No property fields supplied to update.' });
+        }
+        updates.push('updated_at = NOW()');
+        values.push(req.params.id);
+        const result = await query(`UPDATE properties SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`, values);
+        clearCachePattern('properties.');
+        clearCachePattern('/api/properties');
+        clearCachePattern('/properties');
+        clearCachePattern(`property:${req.params.id}`);
+        res.json({ data: normalizePropertyRow(result.rows[0]) });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+router.put('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host', 'admin', 'super_admin'), handleUpdateProperty);
+router.patch('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host', 'admin', 'super_admin'), handleUpdateProperty);
+router.all('/_unused_property_update_dummy', async (req, res, next) => {
     try {
         const fields = ['title', 'description', 'category', 'city', 'address', 'country', 'county', 'sub_county', 'ward', 'town', 'neighborhood', 'estate_village', 'road', 'landmark', 'price', 'service_charges', 'security_deposit', 'minimum_stay', 'available_from', 'bedrooms', 'bathrooms', 'area', 'image_url', 'images', 'video_url', 'amenities', 'lat', 'lng'];
         const updates = [];

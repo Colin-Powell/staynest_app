@@ -9,6 +9,7 @@ import 'package:property_app/session/app_session.dart';
 import 'package:uuid/uuid.dart';
 import 'package:property_app/models/communication_models.dart';
 import 'package:property_app/utils/presence_format.dart';
+import 'package:property_app/widgets/property_conversation_header.dart';
 
 // ─── Landlord Design System Constants ─────────────────────────────────────────
 const Color _bg = Color(0xFFFAFAFA);
@@ -23,6 +24,8 @@ class LandlordChatView extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback? onCall;
   final String userId;
+  final String? conversationId;
+  final ConversationModel? initialConversation;
   final String name;
   final String? avatar;
   final bool isOnline;
@@ -32,6 +35,8 @@ class LandlordChatView extends StatefulWidget {
     super.key,
     required this.onBack,
     required this.userId,
+    this.conversationId,
+    this.initialConversation,
     required this.name,
     this.avatar,
     this.isOnline = false,
@@ -68,14 +73,22 @@ class _LandlordChatViewState extends State<LandlordChatView>
   Timer? _presenceRefreshTimer;
 
   final List<ChatMessage> _messages = [];
+  late String _peerUserId;
+  ConversationModel? _conversation;
+
+  String? get _activeConversationId =>
+      widget.conversationId ?? _conversation?.conversationId;
 
   @override
   void initState() {
     super.initState();
+    _peerUserId = widget.userId;
+    _conversation = widget.initialConversation;
     _isOtherOnline = widget.isOnline;
     _lastSeenAt = widget.lastSeenAt;
-    final latestPresence =
-        SocketService.instance.latestPresenceFor(widget.userId);
+    final latestPresence = _peerUserId.isEmpty
+        ? null
+        : SocketService.instance.latestPresenceFor(_peerUserId);
     if (latestPresence != null) {
       _isOtherOnline = latestPresence['online'] == true;
       _lastSeenAt = DateTime.tryParse(
@@ -88,12 +101,6 @@ class _LandlordChatViewState extends State<LandlordChatView>
         if (mounted) setState(() {});
       },
     );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      try {
-        await MessageService.instance.markAsRead([widget.userId]);
-      } catch (_) {}
-    });
 
     _pageController = AnimationController(
       vsync: this,
@@ -121,7 +128,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
     _fetchMessages();
 
     _typingSubscription = SocketService.instance.typing.listen((data) {
-      if (data['userId'] == widget.userId) {
+      if (data['userId'] == _peerUserId) {
         if (mounted) setState(() => _isOtherTyping = data['isTyping'] == true);
       }
     });
@@ -147,7 +154,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
     });
 
     _fcmSubscription = FirebaseMessaging.onMessage.listen((message) {
-      if (message.data['senderId'] == widget.userId) {
+      if (message.data['senderId'] == _peerUserId) {
         final text = message.notification?.body ?? '';
         final ts = DateTime.now().millisecondsSinceEpoch;
 
@@ -165,7 +172,9 @@ class _LandlordChatViewState extends State<LandlordChatView>
     });
 
     _socketSubscription = SocketService.instance.messages.listen((msg) {
-      if (msg.from != widget.userId) return;
+      if (msg.from != _peerUserId ||
+          (_activeConversationId != null &&
+              msg.conversationId != _activeConversationId)) return;
 
       final socketId = msg.id.trim();
       final socketText = msg.text.trim();
@@ -212,10 +221,13 @@ class _LandlordChatViewState extends State<LandlordChatView>
   void _handleTypingStatus() {
     if (_typingDebounce?.isActive ?? false) _typingDebounce!.cancel();
 
-    SocketService.instance.sendTyping(to: widget.userId, isTyping: true);
+    if (_peerUserId.isEmpty) return;
+    SocketService.instance.sendTyping(to: _peerUserId, isTyping: true);
 
     _typingDebounce = Timer(const Duration(milliseconds: 1500), () {
-      SocketService.instance.sendTyping(to: widget.userId, isTyping: false);
+      if (_peerUserId.isNotEmpty) {
+        SocketService.instance.sendTyping(to: _peerUserId, isTyping: false);
+      }
     });
   }
 
@@ -231,8 +243,24 @@ class _LandlordChatViewState extends State<LandlordChatView>
 
   Future<void> _fetchMessages() async {
     try {
-      final messages =
-          await MessageService.instance.fetchConversation(widget.userId);
+      final conversationId = _activeConversationId;
+      final List<MessageModel> messages;
+      if (conversationId != null && conversationId.isNotEmpty) {
+        final history =
+            await MessageService.instance.fetchConversationById(conversationId);
+        _conversation = history.conversation;
+        _peerUserId = history.conversation.userId;
+        messages = history.messages;
+      } else {
+        final history =
+            await MessageService.instance.fetchGeneralConversationHistory(
+          _peerUserId,
+          userName: widget.name,
+          userAvatar: widget.avatar,
+        );
+        _conversation = history.conversation;
+        messages = history.messages;
+      }
       if (!mounted) return;
 
       final currentUserId = AppSession.currentUserId ?? '';
@@ -256,6 +284,11 @@ class _LandlordChatViewState extends State<LandlordChatView>
         }
         _isLoading = false;
       });
+      await MessageService.instance.markAsRead(
+        _activeConversationId == null ? [_peerUserId] : const [],
+        conversationIds:
+            _activeConversationId == null ? const [] : [_activeConversationId!],
+      );
       _scrollToBottom();
     } catch (err) {
       if (mounted) setState(() => _isLoading = false);
@@ -281,14 +314,29 @@ class _LandlordChatViewState extends State<LandlordChatView>
 
   Future<void> _performSave(String messageId, String text) async {
     try {
-      final realId = await MessageService.instance
-          .saveMessage(toUserId: widget.userId, text: text);
+      final savedMessage = await MessageService.instance.saveMessage(
+        toUserId: _peerUserId,
+        text: text,
+        conversationId: _activeConversationId,
+      );
       if (!mounted) return;
+      if (_conversation?.conversationId == null &&
+          savedMessage.conversationId != null) {
+        _conversation = _conversation?.copyWith(
+              conversationId: savedMessage.conversationId,
+            ) ??
+            ConversationModel(
+              conversationId: savedMessage.conversationId,
+              userId: _peerUserId,
+              userName: widget.name,
+              userAvatar: widget.avatar,
+            );
+      }
       final idx = _messages.indexWhere((m) => m.id == messageId);
       if (idx != -1) {
         setState(() {
           _messages[idx] = _messages[idx].copyWith(
-            id: realId,
+            id: savedMessage.id,
             status: MessageStatus.sent,
           );
         });
@@ -364,6 +412,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
           body: Column(
             children: [
               _buildHeader(context),
+              if (_conversation?.property != null)
+                PropertyConversationHeader(property: _conversation!.property!),
               Expanded(
                 child: _isLoading
                     ? const Center(
@@ -381,6 +431,8 @@ class _LandlordChatViewState extends State<LandlordChatView>
   // ─── Header ──────────────────────────────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context) {
+    final displayName = _conversation?.userName ?? widget.name;
+    final displayAvatar = _conversation?.userAvatar ?? widget.avatar;
     return Container(
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 16,
@@ -402,9 +454,9 @@ class _LandlordChatViewState extends State<LandlordChatView>
           ),
           const SizedBox(width: 16),
           ClipOval(
-            child: (widget.avatar != null && widget.avatar!.trim().isNotEmpty)
+            child: (displayAvatar != null && displayAvatar.trim().isNotEmpty)
                 ? AppSession.buildAvatar(
-                    widget.avatar,
+                    displayAvatar,
                     width: 48,
                     height: 48,
                     fit: BoxFit.cover,
@@ -422,7 +474,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.name,
+                  displayName,
                   style: GoogleFonts.poppins(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
@@ -520,7 +572,10 @@ class _LandlordChatViewState extends State<LandlordChatView>
         final msg = _messages[index - 1];
         final Widget bubble = msg.sender == ChatSender.me
             ? _MyBubble(message: msg, onRetry: () => _retryMessage(msg))
-            : _TheirBubble(message: msg, avatar: widget.avatar);
+            : _TheirBubble(
+                message: msg,
+                avatar: _conversation?.userAvatar ?? widget.avatar,
+              );
         return _buildStaggered(
           index: index,
           child: Padding(

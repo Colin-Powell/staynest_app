@@ -566,3 +566,103 @@ export default {
   sendPropertyApprovedEmail,
   sendWeeklyLandlordDigestEmail,
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Daily listing digest & personalized promotion emails (tenant-facing)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ListingDigestProperty {
+  id: string;
+  title: string;
+  location: string;
+  price: number;
+  imageUrl?: string;
+  category?: string;
+}
+
+export async function sendDailyListingDigestEmail(
+  to: string,
+  userName: string,
+  properties: ListingDigestProperty[],
+): Promise<void> {
+  if (!to || properties.length === 0) return;
+  ensureTransporter();
+
+  const firstName = (userName?.trim() || 'there').split(' ')[0];
+  const subject = `🏠 Today's student housing picks — ${new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}`;
+
+  const propertyRows = properties.slice(0, 5).map(p => `
+    <tr>
+      <td style="padding:12px 0;border-bottom:1px solid #F3F4F6;">
+        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="vertical-align:top;padding-right:16px;width:80px;">
+            ${p.imageUrl ? `<img src="${p.imageUrl}" width="80" height="64" style="border-radius:8px;object-fit:cover;display:block;" alt="${p.title}"/>` : `<div style="width:80px;height:64px;background:#F3F4F6;border-radius:8px;"></div>`}
+          </td>
+          <td style="vertical-align:top;">
+            <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:2px;">${p.title}</div>
+            <div style="font-size:12px;color:#6B7280;margin-bottom:4px;">📍 ${p.location}</div>
+            <div style="font-size:15px;font-weight:800;color:#10B981;">Ksh ${Number(p.price).toLocaleString()}<span style="font-size:11px;font-weight:400;color:#9CA3AF;">/mo</span></div>
+          </td>
+          <td style="vertical-align:middle;text-align:right;">
+            <a href="https://staynest.top/properties/${p.id}" style="display:inline-block;padding:8px 16px;background:#3F37C9;color:#fff;font-size:12px;font-weight:700;text-decoration:none;border-radius:8px;">View</a>
+          </td>
+        </tr></table>
+      </td>
+    </tr>
+  `).join('');
+
+  const html = emailLayout(`
+    <h2 style="margin:0 0 4px;font-size:24px;font-weight:800;color:#111827;letter-spacing:-0.5px;">Good morning, ${firstName}! 🌅</h2>
+    <p style="margin:0 0 24px;font-size:15px;color:#6B7280;line-height:1.6;">Here are today's freshest student housing picks matching your preferences:</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      ${propertyRows}
+    </table>
+    ${ctaButton('Browse All Listings', 'https://staynest.top', '#3F37C9')}
+    <p style="margin:16px 0 0;font-size:12px;color:#9CA3AF;">You're receiving this because you signed up for daily listing alerts. <a href="https://staynest.top/settings/notifications" style="color:#6B7280;">Manage preferences</a></p>
+  `, `Today's student housing picks on StayNest`);
+
+  const text = `Hi ${firstName},\n\nToday's housing picks:\n\n${properties.slice(0, 5).map(p => `• ${p.title} — ${p.location} — Ksh ${Number(p.price).toLocaleString()}/mo\n  https://staynest.top/properties/${p.id}`).join('\n\n')}\n\nBrowse all: https://staynest.top\n\nWarm regards,\nThe StayNest Team`;
+
+  await transporter!.sendMail({ from: env.emailFrom || env.smtpUser, to, subject, text, html });
+}
+
+export async function sendPersonalizedPromotionEmail(
+  to: string,
+  userName: string,
+  properties: ListingDigestProperty[],
+  reasonLabel = 'Based on your recent activity',
+): Promise<void> {
+  if (!to || properties.length === 0) return;
+  ensureTransporter();
+
+  const firstName = (userName?.trim() || 'there').split(' ')[0];
+  const subject = `✨ Properties we think you'll love, ${firstName}`;
+
+  const cards = properties.slice(0, 3).map(p => `
+    <td style="width:33%;padding:8px;vertical-align:top;">
+      <div style="border:1px solid #E5E7EB;border-radius:12px;overflow:hidden;">
+        ${p.imageUrl ? `<img src="${p.imageUrl}" width="100%" height="120" style="display:block;object-fit:cover;" alt="${p.title}"/>` : `<div style="width:100%;height:120px;background:#F3F4F6;"></div>`}
+        <div style="padding:12px;">
+          <div style="font-size:13px;font-weight:700;color:#111827;margin-bottom:2px;">${p.title}</div>
+          <div style="font-size:11px;color:#6B7280;margin-bottom:6px;">📍 ${p.location}</div>
+          <div style="font-size:14px;font-weight:800;color:#10B981;margin-bottom:10px;">Ksh ${Number(p.price).toLocaleString()}/mo</div>
+          <a href="https://staynest.top/properties/${p.id}" style="display:block;text-align:center;padding:8px;background:#3F37C9;color:#fff;font-size:12px;font-weight:700;text-decoration:none;border-radius:8px;">View Property</a>
+        </div>
+      </div>
+    </td>
+  `).join('');
+
+  const html = emailLayout(`
+    <h2 style="margin:0 0 4px;font-size:24px;font-weight:800;color:#111827;letter-spacing:-0.5px;">Hi ${firstName}, we found some gems for you 💎</h2>
+    <p style="margin:0 0 24px;font-size:14px;color:#9CA3AF;">${reasonLabel}</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr>${cards}</tr>
+    </table>
+    ${ctaButton('Explore More Properties', 'https://staynest.top', '#3F37C9')}
+    <p style="margin:16px 0 0;font-size:12px;color:#9CA3AF;">You're receiving this because you've shown interest in similar properties. <a href="https://staynest.top/settings/notifications" style="color:#6B7280;">Manage preferences</a></p>
+  `, `Properties we think you'll love on StayNest`);
+
+  const text = `Hi ${firstName},\n\nBased on your activity, we picked these properties for you:\n\n${properties.slice(0, 3).map(p => `• ${p.title} — ${p.location} — Ksh ${Number(p.price).toLocaleString()}/mo\n  https://staynest.top/properties/${p.id}`).join('\n\n')}\n\nExplore more: https://staynest.top\n\nWarm regards,\nThe StayNest Team`;
+
+  await transporter!.sendMail({ from: env.emailFrom || env.smtpUser, to, subject, text, html });
+}

@@ -16,6 +16,9 @@ import { queueUserPush } from './queue.js';
 import {
   sendVerificationReminderEmail,
   sendWeeklyLandlordDigestEmail,
+  sendDailyListingDigestEmail,
+  sendPersonalizedPromotionEmail,
+  type ListingDigestProperty,
 } from './email.js';
 import { refundExpiredBookingEscrows } from './finance_service.js';
 
@@ -369,6 +372,161 @@ async function sendHostApplicationReminders() {
   }
 }
 
+// --- 7. Daily listing digest (10 AM EAT) -------------------------------------
+
+async function sendDailyListingAlerts() {
+  const lockRes = await query(`SELECT pg_try_advisory_lock(7001) AS locked`, []);
+  if (!lockRes.rows[0]?.locked) return;
+  try {
+    const tenants = await query(
+      `SELECT u.id, u.name, u.email,
+              tp.preferred_location, tp.max_budget, tp.preferred_category
+       FROM users u
+       JOIN tenant_profiles tp ON tp.user_id = u.id
+       WHERE u.role = 'tenant'
+         AND u.email IS NOT NULL
+         AND tp.notify_new_listings IS NOT DISTINCT FROM true
+       LIMIT 500`,
+      [],
+    );
+
+    for (const tenant of tenants.rows) {
+      try {
+        const conditions: string[] = [
+          `p.status = 'approved'`,
+          `p.availability_status = 'available'`,
+          `p.created_at > NOW() - INTERVAL '24 hours'`,
+        ];
+        const params: unknown[] = [];
+        if (tenant.max_budget) {
+          params.push(tenant.max_budget);
+          conditions.push(`p.price <= $${params.length}`);
+        }
+        if (tenant.preferred_location) {
+          params.push(`%${tenant.preferred_location.toLowerCase()}%`);
+          conditions.push(`LOWER(p.city) LIKE $${params.length}`);
+        }
+        if (tenant.preferred_category) {
+          params.push(tenant.preferred_category);
+          conditions.push(`p.category = $${params.length}`);
+        }
+
+        const props = await query(
+          `SELECT p.id, p.title, p.city AS location, p.price, p.image_url AS "imageUrl", p.category
+           FROM properties p
+           WHERE ${conditions.join(' AND ')}
+           ORDER BY p.created_at DESC
+           LIMIT 5`,
+          params,
+        );
+
+        if (props.rowCount === 0) continue;
+
+        const listings: ListingDigestProperty[] = props.rows.map((r: Record<string, unknown>) => ({
+          id: String(r.id),
+          title: String(r.title),
+          location: String(r.location),
+          price: Number(r.price),
+          imageUrl: r.imageUrl ? String(r.imageUrl) : undefined,
+          category: r.category ? String(r.category) : undefined,
+        }));
+
+        await sendDailyListingDigestEmail(tenant.email, tenant.name, listings);
+
+        await queueUserPush(
+          tenant.id,
+          '🏠 New listings match your preferences!',
+          `${listings.length} new propert${listings.length > 1 ? 'ies' : 'y'} just added matching your search.`,
+          { type: 'daily_listing_alert', count: String(listings.length) },
+        );
+      } catch (tenantErr) {
+        console.error(`[cron] daily listing digest failed for userId=${tenant.id}:`, tenantErr);
+      }
+    }
+
+    console.log(`[cron] daily listing alerts processed for ${tenants.rowCount} tenants`);
+  } finally {
+    await query(`SELECT pg_advisory_unlock(7001)`, []);
+  }
+}
+
+// --- 8. Personalized promotions (2 PM EAT) -----------------------------------
+
+async function sendPersonalizedPromotions() {
+  const lockRes = await query(`SELECT pg_try_advisory_lock(7002) AS locked`, []);
+  if (!lockRes.rows[0]?.locked) return;
+  try {
+    const tenants = await query(
+      `SELECT DISTINCT u.id, u.name, u.email,
+              COALESCE(array_agg(DISTINCT pv.property_id) FILTER (WHERE pv.property_id IS NOT NULL), '{}') AS viewed_ids,
+              COALESCE(array_agg(DISTINCT sp.property_id) FILTER (WHERE sp.property_id IS NOT NULL), '{}') AS saved_ids
+       FROM users u
+       LEFT JOIN property_views pv ON pv.user_id = u.id AND pv.viewed_at > NOW() - INTERVAL '7 days'
+       LEFT JOIN saved_properties sp ON sp.user_id = u.id AND sp.created_at > NOW() - INTERVAL '7 days'
+       LEFT JOIN notification_log nl ON nl.user_id = u.id AND nl.type = 'personalized_promotion' AND nl.created_at > NOW() - INTERVAL '3 days'
+       WHERE u.role = 'tenant'
+         AND u.email IS NOT NULL
+         AND nl.id IS NULL
+         AND (pv.property_id IS NOT NULL OR sp.property_id IS NOT NULL)
+       GROUP BY u.id, u.name, u.email
+       LIMIT 200`,
+      [],
+    );
+
+    for (const tenant of tenants.rows) {
+      try {
+        const interactionIds: string[] = [...(tenant.viewed_ids || []), ...(tenant.saved_ids || [])].slice(0, 10);
+        if (interactionIds.length === 0) continue;
+
+        const similar = await query(
+          `SELECT DISTINCT p.id, p.title, p.city AS location, p.price, p.image_url AS "imageUrl", p.category
+           FROM properties p
+           JOIN properties ref ON ref.id = ANY($1::uuid[])
+           WHERE p.status = 'approved'
+             AND p.availability_status = 'available'
+             AND p.id != ALL($1::uuid[])
+             AND (p.city = ref.city OR p.category = ref.category)
+           ORDER BY RANDOM()
+           LIMIT 3`,
+          [interactionIds],
+        );
+
+        if ((similar.rowCount ?? 0) === 0) continue;
+
+        const listings: ListingDigestProperty[] = similar.rows.map((r: Record<string, unknown>) => ({
+          id: String(r.id),
+          title: String(r.title),
+          location: String(r.location),
+          price: Number(r.price),
+          imageUrl: r.imageUrl ? String(r.imageUrl) : undefined,
+          category: r.category ? String(r.category) : undefined,
+        }));
+
+        await sendPersonalizedPromotionEmail(tenant.email, tenant.name, listings);
+
+        await query(
+          `INSERT INTO notification_log (user_id, type, created_at) VALUES ($1, 'personalized_promotion', NOW())
+           ON CONFLICT DO NOTHING`,
+          [tenant.id],
+        );
+
+        await queueUserPush(
+          tenant.id,
+          '✨ Properties curated for you',
+          `We found ${listings.length} properties matching your interests.`,
+          { type: 'personalized_promotion', count: String(listings.length) },
+        );
+      } catch (err) {
+        console.error(`[cron] personalized promotions failed for userId=${tenant.id}:`, err);
+      }
+    }
+
+    console.log(`[cron] personalized promotions sent for ${tenants.rowCount} tenants`);
+  } finally {
+    await query(`SELECT pg_advisory_unlock(7002)`, []);
+  }
+}
+
 // --- Scheduler ----------------------------------------------------------------
 
 export function startCronJobs() {
@@ -390,6 +548,12 @@ export function startCronJobs() {
 
   // 6. Host application reminders — evaluated hourly
   cron.schedule('0 * * * *', sendHostApplicationReminders, { timezone: 'Africa/Nairobi' });
+
+  // 7. Daily listing alerts — 10:00 AM EAT
+  cron.schedule('0 10 * * *', sendDailyListingAlerts, { timezone: 'Africa/Nairobi' });
+
+  // 8. Personalized promotions — 2:00 PM EAT
+  cron.schedule('0 14 * * *', sendPersonalizedPromotions, { timezone: 'Africa/Nairobi' });
 
   console.log('[cron] All scheduled jobs registered (timezone: Africa/Nairobi)');
 }

@@ -91,7 +91,8 @@ class FCMService {
       });
 
       final token = await getToken();
-      debugPrint('[FCM] token=${(token?.length ?? 0) > 20 ? token!.substring(0, 20) : token ?? "null"}...');
+      debugPrint(
+          '[FCM] token=${(token?.length ?? 0) > 20 ? token!.substring(0, 20) : token ?? "null"}...');
     } catch (error, stackTrace) {
       debugPrint('[FCM] listener registration failed: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -113,8 +114,8 @@ class FCMService {
         ),
       );
 
-      final androidImpl = _localNotifications
-          .resolvePlatformSpecificImplementation<
+      final androidImpl =
+          _localNotifications.resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
       if (androidImpl != null) {
         await androidImpl.createNotificationChannel(_channel);
@@ -160,21 +161,27 @@ class FCMService {
     try {
       final chatId = message.data['chatId'];
       final senderId = message.data['senderId']?.toString();
+      final conversationId = message.data['conversationId']?.toString();
 
-      // State action: mark messages from sender as read for the current user.
-      // (Chat open will also mark read, but this ensures unread badges update sooner.)
-      if (senderId != null && senderId.isNotEmpty) {
+      if (conversationId != null && conversationId.isNotEmpty) {
+        await MessageService.instance.markAsRead(
+          const [],
+          conversationIds: [conversationId],
+        );
+      } else if (senderId != null && senderId.isNotEmpty) {
         await MessageService.instance.markAsRead([senderId]);
       }
 
-      if (chatId != null && navigatorKey != null) {
-        // Navigate to chat and ensure background stack is consistent
+      if ((chatId != null || conversationId != null) && navigatorKey != null) {
         navigatorKey!.currentState?.pushNamed(
-          '/chat',
+          conversationId == null || conversationId.isEmpty
+              ? '/chat'
+              : '/chat/$conversationId',
           arguments: {
             'userId': senderId,
             'name': message.notification?.title ?? 'User',
             'chatId': chatId,
+            if (conversationId != null) 'conversationId': conversationId,
             'avatar': message.data['avatar'] ?? '',
           },
         );

@@ -6,10 +6,10 @@ import { settleReferralReward } from '../services/referral_service.js';
 import { calculatePlatformBookingFee } from '../services/booking_fee.js';
 import { completeBookingWithEscrow, createAndPayBookingFromWallet, refundExpiredBookingEscrows, settleEscrow, } from '../services/finance_service.js';
 import { getGeneralPlatformSettings } from '../services/platform_settings_service.js';
-import { isPropertyBookable } from '../services/property_availability.js';
+import { getPropertyIneligibilityReason } from '../services/property_availability.js';
 const router = Router();
 function isPropertyUnavailable(availabilityStatus, legacyStatus) {
-    return !isPropertyBookable(availabilityStatus, legacyStatus);
+    return getPropertyIneligibilityReason(availabilityStatus, legacyStatus) !== null;
 }
 router.get('/fee', requireAuth, authorize('tenant'), async (req, res, next) => {
     const propertyId = String(req.query.propertyId ?? '').trim();
@@ -118,7 +118,8 @@ router.post('/', requireAuth, authorize('tenant'), async (req, res, next) => {
             const landlordId = propResult.rows[0].landlord_id;
             if (isPropertyUnavailable(propResult.rows[0].availability_status, propResult.rows[0].status)) {
                 await client.query('ROLLBACK');
-                return res.status(409).json({ error: 'Property is not available for booking.' });
+                const reason = getPropertyIneligibilityReason(propResult.rows[0].availability_status, propResult.rows[0].status);
+                return res.status(409).json({ error: reason ?? 'This property is currently unavailable and cannot accept new booking requests.' });
             }
             if (!landlordId) {
                 await client.query('ROLLBACK');
@@ -148,7 +149,7 @@ router.post('/', requireAuth, authorize('tenant'), async (req, res, next) => {
          WHERE property_id = $1 AND tenant_id = $2 AND status IN ('pending', 'confirmed')`, [propertyId, req.auth.id]);
             if (existingBooking.rows.length > 0) {
                 await client.query('ROLLBACK');
-                return res.status(409).json({ error: 'You already have an active booking or request for this property.' });
+                return res.status(409).json({ error: 'You already have a request for this property. Check your bookings for its current status.' });
             }
             // Create booking
             const bookingResult = await client.query(`INSERT INTO bookings (property_id, tenant_id, landlord_id, check_in_date, check_out_date, status, total_price, notes)

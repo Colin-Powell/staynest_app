@@ -63,23 +63,21 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       final currentUserId = AppSession.currentUserId;
       final otherId = msg.from == currentUserId ? msg.to : msg.from;
 
-      final index = _conversations.indexWhere((c) => c.userId == otherId);
+      final index = _conversations.indexWhere((conversation) =>
+          msg.conversationId != null
+              ? conversation.conversationId == msg.conversationId
+              : conversation.userId == otherId &&
+                  conversation.contextType == 'general');
       if (index != -1) {
         var autoOpened = false;
         setState(() {
           final old = _conversations[index];
-          _conversations[index] = ConversationModel(
-            userId: old.userId,
-            userName: old.userName,
-            userAvatar: old.userAvatar,
+          _conversations[index] = old.copyWith(
             lastMessage: msg.text,
             lastMessageAt: DateTime.fromMillisecondsSinceEpoch(msg.ts),
             unreadCount: msg.from != currentUserId
                 ? old.unreadCount + 1
                 : old.unreadCount,
-            userOnline: old.userOnline,
-            lastSeenAt: old.lastSeenAt,
-            presenceRevision: old.presenceRevision,
           );
           final item = _conversations.removeAt(index);
           _conversations.insert(0, item);
@@ -91,7 +89,10 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
         });
         if (autoOpened) widget.onChatOpen();
       } else {
-        _loadConversations(preferredUserId: otherId);
+        _loadConversations(
+          preferredUserId: otherId,
+          preferredConversationId: msg.conversationId,
+        );
       }
     });
 
@@ -109,31 +110,28 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
         }
         final lastSeenAt =
             DateTime.tryParse(data['lastSeenAt']?.toString() ?? '');
-        final index =
-            _conversations.indexWhere((item) => item.userId == userId);
-        if (index != -1) {
-          final old = _conversations[index];
-          final updated = ConversationModel(
-            userId: old.userId,
-            userName: old.userName,
-            userAvatar: old.userAvatar,
-            lastMessage: old.lastMessage,
-            lastMessageAt: old.lastMessageAt,
-            unreadCount: old.unreadCount,
-            userOnline: online,
-            lastSeenAt: lastSeenAt,
-            presenceRevision: revision,
-          );
-          _conversations[index] = updated;
-          if (_selectedConversation?.userId == userId) {
-            _selectedConversation = updated;
+        for (var index = 0; index < _conversations.length; index++) {
+          if (_conversations[index].userId == userId) {
+            final updated = _conversations[index].copyWith(
+              userOnline: online,
+              lastSeenAt: lastSeenAt,
+              presenceRevision: revision,
+            );
+            _conversations[index] = updated;
+            if (_selectedConversation?.conversationId ==
+                updated.conversationId) {
+              _selectedConversation = updated;
+            }
           }
         }
       });
     });
   }
 
-  Future<void> _loadConversations({String? preferredUserId}) async {
+  Future<void> _loadConversations({
+    String? preferredUserId,
+    String? preferredConversationId,
+  }) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -148,13 +146,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
         final liveRevision =
             int.tryParse(live?['revision']?.toString() ?? '') ?? -1;
         if (liveRevision <= conversation.presenceRevision) return conversation;
-        return ConversationModel(
-          userId: conversation.userId,
-          userName: conversation.userName,
-          userAvatar: conversation.userAvatar,
-          lastMessage: conversation.lastMessage,
-          lastMessageAt: conversation.lastMessageAt,
-          unreadCount: conversation.unreadCount,
+        return conversation.copyWith(
           userOnline: live?['online'] == true,
           lastSeenAt: DateTime.tryParse(live?['lastSeenAt']?.toString() ?? ''),
           presenceRevision: liveRevision,
@@ -162,6 +154,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       }).toList();
       final isDesktop = MediaQuery.sizeOf(context).width >= 768;
       final currentSelectionId = _selectedConversation?.userId;
+      final currentConversationId = _selectedConversation?.conversationId;
       final selectedId = currentSelectionId ?? preferredUserId;
       final selected = selectedId == null
           ? null
@@ -171,6 +164,10 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
               unreadCountOf: (conversation) => conversation.unreadCount,
               selectedUserId: currentSelectionId,
               preferredUserId: preferredUserId,
+              conversationIdOf: (conversation) =>
+                  conversation.conversationId ?? '',
+              selectedConversationId: currentConversationId,
+              preferredConversationId: preferredConversationId,
             );
       final initialDesktopSelection = isDesktop && selected == null
           ? selectConversation<ConversationModel>(
@@ -263,15 +260,26 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       if (_selectedIds.length == _filteredConversations.length) {
         _exitSelectionMode();
       } else {
-        _selectedIds = _filteredConversations.map((c) => c.userId).toSet();
+        _selectedIds = _filteredConversations.map((c) => c.threadId).toSet();
       }
     });
   }
 
   Future<void> _markSelectedAsRead() async {
     try {
-      final idsToMark = _selectedIds.toList();
-      await MessageService.instance.markAsRead(idsToMark);
+      final selected = _conversations
+          .where((conversation) => _selectedIds.contains(conversation.threadId))
+          .toList();
+      await MessageService.instance.markAsRead(
+        selected
+            .where((conversation) => conversation.conversationId == null)
+            .map((conversation) => conversation.userId)
+            .toList(),
+        conversationIds: selected
+            .map((conversation) => conversation.conversationId)
+            .whereType<String>()
+            .toList(),
+      );
       _exitSelectionMode();
       _loadConversations();
     } catch (e) {
@@ -284,13 +292,22 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
   Future<void> _deleteSelected() async {
     try {
       final idsToDelete = _selectedIds.toList();
+      final selected = _conversations
+          .where((conversation) => idsToDelete.contains(conversation.threadId))
+          .toList();
       setState(() {
-        _conversations.removeWhere((c) => idsToDelete.contains(c.userId));
+        _conversations.removeWhere(
+            (conversation) => idsToDelete.contains(conversation.threadId));
         _selectedIds.clear();
         _isSelectionMode = false;
       });
-      for (var id in idsToDelete) {
-        await MessageService.instance.deleteConversation(id);
+      for (final conversation in selected) {
+        final conversationId = conversation.conversationId;
+        if (conversationId == null) {
+          await MessageService.instance.deleteConversation(conversation.userId);
+        } else {
+          await MessageService.instance.deleteConversationById(conversationId);
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -299,27 +316,21 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
     }
   }
 
-  Future<void> _markConversationRead(String userId) async {
-    final index = _conversations
-        .indexWhere((conversation) => conversation.userId == userId);
+  Future<void> _markConversationRead(ConversationModel conversation) async {
+    final index = _conversations.indexWhere(
+        (item) => item.conversationId == conversation.conversationId);
     if (index != -1) {
       setState(() {
-        _conversations[index] = ConversationModel(
-          userId: _conversations[index].userId,
-          userName: _conversations[index].userName,
-          userAvatar: _conversations[index].userAvatar,
-          lastMessage: _conversations[index].lastMessage,
-          lastMessageAt: _conversations[index].lastMessageAt,
-          unreadCount: 0,
-          userOnline: _conversations[index].userOnline,
-          lastSeenAt: _conversations[index].lastSeenAt,
-          presenceRevision: _conversations[index].presenceRevision,
-        );
+        _conversations[index] = _conversations[index].copyWith(unreadCount: 0);
       });
     }
 
     try {
-      await MessageService.instance.markAsRead([userId]);
+      final conversationId = conversation.conversationId;
+      await MessageService.instance.markAsRead(
+        conversationId == null ? [conversation.userId] : const [],
+        conversationIds: conversationId == null ? const [] : [conversationId],
+      );
     } catch (_) {
       // Optimistic state is kept; a later refresh will reconcile.
     }
@@ -599,10 +610,10 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
             Divider(color: _grey.withOpacity(0.1), height: 1),
         itemBuilder: (context, index) {
           final conv = _filteredConversations[index];
-          final isSelected = _selectedIds.contains(conv.userId);
+          final isSelected = _selectedIds.contains(conv.threadId);
 
           return Dismissible(
-            key: ValueKey(conv.userId),
+            key: ValueKey(conv.threadId),
             direction: DismissDirection.endToStart, // Only swipe to delete
             background: Container(
               margin: const EdgeInsets.symmetric(vertical: 4),
@@ -615,15 +626,21 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                   color: Colors.white, size: 28),
             ),
             onDismissed: (direction) async {
-              final userId = conv.userId;
-              setState(
-                  () => _conversations.removeWhere((c) => c.userId == userId));
-              await MessageService.instance.deleteConversation(userId);
+              setState(() => _conversations
+                  .removeWhere((item) => item.threadId == conv.threadId));
+              final conversationId = conv.conversationId;
+              if (conversationId == null) {
+                await MessageService.instance.deleteConversation(conv.userId);
+              } else {
+                await MessageService.instance
+                    .deleteConversationById(conversationId);
+              }
             },
             child: _ConversationTile(
               name: conv.userName,
               avatarUrl: conv.userAvatar,
               lastMessage: conv.lastMessage ?? 'No messages yet',
+              propertyTitle: conv.property?.title,
               time: _formatTime(conv.lastMessageAt),
               unread: conv.unreadCount,
               isOnline: _onlineUserIds.contains(conv.userId),
@@ -631,9 +648,9 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
               isSelectionMode: _isSelectionMode,
               onTap: () {
                 if (_isSelectionMode) {
-                  _toggleSelection(conv.userId);
+                  _toggleSelection(conv.threadId);
                 } else {
-                  _markConversationRead(conv.userId);
+                  _markConversationRead(conv);
                   widget.onChatOpen();
                   setState(() => _selectedConversation = conv);
                 }
@@ -642,7 +659,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
                 if (!_isSelectionMode) {
                   setState(() {
                     _isSelectionMode = true;
-                    _selectedIds.add(conv.userId);
+                    _selectedIds.add(conv.threadId);
                   });
                 }
               },
@@ -735,6 +752,8 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
         name: conv.userName,
         avatar: conv.userAvatar,
         userId: conv.userId,
+        conversationId: conv.conversationId,
+        initialConversation: conv,
         isOnline: conv.userOnline || _onlineUserIds.contains(conv.userId),
         lastSeenAt: conv.lastSeenAt,
       );
@@ -781,6 +800,7 @@ class _ConversationTile extends StatelessWidget {
   final String name;
   final String? avatarUrl;
   final String lastMessage;
+  final String? propertyTitle;
   final String time;
   final int unread;
   final bool isOnline;
@@ -793,6 +813,7 @@ class _ConversationTile extends StatelessWidget {
     required this.name,
     required this.avatarUrl,
     required this.lastMessage,
+    required this.propertyTitle,
     required this.time,
     required this.unread,
     required this.isOnline,
@@ -872,6 +893,20 @@ class _ConversationTile extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
+                  if (propertyTitle != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      propertyTitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _green,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 3),
                   Row(
                     children: [
                       Expanded(

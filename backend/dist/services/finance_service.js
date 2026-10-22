@@ -1,7 +1,7 @@
 import { pool } from '../db.js';
 import { calculatePlatformBookingFee } from './booking_fee.js';
 import { getGeneralPlatformSettings } from './platform_settings_service.js';
-import { isPropertyBookable } from './property_availability.js';
+import { isPropertyBookable, getPropertyIneligibilityReason } from './property_availability.js';
 async function postLedgerEntry(client, entry) {
     const result = await client.query(`INSERT INTO wallet_transactions
        (user_id, amount, type, description, reference_type, reference_id, idempotency_key, status)
@@ -111,7 +111,8 @@ export async function createAndPayBookingFromWallet(input) {
             throw new Error('Landlords cannot book their own property.');
         }
         if (!isPropertyBookable(property.availability_status, property.status)) {
-            throw new Error('Property is not available for booking.');
+            const reason = getPropertyIneligibilityReason(property.availability_status, property.status);
+            throw new Error(reason ?? 'This property is currently unavailable and cannot accept new booking requests.');
         }
         const overlap = await client.query(`SELECT id FROM bookings
        WHERE property_id = $1

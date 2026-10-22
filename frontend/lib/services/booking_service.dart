@@ -21,7 +21,16 @@ class BookingService {
     if (message.contains('already have an active booking') ||
         message.contains('active booking') ||
         message.contains('duplicate')) {
-      return 'You already have an active booking request for this property. Open My Bookings to view it.';
+      return 'You already have a request for this property. Check your bookings for its current status.';
+    }
+    if (message.contains('already rented') || message.contains('has already been rented')) {
+      return 'This property has already been rented. Explore other available properties nearby.';
+    }
+    if (message.contains('unavailable') || message.contains('not available')) {
+      return 'This property is currently unavailable and cannot accept new booking requests.';
+    }
+    if (message.contains('network') || message.contains('connection') || message.contains('socketexception')) {
+      return 'We couldn’t submit your request. Check your connection and try again.';
     }
     if (message.contains('already booked') ||
         message.contains('not available') ||

@@ -4,6 +4,7 @@ import 'package:property_app/session/app_session.dart';
 
 class SocketMessage {
   final String id;
+  final String? conversationId;
   final String from;
   final String to;
   final String text;
@@ -11,6 +12,7 @@ class SocketMessage {
 
   SocketMessage(
       {required this.id,
+      this.conversationId,
       required this.from,
       required this.to,
       required this.text,
@@ -21,6 +23,7 @@ class SocketMessage {
     // { id, from_user_id, to_user_id, text, created_at }
     return SocketMessage(
       id: json['id']?.toString() ?? '',
+      conversationId: json['conversation_id']?.toString(),
       from: json['from_user_id']?.toString() ?? json['from']?.toString() ?? '',
       to: json['to_user_id']?.toString() ?? json['to']?.toString() ?? '',
       text: json['text']?.toString() ?? '',

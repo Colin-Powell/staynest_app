@@ -1,4 +1,4 @@
-﻿import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { pool, query } from '../db.js';
 import { authorize, requireAuth } from '../middleware/auth.js';
 import { queueUserPush } from '../services/queue.js';
@@ -11,12 +11,12 @@ import {
   settleEscrow,
 } from '../services/finance_service.js';
 import { getGeneralPlatformSettings } from '../services/platform_settings_service.js';
-import { isPropertyBookable } from '../services/property_availability.js';
+import { getPropertyIneligibilityReason } from '../services/property_availability.js';
 
 const router = Router();
 
 function isPropertyUnavailable(availabilityStatus: unknown, legacyStatus: unknown): boolean {
-  return !isPropertyBookable(availabilityStatus, legacyStatus);
+  return getPropertyIneligibilityReason(availabilityStatus, legacyStatus) !== null;
 }
 
 router.get('/fee', requireAuth, authorize('tenant'), async (req: Request, res: Response, next: NextFunction) => {
@@ -162,7 +162,8 @@ router.post('/', requireAuth, authorize('tenant'), async (req: Request, res: Res
         propResult.rows[0].status,
       )) {
         await client.query('ROLLBACK');
-        return res.status(409).json({ error: 'Property is not available for booking.' });
+        const reason = getPropertyIneligibilityReason(propResult.rows[0].availability_status, propResult.rows[0].status);
+        return res.status(409).json({ error: reason ?? 'This property is currently unavailable and cannot accept new booking requests.' });
       }
       
       if (!landlordId) {
@@ -209,7 +210,7 @@ router.post('/', requireAuth, authorize('tenant'), async (req: Request, res: Res
 
       if (existingBooking.rows.length > 0) {
         await client.query('ROLLBACK');
-        return res.status(409).json({ error: 'You already have an active booking or request for this property.' });
+        return res.status(409).json({ error: 'You already have a request for this property. Check your bookings for its current status.' });
       }
 
       // Create booking

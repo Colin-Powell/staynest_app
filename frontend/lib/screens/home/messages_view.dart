@@ -20,6 +20,8 @@ const Color _tenantPrimary = Color(0xFF3F37C9); // Tenant Blue Theme
 // ─── Local UI model ───────────────────────────────────────────────────────────
 class _ChatItem {
   final String id; // userId of other participant
+  final ConversationModel? conversation;
+  String get threadId => conversation?.threadId ?? id;
   final String name;
   final String? avatarUrl;
   final String msg;
@@ -32,6 +34,7 @@ class _ChatItem {
 
   _ChatItem({
     required this.id,
+    this.conversation,
     required this.name,
     this.avatarUrl,
     required this.msg,
@@ -49,8 +52,13 @@ enum _MessageFilter { all, unread, landlords, archived }
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 class MessagesViewScreen extends StatefulWidget {
-  final void Function(String userId, String name, String? avatarUrl,
-      bool isOnline, DateTime? lastSeenAt) onSelectChat;
+  final void Function(
+      String userId,
+      String name,
+      String? avatarUrl,
+      bool isOnline,
+      DateTime? lastSeenAt,
+      ConversationModel? conversation) onSelectChat;
   final ValueChanged<bool>? onSelectionModeChanged;
   final VoidCallback? onClose;
 
@@ -112,12 +120,20 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
       final currentUserId = AppSession.currentUserId;
       final otherId = msg.from == currentUserId ? msg.to : msg.from;
 
-      final index = _chats.indexWhere((c) => c.id == otherId);
+      final index = _chats.indexWhere((chat) => msg.conversationId != null
+          ? chat.threadId == msg.conversationId
+          : chat.id == otherId && chat.conversation?.conversationId == null);
       if (index != -1) {
         setState(() {
           final chat = _chats[index];
           _chats[index] = _ChatItem(
             id: chat.id,
+            conversation: chat.conversation?.copyWith(
+              lastMessage: msg.text,
+              lastMessageAt: DateTime.fromMillisecondsSinceEpoch(msg.ts),
+              unreadCount:
+                  msg.from != currentUserId ? chat.unread + 1 : chat.unread,
+            ),
             name: chat.name,
             avatarUrl: chat.avatarUrl,
             msg: msg.text,
@@ -132,7 +148,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
           final item = _chats.removeAt(index);
           _chats.insert(0, item);
         });
-        if (msg.from != currentUserId &&
+        if (false && msg.from != currentUserId &&
             MediaQuery.sizeOf(context).width >= 768 &&
             !_isSelectionMode) {
           final chat = _chats.firstWhere((item) => item.id == otherId);
@@ -142,10 +158,14 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
             chat.avatarUrl,
             chat.online,
             chat.lastSeenAt,
+            chat.conversation,
           );
         }
       } else {
-        _loadConversations(preferredUserId: otherId);
+        _loadConversations(
+          preferredUserId: otherId,
+          preferredConversationId: msg.conversationId,
+        );
       }
     });
 
@@ -185,6 +205,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
       _suggestedContacts = contacts
           .map((c) => _ChatItem(
                 id: c.userId,
+                conversation: c,
                 name: c.userName,
                 avatarUrl: c.userAvatar,
                 msg: 'Contact to start chat',
@@ -194,7 +215,10 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
     });
   }
 
-  Future<void> _loadConversations({String? preferredUserId}) async {
+  Future<void> _loadConversations({
+    String? preferredUserId,
+    String? preferredConversationId,
+  }) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -212,6 +236,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
           final liveOnline = live == null ? false : live['online'] == true;
           return _ChatItem(
             id: c.userId,
+            conversation: c,
             name: c.userName,
             avatarUrl: c.userAvatar,
             msg: c.lastMessage ?? 'No messages yet',
@@ -237,6 +262,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
           userIdOf: (chat) => chat.id,
           unreadCountOf: (chat) => chat.unread,
           preferredUserId: preferredUserId,
+          preferredConversationId: preferredConversationId,
+          conversationIdOf: (chat) => chat.conversation?.conversationId ?? '',
         )!;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
@@ -246,6 +273,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
             selected.avatarUrl,
             selected.online,
             selected.lastSeenAt,
+            selected.conversation,
           );
         });
       }
@@ -258,8 +286,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
     }
   }
 
-  Future<void> _markConversationRead(String userId) async {
-    final index = _chats.indexWhere((chat) => chat.id == userId);
+  Future<void> _markConversationRead(_ChatItem chat) async {
+    final index = _chats.indexWhere((item) => item.threadId == chat.threadId);
     if (index != -1) {
       setState(() {
         _chats[index].unread = 0;
@@ -267,7 +295,12 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
     }
 
     try {
-      await MessageService.instance.markAsRead([userId]);
+      await MessageService.instance.markAsRead(
+        chat.conversation?.conversationId == null ? [chat.id] : const [],
+        conversationIds: chat.conversation?.conversationId == null
+            ? const []
+            : [chat.conversation!.conversationId!],
+      );
     } catch (_) {
       // Keep the optimistic UI state and refresh on next load.
     }
@@ -319,7 +352,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
         _isSelectionMode = false;
         widget.onSelectionModeChanged?.call(false);
       } else {
-        _selectedIds = filtered.map((c) => c.id).toSet();
+        _selectedIds = filtered.map((c) => c.threadId).toSet();
       }
     });
   }
@@ -334,14 +367,21 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
 
   Future<void> _deleteSelected() async {
     final idsToDelete = _selectedIds.toList();
+    final selectedChats =
+        _chats.where((chat) => idsToDelete.contains(chat.threadId)).toList();
     setState(() {
-      _chats.removeWhere((c) => idsToDelete.contains(c.id));
+      _chats.removeWhere((chat) => idsToDelete.contains(chat.threadId));
       _exitSelectionMode();
     });
 
     try {
-      for (final id in idsToDelete) {
-        await MessageService.instance.deleteConversation(id);
+      for (final chat in selectedChats) {
+        final conversationId = chat.conversation?.conversationId;
+        if (conversationId == null) {
+          await MessageService.instance.deleteConversation(chat.id);
+        } else {
+          await MessageService.instance.deleteConversationById(conversationId);
+        }
       }
     } catch (e) {
       _loadConversations();
@@ -350,12 +390,24 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
 
   Future<void> _markSelectedAsRead() async {
     try {
-      final idsToMark = _selectedIds.toList();
-      await MessageService.instance.markAsRead(idsToMark);
+      final selectedChats =
+          _chats.where((chat) => _selectedIds.contains(chat.threadId)).toList();
+      final conversationIds = selectedChats
+          .map((chat) => chat.conversation?.conversationId)
+          .whereType<String>()
+          .toList();
+      final partnerIds = selectedChats
+          .where((chat) => chat.conversation?.conversationId == null)
+          .map((chat) => chat.id)
+          .toList();
+      await MessageService.instance.markAsRead(
+        partnerIds,
+        conversationIds: conversationIds,
+      );
 
       setState(() {
         for (final c in _chats) {
-          if (idsToMark.contains(c.id)) c.unread = 0;
+          if (_selectedIds.contains(c.threadId)) c.unread = 0;
         }
         _exitSelectionMode();
       });
@@ -618,6 +670,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                       contact.avatarUrl,
                       contact.online,
                       contact.lastSeenAt,
+                      null,
                     ),
                     child: Padding(
                       padding: const EdgeInsets.only(right: 20),
@@ -826,10 +879,10 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                                     itemBuilder: (context, i) {
                                       final chat = displayList[i];
                                       final isSelected =
-                                          _selectedIds.contains(chat.id);
+                                          _selectedIds.contains(chat.threadId);
 
                                       return Dismissible(
-                                        key: ValueKey(chat.id),
+                                        key: ValueKey(chat.threadId),
                                         direction: DismissDirection
                                             .endToStart, // Swipe left to delete
                                         background: Container(
@@ -843,7 +896,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                                               size: 28),
                                         ),
                                         onDismissed: (_) async {
-                                          _selectedIds = {chat.id};
+                                          _selectedIds = {chat.threadId};
                                           await _deleteSelected();
                                           if (mounted) {
                                             ScaffoldMessenger.of(context)
@@ -860,20 +913,23 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                                           isSelected: isSelected,
                                           onTap: () {
                                             if (_isSelectionMode) {
-                                              _toggleChatSelection(chat.id);
+                                              _toggleChatSelection(
+                                                  chat.threadId);
                                             } else {
-                                              _markConversationRead(chat.id);
+                                              _markConversationRead(chat);
                                               widget.onSelectChat(
                                                   chat.id,
                                                   chat.name,
                                                   chat.avatarUrl,
                                                   chat.online,
-                                                  chat.lastSeenAt);
+                                                  chat.lastSeenAt,
+                                                  chat.conversation);
                                             }
                                           },
                                           onLongPress: () {
                                             if (!_isSelectionMode) {
-                                              _enterSelectionMode(chat.id);
+                                              _enterSelectionMode(
+                                                  chat.threadId);
                                             }
                                           },
                                         ),
@@ -1011,6 +1067,19 @@ class _ChatTile extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
+                  if (chat.conversation?.property != null) ...[
+                    Text(
+                      chat.conversation!.property!.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _tenantPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                  ],
                   Row(
                     children: [
                       Expanded(
