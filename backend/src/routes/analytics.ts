@@ -575,6 +575,9 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
            p.id,
            p.title,
            p.image_url,
+           p.city,
+           COALESCE(NULLIF(p.address, ''), NULLIF(p.town, ''),
+                    NULLIF(p.city, ''), NULLIF(p.county, ''), '') AS location,
            p.price,
            p.status,
            p.availability_status,
@@ -605,7 +608,7 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
          FROM properties p
          WHERE p.landlord_id = $1
          ORDER BY views DESC, enquiries DESC
-         LIMIT 10`,
+         LIMIT 4`,
         [landlordId, days]
       ),
 
@@ -728,6 +731,8 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
         id: String(row.id),
         title: String(row.title),
         imageUrl: row.image_url ? String(row.image_url) : null,
+        city: row.city ? String(row.city) : null,
+        location: row.location ? String(row.location) : null,
         price: Number(row.price ?? 0),
         status: String(row.status ?? 'draft'),
         availabilityStatus: String(row.availability_status ?? 'available'),

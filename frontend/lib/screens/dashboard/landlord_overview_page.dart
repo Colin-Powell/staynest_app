@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'dart:math' as math;
@@ -16,6 +18,7 @@ import 'package:property_app/session/onboarding_prefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'landlord_dashboard_service.dart';
 import 'landlord_analytics_page.dart';
+import 'boost_listing_modal.dart';
 
 // ─── Landlord Design System Constants ─────────────────────────────────────────
 const Color _bg = Color(0xFFFAFAFA);
@@ -63,6 +66,12 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
   String _selectedAnalyticsPeriod = 'This Week';
   List<Map<String, dynamic>> _properties = [];
   Map<String, dynamic> _analyticsData = {};
+  int _selectedPerformancePropertyIndex = 0; // Added for Split UI state
+  String? _performanceLeadsPropertyId;
+  List<Map<String, dynamic>> _performanceLeads = const [];
+  bool _loadingPerformanceLeads = false;
+  int _performanceLeadsRequestId = 0;
+
   final Set<String> _dismissedRecommendationIds = {};
   String get _dismissedRecommendationKey =>
       'staynest.landlord.dismissed_recommendations.${AppSession.currentUserId ?? 'anonymous'}';
@@ -87,22 +96,26 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
   }
 
   Future<void> _loadDismissedRecommendations() async {
-    final preferences = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    setState(() {
-      _dismissedRecommendationIds.addAll(
-        preferences.getStringList(_dismissedRecommendationKey) ?? const [],
-      );
-    });
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _dismissedRecommendationIds.addAll(
+          preferences.getStringList(_dismissedRecommendationKey) ?? const [],
+        );
+      });
+    } catch (_) {}
   }
 
   Future<void> _dismissRecommendation(String id) async {
     setState(() => _dismissedRecommendationIds.add(id));
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setStringList(
-      _dismissedRecommendationKey,
-      _dismissedRecommendationIds.toList(),
-    );
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setStringList(
+        _dismissedRecommendationKey,
+        _dismissedRecommendationIds.toList(),
+      );
+    } catch (_) {}
   }
 
   Future<void> _loadData() async {
@@ -117,18 +130,22 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
         'Last 90 Days' => '90d',
         _ => '7d',
       };
-      final results = await Future.wait<dynamic>([
-        PropertiesApi.getLandlordPropertiesPage(limit: 3),
+      final results = await Future.wait<Object?>([
+        PropertiesApi.getLandlordPropertiesPage(limit: 3)
+            .then<Object?>((page) => page)
+            .catchError((_) => null),
         LandlordDashboardService.getLandlordDashboard(periodParam),
       ]);
 
       if (!mounted) return;
 
+      final dashboardData = results[1] as Map<String, dynamic>?;
       setState(() {
-        final propertyPage =
-            results[0] as ({List<Map<String, dynamic>> items, bool hasMore});
-        _properties = propertyPage.items;
-        final dashboardData = results[1] as Map<String, dynamic>?;
+        final propertyPage = results[0];
+        _properties =
+            propertyPage is ({List<Map<String, dynamic>> items, bool hasMore})
+                ? propertyPage.items
+                : const [];
         _analyticsData = dashboardData ?? {};
         if (dashboardData != null) {
           _dashboardAvailable = true;
@@ -138,7 +155,19 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
         }
 
         _isLoading = false;
+        // Reset property selection if data reloads
+        _selectedPerformancePropertyIndex = 0;
+        _performanceLeadsPropertyId = null;
+        _performanceLeads = const [];
+        _performanceLeadsRequestId++;
       });
+      final performance = dashboardData?['propertyPerformance'];
+      if (performance is List && performance.isNotEmpty) {
+        final first = performance.first;
+        if (first is Map && first['id'] != null) {
+          unawaited(_loadPerformanceLeads(first['id'].toString()));
+        }
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -153,18 +182,14 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
     return value is Map ? Map<String, dynamic>.from(value) : {};
   }
 
-  List<Map<String, dynamic>> _analyticsRows(String key) {
-    final value = _analyticsData[key];
-    if (value is! List) return const [];
-    return value.whereType<Map>().map(Map<String, dynamic>.from).toList();
-  }
-
   List<double> get _viewTrend {
     final raw = _analyticsData['chartData'] ??
         _analyticsSection('overview')['chartData'];
     if (raw is! List) return const [];
     return raw.map((value) => value is num ? value.toDouble() : 0.0).toList();
   }
+
+  get dashboardData => null;
 
   Map<String, dynamic> _kpi(String key) => _dashboardAvailable
       ? _analyticsSection('kpis')[key] is Map
@@ -430,57 +455,718 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
     );
   }
 
+  // ─── SPLIT PROPERTY PERFORMANCE UI (UPDATED TO MATCH SCREENSHOT) ─────────────
+
   Widget _buildPropertyPerformancePanel() {
-    final properties = _analyticsData['propertyPerformance'];
-    if (!_dashboardAvailable || properties is! List || properties.isEmpty) {
+    final rawProperties = _analyticsData['propertyPerformance'];
+    if (!_dashboardAvailable ||
+        rawProperties is! List ||
+        rawProperties.isEmpty) {
       return const SizedBox.shrink();
     }
-    return _buildDashboardSection(
-      title: 'Property performance',
-      child: Column(
-        children: properties.whereType<Map>().map((raw) {
-          final property = Map<String, dynamic>.from(raw);
-          return ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(property['title']?.toString() ?? 'Property'),
-            subtitle: Text(
-              '${property['status'] ?? 'draft'} · ${property['availabilityStatus'] ?? 'unknown'}\n'
-              '${property['impressions'] ?? 0} impressions · ${property['views'] ?? 0} detail views (${property['uniqueViewers'] ?? 0} unique)\n'
-              '${property['saves'] ?? 0} saves · ${property['shares'] ?? 0} shares · ${property['enquiries'] ?? 0} property-linked conversations · ${property['bookings'] ?? 0} booking requests',
-            ),
-            trailing: TextButton(
-              onPressed: () {
-                final propertyId = property['id']?.toString();
-                if (propertyId != null && widget.onOpenProperty != null) {
-                  widget.onOpenProperty!(propertyId);
-                } else {
-                  _openAnalytics();
-                }
-              },
-              child: const Text('Report'),
+    final properties = rawProperties.take(4).toList(growable: false);
+
+    if (_selectedPerformancePropertyIndex >= properties.length) {
+      _selectedPerformancePropertyIndex = 0;
+    }
+
+    final selectedProperty = Map<String, dynamic>.from(
+        properties[_selectedPerformancePropertyIndex]);
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (isDesktop || constraints.maxWidth >= 900) {
+          return SizedBox(
+            height: 760, // Fixed height for desktop to prevent overflow
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildPerformanceLeftSidebar(properties),
+                const SizedBox(width: 16),
+                Expanded(child: _buildPerformanceMainDetail(selectedProperty)),
+              ],
             ),
           );
-        }).toList(),
+        } else {
+          // Mobile responsive layout
+          return Column(
+            children: [
+              _buildPerformanceLeftSidebar(properties, isMobile: true),
+              const SizedBox(height: 16),
+              _buildPerformanceMainDetail(selectedProperty, isMobile: true),
+            ],
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildPerformanceLeftSidebar(List<dynamic> properties,
+      {bool isMobile = false}) {
+    return Container(
+      width: isMobile ? double.infinity : 320,
+      height: isMobile ? null : 760,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!isMobile) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Properties',
+                    style: GoogleFonts.poppins(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: _dark)),
+                Text('${properties.length}',
+                    style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: _grey,
+                        fontWeight: FontWeight.w500)),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (isMobile)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final tileWidth = (constraints.maxWidth - 8) / 2;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (var index = 0; index < properties.length; index++)
+                      SizedBox(
+                        width: tileWidth,
+                        child: _buildPerformancePropertyTile(
+                          properties,
+                          index,
+                          isMobile: true,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            )
+          else
+            Expanded(
+              child: Column(
+                children: [
+                  for (var index = 0; index < properties.length; index++)
+                    _buildPerformancePropertyTile(properties, index),
+                ],
+              ),
+            ),
+          _buildPendingReplies(),
+          const SizedBox(height: 16),
+          // CTA Boost Listing at the remaining space bottom
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () {
+                final property = Map<String, dynamic>.from(
+                  properties[_selectedPerformancePropertyIndex],
+                );
+                final propertyId = property['id']?.toString();
+                if (propertyId != null && propertyId.isNotEmpty) {
+                  BoostListingModal.show(context, propertyId);
+                }
+              },
+              icon: const Icon(PhosphorIconsRegular.rocketLaunch, size: 18),
+              label: Text('Boost listing',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              style: FilledButton.styleFrom(
+                backgroundColor: _dark, // Dark contrast for CTA
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildShimmerProperties() {
-    return Column(
-      children: List.generate(
-          2,
-          (index) => Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Shimmer.fromColors(
-                  baseColor: Colors.grey.shade200,
-                  highlightColor: Colors.grey.shade100,
-                  child: Container(
-                      height: 88,
-                      decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20))),
+  Widget _buildPerformancePropertyTile(
+    List<dynamic> properties,
+    int index, {
+    bool isMobile = false,
+  }) {
+    final property = Map<String, dynamic>.from(properties[index]);
+    final isSelected = index == _selectedPerformancePropertyIndex;
+    final city = property['location']?.toString() ??
+        property['city']?.toString() ??
+        'Location unavailable';
+
+    return GestureDetector(
+      onTap: () => _selectPerformanceProperty(index, properties),
+      child: Container(
+        width: double.infinity,
+        margin: EdgeInsets.only(bottom: isMobile ? 0 : 8, right: 8),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isSelected ? _bg : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? _grey.withOpacity(0.2) : Colors.transparent,
+          ),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: buildPropertyImage(
+                _propertyPerformanceImage(property),
+                width: 40,
+                height: 40,
+                fit: BoxFit.cover,
+                errorPlaceholder: Container(
+                  width: 40,
+                  height: 40,
+                  color: _grey.withOpacity(0.1),
+                  child: const Icon(PhosphorIconsRegular.image,
+                      color: _grey, size: 20),
                 ),
-              )),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    property['title']?.toString() ?? 'Untitled',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.w500,
+                      color: _dark,
+                    ),
+                  ),
+                  Text(
+                    city,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(fontSize: 11, color: _grey),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected && !isMobile)
+              const Icon(PhosphorIconsRegular.caretDown,
+                  color: _dark, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPerformanceMainDetail(Map<String, dynamic> property,
+      {bool isMobile = false}) {
+    return SizedBox(
+      height: isMobile ? null : 760,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildPerformanceHeroCard(property, isMobile: isMobile),
+          const SizedBox(height: 12),
+          _buildPerformanceMetricsCard(property, isMobile: isMobile),
+          const SizedBox(height: 12),
+          if (isMobile)
+            _buildPerformanceFunnelCard(property, isMobile: true)
+          else
+            Expanded(
+              child: _buildPerformanceFunnelCard(property, isMobile: false),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPerformanceHeroCard(Map<String, dynamic> property,
+      {required bool isMobile}) {
+    final imageUrl = _propertyPerformanceImage(property);
+    final title = property['title']?.toString() ?? 'Untitled property';
+    final location = property['location']?.toString() ??
+        property['city']?.toString() ??
+        'Location unavailable';
+    return Container(
+      height: isMobile ? 220 : 320,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: _bg,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          buildPropertyImage(
+            imageUrl,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            errorPlaceholder: Container(
+              color: _bg,
+              child: const Icon(PhosphorIconsRegular.image,
+                  color: _grey, size: 48),
+            ),
+          ),
+          // Soft Gradient
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.4),
+                    Colors.transparent,
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.6),
+                  ],
+                  stops: const [0.0, 0.3, 0.7, 1.0],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 24,
+            left: 24,
+            right: 24,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: isMobile ? 24 : 32,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2),
+                ),
+                Text(
+                  location,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            bottom: 24,
+            left: 24,
+            child: _buildSelectedPropertyLeads(isMobile: isMobile),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedPropertyLeads({required bool isMobile}) {
+    final displayedLeads = _performanceLeads.take(3).toList();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_loadingPerformanceLeads)
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          else if (displayedLeads.isEmpty)
+            const Icon(PhosphorIconsRegular.users,
+                size: 16, color: Colors.white)
+          else
+            SizedBox(
+              width: 24.0 + (displayedLeads.length - 1) * 16.0,
+              height: 26,
+              child: Stack(
+                children: [
+                  for (var index = 0; index < displayedLeads.length; index++)
+                    Positioned(
+                      left: index * 16.0,
+                      child: Tooltip(
+                        message:
+                            displayedLeads[index]['name']?.toString() ?? 'Lead',
+                        child: Container(
+                          width: 26,
+                          height: 26,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                          child: ClipOval(
+                            child: AppSession.buildAvatar(
+                              displayedLeads[index]['avatar']?.toString(),
+                              width: 24,
+                              height: 24,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          const SizedBox(width: 8),
+          Text(
+            _loadingPerformanceLeads
+                ? 'Loading leads'
+                : _performanceLeads.isEmpty
+                    ? 'No high-intent leads'
+                    : '${_performanceLeads.length} high-intent leads',
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: isMobile ? 10 : 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPerformanceMetricsCard(Map<String, dynamic> property,
+      {required bool isMobile}) {
+    int metric(String key) =>
+        int.tryParse(property[key]?.toString() ?? '') ?? 0;
+    final items = <(String, String, IconData)>[
+      (
+        'Impressions',
+        metric('impressions').toString(),
+        PhosphorIconsRegular.images
+      ),
+      ('Detail views', metric('views').toString(), PhosphorIconsRegular.eye),
+      ('Saved', metric('saves').toString(), PhosphorIconsRegular.heart),
+      (
+        'Inquiries',
+        metric('enquiries').toString(),
+        PhosphorIconsRegular.chatTeardropText
+      ),
+      (
+        'Bookings',
+        metric('bookings').toString(),
+        PhosphorIconsRegular.calendarCheck
+      ),
+    ];
+
+    return Container(
+      padding:
+          EdgeInsets.symmetric(horizontal: isMobile ? 14 : 24, vertical: 20),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = constraints.maxWidth < 560 ? 2 : 5;
+          final gap = 12.0;
+          final itemWidth =
+              (constraints.maxWidth - gap * (columns - 1)) / columns;
+          return Wrap(
+            spacing: gap,
+            runSpacing: 16,
+            children: [
+              for (final item in items)
+                SizedBox(
+                  width: itemWidth,
+                  child: _buildMetricItem(item.$1, item.$2, item.$3),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildMetricItem(String label, String value, IconData icon) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 16, color: _green),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.poppins(fontSize: 11, color: _grey),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: _dark,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPerformanceFunnelCard(Map<String, dynamic> property,
+      {required bool isMobile}) {
+    int metric(String key) =>
+        int.tryParse(property[key]?.toString() ?? '') ?? 0;
+    final impressions = metric('impressions');
+    final views = metric('views');
+    final enquiries = metric('enquiries');
+    final bookings = metric('bookings');
+    final maximum = [impressions, views, enquiries, bookings]
+        .fold<int>(0, (current, value) => current > value ? current : value);
+
+    return Container(
+      padding: EdgeInsets.all(isMobile ? 16 : 24),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Activity by stage',
+              style: GoogleFonts.poppins(
+                  fontSize: 16, fontWeight: FontWeight.w600, color: _dark)),
+          const SizedBox(height: 4),
+          Text(
+            'Reporting-period counts; stages are not a sequential user cohort.',
+            style: GoogleFonts.poppins(fontSize: 11, color: _grey),
+          ),
+          const SizedBox(height: 16),
+          _buildFunnelRow(
+              'Impressions', impressions, maximum, PhosphorIconsRegular.images),
+          const SizedBox(height: 14),
+          _buildFunnelRow(
+              'Detail views', views, maximum, PhosphorIconsRegular.eye),
+          const SizedBox(height: 14),
+          _buildFunnelRow('Conversations', enquiries, maximum,
+              PhosphorIconsRegular.chatTeardropText),
+          const SizedBox(height: 14),
+          _buildFunnelRow('Booking requests', bookings, maximum,
+              PhosphorIconsRegular.calendarCheck),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFunnelRow(
+    String label,
+    int count,
+    int maximum,
+    IconData icon,
+  ) {
+    final fraction =
+        maximum == 0 ? 0.0 : (count / maximum).clamp(0.0, 1.0).toDouble();
+    return Column(
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 15, color: _grey),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(fontSize: 12, color: _dark)),
+            ),
+            Text(count.toString(),
+                style: GoogleFonts.poppins(
+                    fontSize: 12, fontWeight: FontWeight.w600, color: _dark)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: LinearProgressIndicator(
+            value: fraction,
+            minHeight: 7,
+            color: _green,
+            backgroundColor: const Color(0xFFE9ECEA),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _propertyPerformanceImage(Map<String, dynamic> property) {
+    final imageUrl = property['imageUrl'] ?? property['image_url'];
+    if (imageUrl is String && imageUrl.trim().isNotEmpty) return imageUrl;
+
+    final images = property['images'];
+    if (images is List && images.isNotEmpty) {
+      final firstImage = images.first;
+      final image = firstImage is Map
+          ? firstImage['url']?.toString()
+          : firstImage?.toString();
+      if (image != null && image.trim().isNotEmpty) return image;
+    }
+
+    return mapApiProperty(property).image;
+  }
+
+  Future<void> _loadPerformanceLeads(String propertyId) async {
+    if (propertyId.isEmpty || _performanceLeadsPropertyId == propertyId) return;
+    final requestId = ++_performanceLeadsRequestId;
+    setState(() {
+      _performanceLeadsPropertyId = propertyId;
+      _loadingPerformanceLeads = true;
+    });
+    final response =
+        await LandlordDashboardService.getPropertyManagementData(propertyId);
+    if (!mounted || requestId != _performanceLeadsRequestId) return;
+    final rawLeads = response?['leads'];
+    setState(() {
+      _performanceLeads = rawLeads is List
+          ? rawLeads
+              .whereType<Map>()
+              .map((lead) => Map<String, dynamic>.from(lead))
+              .toList()
+          : const [];
+      _loadingPerformanceLeads = false;
+    });
+  }
+
+  void _selectPerformanceProperty(int index, List<dynamic> properties) {
+    final property = Map<String, dynamic>.from(properties[index]);
+    setState(() => _selectedPerformancePropertyIndex = index);
+    _loadPerformanceLeads(property['id']?.toString() ?? '');
+  }
+
+  List<Map<String, dynamic>> get _unansweredRecommendations {
+    final raw = _analyticsData['recommendations'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .where((item) => item['type'] == 'unanswered_enquiry')
+        .toList();
+  }
+
+  Widget _buildPendingReplies() {
+    final pending = _unansweredRecommendations.take(3).toList();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(PhosphorIconsRegular.chatTeardropText,
+                  size: 16, color: _dark),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Pending replies',
+                  style: GoogleFonts.poppins(
+                      fontSize: 13, fontWeight: FontWeight.w600, color: _dark),
+                ),
+              ),
+              if (pending.isNotEmpty)
+                Text(
+                  '${_unansweredRecommendations.length}',
+                  style: GoogleFonts.poppins(fontSize: 12, color: _grey),
+                ),
+            ],
+          ),
+          if (_dashboardAvailable && pending.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('No unanswered property messages.',
+                  style: GoogleFonts.poppins(fontSize: 11, color: _grey)),
+            ),
+          for (final item in pending)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(PhosphorIconsRegular.clock,
+                  size: 16, color: Color(0xFFB54708)),
+              title: Text(
+                item['property'] is Map
+                    ? (item['property'] as Map)['title']?.toString() ??
+                        'Property inquiry'
+                    : 'Property inquiry',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.poppins(
+                    fontSize: 11, fontWeight: FontWeight.w500, color: _dark),
+              ),
+              subtitle: Text(
+                item['body']?.toString() ?? 'A tenant is waiting for a reply.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.poppins(fontSize: 10, color: _grey),
+              ),
+              onTap: () {
+                final id = item['conversationId']?.toString();
+                if (id != null && id.isNotEmpty) {
+                  widget.onOpenConversation?.call(id);
+                } else {
+                  widget.onViewUnansweredMessages?.call();
+                }
+              },
+            ),
+          if (pending.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: widget.onViewUnansweredMessages,
+                child: const Text('View unanswered messages'),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -666,59 +1352,6 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                         ),
                       ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDesktopFunnelPanel() {
-    final steps = _analyticsRows('funnel');
-    return _buildDesktopPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Activity stages',
-              style: GoogleFonts.poppins(
-                  color: _dark, fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 22),
-          if (_isLoading)
-            const Center(child: CircularProgressIndicator(color: _green))
-          else if (!_dashboardAvailable)
-            Text('Activity data is currently unavailable.',
-                style: GoogleFonts.poppins(color: _grey, fontSize: 13))
-          else if (steps.isEmpty)
-            Text('Funnel data will appear as people discover your listings.',
-                style: GoogleFonts.poppins(color: _grey, fontSize: 13))
-          else ...[
-            Text(
-              _analyticsData['funnelDefinition']?.toString() ??
-                  'Counts use the selected period; activity stages are not a sequential user journey.',
-              style: GoogleFonts.poppins(color: _grey, fontSize: 12),
-            ),
-            const SizedBox(height: 12),
-            ...steps.map((step) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          step['label']?.toString() ?? 'Activity',
-                          style:
-                              GoogleFonts.poppins(color: _grey, fontSize: 13),
-                        ),
-                      ),
-                      Text(
-                        step['value']?.toString() ?? '0',
-                        style: GoogleFonts.poppins(
-                          color: _dark,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
-          ],
         ],
       ),
     );
@@ -920,22 +1553,7 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                     const SizedBox(height: 14),
                     _buildPropertyPerformancePanel(),
                     const SizedBox(height: 14),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final chartWidth = (constraints.maxWidth - 14) * 0.62;
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: chartWidth,
-                              child: _buildDesktopViewsPanel(),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(child: _buildDesktopFunnelPanel()),
-                          ],
-                        );
-                      },
-                    ),
+                    _buildDesktopViewsPanel(),
                     const SizedBox(height: 14),
                     _buildDesktopEngagementPanel(),
                     if (_errorMessage != null) ...[
@@ -1398,6 +2016,25 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
           const Icon(PhosphorIconsRegular.caretRight, color: _grey, size: 20),
         ],
       ),
+    );
+  }
+
+  Widget _buildShimmerProperties() {
+    return Column(
+      children: List.generate(
+          2,
+          (index) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Shimmer.fromColors(
+                  baseColor: Colors.grey.shade200,
+                  highlightColor: Colors.grey.shade100,
+                  child: Container(
+                      height: 88,
+                      decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20))),
+                ),
+              )),
     );
   }
 }
