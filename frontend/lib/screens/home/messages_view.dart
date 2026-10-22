@@ -26,6 +26,8 @@ class _ChatItem {
   final String time;
   int unread = 0;
   bool online;
+  DateTime? lastSeenAt;
+  int presenceRevision;
   final DateTime? lastMessageAt;
 
   _ChatItem({
@@ -37,6 +39,8 @@ class _ChatItem {
     this.lastMessageAt,
     this.unread = 0,
     this.online = false,
+    this.lastSeenAt,
+    this.presenceRevision = 0,
   });
 }
 
@@ -45,8 +49,8 @@ enum _MessageFilter { all, unread, landlords, archived }
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 class MessagesViewScreen extends StatefulWidget {
-  final void Function(String userId, String name, String? avatarUrl)
-      onSelectChat;
+  final void Function(String userId, String name, String? avatarUrl,
+      bool isOnline, DateTime? lastSeenAt) onSelectChat;
   final ValueChanged<bool>? onSelectionModeChanged;
   final VoidCallback? onClose;
 
@@ -69,6 +73,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
   String _searchQuery = '';
 
   bool _isSelectionMode = false;
+  bool _autoOpenedConversation = false;
   _MessageFilter _currentFilter = _MessageFilter.all;
   Set<String> _selectedIds = {};
 
@@ -120,22 +125,45 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
             lastMessageAt: DateTime.fromMillisecondsSinceEpoch(msg.ts),
             unread: msg.from != currentUserId ? chat.unread + 1 : chat.unread,
             online: chat.online,
+            lastSeenAt: chat.lastSeenAt,
+            presenceRevision: chat.presenceRevision,
           );
           // Move to top
           final item = _chats.removeAt(index);
           _chats.insert(0, item);
         });
+        if (msg.from != currentUserId &&
+            MediaQuery.sizeOf(context).width >= 768 &&
+            !_isSelectionMode) {
+          final chat = _chats.firstWhere((item) => item.id == otherId);
+          widget.onSelectChat(
+            chat.id,
+            chat.name,
+            chat.avatarUrl,
+            chat.online,
+            chat.lastSeenAt,
+          );
+        }
       } else {
-        _loadConversations();
+        _loadConversations(preferredUserId: otherId);
       }
     });
 
     _presenceSubscription = SocketService.instance.presence.listen((data) {
       final userId = data['userId']?.toString();
       final isOnline = data['online'] == true;
+      final lastSeenAt =
+          DateTime.tryParse(data['lastSeenAt']?.toString() ?? '');
+      final revision = int.tryParse(data['revision']?.toString() ?? '') ?? 0;
       final idx = _chats.indexWhere((c) => c.id == userId);
       if (idx != -1) {
-        if (mounted) setState(() => _chats[idx].online = isOnline);
+        if (mounted) {
+          setState(() {
+            _chats[idx].online = isOnline;
+            _chats[idx].lastSeenAt = lastSeenAt;
+            _chats[idx].presenceRevision = revision;
+          });
+        }
       }
     });
   }
@@ -166,7 +194,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
     });
   }
 
-  Future<void> _loadConversations() async {
+  Future<void> _loadConversations({String? preferredUserId}) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -176,19 +204,51 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
       final conversations = await MessageService.instance.fetchConversations();
       if (!mounted) return;
       setState(() {
-        _chats = conversations
-            .map((c) => _ChatItem(
-                  id: c.userId,
-                  name: c.userName,
-                  avatarUrl: c.userAvatar,
-                  msg: c.lastMessage ?? 'No messages yet',
-                  time: _formatTime(c.lastMessageAt),
-                  lastMessageAt: c.lastMessageAt,
-                  unread: c.unreadCount,
-                ))
-            .toList();
+        _chats = conversations.map((c) {
+          final live = SocketService.instance.latestPresenceFor(c.userId);
+          final liveRevision =
+              int.tryParse(live?['revision']?.toString() ?? '') ?? -1;
+          final useLivePresence = liveRevision > c.presenceRevision;
+          final liveOnline = live == null ? false : live['online'] == true;
+          return _ChatItem(
+            id: c.userId,
+            name: c.userName,
+            avatarUrl: c.userAvatar,
+            msg: c.lastMessage ?? 'No messages yet',
+            time: _formatTime(c.lastMessageAt),
+            lastMessageAt: c.lastMessageAt,
+            unread: c.unreadCount,
+            online: useLivePresence ? liveOnline : c.userOnline,
+            lastSeenAt: useLivePresence
+                ? DateTime.tryParse(live?['lastSeenAt']?.toString() ?? '')
+                : c.lastSeenAt,
+            presenceRevision:
+                useLivePresence ? liveRevision : c.presenceRevision,
+          );
+        }).toList();
         _isLoading = false;
       });
+      if (!_autoOpenedConversation &&
+          MediaQuery.sizeOf(context).width >= 768 &&
+          _chats.isNotEmpty) {
+        _autoOpenedConversation = true;
+        final selected = selectConversation<_ChatItem>(
+          conversations: _chats,
+          userIdOf: (chat) => chat.id,
+          unreadCountOf: (chat) => chat.unread,
+          preferredUserId: preferredUserId,
+        )!;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          widget.onSelectChat(
+            selected.id,
+            selected.name,
+            selected.avatarUrl,
+            selected.online,
+            selected.lastSeenAt,
+          );
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -553,7 +613,12 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                   final contact = _suggestedContacts[i];
                   return GestureDetector(
                     onTap: () => widget.onSelectChat(
-                        contact.id, contact.name, contact.avatarUrl),
+                      contact.id,
+                      contact.name,
+                      contact.avatarUrl,
+                      contact.online,
+                      contact.lastSeenAt,
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.only(right: 20),
                       child: Column(
@@ -798,8 +863,12 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
                                               _toggleChatSelection(chat.id);
                                             } else {
                                               _markConversationRead(chat.id);
-                                              widget.onSelectChat(chat.id,
-                                                  chat.name, chat.avatarUrl);
+                                              widget.onSelectChat(
+                                                  chat.id,
+                                                  chat.name,
+                                                  chat.avatarUrl,
+                                                  chat.online,
+                                                  chat.lastSeenAt);
                                             }
                                           },
                                           onLongPress: () {

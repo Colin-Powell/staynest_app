@@ -48,6 +48,8 @@ class SocketService {
   SocketService._internal();
 
   io.Socket? _socket;
+  Timer? _presenceHeartbeatTimer;
+  final Map<String, Map<String, dynamic>> _latestPresenceByUser = {};
   final Set<String> _seenMessageKeys = <String>{};
   final StreamController<SocketMessage> _msgController =
       StreamController.broadcast();
@@ -56,6 +58,9 @@ class SocketService {
   final StreamController<Map<String, dynamic>> _presenceController =
       StreamController.broadcast();
   Stream<Map<String, dynamic>> get presence => _presenceController.stream;
+
+  Map<String, dynamic>? latestPresenceFor(String userId) =>
+      _latestPresenceByUser[userId];
 
   final StreamController<Map<String, dynamic>> _signalController =
       StreamController.broadcast();
@@ -70,6 +75,7 @@ class SocketService {
   Stream<Map<String, dynamic>> get seen => _seenController.stream;
 
   void connect({String? url, String? token}) {
+    disconnect();
     _seenMessageKeys.clear();
 
     final base = url ?? AppSession.apiBaseUrl;
@@ -77,7 +83,7 @@ class SocketService {
     final uri =
         base.replaceAll(RegExp(r'/api\/?\$'), '').replaceAll('/api', '');
 
-    _socket = io.io(
+    final socket = io.io(
         uri,
         io.OptionBuilder()
             .setTransports(['websocket'])
@@ -86,12 +92,19 @@ class SocketService {
             .setAuth({'token': token})
             .enableAutoConnect()
             .build());
+    _socket = socket;
 
-    _socket?.onConnect((_) {
-      // ignore
+    socket.onConnect((_) {
+      socket.emit('presence:heartbeat');
+      _presenceHeartbeatTimer?.cancel();
+      _presenceHeartbeatTimer = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => socket.emit('presence:heartbeat'),
+      );
     });
+    socket.onDisconnect((_) => _presenceHeartbeatTimer?.cancel());
 
-    _socket?.on('message', (data) {
+    socket.on('message', (data) {
       final message = data is Map<String, dynamic>
           ? SocketMessage.fromJson(data)
           : data is Map
@@ -109,34 +122,51 @@ class SocketService {
       _msgController.add(message);
     });
 
-    _socket?.on('presence', (data) {
-      if (data is Map<String, dynamic>) _presenceController.add(data);
+    socket.on('presence', (data) {
+      if (data is Map) {
+        final presence = Map<String, dynamic>.from(data);
+        final userId = presence['userId']?.toString();
+        if (userId == null || userId.isEmpty) return;
+        final revision =
+            int.tryParse(presence['revision']?.toString() ?? '') ?? 0;
+        final previousRevision = int.tryParse(
+              _latestPresenceByUser[userId]?['revision']?.toString() ?? '',
+            ) ??
+            -1;
+        if (revision < previousRevision) return;
+        _latestPresenceByUser[userId] = presence;
+        _presenceController.add(presence);
+      }
     });
 
-    _socket?.on('typing', (data) {
-      if (data is Map<String, dynamic>) _typingController.add(data);
+    socket.on('typing', (data) {
+      if (data is Map) _typingController.add(Map<String, dynamic>.from(data));
     });
 
-    _socket?.on('mark_seen', (data) {
-      if (data is Map<String, dynamic>) _seenController.add(data);
+    socket.on('mark_seen', (data) {
+      if (data is Map) _seenController.add(Map<String, dynamic>.from(data));
     });
 
-    _socket?.on('offer', (data) {
+    socket.on('offer', (data) {
       _signalController.add({'type': 'offer', ...?data as Map?});
     });
 
-    _socket?.on('answer', (data) {
+    socket.on('answer', (data) {
       _signalController.add({'type': 'answer', ...?data as Map?});
     });
 
-    _socket?.on('ice-candidate', (data) {
+    socket.on('ice-candidate', (data) {
       _signalController.add({'type': 'ice', ...?data as Map?});
     });
   }
 
   void disconnect() {
+    _presenceHeartbeatTimer?.cancel();
+    _presenceHeartbeatTimer = null;
     _socket?.disconnect();
+    _socket?.dispose();
     _socket = null;
+    _latestPresenceByUser.clear();
   }
 
   void sendMessage({required String to, required String text}) {

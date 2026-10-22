@@ -37,6 +37,9 @@ class ConversationModel {
   final String? lastMessage;
   final DateTime? lastMessageAt;
   final int unreadCount;
+  final bool userOnline;
+  final DateTime? lastSeenAt;
+  final int presenceRevision;
 
   ConversationModel({
     required this.userId,
@@ -45,6 +48,9 @@ class ConversationModel {
     this.lastMessage,
     this.lastMessageAt,
     this.unreadCount = 0,
+    this.userOnline = false,
+    this.lastSeenAt,
+    this.presenceRevision = 0,
   });
 
   factory ConversationModel.fromJson(Map<String, dynamic> json) {
@@ -60,8 +66,37 @@ class ConversationModel {
       lastMessageAt:
           DateTime.tryParse(json['last_message_at']?.toString() ?? ''),
       unreadCount: unreadCount,
+      userOnline: json['user_online'] == true,
+      lastSeenAt: DateTime.tryParse(json['last_seen_at']?.toString() ?? ''),
+      presenceRevision:
+          int.tryParse(json['presence_revision']?.toString() ?? '') ?? 0,
     );
   }
+}
+
+T? selectConversation<T>({
+  required List<T> conversations,
+  required String Function(T) userIdOf,
+  required int Function(T) unreadCountOf,
+  String? selectedUserId,
+  String? preferredUserId,
+}) {
+  T? findById(String? userId) {
+    if (userId == null || userId.isEmpty) return null;
+    for (final conversation in conversations) {
+      if (userIdOf(conversation) == userId) return conversation;
+    }
+    return null;
+  }
+
+  final selected = findById(selectedUserId);
+  if (selected != null) return selected;
+  final preferred = findById(preferredUserId);
+  if (preferred != null) return preferred;
+  for (final conversation in conversations) {
+    if (unreadCountOf(conversation) > 0) return conversation;
+  }
+  return conversations.isEmpty ? null : conversations.first;
 }
 
 class MessageService {
@@ -72,7 +107,9 @@ class MessageService {
   final String _baseUrl = AppSession.apiBaseUrl;
 
   Future<String> saveMessage(
-      {required String toUserId, required String text, String? idempotencyKey}) async {
+      {required String toUserId,
+      required String text,
+      String? idempotencyKey}) async {
     final key = idempotencyKey ?? const Uuid().v4();
     final response = await _client.post(
       Uri.parse('$_baseUrl/messages'),
@@ -92,7 +129,8 @@ class MessageService {
     int offset = 0,
   }) async {
     final response = await _client.get(
-      Uri.parse('$_baseUrl/messages/conversation/$userId?limit=$limit&offset=$offset'),
+      Uri.parse(
+          '$_baseUrl/messages/conversation/$userId?limit=$limit&offset=$offset'),
     );
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -110,8 +148,7 @@ class MessageService {
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     final conversations = (json['data']?['conversations'] as List<dynamic>?)
-            ?.map(
-                (c) => ConversationModel.fromJson(c as Map<String, dynamic>))
+            ?.map((c) => ConversationModel.fromJson(c as Map<String, dynamic>))
             .toList() ??
         [];
     return conversations;
@@ -140,7 +177,8 @@ class MessageService {
 
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       return (json['data']?['contacts'] as List<dynamic>?)
-              ?.map((c) => ConversationModel.fromJson(c as Map<String, dynamic>))
+              ?.map(
+                  (c) => ConversationModel.fromJson(c as Map<String, dynamic>))
               .toList() ??
           [];
     } catch (err) {

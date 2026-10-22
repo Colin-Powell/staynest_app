@@ -5,6 +5,7 @@ import 'package:property_app/theme.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/responsive_layout.dart';
+import 'package:property_app/utils/api_result.dart';
 
 class SuperAdminLoginView extends StatefulWidget {
   const SuperAdminLoginView({super.key});
@@ -66,7 +67,7 @@ class _SuperAdminLoginViewState extends State<SuperAdminLoginView> {
       }
     } catch (e) {
       setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = ApiResult.mapError(e);
         _isLoading = false;
       });
     }

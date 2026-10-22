@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -9,6 +10,7 @@ import 'package:property_app/models/property.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/property_service.dart';
 import 'package:property_app/widgets/property_card.dart';
+import 'package:property_app/widgets/app_footer.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/utils/geocoding.dart';
 
@@ -385,70 +387,6 @@ class _SearchViewState extends State<SearchView> {
     );
   }
 
-  /// Defaults reproduce the original mobile shimmer exactly.
-  Widget _buildShimmerLoading({
-    int columns = 2,
-    double extent = 260,
-    EdgeInsets padding = const EdgeInsets.fromLTRB(24, 0, 24, 120),
-    double crossSpacing = 16,
-    double mainSpacing = 24,
-    int itemCount = 6,
-  }) {
-    return GridView.builder(
-      physics: const NeverScrollableScrollPhysics(),
-      padding: padding,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: columns,
-        crossAxisSpacing: crossSpacing,
-        mainAxisSpacing: mainSpacing,
-        mainAxisExtent: extent, // Fixed height to fit image + text nicely
-      ),
-      itemCount: itemCount,
-      itemBuilder: (context, index) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Shimmer.fromColors(
-              baseColor: Colors.grey.shade200,
-              highlightColor: Colors.grey.shade100,
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Shimmer.fromColors(
-              baseColor: Colors.grey.shade200,
-              highlightColor: Colors.grey.shade100,
-              child: Container(
-                  height: 14,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(4))),
-            ),
-            const SizedBox(height: 8),
-            Shimmer.fromColors(
-              baseColor: Colors.grey.shade200,
-              highlightColor: Colors.grey.shade100,
-              child: Container(
-                  height: 12,
-                  width: 80,
-                  decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(4))),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _buildGridCard(Property property, int index, {bool desktop = false}) {
     final staggerIndex = desktop ? math.min(index, 12) : index;
 
@@ -646,29 +584,13 @@ class _SearchViewState extends State<SearchView> {
 
                 /// RESULTS (2-Column Grid View)
                 Expanded(
-                  child: _loading
-                      ? _buildShimmerLoading()
-                      : _hasError
-                          ? _buildErrorState()
-                          : results.isEmpty
-                              ? _buildEmptyState()
-                              : GridView.builder(
-                                  physics: const BouncingScrollPhysics(),
-                                  padding:
-                                      const EdgeInsets.fromLTRB(24, 0, 24, 120),
-                                  gridDelegate:
-                                      const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    crossAxisSpacing: 16,
-                                    mainAxisSpacing: 24,
-                                    mainAxisExtent: 280,
-                                  ),
-                                  itemCount: results.length,
-                                  itemBuilder: (context, index) {
-                                    return _buildGridCard(
-                                        results[index], index);
-                                  },
-                                ),
+                  child: _buildResultsScrollView(
+                    columns: 2,
+                    extent: 280,
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                    crossSpacing: 16,
+                    mainSpacing: 24,
+                  ),
                 ),
               ],
             ),
@@ -734,35 +656,6 @@ class _SearchViewState extends State<SearchView> {
 
     final items = _loading || _hasError ? const <Property>[] : results;
 
-    Widget body;
-    if (_loading) {
-      body = _buildShimmerLoading(
-        columns: columns,
-        extent: extent,
-        padding: gridPadding,
-        crossSpacing: crossSpacing,
-        mainSpacing: mainSpacing,
-        itemCount: columns * 2,
-      );
-    } else if (_hasError) {
-      body = _buildErrorState();
-    } else if (items.isEmpty) {
-      body = _buildEmptyState();
-    } else {
-      body = GridView.builder(
-        padding: gridPadding,
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: columns,
-          crossAxisSpacing: crossSpacing,
-          mainAxisSpacing: mainSpacing,
-          mainAxisExtent: extent,
-        ),
-        itemCount: items.length,
-        itemBuilder: (context, index) =>
-            _buildGridCard(items[index], index, desktop: true),
-      );
-    }
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -801,7 +694,16 @@ class _SearchViewState extends State<SearchView> {
                           ),
                         ),
                       ),
-                    Expanded(child: body),
+                    Expanded(
+                      child: _buildResultsScrollView(
+                        columns: columns,
+                        extent: extent,
+                        padding: gridPadding,
+                        crossSpacing: crossSpacing,
+                        mainSpacing: mainSpacing,
+                        desktop: true,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -854,6 +756,119 @@ class _SearchViewState extends State<SearchView> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildResultsScrollView({
+    required int columns,
+    required double extent,
+    required EdgeInsets padding,
+    required double crossSpacing,
+    required double mainSpacing,
+    bool desktop = false,
+  }) {
+    final items = _loading || _hasError ? const <Property>[] : results;
+    return CustomScrollView(
+      physics: desktop
+          ? const ClampingScrollPhysics()
+          : const BouncingScrollPhysics(),
+      slivers: [
+        if (_loading)
+          SliverPadding(
+            padding: padding,
+            sliver: SliverGrid(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                crossAxisSpacing: crossSpacing,
+                mainAxisSpacing: mainSpacing,
+                mainAxisExtent: extent,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => _buildSkeletonCard(),
+                childCount: columns * 2,
+              ),
+            ),
+          )
+        else if (_hasError)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _buildErrorState(),
+          )
+        else if (items.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _buildEmptyState(),
+          )
+        else
+          SliverPadding(
+            padding: padding,
+            sliver: SliverGrid(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                crossAxisSpacing: crossSpacing,
+                mainAxisSpacing: mainSpacing,
+                mainAxisExtent: extent,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => _buildGridCard(
+                  items[index],
+                  index,
+                  desktop: desktop,
+                ),
+                childCount: items.length,
+              ),
+            ),
+          ),
+        if (kIsWeb) const SliverToBoxAdapter(child: AppFooter()),
+        SliverToBoxAdapter(child: SizedBox(height: desktop ? 24 : 120)),
+      ],
+    );
+  }
+
+  Widget _buildSkeletonCard() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Shimmer.fromColors(
+          baseColor: Colors.grey.shade200,
+          highlightColor: Colors.grey.shade100,
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Shimmer.fromColors(
+          baseColor: Colors.grey.shade200,
+          highlightColor: Colors.grey.shade100,
+          child: Container(
+            height: 14,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Shimmer.fromColors(
+          baseColor: Colors.grey.shade200,
+          highlightColor: Colors.grey.shade100,
+          child: Container(
+            height: 12,
+            width: 80,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

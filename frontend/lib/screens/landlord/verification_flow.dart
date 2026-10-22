@@ -15,6 +15,7 @@ import 'package:property_app/services/api_client.dart';
 import 'package:property_app/services/uploads.dart';
 import 'package:property_app/services/image_upload_service.dart';
 import 'package:property_app/services/verification_api.dart';
+import 'package:property_app/utils/api_result.dart';
 
 // ─── Landlord Design System Constants ─────────────────────────────────────────
 const Color _bg = Color(0xFFFAFAFA);
@@ -681,9 +682,7 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
       }
     } catch (e) {
       if (mounted) setState(() => _isSubmitting = false);
-      final message = e is ApiException && e.message.isNotEmpty
-          ? e.message
-          : 'Something went wrong while submitting your documents. Please try again later.';
+      final message = ApiResult.mapError(e);
       if (mounted) {
         ModalUtils.showError(context, 'Submission Failed', message);
       }
@@ -1321,9 +1320,11 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
       if (xfile == null) return;
 
       // On native ensure the file was written to disk
-      if (!kIsWeb && !await File(xfile.path).exists()) throw Exception('File not found');
+      if (!kIsWeb && !await File(xfile.path).exists())
+        throw Exception('File not found');
 
-      final compressedFile = await ImageUploadService.compressPickedImage(xfile);
+      final compressedFile =
+          await ImageUploadService.compressPickedImage(xfile);
 
       if (!mounted) return;
       setState(() {
@@ -1352,7 +1353,8 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
       );
       if (xfile == null) return;
 
-      final compressedFile = await ImageUploadService.compressPickedImage(xfile);
+      final compressedFile =
+          await ImageUploadService.compressPickedImage(xfile);
       if (!mounted) return;
       setState(() {
         _capturedImage = compressedFile;
@@ -1364,8 +1366,8 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isUploading = false);
-      ModalUtils.showError(context, 'Upload Error',
-          'Failed to upload image. Please try again.');
+      ModalUtils.showError(
+          context, 'Upload Error', 'Failed to upload image. Please try again.');
     }
   }
 
@@ -1438,8 +1440,7 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
                         kIsWeb
                             ? 'Use your device camera or upload a clear photo of your face'
                             : 'Position your face inside the frame',
-                        style: GoogleFonts.poppins(
-                            color: _grey, fontSize: 15),
+                        style: GoogleFonts.poppins(color: _grey, fontSize: 15),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 48),
@@ -1454,13 +1455,13 @@ class _SelfieCaptureScreenState extends State<SelfieCaptureScreen> {
                         child: _capturedImage != null
                             ? _buildXFileImage(_capturedImage!,
                                 fit: BoxFit.cover)
-                            : (!kIsWeb && _cameraReady && _cameraController != null
+                            : (!kIsWeb &&
+                                    _cameraReady &&
+                                    _cameraController != null
                                 ? CameraPreview(_cameraController!)
                                 : const Center(
-                                    child: Icon(
-                                        PhosphorIconsRegular.userFocus,
-                                        size: 80,
-                                        color: _grey))),
+                                    child: Icon(PhosphorIconsRegular.userFocus,
+                                        size: 80, color: _grey))),
                       ),
                       if (_isUploading) ...[
                         const SizedBox(height: 24),

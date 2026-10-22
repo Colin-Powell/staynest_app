@@ -6,6 +6,7 @@ import 'package:property_app/services/super_admin_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/utils/responsive_layout.dart';
+import 'package:property_app/utils/api_result.dart';
 
 class SuperAdminKycPage extends StatefulWidget {
   const SuperAdminKycPage({super.key});
@@ -80,7 +81,7 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $error'),
+            content: Text(ApiResult.mapError(error)),
             backgroundColor: AppColors.gray900,
             behavior: SnackBarBehavior.floating,
             shape:

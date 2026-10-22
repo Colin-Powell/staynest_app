@@ -1,9 +1,13 @@
 import { Server as IOServer } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { env } from './config.js';
-
+import { pool, query } from './db.js';
 
 import type { Socket } from 'socket.io';
+import type { PoolClient } from 'pg';
+
+const PRESENCE_LEASE_SECONDS = 45;
+const PRESENCE_SWEEP_MS = 15_000;
 
 interface ExtendedSocket extends Socket {
   data: {
@@ -12,6 +16,199 @@ interface ExtendedSocket extends Socket {
 }
 
 export let ioInstance: IOServer;
+
+async function withUserPresenceLock<T>(
+  userId: string,
+  callback: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const user = await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    if (user.rows.length === 0) throw new Error('Presence user no longer exists');
+    const result = await callback(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function conversationPartners(userId: string): Promise<string[]> {
+  const result = await query<{ user_id: string }>(
+    `SELECT DISTINCT CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END AS user_id
+       FROM messages
+      WHERE from_user_id = $1 OR to_user_id = $1`,
+    [userId],
+  );
+  return result.rows.map((row) => row.user_id);
+}
+
+async function emitPresenceToConversationPartners(
+  io: IOServer,
+  userId: string,
+  online: boolean,
+  revision: number,
+  lastSeenAt: string | null = null,
+): Promise<void> {
+  const partners = await conversationPartners(userId);
+  for (const partnerId of partners) {
+    io.to(`user:${partnerId}`).emit('presence', {
+      userId,
+      online,
+      lastSeenAt,
+      revision,
+    });
+  }
+}
+
+async function refreshPresenceLease(
+  io: IOServer,
+  connectionId: string,
+  userId: string,
+): Promise<void> {
+  const revision = await withUserPresenceLock(userId, async (client) => {
+    await client.query(
+      'DELETE FROM presence_connections WHERE user_id = $1 AND expires_at <= now()',
+      [userId],
+    );
+    const active = await client.query(
+      'SELECT 1 FROM presence_connections WHERE user_id = $1 AND expires_at > now() LIMIT 1',
+      [userId],
+    );
+    await client.query(
+      `INSERT INTO presence_connections (connection_id, user_id, expires_at)
+       VALUES ($1, $2, now() + ($3 * interval '1 second'))
+       ON CONFLICT (connection_id) DO UPDATE SET expires_at = EXCLUDED.expires_at`,
+      [connectionId, userId, PRESENCE_LEASE_SECONDS],
+    );
+    if (active.rows.length !== 0) return null;
+    const updated = await client.query<{ presence_revision: string | number }>(
+      `UPDATE users
+          SET presence_revision = presence_revision + 1
+        WHERE id = $1
+        RETURNING presence_revision`,
+      [userId],
+    );
+    return Number(updated.rows[0]?.presence_revision ?? 0);
+  });
+  if (revision !== null) {
+    await emitPresenceToConversationPartners(io, userId, true, revision);
+  }
+}
+
+async function sendConversationPresence(socket: ExtendedSocket, userId: string): Promise<void> {
+  const result = await query<{
+    user_id: string;
+    online: boolean;
+    last_seen_at: Date | null;
+    presence_revision: string | number;
+  }>(
+    `SELECT partners.user_id,
+            EXISTS (
+              SELECT 1 FROM presence_connections pc
+               WHERE pc.user_id = partners.user_id AND pc.expires_at > now()
+            ) AS online,
+            u.last_seen_at,
+            u.presence_revision
+       FROM (
+         SELECT DISTINCT CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END AS user_id
+           FROM messages
+          WHERE from_user_id = $1 OR to_user_id = $1
+       ) partners
+       JOIN users u ON u.id = partners.user_id`,
+    [userId],
+  );
+  for (const presence of result.rows) {
+    socket.emit('presence', {
+      userId: presence.user_id,
+      online: presence.online,
+      lastSeenAt: presence.last_seen_at?.toISOString() ?? null,
+      revision: Number(presence.presence_revision),
+    });
+  }
+}
+
+export async function emitDirectConversationPresence(
+  userId: string,
+  recipientId: string,
+): Promise<void> {
+  const conversation = await query<{
+    last_seen_at: Date | null;
+    online: boolean;
+    presence_revision: string | number;
+  }>(
+    `SELECT u.last_seen_at,
+            EXISTS (
+              SELECT 1 FROM presence_connections pc
+               WHERE pc.user_id = u.id AND pc.expires_at > now()
+            ) AS online,
+            u.presence_revision
+       FROM users u
+      WHERE u.id = $1
+        AND EXISTS (
+          SELECT 1 FROM messages m
+           WHERE (m.from_user_id = $1 AND m.to_user_id = $2)
+              OR (m.from_user_id = $2 AND m.to_user_id = $1)
+        )`,
+    [userId, recipientId],
+  );
+  const presence = conversation.rows[0];
+  if (!presence || !ioInstance) return;
+  ioInstance.to(`user:${recipientId}`).emit('presence', {
+    userId,
+    online: presence.online,
+    lastSeenAt: presence.last_seen_at?.toISOString() ?? null,
+    revision: Number(presence.presence_revision),
+  });
+}
+
+async function expirePresenceLeases(io: IOServer): Promise<void> {
+  const result = await query<{ user_id: string }>(
+    `SELECT DISTINCT user_id FROM presence_connections WHERE expires_at <= now()`,
+  );
+  for (const { user_id: userId } of result.rows) {
+    const presence = await withUserPresenceLock(userId, async (client) => {
+      const expired = await client.query(
+        'DELETE FROM presence_connections WHERE user_id = $1 AND expires_at <= now() RETURNING connection_id',
+        [userId],
+      );
+      if (expired.rows.length === 0) return null;
+      const active = await client.query(
+        'SELECT 1 FROM presence_connections WHERE user_id = $1 AND expires_at > now() LIMIT 1',
+        [userId],
+      );
+      if (active.rows.length !== 0) return null;
+      const updated = await client.query<{
+        last_seen_at: Date;
+        presence_revision: string | number;
+      }>(
+        `UPDATE users
+            SET last_seen_at = now(), presence_revision = presence_revision + 1
+          WHERE id = $1
+          RETURNING last_seen_at, presence_revision`,
+        [userId],
+      );
+      if (!updated.rows[0]) return null;
+      return {
+        lastSeenAt: updated.rows[0].last_seen_at.toISOString(),
+        revision: Number(updated.rows[0].presence_revision),
+      };
+    });
+    if (presence) {
+      await emitPresenceToConversationPartners(
+        io,
+        userId,
+        false,
+        presence.revision,
+        presence.lastSeenAt,
+      );
+    }
+  }
+}
 
 export function initSocket(server: import('http').Server) {
   const io = new IOServer(server, {
@@ -28,24 +225,45 @@ export function initSocket(server: import('http').Server) {
     try {
       const token = socket.handshake.auth?.token ||
         (socket.handshake.headers?.authorization as string | undefined)?.split(' ')[1];
-      if (!token) return next();
+      if (typeof token !== 'string' || !token) {
+        return next(new Error('Authentication required'));
+      }
       const payload = jwt.verify(token, env.jwtSecret) as any;
-      (socket as ExtendedSocket).data.userId = payload?.id?.toString();
+      if (!payload?.id) return next(new Error('Invalid authentication token'));
+      (socket as ExtendedSocket).data.userId = payload.id.toString();
       return next();
     } catch (err) {
       console.warn('Socket auth failed:', err);
-      return next();
+      return next(new Error('Invalid or expired authentication token'));
     }
   });
 
+  const presenceSweep = setInterval(() => {
+    void expirePresenceLeases(io).catch((error) => {
+      console.error('[Presence] lease expiry failed:', error);
+    });
+  }, PRESENCE_SWEEP_MS);
+  presenceSweep.unref();
+
   io.on('connection', (socket: ExtendedSocket) => {
     const uid = socket.data.userId;
-    if (uid) {
-      socket.join(`user:${uid}`);
-      console.log(`Socket connected for user ${uid}`);
-    } else {
-      console.log('Socket connected (unauthenticated client)');
-    }
+    if (!uid) return socket.disconnect(true);
+
+    socket.join(`user:${uid}`);
+    console.log(`Socket connected for user ${uid}`);
+
+    void refreshPresenceLease(io, socket.id, uid).then(async () => {
+      await sendConversationPresence(socket, uid);
+    }).catch((error) => {
+      console.error('[Presence] connection registration failed:', error);
+      socket.disconnect(true);
+    });
+
+    socket.on('presence:heartbeat', () => {
+      void refreshPresenceLease(io, socket.id, uid).catch((error) => {
+        console.error('[Presence] heartbeat refresh failed:', error);
+      });
+    });
 
     // Messaging: client emits { to: string (user UUID), text: string }
     socket.on('message', async (_msg: { to: string; text: string }) => {
@@ -105,6 +323,45 @@ export function initSocket(server: import('http').Server) {
     });
 
     socket.on('disconnect', (reason) => {
+      void withUserPresenceLock(uid, async (client) => {
+        const removed = await client.query(
+          'DELETE FROM presence_connections WHERE connection_id = $1 AND user_id = $2 RETURNING connection_id',
+          [socket.id, uid],
+        );
+        if (removed.rows.length === 0) return null;
+        const active = await client.query(
+          'SELECT 1 FROM presence_connections WHERE user_id = $1 AND expires_at > now() LIMIT 1',
+          [uid],
+        );
+        if (active.rows.length !== 0) return null;
+        const updated = await client.query<{
+          last_seen_at: Date;
+          presence_revision: string | number;
+        }>(
+          `UPDATE users
+              SET last_seen_at = now(), presence_revision = presence_revision + 1
+            WHERE id = $1
+            RETURNING last_seen_at, presence_revision`,
+          [uid],
+        );
+        if (!updated.rows[0]) return null;
+        return {
+          lastSeenAt: updated.rows[0].last_seen_at.toISOString(),
+          revision: Number(updated.rows[0].presence_revision),
+        };
+      }).then(async (presence) => {
+        if (presence) {
+          await emitPresenceToConversationPartners(
+            io,
+            uid,
+            false,
+            presence.revision,
+            presence.lastSeenAt,
+          );
+        }
+      }).catch((error) => {
+        console.error('[Presence] disconnect cleanup failed:', error);
+      });
       console.log('Socket disconnected', reason);
     });
   });

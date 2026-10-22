@@ -6,6 +6,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
 import 'package:property_app/session/onboarding_prefs.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/utils/api_result.dart';
 import 'landlord_dashboard_service.dart';
 
 // ─── Landlord Design System Constants ─────────────────────────────────────────
@@ -58,7 +59,8 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
           context: context,
           imagePath: 'assets/images/graph.webp',
           title: 'Insights & Analytics',
-          subtitle: 'Dive deep into your portfolio performance, see engagement rates, and track conversion funnel metrics.',
+          subtitle:
+              'Dive deep into your portfolio performance, see engagement rates, and track conversion funnel metrics.',
           ctaText: 'View Insights',
         ).then((_) => OnboardingPrefs.markAsSeen('landlordAnalyticsSeen'));
       }
@@ -68,7 +70,8 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
   Future<void> _fetchAnalytics() async {
     setState(() => _isLoading = true);
     try {
-      final data = await LandlordDashboardService.getLandlordOverview(_selectedFilter);
+      final data =
+          await LandlordDashboardService.getLandlordOverview(_selectedFilter);
 
       if (!mounted) return;
 
@@ -81,10 +84,14 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
             };
             _overview['chartData'] ??= <double>[];
           }
-          _metrics = data['metrics'] != null ? Map<String, String>.from(data['metrics']) : _metrics;
-          _topProperties = List<Map<String, dynamic>>.from(data['topProperties'] ?? []);
+          _metrics = data['metrics'] != null
+              ? Map<String, String>.from(data['metrics'])
+              : _metrics;
+          _topProperties =
+              List<Map<String, dynamic>>.from(data['topProperties'] ?? []);
           _funnelSteps = List<Map<String, dynamic>>.from(data['funnel'] ?? []);
-          _photoPerformance = List<Map<String, dynamic>>.from(data['photoPerformance'] ?? []);
+          _photoPerformance =
+              List<Map<String, dynamic>>.from(data['photoPerformance'] ?? []);
           _insight = data['insight'];
         }
         _isLoading = false;
@@ -93,7 +100,9 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
       setState(() => _isLoading = false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load analytics: ${e.toString()}')),
+        SnackBar(
+            content:
+                Text('Failed to load analytics: ${ApiResult.mapError(e)}')),
       );
     }
   }
@@ -120,7 +129,8 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
 
   // ─── UI BUILDERS ─────────────────────────────────────────────────────────────
 
-  Widget _buildCardWrapper({required Widget child, EdgeInsetsGeometry? padding}) {
+  Widget _buildCardWrapper(
+      {required Widget child, EdgeInsetsGeometry? padding}) {
     return Container(
       padding: padding ?? const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -145,18 +155,36 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Shimmer.fromColors(
-            baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-            child: Container(height: 36, width: 120, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8))),
+            baseColor: Colors.grey.shade200,
+            highlightColor: Colors.grey.shade100,
+            child: Container(
+                height: 36,
+                width: 120,
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8))),
           ),
           const SizedBox(height: 8),
           Shimmer.fromColors(
-            baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-            child: Container(height: 16, width: 180, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+            baseColor: Colors.grey.shade200,
+            highlightColor: Colors.grey.shade100,
+            child: Container(
+                height: 16,
+                width: 180,
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(4))),
           ),
           const SizedBox(height: 32),
           Shimmer.fromColors(
-            baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-            child: Container(height: 200, width: double.infinity, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16))),
+            baseColor: Colors.grey.shade200,
+            highlightColor: Colors.grey.shade100,
+            child: Container(
+                height: 200,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16))),
           ),
         ],
       ),
@@ -171,14 +199,21 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
       mainAxisSpacing: 16,
       crossAxisSpacing: 16,
       childAspectRatio: 1.3,
-      children: List.generate(4, (index) => Shimmer.fromColors(
-        baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-        child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20))),
-      )),
+      children: List.generate(
+          4,
+          (index) => Shimmer.fromColors(
+                baseColor: Colors.grey.shade200,
+                highlightColor: Colors.grey.shade100,
+                child: Container(
+                    decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20))),
+              )),
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+      String label, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -186,7 +221,10 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _grey.withOpacity(0.1)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -195,7 +233,8 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(
+                color: color.withOpacity(0.1), shape: BoxShape.circle),
             child: Icon(icon, color: color, size: 20),
           ),
           const Spacer(),
@@ -238,7 +277,8 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     behavior: HitTestBehavior.opaque,
-                    child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 24),
+                    child: const Icon(PhosphorIconsRegular.caretLeft,
+                        color: _dark, size: 24),
                   ),
                   const SizedBox(width: 16),
                   Text(
@@ -260,8 +300,10 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                 backgroundColor: _surface,
                 onRefresh: _fetchAnalytics,
                 child: ListView(
-                  physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                  padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(context).padding.bottom + 48),
+                  physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics()),
+                  padding: EdgeInsets.fromLTRB(
+                      24, 8, 24, MediaQuery.of(context).padding.bottom + 48),
                   children: [
                     // ─── Header & Filter ───
                     Row(
@@ -276,17 +318,24 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
                           decoration: BoxDecoration(
                             color: _surface,
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(color: _grey.withOpacity(0.2)),
-                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))],
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.black.withOpacity(0.02),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2))
+                            ],
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
                               value: _selectedFilter,
-                              icon: const Icon(PhosphorIconsRegular.caretDown, color: _dark, size: 16),
+                              icon: const Icon(PhosphorIconsRegular.caretDown,
+                                  color: _dark, size: 16),
                               style: GoogleFonts.poppins(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -302,7 +351,8 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                                   });
                                 }
                               },
-                              items: _filters.map<DropdownMenuItem<String>>((String value) {
+                              items: _filters.map<DropdownMenuItem<String>>(
+                                  (String value) {
                                 return DropdownMenuItem<String>(
                                   value: value,
                                   child: Text(value),
@@ -338,8 +388,11 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                               children: [
                                 Container(
                                   padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(color: _green.withOpacity(0.1), shape: BoxShape.circle),
-                                  child: const Icon(PhosphorIconsBold.trendUp, color: _green, size: 12),
+                                  decoration: BoxDecoration(
+                                      color: _green.withOpacity(0.1),
+                                      shape: BoxShape.circle),
+                                  child: const Icon(PhosphorIconsBold.trendUp,
+                                      color: _green, size: 12),
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
@@ -353,29 +406,42 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                               ],
                             ),
                             const SizedBox(height: 32),
-                            
+
                             // ─── INTERACTIVE CHART ───
                             SizedBox(
-                              height: 200, // Increased height to fit axes comfortably
+                              height:
+                                  200, // Increased height to fit axes comfortably
                               width: double.infinity,
                               child: _overview['chartData'].isEmpty
                                   ? Center(
                                       child: Text(
                                         'No traffic data for this period',
-                                        style: GoogleFonts.poppins(color: _grey, fontSize: 13),
+                                        style: GoogleFonts.poppins(
+                                            color: _grey, fontSize: 13),
                                       ),
                                     )
                                   : GestureDetector(
-                                      onPanDown: (details) => setState(() => _chartTouchPosition = details.localPosition),
-                                      onPanUpdate: (details) => setState(() => _chartTouchPosition = details.localPosition),
-                                      onPanEnd: (_) => setState(() => _chartTouchPosition = null),
-                                      onPanCancel: () => setState(() => _chartTouchPosition = null),
+                                      onPanDown: (details) => setState(() =>
+                                          _chartTouchPosition =
+                                              details.localPosition),
+                                      onPanUpdate: (details) => setState(() =>
+                                          _chartTouchPosition =
+                                              details.localPosition),
+                                      onPanEnd: (_) => setState(
+                                          () => _chartTouchPosition = null),
+                                      onPanCancel: () => setState(
+                                          () => _chartTouchPosition = null),
                                       child: CustomPaint(
                                         painter: _InteractiveLineChartPainter(
-                                          data: (_overview['chartData'] as List).map((e) => (e as num).toDouble()).toList(),
-                                          xLabels: _generateXLabels((_overview['chartData'] as List).length),
+                                          data: (_overview['chartData'] as List)
+                                              .map((e) => (e as num).toDouble())
+                                              .toList(),
+                                          xLabels: _generateXLabels(
+                                              (_overview['chartData'] as List)
+                                                  .length),
                                           lineColor: _green,
-                                          gradientColor: _green.withOpacity(0.15),
+                                          gradientColor:
+                                              _green.withOpacity(0.15),
                                           touchPosition: _chartTouchPosition,
                                         ),
                                       ),
@@ -407,10 +473,20 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                         crossAxisSpacing: 16,
                         childAspectRatio: 1.3,
                         children: [
-                          _buildStatCard('Unique Viewers', _metrics['uniqueViewers']!, PhosphorIconsFill.users, const Color(0xFF3B82F6)),
-                          _buildStatCard('Saves', _metrics['saves']!, PhosphorIconsFill.heart, const Color(0xFFEC4899)),
-                          _buildStatCard('Shares', _metrics['shares']!, PhosphorIconsFill.shareNetwork, const Color(0xFF8B5CF6)),
-                          _buildStatCard('Avg. CTR', _metrics['avgCtr']!, PhosphorIconsFill.cursorClick, _green),
+                          _buildStatCard(
+                              'Unique Viewers',
+                              _metrics['uniqueViewers']!,
+                              PhosphorIconsFill.users,
+                              const Color(0xFF3B82F6)),
+                          _buildStatCard('Saves', _metrics['saves']!,
+                              PhosphorIconsFill.heart, const Color(0xFFEC4899)),
+                          _buildStatCard(
+                              'Shares',
+                              _metrics['shares']!,
+                              PhosphorIconsFill.shareNetwork,
+                              const Color(0xFF8B5CF6)),
+                          _buildStatCard('Avg. CTR', _metrics['avgCtr']!,
+                              PhosphorIconsFill.cursorClick, _green),
                         ],
                       ),
                     const SizedBox(height: 40),
@@ -422,14 +498,17 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                         decoration: BoxDecoration(
                           color: const Color(0xFFFEF2F2), // Soft Red Tint
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: const Color(0xFFFCA5A5).withOpacity(0.5), width: 1.5),
+                          border: Border.all(
+                              color: const Color(0xFFFCA5A5).withOpacity(0.5),
+                              width: 1.5),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                const Icon(PhosphorIconsFill.warningCircle, color: Color(0xFFEF4444), size: 24),
+                                const Icon(PhosphorIconsFill.warningCircle,
+                                    color: Color(0xFFEF4444), size: 24),
                                 const SizedBox(width: 12),
                                 Text(
                                   'Monetization Insight',
@@ -458,12 +537,16 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFFEF4444),
                                   elevation: 0,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(32)),
                                 ),
                                 child: Text(
                                   'Boost Listing',
-                                  style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w700),
+                                  style: GoogleFonts.poppins(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700),
                                 ),
                               ),
                             ),
@@ -497,19 +580,27 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                           ),
                           const SizedBox(height: 16),
                           if (_isLoading)
-                             const Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Center(child: CircularProgressIndicator(color: _green)))
+                            const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 20),
+                                child: Center(
+                                    child: CircularProgressIndicator(
+                                        color: _green)))
                           else if (_photoPerformance.isEmpty)
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 20),
-                              child: Center(child: Text('No photo data available', style: GoogleFonts.poppins(fontSize: 13, color: _grey))),
+                              child: Center(
+                                  child: Text('No photo data available',
+                                      style: GoogleFonts.poppins(
+                                          fontSize: 13, color: _grey))),
                             )
                           else
-                            ..._photoPerformance.map((p) => _buildPhotoMetricRow(
-                                  p['label'],
-                                  p['engagement'],
-                                  p['image'],
-                                  Color(p['color'] ?? 0xFF10B981),
-                                )),
+                            ..._photoPerformance
+                                .map((p) => _buildPhotoMetricRow(
+                                      p['label'],
+                                      p['engagement'],
+                                      p['image'],
+                                      Color(p['color'] ?? 0xFF10B981),
+                                    )),
                         ],
                       ),
                     ),
@@ -526,20 +617,32 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                     ),
                     const SizedBox(height: 16),
                     _buildCardWrapper(
-                      child: _isLoading 
-                          ? const Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Center(child: CircularProgressIndicator(color: _green)))
+                      child: _isLoading
+                          ? const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 20),
+                              child: Center(
+                                  child:
+                                      CircularProgressIndicator(color: _green)))
                           : _funnelSteps.isEmpty
-                          ? Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              child: Center(child: Text('Insufficient funnel data', style: GoogleFonts.poppins(color: _grey))),
-                            )
-                          : Column(
-                              children: _funnelSteps.map((step) {
-                                final pctRaw = step['percentage'];
-                                final double pct = pctRaw is num ? pctRaw.toDouble() : 0.0;
-                                return _buildFunnelStep(step['label'].toString(), step['value'].toString(), pct);
-                              }).toList(),
-                            ),
+                              ? Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 20),
+                                  child: Center(
+                                      child: Text('Insufficient funnel data',
+                                          style: GoogleFonts.poppins(
+                                              color: _grey))),
+                                )
+                              : Column(
+                                  children: _funnelSteps.map((step) {
+                                    final pctRaw = step['percentage'];
+                                    final double pct =
+                                        pctRaw is num ? pctRaw.toDouble() : 0.0;
+                                    return _buildFunnelStep(
+                                        step['label'].toString(),
+                                        step['value'].toString(),
+                                        pct);
+                                  }).toList(),
+                                ),
                     ),
                     const SizedBox(height: 40),
 
@@ -556,19 +659,28 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
 
                     if (_isLoading)
                       Column(
-                        children: List.generate(2, (index) => Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Shimmer.fromColors(
-                            baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                            child: Container(height: 88, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20))),
-                          ),
-                        )),
+                        children: List.generate(
+                            2,
+                            (index) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 16),
+                                  child: Shimmer.fromColors(
+                                    baseColor: Colors.grey.shade200,
+                                    highlightColor: Colors.grey.shade100,
+                                    child: Container(
+                                        height: 88,
+                                        decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius:
+                                                BorderRadius.circular(20))),
+                                  ),
+                                )),
                       )
                     else if (_topProperties.isEmpty)
                       Center(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 32),
-                          child: Text('No properties to display yet.', style: GoogleFonts.poppins(color: _grey)),
+                          child: Text('No properties to display yet.',
+                              style: GoogleFonts.poppins(color: _grey)),
                         ),
                       )
                     else
@@ -590,7 +702,8 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
     );
   }
 
-  Widget _buildPhotoMetricRow(String label, String value, String? imageUrl, Color color) {
+  Widget _buildPhotoMetricRow(
+      String label, String value, String? imageUrl, Color color) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
@@ -603,7 +716,12 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                 width: 48,
                 height: 48,
                 fit: BoxFit.cover,
-                errorPlaceholder: Container(width: 48, height: 48, color: _grey.withOpacity(0.1), child: const Icon(PhosphorIconsRegular.image, color: _grey, size: 20)),
+                errorPlaceholder: Container(
+                    width: 48,
+                    height: 48,
+                    color: _grey.withOpacity(0.1),
+                    child: const Icon(PhosphorIconsRegular.image,
+                        color: _grey, size: 20)),
               ),
             ),
           const SizedBox(width: 16),
@@ -672,7 +790,8 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
     );
   }
 
-  Widget _buildTopPropertyCard(String name, String location, String image, String views) {
+  Widget _buildTopPropertyCard(
+      String name, String location, String image, String views) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
@@ -681,7 +800,10 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _grey.withOpacity(0.1)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Row(
@@ -697,7 +819,8 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                 width: 72,
                 height: 72,
                 color: _grey.withOpacity(0.1),
-                child: const Icon(PhosphorIconsRegular.house, color: _grey, size: 28),
+                child: const Icon(PhosphorIconsRegular.house,
+                    color: _grey, size: 28),
               ),
             ),
           ),
@@ -778,20 +901,21 @@ class _InteractiveLineChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (data.length < 2) return; 
+    if (data.length < 2) return;
 
     final double maxData = data.reduce((a, b) => a > b ? a : b);
     final double minData = data.reduce((a, b) => a < b ? a : b);
 
     // Padding for axes
-    const double yAxisWidth = 32.0; 
+    const double yAxisWidth = 32.0;
     const double xAxisHeight = 24.0;
-    
+
     final double chartWidth = size.width - yAxisWidth;
     final double chartHeight = size.height - xAxisHeight;
 
     // ─── Draw Y-Axis (Values & Grid Lines) ───
-    final textStyle = GoogleFonts.poppins(color: _grey, fontSize: 10, fontWeight: FontWeight.w500);
+    final textStyle = GoogleFonts.poppins(
+        color: _grey, fontSize: 10, fontWeight: FontWeight.w500);
     final gridPaint = Paint()
       ..color = _grey.withOpacity(0.2)
       ..strokeWidth = 1;
@@ -820,7 +944,7 @@ class _InteractiveLineChartPainter extends CustomPainter {
     for (int i = 0; i < data.length; i++) {
       final double x = yAxisWidth + (i * widthStep);
       final double normalizedY = (data[i] - minData) / heightRange;
-      
+
       // Invert Y axis since canvas 0,0 is top-left
       final double y = chartHeight - (normalizedY * chartHeight);
       points.add(Offset(x, y));
@@ -831,7 +955,8 @@ class _InteractiveLineChartPainter extends CustomPainter {
           text: TextSpan(text: xLabels[i], style: textStyle),
           textDirection: TextDirection.ltr,
         )..layout();
-        tp.paint(canvas, Offset(x - (tp.width / 2), size.height - xAxisHeight + 8));
+        tp.paint(
+            canvas, Offset(x - (tp.width / 2), size.height - xAxisHeight + 8));
       }
     }
 
@@ -845,9 +970,12 @@ class _InteractiveLineChartPainter extends CustomPainter {
       final controlPoint1 = Offset(p1.dx + (p2.dx - p1.dx) / 2, p1.dy);
       final controlPoint2 = Offset(p1.dx + (p2.dx - p1.dx) / 2, p2.dy);
       path.cubicTo(
-        controlPoint1.dx, controlPoint1.dy,
-        controlPoint2.dx, controlPoint2.dy,
-        p2.dx, p2.dy,
+        controlPoint1.dx,
+        controlPoint1.dy,
+        controlPoint2.dx,
+        controlPoint2.dy,
+        p2.dx,
+        p2.dy,
       );
     }
 
@@ -908,24 +1036,39 @@ class _InteractiveLineChartPainter extends CustomPainter {
       final vLinePaint = Paint()
         ..color = lineColor.withOpacity(0.4)
         ..strokeWidth = 1.5;
-      canvas.drawLine(Offset(closestPoint.dx, 0), Offset(closestPoint.dx, chartHeight), vLinePaint);
+      canvas.drawLine(Offset(closestPoint.dx, 0),
+          Offset(closestPoint.dx, chartHeight), vLinePaint);
 
       // 3. Highlight the specific circle
       canvas.drawCircle(closestPoint, 6, dotPaint);
-      canvas.drawCircle(closestPoint, 6, Paint()..color = lineColor..strokeWidth = 3.5..style = PaintingStyle.stroke);
+      canvas.drawCircle(
+          closestPoint,
+          6,
+          Paint()
+            ..color = lineColor
+            ..strokeWidth = 3.5
+            ..style = PaintingStyle.stroke);
 
       // 4. Draw Tooltip Box
       final String tooltipValue = data[closestIndex].toInt().toString();
-      final String tooltipLabel = xLabels.length > closestIndex ? xLabels[closestIndex] : '';
+      final String tooltipLabel =
+          xLabels.length > closestIndex ? xLabels[closestIndex] : '';
 
       final tooltipTp = TextPainter(
-        text: TextSpan(
-          children: [
-            TextSpan(text: '$tooltipValue Views\n', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13, height: 1.2)),
-            if (tooltipLabel.isNotEmpty)
-              TextSpan(text: tooltipLabel, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 11)),
-          ]
-        ),
+        text: TextSpan(children: [
+          TextSpan(
+              text: '$tooltipValue Views\n',
+              style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  height: 1.2)),
+          if (tooltipLabel.isNotEmpty)
+            TextSpan(
+                text: tooltipLabel,
+                style:
+                    GoogleFonts.poppins(color: Colors.white70, fontSize: 11)),
+        ]),
         textDirection: TextDirection.ltr,
         textAlign: TextAlign.center,
       )..layout();
@@ -938,8 +1081,10 @@ class _InteractiveLineChartPainter extends CustomPainter {
 
       // Keep tooltip inside canvas bounds
       if (tooltipX < yAxisWidth) tooltipX = yAxisWidth;
-      if (tooltipX + tooltipWidth > size.width) tooltipX = size.width - tooltipWidth;
-      if (tooltipY < 0) tooltipY = closestPoint.dy + 16; // Flip below point if too high
+      if (tooltipX + tooltipWidth > size.width)
+        tooltipX = size.width - tooltipWidth;
+      if (tooltipY < 0)
+        tooltipY = closestPoint.dy + 16; // Flip below point if too high
 
       final RRect tooltipRect = RRect.fromRectAndRadius(
         Rect.fromLTWH(tooltipX, tooltipY, tooltipWidth, tooltipHeight),
@@ -947,16 +1092,21 @@ class _InteractiveLineChartPainter extends CustomPainter {
       );
 
       // Tooltip shadow
-      canvas.drawRRect(tooltipRect.shift(const Offset(0, 4)), Paint()..color = Colors.black.withOpacity(0.15)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8));
+      canvas.drawRRect(
+          tooltipRect.shift(const Offset(0, 4)),
+          Paint()
+            ..color = Colors.black.withOpacity(0.15)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8));
       // Tooltip body
       canvas.drawRRect(tooltipRect, Paint()..color = _dark);
-      
+
       tooltipTp.paint(canvas, Offset(tooltipX + 12, tooltipY + 8));
     }
   }
 
   @override
   bool shouldRepaint(covariant _InteractiveLineChartPainter oldDelegate) {
-    return oldDelegate.touchPosition != touchPosition || oldDelegate.data != data;
+    return oldDelegate.touchPosition != touchPosition ||
+        oldDelegate.data != data;
   }
 }

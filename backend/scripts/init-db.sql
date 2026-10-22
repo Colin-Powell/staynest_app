@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS presence_revision bigint NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS roles text[] NOT NULL DEFAULT ARRAY['tenant']::text[];
 ALTER TABLE users ADD COLUMN IF NOT EXISTS landlord_verified boolean NOT NULL DEFAULT false;
 UPDATE users
@@ -393,6 +395,16 @@ CREATE TABLE IF NOT EXISTS message_reads (
 
 CREATE INDEX IF NOT EXISTS idx_message_reads_user_id ON message_reads(user_id);
 CREATE INDEX IF NOT EXISTS idx_message_reads_message_id ON message_reads(message_id);
+
+CREATE TABLE IF NOT EXISTS presence_connections (
+  connection_id text PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_presence_connections_user_expiry
+  ON presence_connections(user_id, expires_at);
+CREATE INDEX IF NOT EXISTS idx_presence_connections_expiry
+  ON presence_connections(expires_at);
 
 -- Bookings table for property bookings/reservations
 CREATE TABLE IF NOT EXISTS bookings (

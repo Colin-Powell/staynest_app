@@ -1,0 +1,1 @@
+{"version":3,"file":"feed_location.js","sourceRoot":"","sources":["../../src/services/feed_location.ts"],"names":[],"mappings":"AAAA,MAAM,CAAC,MAAM,+BAA+B,GAAG,EAAE,CAAC;AAClD,MAAM,CAAC,MAAM,qCAAqC,GAAG,EAAE,CAAC;AAExD,MAAM,UAAU,yBAAyB,CAAC,KAAK,GAAG,GAAG;IACnD,OAAO;mBACU,KAAK;mBACL,KAAK;mBACL,KAAK;mBACL,KAAK;mBACL,KAAK;mBACL,KAAK;mBACL,KAAK;IACpB,CAAC;AACL,CAAC"}

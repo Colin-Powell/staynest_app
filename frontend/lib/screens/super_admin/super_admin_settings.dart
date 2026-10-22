@@ -4,6 +4,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/super_admin_service.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/utils/responsive_layout.dart';
+import 'package:property_app/utils/api_result.dart';
 
 class SuperAdminSettingsPage extends StatefulWidget {
   const SuperAdminSettingsPage({super.key});
@@ -97,7 +98,7 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error saving: $e')));
+            .showSnackBar(SnackBar(content: Text(ApiResult.mapError(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);

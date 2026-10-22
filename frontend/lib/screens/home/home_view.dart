@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shimmer/shimmer.dart';
@@ -9,6 +10,7 @@ import 'package:property_app/session/app_session.dart';
 import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
 import 'package:property_app/widgets/property_card.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/widgets/app_footer.dart';
 
 import 'package:property_app/models/property.dart';
 import 'package:property_app/screens/home/home_feed_controller.dart';
@@ -26,6 +28,7 @@ const double _desktopBreakpoint = 768;
 const double _desktopMaxWidth = 1760;
 const double _cardHeight = 380;
 const double _cardGap = 24;
+const int _maxHomeFeedRows = 10;
 
 const _categoryTypes = <Map<String, String>>[
   {'name': 'All', 'image': 'assets/images/all.webp'},
@@ -217,11 +220,27 @@ class _HomeViewState extends State<HomeView> {
                     SliverToBoxAdapter(child: _buildShimmerLoading(context))
                   else if (_feedController.hasError)
                     SliverToBoxAdapter(
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 40),
-                          child: Text('Failed to load properties',
-                              style: GoogleFonts.poppins(color: _grey)),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 40),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _feedController.errorMessage ??
+                                  'Could not load properties.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.poppins(color: _grey),
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton(
+                              onPressed: _loadFeed,
+                              child: Text(
+                                'Retry',
+                                style: GoogleFonts.poppins(color: _primaryText),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     )
@@ -240,7 +259,9 @@ class _HomeViewState extends State<HomeView> {
                     ...() {
                       final sliverWidgets = <Widget>[];
 
-                      final sections = _feedController.feedResponse!.sections;
+                      final sections = _feedController.feedResponse!.sections
+                          .take(_maxHomeFeedRows)
+                          .toList(growable: false);
                       for (int i = 0; i < sections.length; i++) {
                         final section = sections[i];
 
@@ -265,6 +286,7 @@ class _HomeViewState extends State<HomeView> {
 
                       return sliverWidgets;
                     }(),
+                  if (kIsWeb) const SliverToBoxAdapter(child: AppFooter()),
                   const SliverToBoxAdapter(child: SizedBox(height: 120)),
                 ],
               ),
@@ -620,7 +642,9 @@ class _HomeViewState extends State<HomeView> {
                           cols: cols,
                           cardWidth: cardWidth,
                         ),
-                        const SliverToBoxAdapter(child: SizedBox(height: 80)),
+                        if (kIsWeb)
+                          const SliverToBoxAdapter(child: AppFooter()),
+                        const SliverToBoxAdapter(child: SizedBox(height: 24)),
                       ],
                     ),
                   ),
@@ -658,7 +682,10 @@ class _HomeViewState extends State<HomeView> {
                   const Icon(PhosphorIconsRegular.warningCircle,
                       size: 48, color: Color(0xFFEF4444)),
                   const SizedBox(height: 16),
-                  Text('Failed to load properties',
+                  Text(
+                      _feedController.errorMessage ??
+                          'Could not load properties.',
+                      textAlign: TextAlign.center,
                       style: GoogleFonts.poppins(
                           color: _dark,
                           fontWeight: FontWeight.w600,
@@ -692,7 +719,8 @@ class _HomeViewState extends State<HomeView> {
     }
 
     final slivers = <Widget>[];
-    final sections = response.sections;
+    final sections =
+        response.sections.take(_maxHomeFeedRows).toList(growable: false);
     for (int i = 0; i < sections.length; i++) {
       final section = sections[i];
       slivers.add(

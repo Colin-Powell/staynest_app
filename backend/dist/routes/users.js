@@ -8,42 +8,94 @@ const router = Router();
 router.patch('/profile', requireAuth, async (req, res, next) => {
     try {
         const userId = req.auth?.id;
-        const { name, email, phone, avatar, businessName, businessType, businessDescription, taxId, yearsInBusiness, settings } = req.body;
-        // If avatar is being updated, delete the old Cloudinary asset.
-        // We store `users.avatar` as Cloudinary `public_id` (per client choice B).
-        if (avatar != null) {
-            // Fetch current avatar public_id
-            const currentRes = await query('SELECT avatar FROM users WHERE id = $1', [userId]);
-            const currentAvatar = currentRes.rows[0]?.avatar;
-            if (currentAvatar && typeof currentAvatar === 'string' && currentAvatar !== avatar) {
-                try {
-                    const { deleteFromCloudinary } = await import('../services/cloudinary.js');
-                    await deleteFromCloudinary(currentAvatar);
-                }
-                catch (_) {
-                    // Ignore deletion errors so profile update still succeeds.
-                }
+        const body = req.body ?? {};
+        if (typeof body !== 'object' || Array.isArray(body)) {
+            return res.status(400).json({ error: 'Profile updates must be an object.' });
+        }
+        if ('email' in body) {
+            return res.status(400).json({ error: 'Email cannot be changed through profile updates.' });
+        }
+        const updates = [];
+        const values = [];
+        const addUpdate = (column, value) => {
+            values.push(value);
+            updates.push(`${column} = $${values.length}`);
+        };
+        if ('name' in body) {
+            if (typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 120) {
+                return res.status(400).json({ error: 'Name must be between 1 and 120 characters.' });
+            }
+            addUpdate('name', body.name.trim());
+        }
+        if ('phone' in body) {
+            if (body.phone !== null && typeof body.phone !== 'string') {
+                return res.status(400).json({ error: 'Phone number must be text.' });
+            }
+            const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+            if (phone && !/^[+0-9().\s-]{7,25}$/.test(phone)) {
+                return res.status(400).json({ error: 'Enter a valid phone number.' });
+            }
+            addUpdate('phone', phone || null);
+        }
+        if ('avatar' in body) {
+            if (typeof body.avatar !== 'string' || body.avatar.length > 500) {
+                return res.status(400).json({ error: 'Avatar reference is invalid.' });
+            }
+            addUpdate('avatar', body.avatar.trim() || null);
+        }
+        const optionalFields = [
+            ['businessName', 'business_name', 160],
+            ['businessType', 'business_type', 100],
+            ['businessDescription', 'business_description', 2000],
+            ['taxId', 'tax_id', 100],
+        ];
+        for (const [input, column, maxLength] of optionalFields) {
+            if (!(input in body))
+                continue;
+            const value = body[input];
+            if (value !== null && (typeof value !== 'string' || value.length > maxLength)) {
+                return res.status(400).json({ error: `${input} must be text of at most ${maxLength} characters.` });
+            }
+            addUpdate(column, typeof value === 'string' ? value.trim() || null : null);
+        }
+        if ('yearsInBusiness' in body) {
+            const years = body.yearsInBusiness;
+            if (years !== null && (!Number.isInteger(years) || years < 0 || years > 100)) {
+                return res.status(400).json({ error: 'Years in business must be an integer from 0 to 100.' });
+            }
+            addUpdate('years_in_business', years);
+        }
+        if ('settings' in body) {
+            if (!body.settings || typeof body.settings !== 'object' || Array.isArray(body.settings)) {
+                return res.status(400).json({ error: 'Settings must be an object.' });
+            }
+            values.push(JSON.stringify(body.settings));
+            updates.push(`settings = COALESCE(settings, '{}'::jsonb) || $${values.length}::jsonb`);
+        }
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No profile fields were provided.' });
+        }
+        const currentRes = 'avatar' in body
+            ? await query('SELECT avatar FROM users WHERE id = $1', [userId])
+            : null;
+        const currentAvatar = currentRes?.rows[0]?.avatar;
+        values.push(userId);
+        const result = await query(`UPDATE users SET ${updates.join(', ')} WHERE id = $${values.length}
+       RETURNING id, name, email, phone, avatar, role, roles, landlord_verified, verified, created_at,
+                 business_name, business_type, business_description, tax_id, years_in_business, settings`, values);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+        const nextAvatar = result.rows[0].avatar;
+        if (currentAvatar && currentAvatar !== nextAvatar) {
+            try {
+                const { deleteFromCloudinary } = await import('../services/cloudinary.js');
+                await deleteFromCloudinary(currentAvatar);
+            }
+            catch (_) {
+                // The persisted profile remains valid if old-media cleanup fails.
             }
         }
-        const result = await query(`UPDATE users
-         SET name = COALESCE(NULLIF($1, ''), name),
-           email = COALESCE(NULLIF($2, ''), email),
-           phone = COALESCE($3, phone),
-           avatar = COALESCE($4, avatar),
-           business_name = COALESCE($5, business_name),
-           business_type = COALESCE($6, business_type),
-           business_description = COALESCE($7, business_description),
-           tax_id = COALESCE($8, tax_id),
-           years_in_business = COALESCE($9, years_in_business),
-           settings = COALESCE($10, settings)
-         WHERE id = $11
-      RETURNING id, name, email, phone, avatar, role, roles, landlord_verified, verified, created_at, business_name, business_type, business_description, tax_id, years_in_business, settings`, [
-            name, email, phone, avatar,
-            businessName, businessType, businessDescription,
-            taxId, yearsInBusiness,
-            settings ? JSON.stringify(settings) : null,
-            userId
-        ]);
         await cache.del('cache:/users*');
         res.json({ data: result.rows[0] });
     }

@@ -65,6 +65,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
 
       final index = _conversations.indexWhere((c) => c.userId == otherId);
       if (index != -1) {
+        var autoOpened = false;
         setState(() {
           final old = _conversations[index];
           _conversations[index] = ConversationModel(
@@ -76,12 +77,21 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
             unreadCount: msg.from != currentUserId
                 ? old.unreadCount + 1
                 : old.unreadCount,
+            userOnline: old.userOnline,
+            lastSeenAt: old.lastSeenAt,
+            presenceRevision: old.presenceRevision,
           );
           final item = _conversations.removeAt(index);
           _conversations.insert(0, item);
+          if (_selectedConversation == null &&
+              MediaQuery.sizeOf(context).width >= 768) {
+            _selectedConversation = item;
+            autoOpened = true;
+          }
         });
+        if (autoOpened) widget.onChatOpen();
       } else {
-        _loadConversations();
+        _loadConversations(preferredUserId: otherId);
       }
     });
 
@@ -90,16 +100,40 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       if (userId == null) return;
       if (!mounted) return;
       setState(() {
-        if (data['online'] == true) {
+        final online = data['online'] == true;
+        final revision = int.tryParse(data['revision']?.toString() ?? '') ?? 0;
+        if (online) {
           _onlineUserIds.add(userId);
         } else {
           _onlineUserIds.remove(userId);
+        }
+        final lastSeenAt =
+            DateTime.tryParse(data['lastSeenAt']?.toString() ?? '');
+        final index =
+            _conversations.indexWhere((item) => item.userId == userId);
+        if (index != -1) {
+          final old = _conversations[index];
+          final updated = ConversationModel(
+            userId: old.userId,
+            userName: old.userName,
+            userAvatar: old.userAvatar,
+            lastMessage: old.lastMessage,
+            lastMessageAt: old.lastMessageAt,
+            unreadCount: old.unreadCount,
+            userOnline: online,
+            lastSeenAt: lastSeenAt,
+            presenceRevision: revision,
+          );
+          _conversations[index] = updated;
+          if (_selectedConversation?.userId == userId) {
+            _selectedConversation = updated;
+          }
         }
       });
     });
   }
 
-  Future<void> _loadConversations() async {
+  Future<void> _loadConversations({String? preferredUserId}) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -108,10 +142,57 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
     try {
       final conversations = await MessageService.instance.fetchConversations();
       if (!mounted) return;
+      final currentConversations = conversations.map((conversation) {
+        final live =
+            SocketService.instance.latestPresenceFor(conversation.userId);
+        final liveRevision =
+            int.tryParse(live?['revision']?.toString() ?? '') ?? -1;
+        if (liveRevision <= conversation.presenceRevision) return conversation;
+        return ConversationModel(
+          userId: conversation.userId,
+          userName: conversation.userName,
+          userAvatar: conversation.userAvatar,
+          lastMessage: conversation.lastMessage,
+          lastMessageAt: conversation.lastMessageAt,
+          unreadCount: conversation.unreadCount,
+          userOnline: live?['online'] == true,
+          lastSeenAt: DateTime.tryParse(live?['lastSeenAt']?.toString() ?? ''),
+          presenceRevision: liveRevision,
+        );
+      }).toList();
+      final isDesktop = MediaQuery.sizeOf(context).width >= 768;
+      final currentSelectionId = _selectedConversation?.userId;
+      final selectedId = currentSelectionId ?? preferredUserId;
+      final selected = selectedId == null
+          ? null
+          : selectConversation<ConversationModel>(
+              conversations: currentConversations,
+              userIdOf: (conversation) => conversation.userId,
+              unreadCountOf: (conversation) => conversation.unreadCount,
+              selectedUserId: currentSelectionId,
+              preferredUserId: preferredUserId,
+            );
+      final initialDesktopSelection = isDesktop && selected == null
+          ? selectConversation<ConversationModel>(
+              conversations: currentConversations,
+              userIdOf: (conversation) => conversation.userId,
+              unreadCountOf: (conversation) => conversation.unreadCount,
+            )
+          : null;
+      final shouldNotifyChatOpen = isDesktop &&
+          ((selected == null && initialDesktopSelection != null) ||
+              (_selectedConversation == null && selected != null));
       setState(() {
-        _conversations = conversations;
+        _conversations = currentConversations;
+        _selectedConversation = selected ?? initialDesktopSelection;
+        _onlineUserIds
+          ..clear()
+          ..addAll(currentConversations
+              .where((item) => item.userOnline)
+              .map((item) => item.userId));
         _isLoading = false;
       });
+      if (shouldNotifyChatOpen) widget.onChatOpen();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -230,6 +311,9 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
           lastMessage: _conversations[index].lastMessage,
           lastMessageAt: _conversations[index].lastMessageAt,
           unreadCount: 0,
+          userOnline: _conversations[index].userOnline,
+          lastSeenAt: _conversations[index].lastSeenAt,
+          presenceRevision: _conversations[index].presenceRevision,
         );
       });
     }
@@ -651,6 +735,8 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
         name: conv.userName,
         avatar: conv.userAvatar,
         userId: conv.userId,
+        isOnline: conv.userOnline || _onlineUserIds.contains(conv.userId),
+        lastSeenAt: conv.lastSeenAt,
       );
     }
 

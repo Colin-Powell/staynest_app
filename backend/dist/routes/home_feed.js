@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { FeedService } from '../services/feed.js';
+import { normalizePublicPropertyCategory } from '../services/property_category.js';
 const router = Router();
 // Minimal normalize function borrowed from properties.ts
 function normalizePropertyRow(property) {
+    property.category = normalizePublicPropertyCategory(property.category);
     let images = property.images;
     if (!property.status) {
         property.status = 'pending_review';

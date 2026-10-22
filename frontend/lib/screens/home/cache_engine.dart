@@ -40,6 +40,8 @@ class CacheEngine {
   static const int _currentVersion = 1; // Engine version for schema migration
   static const String _boxName = 'staynest_cache';
   Box? _box;
+  Future<void>? _initializing;
+  bool _hiveInitialized = false;
 
   // In-memory speed layer
   final Map<String, CacheEntry> _memoryCache = {};
@@ -47,12 +49,56 @@ class CacheEngine {
   // Request Deduplication: Prevents multiple simultaneous API calls for the same key
   final Map<String, Future<dynamic>> _inFlightRequests = {};
 
+  static String requestKey(
+    Uri uri, {
+    required String? userId,
+    required String role,
+  }) {
+    return 'http:${userId ?? 'guest'}:$role:${uri.toString()}';
+  }
+
+  static Duration? requestTtl(Uri uri) {
+    final path = uri.path.toLowerCase();
+    if (path.contains('/auth/') ||
+        path.contains('/payments') ||
+        path.contains('/wallet') ||
+        path.contains('/availability-check') ||
+        path.endsWith('/bookings/fee') ||
+        path.endsWith('/version')) {
+      return null;
+    }
+    if (path.contains('/messages')) return const Duration(minutes: 2);
+    if (path.contains('/bookings')) return const Duration(minutes: 2);
+    if (path.contains('/notifications')) return const Duration(minutes: 1);
+    if (path.contains('/users')) return CacheTTL.profile;
+    if (path.contains('/properties') || path.contains('/home/feed')) {
+      return CacheTTL.listings;
+    }
+    return const Duration(minutes: 2);
+  }
+
   /// Initializes Hive and opens the cache box
   Future<void> _init() async {
     if (_box != null && _box!.isOpen) return;
-    if (!kIsWeb && !Hive.isAdapterRegistered(0)) {
+    final pending = _initializing;
+    if (pending != null) return pending;
+
+    final initialization = _openCacheBox();
+    _initializing = initialization;
+    try {
+      await initialization;
+    } finally {
+      if (identical(_initializing, initialization)) {
+        _initializing = null;
+      }
+    }
+  }
+
+  Future<void> _openCacheBox() async {
+    if (!kIsWeb && !_hiveInitialized) {
       final appDir = await getApplicationDocumentsDirectory();
       Hive.init(appDir.path);
+      _hiveInitialized = true;
     }
     _box = await Hive.openBox(_boxName);
   }
@@ -64,9 +110,23 @@ class CacheEngine {
     required String key,
     required Future<T> Function() networkFetcher,
     required Function(T data, bool isFromCache) onData,
+    Function(Object error)? onError,
     Duration ttl = const Duration(minutes: 10),
   }) async {
-    await _init();
+    try {
+      await _init();
+    } catch (error) {
+      debugPrint('[CacheEngine] Cache initialization failed: $error');
+      try {
+        final freshData = await _deduplicatedFetch(key, networkFetcher);
+        onData(freshData, false);
+      } catch (networkError) {
+        debugPrint(
+            '[CacheEngine] Network fetch failed for $key: $networkError');
+        onError?.call(networkError);
+      }
+      return;
+    }
 
     CacheEntry? entry;
 
@@ -132,10 +192,15 @@ class CacheEngine {
     // 3. Stale-While-Revalidate: Fetch fresh data from Network (L3)
     try {
       final T freshData = await _deduplicatedFetch(key, networkFetcher);
-      await _save(key, freshData, ttl);
+      try {
+        await _save(key, freshData, ttl);
+      } catch (cacheError) {
+        debugPrint('[CacheEngine] Could not persist $key: $cacheError');
+      }
       onData(freshData, false);
     } catch (e) {
       debugPrint('[CacheEngine] Network fetch failed for $key: $e');
+      onError?.call(e);
 
       // FAILURE FALLBACK: If network fails, the user continues to see stale data.
       // If no data was found in cache (entry == null), the UI should handle the error.
@@ -159,15 +224,19 @@ class CacheEngine {
     }
   }
 
-  
-  /// Standard Future-based cache fetch. 
+  /// Standard Future-based cache fetch.
   /// Returns cached data immediately if fresh, otherwise fetches from network.
   Future<T> getOrFetch<T>({
     required String key,
     required Future<T> Function() networkFetcher,
     Duration ttl = const Duration(minutes: 10),
   }) async {
-    await _init();
+    try {
+      await _init();
+    } catch (error) {
+      debugPrint('[CacheEngine] Cache unavailable; using network: $error');
+      return networkFetcher();
+    }
 
     // 1 & 2. Check Cache
     CacheEntry? entry;
@@ -205,21 +274,25 @@ class CacheEngine {
         } else if (data is Map && T == Map<String, dynamic>) {
           data = Map<String, dynamic>.from(data);
         }
-        
+
         if (!entry.isExpired) return data as T;
-        
+
         // If expired, we trigger a background network fetch but still return stale data for instant UI
         _deduplicatedFetch(key, networkFetcher).then((freshData) {
-          _save(key, freshData, ttl);
+          return _save(key, freshData, ttl);
         }).catchError((_) {});
-        
+
         return data as T;
       } catch (_) {}
     }
 
     // 3. Cache Miss - Fetch from Network
     final T freshData = await _deduplicatedFetch(key, networkFetcher);
-    await _save(key, freshData, ttl);
+    try {
+      await _save(key, freshData, ttl);
+    } catch (error) {
+      debugPrint('[CacheEngine] Could not persist $key: $error');
+    }
     return freshData;
   }
 
@@ -241,13 +314,56 @@ class CacheEngine {
   /// Invalidate specific keys (e.g., when a user updates a property)
   Future<void> invalidate(String key) async {
     _memoryCache.remove(key);
-    await _box?.delete(key);
+    try {
+      await _init();
+      await _box?.delete(key);
+    } catch (error) {
+      debugPrint('[CacheEngine] Could not invalidate $key: $error');
+    }
+  }
+
+  Future<void> invalidateMatching(bool Function(String key) matches) async {
+    _memoryCache.removeWhere((key, _) => matches(key));
+    try {
+      await _init();
+      final keys =
+          _box!.keys.whereType<String>().where(matches).toList(growable: false);
+      if (keys.isNotEmpty) await _box!.deleteAll(keys);
+    } catch (error) {
+      debugPrint('[CacheEngine] Could not invalidate matching entries: $error');
+    }
+  }
+
+  Future<void> invalidateAfterWrite({
+    required Uri uri,
+    required String? userId,
+  }) async {
+    final path = uri.path.toLowerCase();
+    final affectedPaths = <String>[
+      if (path.contains('/messages')) '/messages',
+      if (path.contains('/bookings')) '/bookings',
+      if (path.contains('/notifications')) '/notifications',
+      if (path.contains('/users')) '/users',
+      if (path.contains('/tenant_profiles')) '/tenant_profiles',
+      if (path.contains('/properties')) ...['/properties', '/home/feed'],
+    ];
+    if (affectedPaths.isEmpty) return;
+
+    final userPrefix = 'http:${userId ?? 'guest'}:';
+    await invalidateMatching((key) =>
+        key.startsWith(userPrefix) &&
+        affectedPaths.any((affectedPath) => key.contains(affectedPath)));
   }
 
   /// Clear everything (e.g., on Logout)
   Future<void> clearAll() async {
     _memoryCache.clear();
-    await _box?.clear();
+    try {
+      await _init();
+      await _box?.clear();
+    } catch (error) {
+      debugPrint('[CacheEngine] Could not clear persistent cache: $error');
+    }
   }
 }
 

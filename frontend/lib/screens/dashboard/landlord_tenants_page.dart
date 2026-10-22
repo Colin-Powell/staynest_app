@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/utils/api_result.dart';
 
 // --- Theme Constants ---
 const Color _landlordPrimary = Color(0xFF059669);
@@ -44,7 +45,7 @@ class _LandlordTenantsPageState extends State<LandlordTenantsPage> {
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to load tenants: ${e.toString()}';
+        _errorMessage = 'Failed to load tenants: ${ApiResult.mapError(e)}';
         _isLoading = false;
       });
     }

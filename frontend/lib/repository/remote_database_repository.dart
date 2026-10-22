@@ -378,7 +378,11 @@ class RemoteDatabaseRepository {
   }) async {
     final response = await apiClient.post(
       Uri.parse('${AppSession.apiBaseUrl}/auth/login'),
-      body: {'email': email, 'password': password, if (portal != null) 'portal': portal},
+      body: {
+        'email': email,
+        'password': password,
+        if (portal != null) 'portal': portal
+      },
     );
 
     if (response.statusCode == 401 || response.statusCode == 404) {
@@ -600,7 +604,7 @@ class RemoteDatabaseRepository {
   }) async {
     final url = '${AppSession.apiBaseUrl}/users/profile';
     if (kDebugMode) {
-      debugPrint('[Repository] Updating user at: $url with $update');
+      debugPrint('[Repository] Updating user profile at: $url');
     }
 
     final response = await apiClient.patch(

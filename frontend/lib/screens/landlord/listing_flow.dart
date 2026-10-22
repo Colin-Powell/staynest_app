@@ -531,7 +531,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          photo.error = e.toString();
+          photo.error = ApiResult.mapError(e);
           photo.isUploading = false;
         });
       }
@@ -2773,7 +2773,7 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString().replaceAll('Exception: ', '');
+          _error = ApiResult.mapError(e);
           _isLoading = false;
         });
       }

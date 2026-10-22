@@ -772,7 +772,8 @@ Widget _buildTextField(String label,
     {String? hintText,
     bool isPassword = false,
     IconData? prefixIcon,
-    TextEditingController? controller}) {
+    TextEditingController? controller,
+    bool readOnly = false}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 24),
     child: Column(
@@ -790,6 +791,7 @@ Widget _buildTextField(String label,
         TextFormField(
           controller: controller,
           obscureText: isPassword,
+          readOnly: readOnly,
           style: GoogleFonts.poppins(
               fontSize: 15, fontWeight: FontWeight.w500, color: _dark),
           decoration: InputDecoration(
@@ -937,12 +939,11 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
 
   Future<void> _handleSave() async {
     final name = _nameController.text.trim();
-    final email = _emailController.text.trim();
     final phone = _phoneController.text.trim();
 
-    if (name.isEmpty || email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Name and email are required.')));
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Name is required.')));
       return;
     }
 
@@ -956,7 +957,6 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
       final repository = RemoteDatabaseRepository();
       final updatedUser = await repository.updateCurrentUser(update: {
         'name': name,
-        'email': email,
         'phone': phone,
         if (avatarPublicId != null) 'avatar': avatarPublicId,
       });
@@ -1050,7 +1050,8 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                       prefixIcon: PhosphorIconsRegular.user),
                   _buildTextField('Email Address',
                       controller: _emailController,
-                      prefixIcon: PhosphorIconsRegular.envelopeSimple),
+                      prefixIcon: PhosphorIconsRegular.envelopeSimple,
+                      readOnly: true),
                   _buildTextField('Phone Number',
                       controller: _phoneController,
                       prefixIcon: PhosphorIconsRegular.phone),

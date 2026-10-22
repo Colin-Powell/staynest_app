@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/screens/home/cache_engine.dart';
 
 import '../services/api_client.dart'; // ApiException
 
@@ -152,66 +153,104 @@ class HttpJsonClient {
   Future<http.Response> get(
     Uri uri, {
     Map<String, String>? headers,
-  }) {
-    return _sendWithOptionalRetry(() async {
-      return _client.get(uri, headers: {..._authHeaders, ...?headers});
-    });
+  }) async {
+    final ttl = CacheEngine.requestTtl(uri);
+    Future<http.Response> fetch() => _sendWithOptionalRetry(
+          () async => _client.get(uri, headers: {..._authHeaders, ...?headers}),
+        );
+    if (ttl == null) return fetch();
+
+    final body = await CacheEngine.instance.getOrFetch<String>(
+      key: CacheEngine.requestKey(
+        uri,
+        userId: AppSession.currentUserId,
+        role: AppSession.currentRole,
+      ),
+      ttl: ttl,
+      networkFetcher: () async => (await fetch()).body,
+    );
+    return http.Response(
+      body,
+      200,
+      headers: const {'content-type': 'application/json; charset=utf-8'},
+      request: http.Request('GET', uri),
+    );
   }
 
   Future<http.Response> post(
     Uri uri, {
     Map<String, String>? headers,
     Object? body,
-  }) {
+  }) async {
     final encodedBody =
         body is String ? body : (body == null ? null : jsonEncode(body));
-    return _sendWithOptionalRetry(() async {
+    final response = await _sendWithOptionalRetry(() async {
       return _client.post(
         uri,
         headers: {..._authHeaders, ...?headers},
         body: encodedBody,
       );
     });
+    await CacheEngine.instance.invalidateAfterWrite(
+      uri: uri,
+      userId: AppSession.currentUserId,
+    );
+    return response;
   }
 
   Future<http.Response> patch(
     Uri uri, {
     Map<String, String>? headers,
     Object? body,
-  }) {
+  }) async {
     final encodedBody =
         body is String ? body : (body == null ? null : jsonEncode(body));
-    return _sendWithOptionalRetry(() async {
+    final response = await _sendWithOptionalRetry(() async {
       return _client.patch(
         uri,
         headers: {..._authHeaders, ...?headers},
         body: encodedBody,
       );
     });
+    await CacheEngine.instance.invalidateAfterWrite(
+      uri: uri,
+      userId: AppSession.currentUserId,
+    );
+    return response;
   }
 
   Future<http.Response> put(
     Uri uri, {
     Map<String, String>? headers,
     Object? body,
-  }) {
+  }) async {
     final encodedBody =
         body is String ? body : (body == null ? null : jsonEncode(body));
-    return _sendWithOptionalRetry(() async {
+    final response = await _sendWithOptionalRetry(() async {
       return _client.put(
         uri,
         headers: {..._authHeaders, ...?headers},
         body: encodedBody,
       );
     });
+    await CacheEngine.instance.invalidateAfterWrite(
+      uri: uri,
+      userId: AppSession.currentUserId,
+    );
+    return response;
   }
 
   Future<http.Response> delete(
     Uri uri, {
     Map<String, String>? headers,
-  }) {
-    return _sendWithOptionalRetry(() async {
+  }) async {
+    final response = await _sendWithOptionalRetry(() async {
       return _client.delete(uri, headers: {..._authHeaders, ...?headers});
     });
+    await CacheEngine.instance.invalidateAfterWrite(
+      uri: uri,
+      userId: AppSession.currentUserId,
+    );
+    return response;
   }
 }

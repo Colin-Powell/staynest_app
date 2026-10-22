@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { queueUserPush } from '../services/queue.js';
-import { ioInstance } from '../socket.js';
+import { emitDirectConversationPresence, ioInstance } from '../socket.js';
 const router = Router();
 // Save a message to database
 router.post('/', requireAuth, async (req, res, next) => {
@@ -28,6 +28,12 @@ router.post('/', requireAuth, async (req, res, next) => {
         // Emit to recipient over socket
         if (ioInstance && to_user_id !== from_user_id) {
             ioInstance.to(`user:${to_user_id}`).emit('message', payload);
+            void Promise.all([
+                emitDirectConversationPresence(from_user_id, to_user_id),
+                emitDirectConversationPresence(to_user_id, from_user_id),
+            ]).catch((error) => {
+                console.error('[Presence] conversation refresh failed:', error);
+            });
         }
         // Send push notification
         if (to_user_id !== from_user_id) {
@@ -132,6 +138,12 @@ router.get('/conversations', requireAuth, async (req, res, next) => {
          p.partner_id as user_id,
          u.name as user_name,
          u.avatar as user_avatar,
+         EXISTS (
+           SELECT 1 FROM presence_connections pc
+            WHERE pc.user_id = p.partner_id AND pc.expires_at > now()
+         ) as user_online,
+         u.last_seen_at,
+         u.presence_revision,
          (SELECT m2.text
             FROM messages m2
            WHERE (m2.from_user_id = $1 AND m2.to_user_id = p.partner_id)

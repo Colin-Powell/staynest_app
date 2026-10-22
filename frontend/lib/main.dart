@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:property_app/utils/responsive_modal_sheet.dart';
+import 'package:property_app/widgets/app_footer.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
@@ -96,12 +97,8 @@ Future<void> main() async {
     debugPrint('dotenv load failed: $err');
   }
 
-  await _initializeFirebaseAsync();
   await AppSession.restoreSession();
   await AppSession.initializeAppInfo();
-  if (AppSession.currentUserId != null) {
-    AuthService.instance.syncFCMToken();
-  }
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -109,6 +106,15 @@ Future<void> main() async {
     statusBarBrightness: Brightness.light,
   ));
   runApp(const PropertyApp());
+  unawaited(_initializeFirebaseAsync().catchError((error, stackTrace) {
+    debugPrint('[Firebase] background initialization failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }));
+  if (AppSession.currentUserId != null) {
+    unawaited(AuthService.instance.syncFCMToken().catchError((error) {
+      debugPrint('[FCM] token sync failed: $error');
+    }));
+  }
   unawaited(DeviceLocationService.instance.initialize());
 }
 
@@ -250,6 +256,19 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
     _scheduleLandlordPortalActivation();
     return LandlordPortalView(
       onSwitchToTenantPortal: () => _switchActivePortal('tenant'),
+    );
+  }
+
+  Widget _publicInfoPageWithFooter(Widget page) {
+    if (!kIsWeb) return page;
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          Expanded(child: page),
+          const AppFooter(),
+        ],
+      ),
     );
   }
 
@@ -455,7 +474,8 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
                 Navigator.pushReplacementNamed(context, '/register'),
           );
         },
-        '/privacy': (context) => const PrivacyPolicyView(),
+        '/privacy': (context) =>
+            _publicInfoPageWithFooter(const PrivacyPolicyView()),
         '/home': (context) => AppShell(onRequireLogin: _showLoginModal),
         '/explore': (context) => AppShell(onRequireLogin: _showLoginModal),
         '/landlord': (context) => _landlordPortalRoute(),
@@ -588,8 +608,9 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
             TenantBookingsView(onBack: () => Navigator.pop(context)),
         '/landlord_bookings': (context) =>
             _landlordOnlyRoute(() => const LandlordBookingsPage()),
-        '/help_support': (context) =>
-            HelpSupportView(onBack: () => Navigator.pop(context)),
+        '/help_support': (context) => _publicInfoPageWithFooter(
+              HelpSupportView(onBack: () => Navigator.pop(context)),
+            ),
         '/settings': (context) => SettingView(
               onBack: () => Navigator.pop(context),
               onLogout: () async {
@@ -616,7 +637,7 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
                 }
               },
             ),
-        '/about': (context) => const AboutView(),
+        '/about': (context) => _publicInfoPageWithFooter(const AboutView()),
         '/how_it_works': (context) => HowItWorksView.fromArguments(
             ModalRoute.of(context)!.settings.arguments),
         '/edit_profile': (context) => EditProfileView(
@@ -989,6 +1010,10 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
             userId: arguments['userId']?.toString() ?? '',
             name: arguments['name']?.toString() ?? 'Agent',
             avatar: arguments['avatar']?.toString() ?? '',
+            isOnline: arguments['isOnline'] == true,
+            lastSeenAt: DateTime.tryParse(
+              arguments['lastSeenAt']?.toString() ?? '',
+            ),
           );
         } else if (AppSession.isLandlord) {
           content = Stack(
@@ -1038,7 +1063,7 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
         } else {
           content = MessagesViewScreen(
             onClose: () => Navigator.of(context).pop(),
-            onSelectChat: (userId, name, avatar) {
+            onSelectChat: (userId, name, avatar, isOnline, lastSeenAt) {
               Navigator.of(context).pop();
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 navigatorKey.currentState?.pushNamed(
@@ -1047,6 +1072,8 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
                     'userId': userId,
                     'name': name,
                     'avatar': avatar ?? '',
+                    'isOnline': isOnline,
+                    'lastSeenAt': lastSeenAt?.toIso8601String(),
                   },
                 );
               });
@@ -1444,10 +1471,16 @@ class _AppShellState extends State<AppShell> {
               onSelectionModeChanged: (isSelecting) {
                 setState(() => _isMessageSelectionMode = isSelecting);
               },
-              onSelectChat: (userId, name, avatar) {
+              onSelectChat: (userId, name, avatar, isOnline, lastSeenAt) {
                 closeSheet();
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _openChat(userId, name, avatar);
+                  _openChat(
+                    userId,
+                    name,
+                    avatar,
+                    isOnline: isOnline,
+                    lastSeenAt: lastSeenAt,
+                  );
                 });
               },
             ),
@@ -1469,9 +1502,27 @@ class _AppShellState extends State<AppShell> {
       _toggleDesktopNotifications();
       return;
     }
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const NotificationsView()),
+    showResponsiveModalSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final height =
+            (MediaQuery.sizeOf(sheetContext).height * 0.72).clamp(0.0, 560.0);
+        return SizedBox(
+          height: height,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(20),
+            ),
+            child: NotificationsView(
+              onClose: () => Navigator.of(sheetContext).pop(),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1711,13 +1762,21 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  void _openChat(String userId, String name, String? avatar) {
+  void _openChat(
+    String userId,
+    String name,
+    String? avatar, {
+    bool isOnline = false,
+    DateTime? lastSeenAt,
+  }) {
     Navigator.of(context, rootNavigator: true).pushNamed(
       '/chat',
       arguments: {
         'userId': userId,
         'name': name,
         'avatar': avatar ?? '',
+        'isOnline': isOnline,
+        'lastSeenAt': lastSeenAt?.toIso8601String(),
       },
     );
   }
@@ -1747,7 +1806,7 @@ class _AppShellState extends State<AppShell> {
         final panelWidth =
             (constraints.maxWidth - 32).clamp(320.0, 420.0).toDouble();
         final panelHeight =
-            (constraints.maxHeight - 110).clamp(320.0, 640.0).toDouble();
+            (constraints.maxHeight * 0.72).clamp(420.0, 540.0).toDouble();
         return Scaffold(
           backgroundColor: const Color(0xFFFAFAFA),
           body: Stack(
@@ -1786,7 +1845,6 @@ class _AppShellState extends State<AppShell> {
                       ),
                     ),
                   ),
-                  const _DesktopFooter(),
                 ],
               ),
               if (_showDesktopNotifications || _showDesktopMessages)
@@ -1824,9 +1882,16 @@ class _AppShellState extends State<AppShell> {
                     borderRadius: BorderRadius.circular(16),
                     child: MessagesViewScreen(
                       onClose: _closeDesktopPanels,
-                      onSelectChat: (userId, name, avatarUrl) {
+                      onSelectChat:
+                          (userId, name, avatarUrl, isOnline, lastSeenAt) {
                         _closeDesktopPanels();
-                        _openChat(userId, name, avatarUrl);
+                        _openChat(
+                          userId,
+                          name,
+                          avatarUrl,
+                          isOnline: isOnline,
+                          lastSeenAt: lastSeenAt,
+                        );
                       },
                     ),
                   ),
@@ -2371,41 +2436,6 @@ class _DesktopHeaderTab extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _DesktopFooter extends StatelessWidget {
-  const _DesktopFooter();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
-      ),
-      child: Row(
-        children: [
-          Text(
-            '© StayNest 2026',
-            style: GoogleFonts.poppins(
-                fontSize: 12, color: const Color(0xFF6B7280)),
-          ),
-          const Spacer(),
-          TextButton(
-            onPressed: () => Navigator.pushNamed(context, '/privacy'),
-            child: Text('Privacy', style: GoogleFonts.poppins(fontSize: 12)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pushNamed(context, '/help_support'),
-            child: Text('Help & Support',
-                style: GoogleFonts.poppins(fontSize: 12)),
-          ),
-        ],
       ),
     );
   }

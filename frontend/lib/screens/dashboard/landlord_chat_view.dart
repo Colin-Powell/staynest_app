@@ -8,6 +8,7 @@ import 'package:property_app/services/message_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:uuid/uuid.dart';
 import 'package:property_app/models/communication_models.dart';
+import 'package:property_app/utils/presence_format.dart';
 
 // ─── Landlord Design System Constants ─────────────────────────────────────────
 const Color _bg = Color(0xFFFAFAFA);
@@ -24,6 +25,8 @@ class LandlordChatView extends StatefulWidget {
   final String userId;
   final String name;
   final String? avatar;
+  final bool isOnline;
+  final DateTime? lastSeenAt;
 
   const LandlordChatView({
     super.key,
@@ -31,6 +34,8 @@ class LandlordChatView extends StatefulWidget {
     required this.userId,
     required this.name,
     this.avatar,
+    this.isOnline = false,
+    this.lastSeenAt,
     this.onCall,
   });
 
@@ -51,18 +56,38 @@ class _LandlordChatViewState extends State<LandlordChatView>
   StreamSubscription? _socketSubscription;
   StreamSubscription? _typingSubscription;
   StreamSubscription? _seenSubscription;
+  StreamSubscription? _presenceSubscription;
   StreamSubscription? _fcmSubscription;
 
   bool _isTyping = false;
   bool _isOtherTyping = false;
+  late bool _isOtherOnline;
+  DateTime? _lastSeenAt;
   bool _isLoading = true;
   Timer? _typingDebounce;
+  Timer? _presenceRefreshTimer;
 
   final List<ChatMessage> _messages = [];
 
   @override
   void initState() {
     super.initState();
+    _isOtherOnline = widget.isOnline;
+    _lastSeenAt = widget.lastSeenAt;
+    final latestPresence =
+        SocketService.instance.latestPresenceFor(widget.userId);
+    if (latestPresence != null) {
+      _isOtherOnline = latestPresence['online'] == true;
+      _lastSeenAt = DateTime.tryParse(
+        latestPresence['lastSeenAt']?.toString() ?? '',
+      );
+    }
+    _presenceRefreshTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) {
+        if (mounted) setState(() {});
+      },
+    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
@@ -99,6 +124,14 @@ class _LandlordChatViewState extends State<LandlordChatView>
       if (data['userId'] == widget.userId) {
         if (mounted) setState(() => _isOtherTyping = data['isTyping'] == true);
       }
+    });
+
+    _presenceSubscription = SocketService.instance.presence.listen((data) {
+      if (data['userId']?.toString() != widget.userId || !mounted) return;
+      setState(() {
+        _isOtherOnline = data['online'] == true;
+        _lastSeenAt = DateTime.tryParse(data['lastSeenAt']?.toString() ?? '');
+      });
     });
 
     _seenSubscription = SocketService.instance.seen.listen((data) {
@@ -166,6 +199,9 @@ class _LandlordChatViewState extends State<LandlordChatView>
     _fcmSubscription?.cancel();
     _typingSubscription?.cancel();
     _seenSubscription?.cancel();
+    _presenceSubscription?.cancel();
+    _typingDebounce?.cancel();
+    _presenceRefreshTimer?.cancel();
     _pageController.dispose();
     _listController.dispose();
     _msgController.dispose();
@@ -403,17 +439,30 @@ class _LandlordChatViewState extends State<LandlordChatView>
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: _isOtherTyping ? _dark : _green,
+                        color: _isOtherTyping
+                            ? _dark
+                            : _isOtherOnline
+                                ? _green
+                                : _grey,
                         shape: BoxShape.circle,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      _isOtherTyping ? 'typing...' : 'Online',
+                      _isOtherTyping
+                          ? 'typing...'
+                          : presenceLabel(
+                              online: _isOtherOnline,
+                              lastSeenAt: _lastSeenAt,
+                            ),
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: _isOtherTyping ? _dark : _grey,
+                        color: _isOtherTyping
+                            ? _dark
+                            : _isOtherOnline
+                                ? _green
+                                : _grey,
                       ),
                     ),
                   ],

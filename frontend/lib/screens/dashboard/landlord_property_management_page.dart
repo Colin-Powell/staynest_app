@@ -9,6 +9,7 @@ import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/property_links.dart';
+import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'boost_listing_modal.dart';
 import 'landlord_calendar_page.dart';
@@ -319,7 +320,10 @@ class _LandlordPropertyManagementPageState
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to load property for editing: $error')),
+        SnackBar(
+          content: Text(
+              'Unable to load property for editing: ${ApiResult.mapError(error)}'),
+        ),
       );
     }
   }

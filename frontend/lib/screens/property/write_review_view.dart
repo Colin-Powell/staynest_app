@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
+import 'package:property_app/utils/api_result.dart';
 
 class WriteReviewView extends StatefulWidget {
   final String propertyId;
@@ -64,7 +65,7 @@ class _WriteReviewViewState extends State<WriteReviewView> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+          SnackBar(content: Text(ApiResult.mapError(e))),
         );
       }
     } finally {

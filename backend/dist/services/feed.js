@@ -1,5 +1,7 @@
 import { query } from '../db.js';
 import { buildTrendingPropertiesQuery, NEW_LISTING_WINDOW_DAYS, TRENDING_MIN_UNIQUE_TENANTS, TRENDING_WINDOW_DAYS, } from './discovery_rules.js';
+import { publicPropertyCategorySql } from './property_category.js';
+import { MAX_HOME_FEED_PROPERTIES_PER_LOCATION, MAX_HOME_FEED_LOCATION_SECTIONS, publicPropertyLocationSql, } from './feed_location.js';
 const APPROVED = "COALESCE(p.status, 'pending_review') = 'approved'";
 function distanceSql(latParam, lngParam) {
     return `(6371 * 2 * ASIN(SQRT(
@@ -44,12 +46,13 @@ function filtersFor(context, params, excluded, includeCampus = true) {
     if (context.category && context.category.toLowerCase() !== 'all') {
         params.push(context.category);
         const categoryParam = `$${params.length}`;
+        const propertyCategory = publicPropertyCategorySql();
         filters.push(`(
-      LOWER(p.category) = LOWER(${categoryParam})
-      OR LOWER(p.category) = LOWER(REGEXP_REPLACE(${categoryParam}, 's$', ''))
-      OR REGEXP_REPLACE(LOWER(p.category), '[ _-]+', '_', 'g') =
+      LOWER(${propertyCategory}) = LOWER(${categoryParam})
+      OR LOWER(${propertyCategory}) = LOWER(REGEXP_REPLACE(${categoryParam}, 's$', ''))
+      OR REGEXP_REPLACE(LOWER(${propertyCategory}), '[ _-]+', '_', 'g') =
          REGEXP_REPLACE(LOWER(${categoryParam}), '[ _-]+', '_', 'g')
-      OR REGEXP_REPLACE(LOWER(p.category), '[ _-]+', '_', 'g') =
+      OR REGEXP_REPLACE(LOWER(${propertyCategory}), '[ _-]+', '_', 'g') =
          REGEXP_REPLACE(LOWER(${categoryParam}), '[ _-]+', '_', 'g') || '_room'
       OR EXISTS (SELECT 1 FROM property_types pt
         WHERE pt.id = p.property_type_id
@@ -162,6 +165,68 @@ export class FeedService {
             params.push(limit);
             const result = await query(buildTrendingPropertiesQuery(filters.join(' AND '), params.length), params);
             addSection(section('trending_now', 'property_grid', resolved.anchorLat != null ? 'Trending Near You' : 'Trending Now', `At least ${TRENDING_MIN_UNIQUE_TENANTS} tenants engaged in the last ${TRENDING_WINDOW_DAYS} days`, 'deduplicated_tenant_engagement_per_exposure_v1', result.rows));
+        }
+        {
+            const locationContext = {
+                ...resolved,
+                campusId: undefined,
+                locationId: undefined,
+            };
+            const params = [];
+            const filters = filtersFor(locationContext, params, [], false);
+            const location = publicPropertyLocationSql();
+            params.push(MAX_HOME_FEED_LOCATION_SECTIONS, MAX_HOME_FEED_PROPERTIES_PER_LOCATION);
+            const result = await query(`WITH eligible AS (
+           SELECT p.*, ${location} AS feed_location
+           FROM properties p
+           WHERE ${filters.join(' AND ')}
+         ), locations AS (
+           SELECT LOWER(BTRIM(feed_location)) AS location_key,
+                  MIN(BTRIM(feed_location)) AS location_name,
+                  COUNT(*) AS property_count
+           FROM eligible
+           WHERE NULLIF(BTRIM(feed_location), '') IS NOT NULL
+           GROUP BY LOWER(BTRIM(feed_location))
+           ORDER BY property_count DESC, location_name ASC
+           LIMIT $${params.length - 1}
+         ), ranked AS (
+           SELECT eligible.*, locations.location_name,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY LOWER(BTRIM(eligible.feed_location))
+                    ORDER BY eligible.published_at DESC NULLS LAST,
+                             eligible.created_at DESC, eligible.id
+                  ) AS location_rank
+           FROM eligible
+           JOIN locations
+             ON LOWER(BTRIM(eligible.feed_location)) = locations.location_key
+         )
+         SELECT * FROM ranked
+         WHERE location_rank <= $${params.length}
+         ORDER BY location_name ASC, location_rank ASC`, params);
+            const locationSections = new Map();
+            for (const row of result.rows) {
+                const locationName = String(row.location_name ?? '').trim();
+                if (!locationName)
+                    continue;
+                const locationKey = locationName.toLowerCase();
+                let locationSection = locationSections.get(locationKey);
+                if (!locationSection) {
+                    locationSection = { locationName, items: [] };
+                    locationSections.set(locationKey, locationSection);
+                }
+                const item = { ...row };
+                delete item.feed_location;
+                delete item.location_name;
+                delete item.location_rank;
+                locationSection.items.push(item);
+            }
+            for (const { locationName, items } of locationSections.values()) {
+                const locationId = locationName
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '_')
+                    .replace(/^_+|_+$/g, '');
+                addSection(section(`properties_in_${locationId}`, 'property_carousel', `Properties in ${locationName}`, `Available stays in ${locationName}`, 'approved_properties_by_location_v1', items));
+            }
         }
         if (sections.length === 0) {
             const params = [];

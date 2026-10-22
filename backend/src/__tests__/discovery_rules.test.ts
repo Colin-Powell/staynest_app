@@ -10,6 +10,16 @@ import {
   TRENDING_MIN_UNIQUE_TENANTS,
   TRENDING_WINDOW_DAYS,
 } from '../services/discovery_rules.js';
+import {
+  DEFAULT_PUBLIC_PROPERTY_CATEGORY,
+  normalizePublicPropertyCategory,
+  publicPropertyCategorySql,
+} from '../services/property_category.js';
+import {
+  MAX_HOME_FEED_PROPERTIES_PER_LOCATION,
+  MAX_HOME_FEED_LOCATION_SECTIONS,
+  publicPropertyLocationSql,
+} from '../services/feed_location.js';
 
 test('discovery windows and minimum Trending thresholds are centralized', () => {
   assert.equal(NEW_LISTING_WINDOW_DAYS, 30);
@@ -39,4 +49,24 @@ test('Trending query deduplicates tenant events and normalizes by all supported 
   for (const eventType of TRENDING_IMPRESSION_EVENT_TYPES) {
     assert.ok(sql.includes(eventType));
   }
+});
+
+test('missing public property categories normalize to Apartment', () => {
+  assert.equal(DEFAULT_PUBLIC_PROPERTY_CATEGORY, 'Apartment');
+  assert.equal(normalizePublicPropertyCategory(null), 'Apartment');
+  assert.equal(normalizePublicPropertyCategory('  '), 'Apartment');
+  assert.equal(normalizePublicPropertyCategory('Studio'), 'Studio');
+  assert.equal(
+    publicPropertyCategorySql(),
+    "COALESCE(NULLIF(BTRIM(p.category), ''), 'Apartment')",
+  );
+});
+
+test('home feed location rows use provided areas and stay capped at ten', () => {
+  assert.equal(MAX_HOME_FEED_LOCATION_SECTIONS, 10);
+  assert.equal(MAX_HOME_FEED_PROPERTIES_PER_LOCATION, 10);
+  const locationSql = publicPropertyLocationSql();
+  assert.ok(locationSql.indexOf('p.county') < locationSql.indexOf('p.town'));
+  assert.ok(locationSql.includes('p.city'));
+  assert.ok(locationSql.includes('p.neighborhood'));
 });

@@ -1,13 +1,23 @@
 import 'dart:convert';
+import 'package:property_app/services/api_client.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/repository/http_json_client.dart';
+import 'package:property_app/utils/api_result.dart';
 
 class BookingService {
   static String get _baseUrl => '${AppSession.apiBaseUrl}/bookings';
   static final HttpJsonClient _client = HttpJsonClient();
 
   static String friendlyErrorMessage(Object error) {
-    final message = error.toString().toLowerCase();
+    final rawMessage = error is ApiException
+        ? (error.responseBody is Map
+            ? ((error.responseBody as Map)['error'] ??
+                    (error.responseBody as Map)['message'] ??
+                    error.message)
+                .toString()
+            : error.message)
+        : error.toString();
+    final message = rawMessage.toLowerCase();
     if (message.contains('already have an active booking') ||
         message.contains('active booking') ||
         message.contains('duplicate')) {
@@ -27,7 +37,7 @@ class BookingService {
     if (message.contains('no landlord') || message.contains('own property')) {
       return 'This property cannot accept your booking.';
     }
-    return 'We could not submit your booking. Please try again.';
+    return ApiResult.mapError(error);
   }
 
   static Future<Map<String, dynamic>> fetchBookingFee(String propertyId) async {

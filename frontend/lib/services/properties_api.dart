@@ -37,6 +37,57 @@ class PropertiesApi {
     return HomeFeedResponse.fromJson(response);
   }
 
+  static Future<bool> getHomeFeedCached({
+    double? lat,
+    double? lng,
+    double? radiusKm,
+    String? campusId,
+    String? locationId,
+    String? category,
+    int limit = 20,
+    String? cursor,
+    required void Function(HomeFeedResponse response, bool isFromCache) onData,
+    void Function(Object error)? onError,
+  }) async {
+    final queryParams = <String, String>{};
+    if (lat != null) queryParams['lat'] = lat.toString();
+    if (lng != null) queryParams['lng'] = lng.toString();
+    if (radiusKm != null) queryParams['radiusKm'] = radiusKm.toString();
+    if (campusId != null) queryParams['campusId'] = campusId;
+    if (locationId != null) queryParams['locationId'] = locationId;
+    if (category != null && category.isNotEmpty && category != 'All') {
+      queryParams['category'] = category;
+    }
+    queryParams['limit'] = limit.toString();
+    if (cursor != null) queryParams['cursor'] = cursor;
+
+    final queryString = Uri(queryParameters: queryParams).query;
+    final path = queryString.isEmpty ? '/home/feed' : '/home/feed?$queryString';
+    final userScope = AppSession.currentUserId ?? 'guest';
+    final cacheKey =
+        'home_feed_${userScope}_${AppSession.currentRole}_$queryString';
+    var delivered = false;
+
+    await CacheEngine.instance.handle<Map<String, dynamic>>(
+      key: cacheKey,
+      ttl: CacheTTL.listings,
+      networkFetcher: () => _client(
+        timeout: const Duration(seconds: 12),
+      ).getJson(path),
+      onData: (data, isFromCache) {
+        try {
+          final response = HomeFeedResponse.fromJson(data);
+          delivered = true;
+          onData(response, isFromCache);
+        } catch (error) {
+          onError?.call(error);
+        }
+      },
+      onError: onError,
+    );
+    return delivered;
+  }
+
   static Future<void> trackPropertyShare(String propertyId) async {
     final client = _client();
     await client.postJson('/analytics/track', body: {
@@ -145,9 +196,10 @@ class PropertiesApi {
     }
   }
 
-  static ApiClient _client() {
+  static ApiClient _client({Duration timeout = const Duration(seconds: 30)}) {
     return ApiClient(
       baseUrl: AppSession.apiBaseUrl,
+      timeout: timeout,
       defaultHeaders: AppSession.apiToken != null
           ? {'Authorization': 'Bearer ${AppSession.apiToken!}'}
           : null,

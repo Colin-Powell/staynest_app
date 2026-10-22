@@ -35,9 +35,13 @@ class _EditProfileViewState extends State<EditProfileView>
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
 
   File? _selectedImage;
   bool _isSaving = false;
+  bool _isLoadingProfile = true;
+  bool _formHasEdits = false;
+  String? _profileLoadError;
 
   @override
   void initState() {
@@ -64,21 +68,28 @@ class _EditProfileViewState extends State<EditProfileView>
   }
 
   Future<void> _populateFromSession() async {
+    if (mounted) setState(() => _isLoadingProfile = true);
     try {
-      if (AppSession.apiToken != null && AppSession.currentUserId != null) {
-        final user = await RemoteDatabaseRepository().loadCurrentUser();
-        AppSession.updateCurrentUser(user);
-        await AppSession.persistSession();
+      final user = await RemoteDatabaseRepository().loadCurrentUser();
+      AppSession.updateCurrentUser(user);
+      await AppSession.persistSession();
+      if (!_formHasEdits) {
+        _nameController.text = AppSession.displayName;
+        _emailController.text = AppSession.displayEmail;
+        _phoneController.text = AppSession.displayPhone;
       }
-    } catch (_) {
-      // Use the cached session values when the profile request is unavailable.
+      _profileLoadError = null;
+    } catch (error) {
+      if (!_formHasEdits) {
+        _nameController.text = AppSession.displayName;
+        _emailController.text = AppSession.displayEmail;
+        _phoneController.text = AppSession.displayPhone;
+      }
+      _profileLoadError = ApiResult.mapError(error);
     }
 
     if (!mounted) return;
-    _nameController.text = AppSession.displayName;
-    _emailController.text = AppSession.displayEmail;
-    _phoneController.text = AppSession.displayPhone;
-    setState(() {});
+    setState(() => _isLoadingProfile = false);
   }
 
   @override
@@ -147,64 +158,105 @@ class _EditProfileViewState extends State<EditProfileView>
         child: Scaffold(
           backgroundColor: _bgColor,
           body: SafeArea(
-            child: Column(
-              children: [
-                _buildHeader(context),
-                Expanded(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.only(
-                      left: 24,
-                      right: 24,
-                      top: 16,
-                      bottom: 24,
-                    ),
+            child: _isLoadingProfile
+                ? const Center(child: CircularProgressIndicator())
+                : Form(
+                    key: _formKey,
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildStaggered(index: 1, child: _buildAvatarSection()),
-                        const SizedBox(height: 40),
-                        _buildStaggered(
-                          index: 2,
-                          child: _buildField(
-                            label: 'Full Name',
-                            controller: _nameController,
-                            keyboardType: TextInputType.name,
-                            textCapitalization: TextCapitalization.words,
+                        if (_profileLoadError != null)
+                          MaterialBanner(
+                            content: Text(
+                                'Could not refresh your profile: $_profileLoadError'),
+                            actions: [
+                              TextButton(
+                                onPressed:
+                                    _isSaving ? null : _populateFromSession,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        _buildHeader(context),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            physics: const BouncingScrollPhysics(),
+                            padding: const EdgeInsets.only(
+                              left: 24,
+                              right: 24,
+                              top: 16,
+                              bottom: 24,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildStaggered(
+                                    index: 1, child: _buildAvatarSection()),
+                                const SizedBox(height: 40),
+                                _buildStaggered(
+                                  index: 2,
+                                  child: _buildField(
+                                    label: 'Full Name',
+                                    controller: _nameController,
+                                    keyboardType: TextInputType.name,
+                                    textCapitalization:
+                                        TextCapitalization.words,
+                                    onChanged: (_) => _formHasEdits = true,
+                                    validator: (value) {
+                                      final name = value?.trim() ?? '';
+                                      if (name.isEmpty) {
+                                        return 'Enter your full name.';
+                                      }
+                                      if (name.length > 120) {
+                                        return 'Name is too long.';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                _buildStaggered(
+                                  index: 3,
+                                  child: _buildField(
+                                    label: 'Phone Number',
+                                    controller: _phoneController,
+                                    keyboardType: TextInputType.phone,
+                                    onChanged: (_) => _formHasEdits = true,
+                                    validator: (value) {
+                                      final phone = value?.trim() ?? '';
+                                      if (phone.isNotEmpty &&
+                                          !RegExp(r'^[+0-9().\s-]{7,25}$')
+                                              .hasMatch(phone)) {
+                                        return 'Enter a valid phone number.';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                _buildStaggered(
+                                  index: 4,
+                                  child: _buildField(
+                                    label: 'Email Address',
+                                    controller: _emailController,
+                                    keyboardType: TextInputType.emailAddress,
+                                    readOnly: true,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        // Bottom Button placed below ScrollView to prevent truncating overlap
                         _buildStaggered(
-                          index: 3,
-                          child: _buildField(
-                            label: 'Phone Number',
-                            controller: _phoneController,
-                            keyboardType: TextInputType.phone,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        _buildStaggered(
-                          index: 4,
-                          child: _buildField(
-                            label: 'Email Address',
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
+                          index: 5,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+                            child: _buildBottomBar(context),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
-                // Bottom Button placed below ScrollView to prevent truncating overlap
-                _buildStaggered(
-                  index: 5,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-                    child: _buildBottomBar(context),
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
@@ -348,6 +400,9 @@ class _EditProfileViewState extends State<EditProfileView>
     required TextEditingController controller,
     TextInputType keyboardType = TextInputType.text,
     TextCapitalization textCapitalization = TextCapitalization.none,
+    bool readOnly = false,
+    ValueChanged<String>? onChanged,
+    String? Function(String?)? validator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,6 +420,9 @@ class _EditProfileViewState extends State<EditProfileView>
           controller: controller,
           keyboardType: keyboardType,
           textCapitalization: textCapitalization,
+          readOnly: readOnly,
+          onChanged: onChanged,
+          validator: validator,
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -430,18 +488,9 @@ class _EditProfileViewState extends State<EditProfileView>
 
   Future<void> _handleSaveProfile() async {
     final name = _nameController.text.trim();
-    final email = _emailController.text.trim();
     final phone = _phoneController.text.trim();
 
-    if (name.isEmpty || email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Name and email are required.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSaving = true);
     try {
@@ -453,7 +502,6 @@ class _EditProfileViewState extends State<EditProfileView>
       final repository = RemoteDatabaseRepository();
       final updatedUser = await repository.updateCurrentUser(update: {
         'name': name,
-        'email': email,
         'phone': phone,
         if (avatarPublicId != null) 'avatar': avatarPublicId,
       });
