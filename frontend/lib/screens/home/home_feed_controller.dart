@@ -20,10 +20,16 @@ String describeHomeFeedLoadError(Object error) {
 }
 
 class HomeFeedController extends ChangeNotifier {
+  static const int _pageSize = 8;
+
   bool isLoading = true;
+  bool isLoadingMore = false;
   bool hasError = false;
   String? errorMessage;
   HomeFeedResponse? feedResponse;
+  String? nextCursor;
+
+  bool get hasMore => nextCursor != null;
 
   bool _disposed = false;
   int _requestId = 0;
@@ -59,8 +65,8 @@ class HomeFeedController extends ChangeNotifier {
       locationId,
       category,
     ].join('|');
-    final canKeepCurrentFeed = feedResponse != null &&
-        requestKey == _feedRequestKey;
+    final canKeepCurrentFeed =
+        feedResponse != null && requestKey == _feedRequestKey;
 
     _lat = lat;
     _lng = lng;
@@ -69,6 +75,8 @@ class HomeFeedController extends ChangeNotifier {
     _locationId = locationId;
     _category = category;
     _feedRequestKey = requestKey;
+    nextCursor = null;
+    isLoadingMore = false;
 
     isLoading = !canKeepCurrentFeed;
     hasError = false;
@@ -85,10 +93,12 @@ class HomeFeedController extends ChangeNotifier {
         campusId: campusId,
         locationId: locationId,
         category: category,
+        limit: _pageSize,
         onData: (response, isFromCache) {
           if (_disposed || requestId != _requestId) return;
           receivedResponse = true;
           feedResponse = response;
+          nextCursor = response.nextCursor;
           isLoading = false;
           hasError = false;
           errorMessage = null;
@@ -155,6 +165,69 @@ class HomeFeedController extends ChangeNotifier {
     } finally {
       if (!_disposed && requestId == _requestId) {
         isLoading = false;
+        _notify();
+      }
+    }
+  }
+
+  Future<void> loadMore() async {
+    final cursor = nextCursor;
+    final requestId = _requestId;
+    if (_disposed || cursor == null || isLoadingMore || feedResponse == null) {
+      return;
+    }
+
+    isLoadingMore = true;
+    _notify();
+    try {
+      await PropertiesApi.getHomeFeedCached(
+        lat: _lat,
+        lng: _lng,
+        radiusKm: _radiusKm,
+        campusId: _campusId,
+        locationId: _locationId,
+        category: _category,
+        limit: _pageSize,
+        cursor: cursor,
+        onData: (page, isFromCache) {
+          if (_disposed || requestId != _requestId) return;
+          final currentSections = {
+            for (final section in feedResponse!.sections)
+              section.id: section.copyWith(hasMore: false),
+          };
+          for (final section in page.sections) {
+            final current = currentSections[section.id];
+            if (current == null) {
+              currentSections[section.id] = section;
+              continue;
+            }
+            final seenIds = current.items.map((item) => item.id).toSet();
+            currentSections[section.id] = current.copyWith(
+              items: [
+                ...current.items,
+                ...section.items.where((item) => seenIds.add(item.id)),
+              ],
+              hasMore: section.hasMore,
+              nextCursor: section.nextCursor,
+            );
+          }
+          feedResponse = HomeFeedResponse(
+            schemaVersion: page.schemaVersion,
+            generatedAt: page.generatedAt,
+            context: page.context,
+            sections: currentSections.values.toList(),
+            nextCursor: page.nextCursor,
+          );
+          nextCursor = page.nextCursor;
+          _notify();
+        },
+        onError: (error) => debugPrint('Could not load more home feed: $error'),
+      );
+    } catch (error) {
+      debugPrint('Could not load more home feed: $error');
+    } finally {
+      if (!_disposed && requestId == _requestId) {
+        isLoadingMore = false;
         _notify();
       }
     }

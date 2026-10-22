@@ -22,7 +22,7 @@ const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 
 class LandlordChatView extends StatefulWidget {
   final VoidCallback onBack;
-  final VoidCallback? onCall;
+  final VoidCallback? onClose;
   final String userId;
   final String? conversationId;
   final ConversationModel? initialConversation;
@@ -41,7 +41,7 @@ class LandlordChatView extends StatefulWidget {
     this.avatar,
     this.isOnline = false,
     this.lastSeenAt,
-    this.onCall,
+    this.onClose,
   });
 
   @override
@@ -522,11 +522,12 @@ class _LandlordChatViewState extends State<LandlordChatView>
               ],
             ),
           ),
-          GestureDetector(
-            onTap: widget.onCall,
-            child:
-                const Icon(PhosphorIconsRegular.phone, color: _dark, size: 26),
-          ),
+          if (widget.onClose != null)
+            IconButton(
+              tooltip: 'Close chat window',
+              onPressed: widget.onClose,
+              icon: const Icon(PhosphorIconsRegular.x, color: _dark, size: 22),
+            ),
         ],
       ),
     );

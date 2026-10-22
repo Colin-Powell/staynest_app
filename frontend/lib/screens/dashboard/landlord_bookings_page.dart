@@ -23,12 +23,16 @@ class LandlordBookingsPage extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onOpenCalendar;
   final ValueChanged<Map<String, dynamic>>? onOpenBookingDetail;
+  final String? initialBookingId;
+  final bool initialPendingOnly;
 
   const LandlordBookingsPage({
     super.key,
     this.onBack,
     this.onOpenCalendar,
     this.onOpenBookingDetail,
+    this.initialBookingId,
+    this.initialPendingOnly = false,
   });
 
   @override
@@ -37,7 +41,7 @@ class LandlordBookingsPage extends StatefulWidget {
 
 class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
   String _selectedTab = 'Upcoming';
-  final List<String> _tabs = ['Upcoming', 'Completed', 'Cancelled'];
+  final List<String> _tabs = ['Pending', 'Upcoming', 'Completed', 'Cancelled'];
 
   // Status Pill Colors mapped to the minimal Theme
   static const Map<String, Map<String, Color>> statusColors = {
@@ -58,10 +62,12 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
   bool _isLoading = true;
   String? _errorMessage;
   List<Map<String, dynamic>> _allBookings = [];
+  bool _openedInitialBooking = false;
 
   @override
   void initState() {
     super.initState();
+    if (widget.initialPendingOnly) _selectedTab = 'Pending';
     _loadBookings();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!OnboardingPrefs.hasSeen('landlordBookingsSeen')) {
@@ -119,6 +125,20 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
       }
       _isLoading = false;
     });
+
+    final initialBookingId = widget.initialBookingId;
+    if (!_openedInitialBooking && initialBookingId != null) {
+      final matchingBookings = _allBookings
+          .where((item) => item['id']?.toString() == initialBookingId)
+          .toList();
+      if (matchingBookings.isNotEmpty) {
+        final booking = matchingBookings.first;
+        _openedInitialBooking = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openBookingDetail(booking);
+        });
+      }
+    }
   }
 
   void _openCalendar() {
@@ -163,6 +183,9 @@ class _LandlordBookingsPageState extends State<LandlordBookingsPage> {
 
   List<Map<String, dynamic>> get _filteredBookings {
     return _allBookings.where((booking) {
+      if (_selectedTab == 'Pending') {
+        return booking['rawStatus'] == 'pending';
+      }
       final status = booking['status'] as String? ?? '';
       return status == _selectedTab;
     }).toList();

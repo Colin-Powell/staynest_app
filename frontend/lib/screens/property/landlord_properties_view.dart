@@ -4,7 +4,8 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:shimmer/shimmer.dart';
 
 import 'package:property_app/models/property.dart';
-import 'package:property_app/services/property_service.dart';
+import 'package:property_app/services/properties_api.dart';
+import 'package:property_app/utils/property_mapper.dart';
 import 'package:property_app/widgets/property_image.dart';
 
 // ─── Landlord Design System Constants ─────────────────────────────────────────
@@ -29,9 +30,11 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
   late Animation<double> _fadeAnim;
   late Animation<double> _scaleAnim;
 
-  final _propertyService = PropertyService.instance;
+  final ScrollController _scrollController = ScrollController();
   List<Property> _properties = [];
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = false;
   String _selectedCategory = 'All';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -51,6 +54,7 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
         _searchQuery = _searchController.text.toLowerCase();
       });
     });
+    _scrollController.addListener(_onScroll);
 
     _entryController.forward();
     _loadProperties();
@@ -82,12 +86,57 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
   }
 
   Future<void> _loadProperties() async {
-    final loaded = await _propertyService.fetchProperties();
-    if (!mounted) return;
-    setState(() {
-      _properties = loaded.cast<Property>();
-      _loading = false;
+    if (mounted) setState(() => _loading = true);
+    try {
+      final page = await PropertiesApi.getLandlordPropertiesPage();
+      if (!mounted) return;
+      setState(() {
+        _properties = page.items.map(mapApiProperty).toList();
+        _hasMore = page.hasMore;
+        _loading = false;
+        _loadingMore = false;
+      });
+      _loadMoreToFillViewport();
+    } catch (error) {
+      debugPrint('Could not load landlord properties: $error');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.extentAfter < 600) {
+      _loadMoreProperties();
+    }
+  }
+
+  void _loadMoreToFillViewport() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          _scrollController.hasClients &&
+          _scrollController.position.extentAfter < 600) {
+        _loadMoreProperties();
+      }
     });
+  }
+
+  Future<void> _loadMoreProperties() async {
+    if (_loading || _loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await PropertiesApi.getLandlordPropertiesPage(
+        offset: _properties.length,
+      );
+      if (!mounted) return;
+      setState(() {
+        _properties.addAll(page.items.map(mapApiProperty));
+        _hasMore = page.hasMore;
+        _loadingMore = false;
+      });
+      _loadMoreToFillViewport();
+    } catch (error) {
+      debugPrint('Could not load more landlord properties: $error');
+      if (mounted) setState(() => _loadingMore = false);
+    }
   }
 
   String _getCategoryAsset(String category) {
@@ -104,6 +153,8 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _entryController.dispose();
     super.dispose();
   }
@@ -315,6 +366,7 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
               child: SafeArea(
                 bottom: false,
                 child: CustomScrollView(
+                  controller: _scrollController,
                   physics: const BouncingScrollPhysics(),
                   slivers: [
                     // ─── Header ───
@@ -435,6 +487,13 @@ class _LandlordPropertiesViewState extends State<LandlordPropertiesView>
                             },
                             childCount: _visibleProperties.length,
                           ),
+                        ),
+                      ),
+                    if (_loadingMore)
+                      const SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(child: CircularProgressIndicator()),
                         ),
                       ),
                   ],

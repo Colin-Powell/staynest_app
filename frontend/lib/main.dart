@@ -1081,6 +1081,20 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
     final isChat = settings.name == '/chat' || directConversationMatch != null;
     final rawArguments = settings.arguments;
     final arguments = rawArguments is Map ? rawArguments : const {};
+    final navigatorContext = navigatorKey.currentContext;
+    final isDesktop = navigatorContext != null &&
+        MediaQuery.sizeOf(navigatorContext).width >= 768;
+    if (isDesktop) {
+      return MaterialPageRoute<void>(
+        settings: settings,
+        builder: (_) => AppShell(
+          onRequireLogin: _showLoginModal,
+          initialShowMessages: true,
+          initialConversationId: directConversationMatch?.group(1) ??
+              arguments['conversationId']?.toString(),
+        ),
+      );
+    }
 
     return PageRouteBuilder<void>(
       settings: settings,
@@ -1167,7 +1181,6 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
             onClose: () => Navigator.of(context).pop(),
             onSelectChat:
                 (userId, name, avatar, isOnline, lastSeenAt, conversation) {
-              Navigator.of(context).pop();
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 navigatorKey.currentState?.pushNamed(
                   conversation?.conversationId == null
@@ -1362,8 +1375,15 @@ enum _AppScreen { home, search, map, saved, messages, profile }
 class AppShell extends StatefulWidget {
   final Future<void> Function(BuildContext context,
       {VoidCallback? onAuthenticated})? onRequireLogin;
+  final String? initialConversationId;
+  final bool initialShowMessages;
 
-  const AppShell({super.key, this.onRequireLogin});
+  const AppShell({
+    super.key,
+    this.onRequireLogin,
+    this.initialConversationId,
+    this.initialShowMessages = false,
+  });
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -1386,6 +1406,9 @@ class _AppShellState extends State<AppShell> {
   bool _isMessageSelectionMode = false;
   bool _showDesktopNotifications = false;
   bool _showDesktopMessages = false;
+  ConversationModel? _desktopSelectedConversation;
+  Future<void> Function(String?, String?, String?, String?)?
+      _desktopMessageAction;
   bool _hostEntryBusy = false;
   String? _desktopProfileHelperRoute;
   int _unreadNotificationCount = 0;
@@ -1397,12 +1420,53 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialShowMessages && !AppSession.isGuest) {
+      _showDesktopMessages = true;
+    }
+    final initialConversationId = widget.initialConversationId;
+    if (initialConversationId != null && !AppSession.isGuest) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _openChat(
+          '',
+          'Conversation',
+          null,
+          conversationId: initialConversationId,
+        );
+      });
+    }
     if (AppSession.isGuest) return;
+    _desktopMessageAction = (
+      conversationId,
+      senderId,
+      name,
+      avatar,
+    ) async {
+      if (!mounted) return;
+      _openChat(
+        senderId ?? '',
+        name ?? 'Conversation',
+        avatar,
+        conversationId: conversationId,
+      );
+    };
+    FCMService.instance.onDesktopMessageAction = _desktopMessageAction;
     try {
       SocketService.instance
           .connect(url: AppSession.apiBaseUrl, token: AppSession.apiToken);
     } catch (_) {}
     _refreshDesktopCounts();
+  }
+
+  @override
+  void dispose() {
+    if (identical(
+      FCMService.instance.onDesktopMessageAction,
+      _desktopMessageAction,
+    )) {
+      FCMService.instance.onDesktopMessageAction = null;
+    }
+    super.dispose();
   }
 
   void _goTo(_AppScreen s) {
@@ -1468,21 +1532,13 @@ class _AppShellState extends State<AppShell> {
       _requireAuthentication(onAuthenticated: _toggleDesktopNotifications);
       return;
     }
-    final show = !_showDesktopNotifications;
-    setState(() {
-      _showDesktopNotifications = show;
-      _showDesktopMessages = false;
-    });
-    if (show) _refreshDesktopCounts();
+    setState(() => _showDesktopNotifications = !_showDesktopNotifications);
+    if (_showDesktopNotifications) _refreshDesktopCounts();
   }
 
   void _toggleDesktopMessages() {
-    final show = !_showDesktopMessages;
-    setState(() {
-      _showDesktopMessages = show;
-      _showDesktopNotifications = false;
-    });
-    if (show) _refreshDesktopCounts();
+    setState(() => _showDesktopMessages = !_showDesktopMessages);
+    if (_showDesktopMessages) _refreshDesktopCounts();
   }
 
   void _closeDesktopPanels() {
@@ -1490,7 +1546,28 @@ class _AppShellState extends State<AppShell> {
     setState(() {
       _showDesktopNotifications = false;
       _showDesktopMessages = false;
+      _desktopSelectedConversation = null;
     });
+    _refreshDesktopCounts();
+  }
+
+  void _closeDesktopNotifications() {
+    if (!_showDesktopNotifications) return;
+    setState(() => _showDesktopNotifications = false);
+    _refreshDesktopCounts();
+  }
+
+  void _closeDesktopMessages() {
+    if (!_showDesktopMessages) return;
+    setState(() {
+      _showDesktopMessages = false;
+      _desktopSelectedConversation = null;
+    });
+    _refreshDesktopCounts();
+  }
+
+  void _returnToDesktopInbox() {
+    setState(() => _desktopSelectedConversation = null);
     _refreshDesktopCounts();
   }
 
@@ -1612,7 +1689,6 @@ class _AppShellState extends State<AppShell> {
               },
               onSelectChat:
                   (userId, name, avatar, isOnline, lastSeenAt, conversation) {
-                closeSheet();
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _openChat(
                     userId,
@@ -1913,6 +1989,20 @@ class _AppShellState extends State<AppShell> {
     bool isOnline = false,
     DateTime? lastSeenAt,
   }) {
+    if (MediaQuery.sizeOf(context).width >= 768) {
+      setState(() {
+        _showDesktopMessages = true;
+        _desktopSelectedConversation = conversation ??
+            ConversationModel(
+              conversationId: conversationId,
+              userId: userId,
+              userName: name,
+              userAvatar: avatar,
+            );
+      });
+      return;
+    }
+
     Navigator.of(context, rootNavigator: true).pushNamed(
       conversationId == null ? '/chat' : '/chat/$conversationId',
       arguments: {
@@ -1967,10 +2057,17 @@ class _AppShellState extends State<AppShell> {
       final isExpandedDesktop = constraints.maxWidth >= 1200;
 
       if (!isMobile) {
-        final panelWidth =
+        final maxPanelWidth =
             (constraints.maxWidth - 32).clamp(320.0, 420.0).toDouble();
+        final bothContextWindows =
+            _showDesktopNotifications && _showDesktopMessages;
+        final panelWidth = bothContextWindows
+            ? ((constraints.maxWidth - 64) / 2)
+                .clamp(300.0, maxPanelWidth)
+                .toDouble()
+            : maxPanelWidth;
         final panelHeight =
-            (constraints.maxHeight * 0.72).clamp(420.0, 540.0).toDouble();
+            (constraints.maxHeight - 110).clamp(360.0, 540.0).toDouble();
         return Scaffold(
           backgroundColor: const Color(0xFFFAFAFA),
           body: Stack(
@@ -2011,27 +2108,18 @@ class _AppShellState extends State<AppShell> {
                   ),
                 ],
               ),
-              if (_showDesktopNotifications || _showDesktopMessages)
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _closeDesktopPanels,
-                    child: ColoredBox(
-                      color: Colors.black.withValues(alpha: 0.06),
-                    ),
-                  ),
-                ),
               if (_showDesktopNotifications)
                 Positioned(
                   top: 76,
-                  right: 190,
+                  right: bothContextWindows ? panelWidth + 40 : 24,
                   width: panelWidth,
                   height: panelHeight,
                   child: Material(
                     elevation: 16,
                     clipBehavior: Clip.antiAlias,
                     borderRadius: BorderRadius.circular(16),
-                    child: NotificationsView(onClose: _closeDesktopPanels),
+                    child:
+                        NotificationsView(onClose: _closeDesktopNotifications),
                   ),
                 ),
               if (_showDesktopMessages)
@@ -2044,22 +2132,39 @@ class _AppShellState extends State<AppShell> {
                     elevation: 16,
                     clipBehavior: Clip.antiAlias,
                     borderRadius: BorderRadius.circular(16),
-                    child: MessagesViewScreen(
-                      onClose: _closeDesktopPanels,
-                      onSelectChat: (userId, name, avatarUrl, isOnline,
-                          lastSeenAt, conversation) {
-                        _closeDesktopPanels();
-                        _openChat(
-                          userId,
-                          name,
-                          avatarUrl,
-                          isOnline: isOnline,
-                          lastSeenAt: lastSeenAt,
-                          conversationId: conversation?.conversationId,
-                          conversation: conversation,
-                        );
-                      },
-                    ),
+                    child: _desktopSelectedConversation == null
+                        ? MessagesViewScreen(
+                            onClose: _closeDesktopMessages,
+                            onSelectChat: (
+                              userId,
+                              name,
+                              avatarUrl,
+                              isOnline,
+                              lastSeenAt,
+                              conversation,
+                            ) {
+                              _openChat(
+                                userId,
+                                name,
+                                avatarUrl,
+                                isOnline: isOnline,
+                                lastSeenAt: lastSeenAt,
+                                conversationId: conversation?.conversationId,
+                                conversation: conversation,
+                              );
+                            },
+                          )
+                        : ChatView(
+                            onBack: _returnToDesktopInbox,
+                            onClose: _closeDesktopMessages,
+                            userId: _desktopSelectedConversation!.userId,
+                            name: _desktopSelectedConversation!.userName,
+                            avatar:
+                                _desktopSelectedConversation!.userAvatar ?? '',
+                            conversationId:
+                                _desktopSelectedConversation!.conversationId,
+                            initialConversation: _desktopSelectedConversation,
+                          ),
                   ),
                 ),
             ],

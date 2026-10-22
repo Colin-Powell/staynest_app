@@ -42,7 +42,11 @@ class FeedSection {
     required this.hasMore,
   });
 
-  FeedSection copyWith({List<Property>? items}) {
+  FeedSection copyWith({
+    List<Property>? items,
+    bool? hasMore,
+    String? nextCursor,
+  }) {
     return FeedSection(
       id: id,
       type: type,
@@ -50,8 +54,8 @@ class FeedSection {
       subtitle: subtitle,
       algorithm: algorithm,
       items: items ?? this.items,
-      nextCursor: nextCursor,
-      hasMore: hasMore,
+      nextCursor: nextCursor ?? (hasMore == false ? null : this.nextCursor),
+      hasMore: hasMore ?? this.hasMore,
     );
   }
 

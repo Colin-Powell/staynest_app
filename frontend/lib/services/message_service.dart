@@ -84,6 +84,7 @@ class ConversationModel {
   final String userName;
   final String? userAvatar;
   final String? lastMessage;
+  final String? lastMessageFromUserId;
   final DateTime? lastMessageAt;
   final int unreadCount;
   final bool userOnline;
@@ -100,6 +101,7 @@ class ConversationModel {
     required this.userName,
     this.userAvatar,
     this.lastMessage,
+    this.lastMessageFromUserId,
     this.lastMessageAt,
     this.unreadCount = 0,
     this.userOnline = false,
@@ -120,6 +122,7 @@ class ConversationModel {
       userName: json['user_name']?.toString() ?? 'Unknown',
       userAvatar: json['user_avatar']?.toString(),
       lastMessage: json['last_message']?.toString(),
+      lastMessageFromUserId: json['last_message_from_user_id']?.toString(),
       lastMessageAt:
           DateTime.tryParse(json['last_message_at']?.toString() ?? ''),
       unreadCount: unreadCount,
@@ -152,6 +155,7 @@ class ConversationModel {
     String? userName,
     String? userAvatar,
     String? lastMessage,
+    String? lastMessageFromUserId,
     DateTime? lastMessageAt,
     int? unreadCount,
     bool? userOnline,
@@ -166,6 +170,8 @@ class ConversationModel {
       userName: userName ?? this.userName,
       userAvatar: userAvatar ?? this.userAvatar,
       lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageFromUserId:
+          lastMessageFromUserId ?? this.lastMessageFromUserId,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       unreadCount: unreadCount ?? this.unreadCount,
       userOnline: userOnline ?? this.userOnline,

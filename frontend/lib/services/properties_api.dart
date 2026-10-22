@@ -88,6 +88,20 @@ class PropertiesApi {
     return delivered;
   }
 
+  static Future<({List<Map<String, dynamic>> items, bool hasMore})>
+      getLandlordPropertiesPage({int offset = 0, int limit = 20}) async {
+    final response = await _client().getJson(
+      '/properties/me',
+      queryParams: {'offset': '$offset', 'limit': '$limit'},
+    );
+    final data = response['data'] as List<dynamic>? ?? [];
+    final meta = response['meta'];
+    return (
+      items: data.cast<Map<String, dynamic>>(),
+      hasMore: meta is Map && meta['hasMore'] == true,
+    );
+  }
+
   static Future<void> trackPropertyShare(String propertyId) async {
     final client = _client();
     await client.postJson('/analytics/track', body: {

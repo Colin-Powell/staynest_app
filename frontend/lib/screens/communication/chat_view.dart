@@ -22,7 +22,7 @@ const Color _primary = Color(0xFF3F37C9); // Tenant Blue Theme
 
 class ChatView extends StatefulWidget {
   final VoidCallback onBack;
-  final VoidCallback? onCall;
+  final VoidCallback? onClose;
   final String userId;
   final String? conversationId;
   final ConversationModel? initialConversation;
@@ -41,7 +41,7 @@ class ChatView extends StatefulWidget {
     required this.avatar,
     this.isOnline = false,
     this.lastSeenAt,
-    this.onCall,
+    this.onClose,
   });
 
   @override
@@ -356,6 +356,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       }
     });
   }
+
   void _oldScrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -573,11 +574,12 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
               ],
             ),
           ),
-          GestureDetector(
-            onTap: widget.onCall,
-            child:
-                const Icon(PhosphorIconsRegular.phone, color: _dark, size: 26),
-          ),
+          if (widget.onClose != null)
+            IconButton(
+              tooltip: 'Close chat window',
+              onPressed: widget.onClose,
+              icon: const Icon(PhosphorIconsRegular.x, color: _dark, size: 22),
+            ),
         ],
       ),
     );

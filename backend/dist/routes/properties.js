@@ -293,15 +293,19 @@ router.get('/recommendations', async (req, res, next) => {
 // Get current user's (landlord) properties
 router.get('/me', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
     try {
+        const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit ?? '20'), 10) || 20, 1), 50);
+        const offset = Math.max(Number.parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
         const result = await query(`SELECT ${PROPERTY_SELECT},
               p.created_at,
               p.created_at AS updated_at
        FROM properties p
        LEFT JOIN users u ON u.id = p.landlord_id
        WHERE p.landlord_id = $1
-       ORDER BY p.created_at DESC`, [req.auth?.id]);
+       ORDER BY p.created_at DESC
+       LIMIT $2 OFFSET $3`, [req.auth?.id, limit + 1, offset]);
         res.json({
-            data: result.rows.map((row) => normalizePropertyRow(row)),
+            data: result.rows.slice(0, limit).map((row) => normalizePropertyRow(row)),
+            meta: { hasMore: result.rows.length > limit, limit, offset },
         });
     }
     catch (error) {

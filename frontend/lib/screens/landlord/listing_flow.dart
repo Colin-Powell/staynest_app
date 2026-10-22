@@ -215,8 +215,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
       _title.text = existing['title']?.toString() ?? '';
       _description.text = existing['description']?.toString() ?? '';
       _propertyType = existing['category']?.toString() ?? _propertyType;
-      _bedrooms = (existing['bedrooms'] as num?)?.toInt() ?? _bedrooms;
-      _bathrooms = (existing['bathrooms'] as num?)?.toInt() ?? _bathrooms;
+      _bedrooms =
+          num.tryParse(existing['bedrooms']?.toString() ?? '')?.toInt() ??
+              _bedrooms;
+      _bathrooms =
+          num.tryParse(existing['bathrooms']?.toString() ?? '')?.toInt() ??
+              _bathrooms;
       _selectedCity = existing['city']?.toString() ?? _selectedCity;
       _neighborhood.text = existing['address']?.toString() ?? '';
       _locationSearch.text = existing['address']?.toString() ?? '';
@@ -226,8 +230,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
       _minimumStay = existing['minimum_stay']?.toString() ?? _minimumStay;
       _availableFrom =
           DateTime.tryParse(existing['available_from']?.toString() ?? '');
-      _selectedLatitude = (existing['lat'] as num?)?.toDouble();
-      _selectedLongitude = (existing['lng'] as num?)?.toDouble();
+      _selectedLatitude =
+          num.tryParse(existing['lat']?.toString() ?? '')?.toDouble();
+      _selectedLongitude =
+          num.tryParse(existing['lng']?.toString() ?? '')?.toDouble();
       _locationBiasLatitude = _selectedLatitude;
       _locationBiasLongitude = _selectedLongitude;
       _selectedLocationLabel = _locationSearch.text;

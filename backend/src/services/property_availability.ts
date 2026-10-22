@@ -29,17 +29,13 @@ export function isPropertyBookable(
   status: unknown,
 ): boolean {
   const normStatus = String(status ?? '').toLowerCase().trim();
-  // Status must be approved for the property to be bookable
-  if (normStatus !== '' && normStatus !== 'approved') {
-    return false;
-  }
-
   const availability = String(availabilityStatus ?? '').toLowerCase().trim();
   if (availability === '' || availability === 'unknown') {
-    // If availability is unset, defaults to bookable if property is approved
-    return normStatus === 'approved' || normStatus === '';
+    // Legacy rows stored availability in `status` rather than `availability_status`.
+    return bookableStatuses.has(normStatus);
   }
 
+  if (normStatus !== '' && normStatus !== 'approved') return false;
   return bookableStatuses.has(availability);
 }
 

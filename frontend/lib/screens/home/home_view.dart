@@ -71,6 +71,7 @@ class HomeView extends StatefulWidget {
 
 class _HomeViewState extends State<HomeView> {
   final _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final HomeFeedController _feedController = HomeFeedController();
   int _feedRequestId = 0;
 
@@ -80,6 +81,7 @@ class _HomeViewState extends State<HomeView> {
   void initState() {
     super.initState();
     _feedController.addListener(_onFeedUpdated);
+    _scrollController.addListener(_maybeLoadMore);
     _loadFeed();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -99,13 +101,27 @@ class _HomeViewState extends State<HomeView> {
   @override
   void dispose() {
     _feedController.removeListener(_onFeedUpdated);
+    _scrollController.removeListener(_maybeLoadMore);
+    _scrollController.dispose();
     _feedController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
   void _onFeedUpdated() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeLoadMore());
+  }
+
+  void _maybeLoadMore() {
+    if (!_scrollController.hasClients ||
+        _scrollController.position.extentAfter >= 600 ||
+        !_feedController.hasMore ||
+        _feedController.isLoadingMore) {
+      return;
+    }
+    unawaited(_feedController.loadMore());
   }
 
   Future<void> _loadFeed() async {
@@ -212,6 +228,7 @@ class _HomeViewState extends State<HomeView> {
               onRefresh: _loadFeed,
               color: _primaryText,
               child: CustomScrollView(
+                controller: _scrollController,
                 physics: const BouncingScrollPhysics(),
                 slivers: [
                   SliverToBoxAdapter(child: _buildHeader()),
@@ -286,7 +303,13 @@ class _HomeViewState extends State<HomeView> {
 
                       return sliverWidgets;
                     }(),
-
+                  if (_feedController.isLoadingMore)
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    ),
                   const SliverToBoxAdapter(child: SizedBox(height: 120)),
                 ],
               ),
@@ -633,6 +656,7 @@ class _HomeViewState extends State<HomeView> {
                     onRefresh: _loadFeed,
                     color: _primaryText,
                     child: CustomScrollView(
+                      controller: _scrollController,
                       physics: const ClampingScrollPhysics(),
                       slivers: [
                         const SliverToBoxAdapter(child: SizedBox(height: 32)),
@@ -642,6 +666,13 @@ class _HomeViewState extends State<HomeView> {
                           cols: cols,
                           cardWidth: cardWidth,
                         ),
+                        if (_feedController.isLoadingMore)
+                          const SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 24),
+                              child: Center(child: CircularProgressIndicator()),
+                            ),
+                          ),
                         if (kIsWeb)
                           const SliverToBoxAdapter(child: AppFooter()),
                         const SliverToBoxAdapter(child: SizedBox(height: 24)),

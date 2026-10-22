@@ -16,16 +16,20 @@ const Color _grey = Color(0xFF9CA3AF);
 const Color _surface = Colors.white;
 const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 
-enum _LandlordFilter { all, applicants, tenants, archived }
+enum _LandlordFilter { all, unanswered, applicants, tenants, archived }
 
 class LandlordMessagesPage extends StatefulWidget {
   final VoidCallback onChatOpen;
   final VoidCallback onChatClose;
+  final String? initialConversationId;
+  final bool initialUnansweredOnly;
 
   const LandlordMessagesPage({
     super.key,
     required this.onChatOpen,
     required this.onChatClose,
+    this.initialConversationId,
+    this.initialUnansweredOnly = false,
   });
 
   @override
@@ -51,10 +55,13 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialUnansweredOnly) {
+      _currentFilter = _LandlordFilter.unanswered;
+    }
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text.toLowerCase());
     });
-    _loadConversations();
+    _loadConversations(preferredConversationId: widget.initialConversationId);
     _setupSocketListener();
   }
 
@@ -74,6 +81,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
           final old = _conversations[index];
           _conversations[index] = old.copyWith(
             lastMessage: msg.text,
+            lastMessageFromUserId: msg.from,
             lastMessageAt: DateTime.fromMillisecondsSinceEpoch(msg.ts),
             unreadCount: msg.from != currentUserId
                 ? old.unreadCount + 1
@@ -156,7 +164,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
       final currentSelectionId = _selectedConversation?.userId;
       final currentConversationId = _selectedConversation?.conversationId;
       final selectedId = currentSelectionId ?? preferredUserId;
-      final selected = selectedId == null
+      final selected = selectedId == null && preferredConversationId == null
           ? null
           : selectConversation<ConversationModel>(
               conversations: currentConversations,
@@ -209,6 +217,12 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
 
   List<ConversationModel> get _filteredConversations {
     Iterable<ConversationModel> filtered = _conversations;
+    if (_currentFilter == _LandlordFilter.unanswered) {
+      filtered = filtered.where((conversation) =>
+          conversation.contextType == 'property' &&
+          conversation.lastMessageFromUserId != null &&
+          conversation.lastMessageFromUserId != AppSession.currentUserId);
+    }
     if (_currentFilter == _LandlordFilter.archived) {
       filtered = filtered.where((c) => false); // Expand logic later if needed
     }

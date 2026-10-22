@@ -45,101 +45,126 @@ class PropertyConversationHeader extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        borderRadius: BorderRadius.circular(10),
+        color: Colors.white,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(8),
+        ),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(7),
-            child: SizedBox(
-              width: 64,
-              height: 64,
-              child: property.imageUrl == null || property.imageUrl!.isEmpty
-                  ? const ColoredBox(
-                      color: Color(0xFFE2E8F0),
-                      child: Icon(PhosphorIconsRegular.house,
-                          color: Color(0xFF64748B)),
-                    )
-                  : Image.network(
-                      property.imageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const ColoredBox(
+      child: ClipRRect(
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(8),
+        ),
+        child: SizedBox(
+          height: 84,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 76,
+                height: 84,
+                child: property.imageUrl == null || property.imageUrl!.isEmpty
+                    ? const ColoredBox(
                         color: Color(0xFFE2E8F0),
                         child: Icon(PhosphorIconsRegular.house,
                             color: Color(0xFF64748B)),
+                      )
+                    : Image.network(
+                        property.imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const ColoredBox(
+                          color: Color(0xFFE2E8F0),
+                          child: Icon(PhosphorIconsRegular.house,
+                              color: Color(0xFF64748B)),
+                        ),
                       ),
-                    ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  property.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF172033),
-                  ),
-                ),
-                if (property.location.isNotEmpty)
-                  Text(
-                    property.location,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      color: const Color(0xFF64748B),
-                    ),
-                  ),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 2,
-                  children: [
-                    if (property.price != null && property.price! > 0)
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        'Ksh ${property.price}',
+                        property.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
                           color: const Color(0xFF172033),
                         ),
                       ),
-                    if (availabilityLabel != null)
-                      Text(
-                        availabilityLabel,
-                        style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          color: const Color(0xFF64748B),
+                      if (property.location.isNotEmpty)
+                        Text(
+                          property.location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: const Color(0xFF64748B),
+                          ),
                         ),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 2,
+                        children: [
+                          if (property.price != null && property.price! > 0)
+                            Text(
+                              'Ksh ${property.price}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF172033),
+                              ),
+                            ),
+                          if (availabilityLabel != null)
+                            Text(
+                              availabilityLabel,
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                color: const Color(0xFF64748B),
+                              ),
+                            ),
+                        ],
                       ),
-                  ],
+                    ],
+                  ),
                 ),
-              ],
-            ),
+              ),
+              TextButton.icon(
+                onPressed: () => _viewProperty(context),
+                icon: const Icon(PhosphorIconsRegular.arrowSquareOut, size: 15),
+                label: const Text('View'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                  textStyle: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
-          const SizedBox(width: 4),
-          TextButton.icon(
-            onPressed: () => _viewProperty(context),
-            icon: const Icon(PhosphorIconsRegular.arrowSquareOut, size: 15),
-            label: const Text('View'),
-            style: TextButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
-              textStyle: GoogleFonts.poppins(
-                  fontSize: 11, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

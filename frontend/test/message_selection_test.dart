@@ -91,4 +91,20 @@ void main() {
     expect(propertyA.property?.location, 'Kilifi');
     expect(propertyA.property?.price, 18000);
   });
+
+  test('conversation retains the last message sender for unanswered filtering',
+      () {
+    final conversation = ConversationModel.fromJson({
+      'conversation_id': 'property-thread',
+      'user_id': 'tenant',
+      'user_name': 'Tenant',
+      'context_type': 'property',
+      'last_message': 'Is this listing available?',
+      'last_message_from_user_id': 'tenant',
+      'property_id': 'property-id',
+    });
+
+    expect(conversation.lastMessageFromUserId, 'tenant');
+    expect(conversation.contextType, 'property');
+  });
 }

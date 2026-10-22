@@ -54,7 +54,8 @@ router.get('/', async (req, res, next) => {
         const campusId = typeof req.query.campusId === 'string' ? req.query.campusId : undefined;
         const locationId = typeof req.query.locationId === 'string' ? req.query.locationId : undefined;
         const category = typeof req.query.category === 'string' ? req.query.category.trim() : undefined;
-        const limit = Math.min(Math.max(req.query.limit ? parseInt(req.query.limit) : 20, 1), 50);
+        const limit = Math.min(Math.max(req.query.limit ? parseInt(req.query.limit) : 20, 1), 20);
+        const offset = Math.max(0, req.query.cursor ? parseInt(req.query.cursor, 10) || 0 : 0);
         // Auth context (if any)
         const userId = req.user?.id;
         const context = {
@@ -66,9 +67,23 @@ router.get('/', async (req, res, next) => {
             category,
             userId
         };
-        const sections = await FeedService.generateFeed(context, limit);
+        const fetchLimit = Math.min(offset + limit + 1, 50);
+        const sections = await FeedService.generateFeed(context, fetchLimit);
+        const pagedSections = sections.flatMap((sec) => {
+            const items = sec.items.slice(offset, offset + limit);
+            if (items.length === 0)
+                return [];
+            return [{
+                    ...sec,
+                    items,
+                    hasMore: sec.items.length > offset + limit,
+                    nextCursor: sec.items.length > offset + limit
+                        ? String(offset + limit)
+                        : null,
+                }];
+        });
         // Normalize items
-        const normalizedSections = sections.map((sec) => ({
+        const normalizedSections = pagedSections.map((sec) => ({
             ...sec,
             items: sec.items.map((item) => normalizePropertyRow(item))
         }));
@@ -86,7 +101,9 @@ router.get('/', async (req, res, next) => {
                     category: category || 'All'
                 },
                 sections: normalizedSections,
-                nextCursor: null
+                nextCursor: normalizedSections.some((sec) => sec.hasMore)
+                    ? String(offset + limit)
+                    : null,
             }
         });
     }

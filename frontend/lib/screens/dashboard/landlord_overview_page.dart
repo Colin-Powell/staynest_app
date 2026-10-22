@@ -13,6 +13,7 @@ import 'package:property_app/utils/property_mapper.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
 import 'package:property_app/session/onboarding_prefs.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'landlord_dashboard_service.dart';
 import 'landlord_analytics_page.dart';
 
@@ -25,6 +26,13 @@ const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 
 class LandlordOverviewPage extends StatefulWidget {
   final VoidCallback? onViewAllProperties;
+  final VoidCallback? onViewBookings;
+  final VoidCallback? onViewMessages;
+  final VoidCallback? onViewUnansweredMessages;
+  final void Function(String conversationId)? onOpenConversation;
+  final void Function(String bookingId)? onOpenBooking;
+  final void Function(String propertyId)? onEditProperty;
+  final void Function(String propertyId)? onOpenProperty;
   final VoidCallback? onAddProperty;
   final VoidCallback? onViewVerification;
   final VoidCallback? onLogout;
@@ -32,6 +40,13 @@ class LandlordOverviewPage extends StatefulWidget {
   const LandlordOverviewPage({
     super.key,
     this.onViewAllProperties,
+    this.onViewBookings,
+    this.onViewMessages,
+    this.onViewUnansweredMessages,
+    this.onOpenConversation,
+    this.onOpenBooking,
+    this.onEditProperty,
+    this.onOpenProperty,
     this.onAddProperty,
     this.onViewVerification,
     this.onLogout,
@@ -43,23 +58,20 @@ class LandlordOverviewPage extends StatefulWidget {
 
 class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
   bool _isLoading = true;
+  bool _dashboardAvailable = false;
   String? _errorMessage;
   String _selectedAnalyticsPeriod = 'This Week';
   List<Map<String, dynamic>> _properties = [];
   Map<String, dynamic> _analyticsData = {};
-  Map<String, String> _metrics = {
-    'totalViews': '0',
-    'viewsGrowth': '+0%',
-    'totalBookings': '0',
-    'bookingsGrowth': '+0%',
-    'occupancyRate': '0%',
-    'occupancyGrowth': '+0%',
-  };
+  final Set<String> _dismissedRecommendationIds = {};
+  String get _dismissedRecommendationKey =>
+      'staynest.landlord.dismissed_recommendations.${AppSession.currentUserId ?? 'anonymous'}';
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadDismissedRecommendations();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!OnboardingPrefs.hasSeen('landlordOverviewSeen')) {
         OnboardingBottomSheet.show(
@@ -74,6 +86,25 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
     });
   }
 
+  Future<void> _loadDismissedRecommendations() async {
+    final preferences = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _dismissedRecommendationIds.addAll(
+        preferences.getStringList(_dismissedRecommendationKey) ?? const [],
+      );
+    });
+  }
+
+  Future<void> _dismissRecommendation(String id) async {
+    setState(() => _dismissedRecommendationIds.add(id));
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setStringList(
+      _dismissedRecommendationKey,
+      _dismissedRecommendationIds.toList(),
+    );
+  }
+
   Future<void> _loadData() async {
     try {
       setState(() {
@@ -81,36 +112,31 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
         _errorMessage = null;
       });
 
-      final results = await Future.wait([
-        PropertiesApi.getLandlordProperties(),
-        LandlordDashboardService.getLandlordOverview(_selectedAnalyticsPeriod),
+      final periodParam = switch (_selectedAnalyticsPeriod) {
+        'Last 28 Days' => '28d',
+        'Last 90 Days' => '90d',
+        _ => '7d',
+      };
+      final results = await Future.wait<dynamic>([
+        PropertiesApi.getLandlordPropertiesPage(limit: 3),
+        LandlordDashboardService.getLandlordDashboard(periodParam),
       ]);
 
       if (!mounted) return;
 
       setState(() {
-        _properties = results[0] as List<Map<String, dynamic>>;
-        final analyticsData = results[1] as Map<String, dynamic>?;
-        _analyticsData = analyticsData ?? {};
-
-        if (analyticsData != null) {
-          _metrics = {
-            'totalViews':
-                analyticsData['overview']?['totalViews']?.toString() ?? '0',
-            'viewsGrowth':
-                analyticsData['overview']?['growth']?.toString() ?? '0%',
-            'totalBookings':
-                analyticsData['metrics']?['totalBookings']?.toString() ?? '0',
-            'bookingsGrowth':
-                analyticsData['metrics']?['bookingsGrowth']?.toString() ??
-                    '+0%',
-            'occupancyRate':
-                analyticsData['metrics']?['occupancyRate']?.toString() ?? '0%',
-            'occupancyGrowth':
-                analyticsData['metrics']?['occupancyGrowth']?.toString() ??
-                    '+0%',
-          };
+        final propertyPage =
+            results[0] as ({List<Map<String, dynamic>> items, bool hasMore});
+        _properties = propertyPage.items;
+        final dashboardData = results[1] as Map<String, dynamic>?;
+        _analyticsData = dashboardData ?? {};
+        if (dashboardData != null) {
+          _dashboardAvailable = true;
+        } else {
+          _dashboardAvailable = false;
+          _errorMessage = 'Performance data is currently unavailable.';
         }
+
         _isLoading = false;
       });
     } catch (e) {
@@ -134,9 +160,31 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
   }
 
   List<double> get _viewTrend {
-    final raw = _analyticsSection('overview')['chartData'];
+    final raw = _analyticsData['chartData'] ??
+        _analyticsSection('overview')['chartData'];
     if (raw is! List) return const [];
     return raw.map((value) => value is num ? value.toDouble() : 0.0).toList();
+  }
+
+  Map<String, dynamic> _kpi(String key) => _dashboardAvailable
+      ? _analyticsSection('kpis')[key] is Map
+          ? Map<String, dynamic>.from(_analyticsSection('kpis')[key] as Map)
+          : <String, dynamic>{}
+      : <String, dynamic>{};
+
+  String _displayRate(Object? value) =>
+      value is num ? '${value.toStringAsFixed(1)}%' : 'Not enough data';
+
+  void _openAnalytics() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LandlordAnalyticsPage(
+          initialFilter: _selectedAnalyticsPeriod,
+          onOpenProperty: widget.onOpenProperty,
+        ),
+      ),
+    );
   }
 
   String _trendLabel(int index, int length) {
@@ -169,6 +217,251 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(24))),
               )),
+    );
+  }
+
+  Widget _buildKpiGrid({required bool compact}) {
+    final properties = _kpi('properties');
+    final views = _kpi('views');
+    final enquiries = _kpi('enquiries');
+    final response = _kpi('responseRate');
+    final conversion = _kpi('conversion');
+    final pendingBookings = _kpi('pendingBookings');
+    final periodLabel = _selectedAnalyticsPeriod == 'This Week'
+        ? 'Selected 7-day period'
+        : _selectedAnalyticsPeriod == 'Last 28 Days'
+            ? 'Selected 28-day period'
+            : 'Selected 90-day period';
+    final cards = <Widget>[
+      _DashboardKpiCard(
+        title: 'Properties',
+        value: _dashboardAvailable
+            ? (properties['total'] ?? 0).toString()
+            : 'Unavailable',
+        detail: _dashboardAvailable
+            ? '${properties['published'] ?? 0} published · ${properties['pending'] ?? 0} pending · ${properties['draft'] ?? 0} drafts · ${properties['rented'] ?? 0} rented · ${properties['unavailable'] ?? 0} unavailable'
+            : 'Property counts could not be loaded.',
+        icon: PhosphorIconsRegular.buildings,
+        onTap: widget.onViewAllProperties,
+        loading: _isLoading,
+      ),
+      _DashboardKpiCard(
+        title: 'Property views',
+        value: _dashboardAvailable ? '${views['total'] ?? 0}' : 'Unavailable',
+        detail: _dashboardAvailable
+            ? '${views['uniqueViewers'] ?? 0} unique property viewers · ${views['growth'] ?? '—'} vs previous period'
+            : 'View data could not be loaded.',
+        icon: PhosphorIconsRegular.eye,
+        onTap: _openAnalytics,
+        loading: _isLoading,
+      ),
+      _DashboardKpiCard(
+        title: 'Property-linked conversations',
+        value:
+            _dashboardAvailable ? '${enquiries['total'] ?? 0}' : 'Unavailable',
+        detail: _dashboardAvailable
+            ? '${enquiries['uniqueTenants'] ?? 0} distinct tenants · not a qualification count'
+            : 'Conversation data could not be loaded.',
+        icon: PhosphorIconsRegular.chatTeardropText,
+        onTap: widget.onViewMessages,
+        loading: _isLoading,
+      ),
+      _DashboardKpiCard(
+        title: 'Pending booking requests',
+        value: _dashboardAvailable
+            ? '${pendingBookings['count'] ?? 0}'
+            : 'Unavailable',
+        detail: 'Current requests requiring landlord action.',
+        icon: PhosphorIconsRegular.calendarCheck,
+        onTap: widget.onViewBookings,
+        loading: _isLoading,
+      ),
+      _DashboardKpiCard(
+        title: 'Response rate',
+        value: _dashboardAvailable
+            ? _displayRate(response['percentage'])
+            : 'Unavailable',
+        detail: _dashboardAvailable
+            ? '${response['responded'] ?? 0} replied of ${response['total'] ?? 0} tenant-started conversations older than 12 hours · $periodLabel'
+            : 'Response data could not be loaded.',
+        icon: PhosphorIconsRegular.paperPlaneTilt,
+        onTap: widget.onViewUnansweredMessages ?? widget.onViewMessages,
+        loading: _isLoading,
+      ),
+      _DashboardKpiCard(
+        title: 'View-to-conversation rate',
+        value: _dashboardAvailable
+            ? _displayRate(conversion['percentage'])
+            : 'Unavailable',
+        detail: _dashboardAvailable
+            ? '${conversion['convertedPairs'] ?? 0} of ${conversion['eligibleViewers'] ?? 0} viewed property/tenant pairs · $periodLabel'
+            : 'Conversion data could not be loaded.',
+        icon: PhosphorIconsRegular.chartLineUp,
+        onTap: _openAnalytics,
+        loading: _isLoading,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = compact
+            ? 2
+            : constraints.maxWidth >= 1100
+                ? 3
+                : 2;
+        final gap = 14.0;
+        final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children:
+              cards.map((card) => SizedBox(width: width, child: card)).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildRecommendations() {
+    final recommendations = _analyticsData['recommendations'];
+    if (!_dashboardAvailable || recommendations is! List) {
+      return const SizedBox.shrink();
+    }
+    final rows = recommendations
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .where((item) =>
+            !_dismissedRecommendationIds.contains(item['id']?.toString()))
+        .toList();
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    return _buildDashboardSection(
+      title: 'Recommended actions',
+      child: Column(
+        children: rows.map((recommendation) {
+          final priority = recommendation['priority']?.toString() ?? 'low';
+          final property = recommendation['property'];
+          final propertyMap = property is Map
+              ? Map<String, dynamic>.from(property)
+              : <String, dynamic>{};
+          return Column(
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  priority == 'high'
+                      ? PhosphorIconsRegular.warningCircle
+                      : PhosphorIconsRegular.lightbulb,
+                  color: priority == 'high' ? const Color(0xFFB42318) : _green,
+                ),
+                title:
+                    Text(recommendation['title']?.toString() ?? 'Review item'),
+                subtitle: Text(
+                  '${recommendation['body'] ?? ''}${propertyMap['title'] == null ? '' : '\n${propertyMap['title']}'}',
+                ),
+                trailing: IconButton(
+                  tooltip: 'Dismiss recommendation',
+                  onPressed: () => _dismissRecommendation(
+                    recommendation['id']?.toString() ?? '',
+                  ),
+                  icon: const Icon(Icons.close, size: 18),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => _handleRecommendation(recommendation),
+                  child:
+                      Text(recommendation['actionText']?.toString() ?? 'Open'),
+                ),
+              ),
+              if (recommendation != rows.last) const Divider(height: 1),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  void _handleRecommendation(Map<String, dynamic> recommendation) {
+    switch (recommendation['type']) {
+      case 'unanswered_enquiry':
+        final conversationId = recommendation['conversationId']?.toString();
+        if (conversationId != null && widget.onOpenConversation != null) {
+          widget.onOpenConversation!(conversationId);
+        } else {
+          widget.onViewMessages?.call();
+        }
+        break;
+      case 'pending_booking':
+        final bookingId = recommendation['bookingId']?.toString();
+        if (bookingId != null && widget.onOpenBooking != null) {
+          widget.onOpenBooking!(bookingId);
+        } else {
+          widget.onViewBookings?.call();
+        }
+        break;
+      case 'promising_listing':
+        final property = recommendation['property'];
+        final propertyId = property is Map ? property['id']?.toString() : null;
+        if (propertyId != null) widget.onOpenProperty?.call(propertyId);
+        break;
+      default:
+        final property = recommendation['property'];
+        final propertyId = property is Map ? property['id']?.toString() : null;
+        if (propertyId != null) widget.onEditProperty?.call(propertyId);
+    }
+  }
+
+  Widget _buildDashboardSection({
+    required String title,
+    required Widget child,
+  }) {
+    return _buildDesktopPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: GoogleFonts.poppins(
+                  color: _dark, fontSize: 16, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPropertyPerformancePanel() {
+    final properties = _analyticsData['propertyPerformance'];
+    if (!_dashboardAvailable || properties is! List || properties.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return _buildDashboardSection(
+      title: 'Property performance',
+      child: Column(
+        children: properties.whereType<Map>().map((raw) {
+          final property = Map<String, dynamic>.from(raw);
+          return ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(property['title']?.toString() ?? 'Property'),
+            subtitle: Text(
+              '${property['status'] ?? 'draft'} · ${property['availabilityStatus'] ?? 'unknown'}\n'
+              '${property['impressions'] ?? 0} impressions · ${property['views'] ?? 0} detail views (${property['uniqueViewers'] ?? 0} unique)\n'
+              '${property['saves'] ?? 0} saves · ${property['shares'] ?? 0} shares · ${property['enquiries'] ?? 0} property-linked conversations · ${property['bookings'] ?? 0} booking requests',
+            ),
+            trailing: TextButton(
+              onPressed: () {
+                final propertyId = property['id']?.toString();
+                if (propertyId != null && widget.onOpenProperty != null) {
+                  widget.onOpenProperty!(propertyId);
+                } else {
+                  _openAnalytics();
+                }
+              },
+              child: const Text('Report'),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -214,77 +507,8 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
     );
   }
 
-  Widget _buildDesktopMetricCard(
-    String label,
-    String value,
-    String change,
-    IconData icon,
-  ) {
-    final positive = !change.startsWith('-');
-    return _buildDesktopPanel(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: _green.withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 22, color: _green),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: positive
-                      ? const Color(0xFFE8F4F1)
-                      : const Color(0xFFFFF1F0),
-                  borderRadius: BorderRadius.circular(20), // Pill shape
-                ),
-                child: Text(
-                  change,
-                  style: GoogleFonts.poppins(
-                    color: positive ? _green : const Color(0xFFB42318),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.poppins(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              color: _dark,
-              height: 1.1,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: _grey,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildDesktopViewsPanel() {
-    final overview = _analyticsSection('overview');
+    final views = _kpi('views');
     final values = _viewTrend;
     final maxValue = values.isEmpty ? 1.0 : values.reduce(math.max).toDouble();
     final maxY = maxValue <= 0 ? 1.0 : maxValue * 1.2;
@@ -301,16 +525,16 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Profile views',
+                    Text('Property detail views',
                         style: GoogleFonts.poppins(
                             color: _dark,
                             fontWeight: FontWeight.w600,
                             fontSize: 16)),
                     const SizedBox(height: 8),
                     Text(
-                      overview['totalViews']?.toString() ??
-                          _metrics['totalViews'] ??
-                          '0',
+                      _dashboardAvailable
+                          ? views['total']?.toString() ?? '0'
+                          : 'Unavailable',
                       style: GoogleFonts.poppins(
                         color: _dark,
                         fontWeight: FontWeight.w700,
@@ -325,18 +549,27 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE8F4F1),
+                  color: _dashboardAvailable
+                      ? const Color(0xFFE8F4F1)
+                      : const Color(0xFFF3F4F6),
                   borderRadius: BorderRadius.circular(20), // Pill shape
                 ),
                 child: Text(
-                  overview['growth']?.toString() ??
-                      _metrics['viewsGrowth'] ??
-                      '0%',
+                  _dashboardAvailable
+                      ? views['growth']?.toString() ?? '—'
+                      : 'Unavailable',
                   style: GoogleFonts.poppins(
-                      color: _green, fontSize: 12, fontWeight: FontWeight.w600),
+                      color: _dashboardAvailable ? _green : _grey,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Counts one detail view per signed-in tenant/property per day.',
+            style: GoogleFonts.poppins(color: _grey, fontSize: 11),
           ),
           const SizedBox(height: 24),
           SizedBox(
@@ -444,54 +677,48 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Conversion funnel',
+          Text('Activity stages',
               style: GoogleFonts.poppins(
                   color: _dark, fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 22),
           if (_isLoading)
             const Center(child: CircularProgressIndicator(color: _green))
+          else if (!_dashboardAvailable)
+            Text('Activity data is currently unavailable.',
+                style: GoogleFonts.poppins(color: _grey, fontSize: 13))
           else if (steps.isEmpty)
             Text('Funnel data will appear as people discover your listings.',
                 style: GoogleFonts.poppins(color: _grey, fontSize: 13))
-          else
-            ...steps.map((step) {
-              final rawPercentage = step['percentage'];
-              final percentage = rawPercentage is num
-                  ? rawPercentage.toDouble().clamp(0.0, 1.0)
-                  : 0.0;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(step['label']?.toString() ?? 'Activity',
-                              style: GoogleFonts.poppins(
-                                  color: _grey, fontSize: 13)),
+          else ...[
+            Text(
+              _analyticsData['funnelDefinition']?.toString() ??
+                  'Counts use the selected period; activity stages are not a sequential user journey.',
+              style: GoogleFonts.poppins(color: _grey, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            ...steps.map((step) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          step['label']?.toString() ?? 'Activity',
+                          style:
+                              GoogleFonts.poppins(color: _grey, fontSize: 13),
                         ),
-                        Text(step['value']?.toString() ?? '0',
-                            style: GoogleFonts.poppins(
-                                color: _dark,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10), // Pill progress
-                      child: LinearProgressIndicator(
-                        value: percentage,
-                        minHeight: 8,
-                        color: _green,
-                        backgroundColor: const Color(0xFFE9ECEA),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            }),
+                      Text(
+                        step['value']?.toString() ?? '0',
+                        style: GoogleFonts.poppins(
+                          color: _dark,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+          ],
         ],
       ),
     );
@@ -517,7 +744,9 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
       ),
       (
         'Average CTR',
-        metrics['avgCtr']?.toString() ?? '0%',
+        metrics['avgCtr'] is num
+            ? '${(metrics['avgCtr'] as num).toStringAsFixed(1)}%'
+            : 'Not enough data',
         PhosphorIconsRegular.cursorClick,
       ),
     ];
@@ -576,180 +805,10 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
     );
   }
 
-  Widget _buildDesktopTopPropertiesPanel() {
-    final properties = _analyticsRows('topProperties');
-    return _buildDesktopPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text('Top performing properties',
-                    style: GoogleFonts.poppins(
-                        color: _dark,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600)),
-              ),
-              TextButton(
-                onPressed: widget.onViewAllProperties,
-                style: TextButton.styleFrom(
-                  foregroundColor: _green,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
-                ),
-                child: Text('View all',
-                    style: GoogleFonts.poppins(
-                        fontSize: 12, fontWeight: FontWeight.w600)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (_isLoading)
-            const Center(child: CircularProgressIndicator(color: _green))
-          else if (properties.isEmpty)
-            Text('Your listings will appear here as they receive views.',
-                style: GoogleFonts.poppins(color: _grey, fontSize: 13))
-          else
-            ...properties.map((property) {
-              final image = property['image']?.toString() ?? '';
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: buildPropertyImage(
-                        image,
-                        width: 56,
-                        height: 56,
-                        fit: BoxFit.cover,
-                        errorPlaceholder: Container(
-                          width: 56,
-                          height: 56,
-                          color: const Color(0xFFF0F2F1),
-                          child: const Icon(PhosphorIconsRegular.house,
-                              color: _grey, size: 24),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            property['name']?.toString() ?? 'Property',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.poppins(
-                                color: _dark,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            property['location']?.toString() ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style:
-                                GoogleFonts.poppins(color: _grey, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _bg,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${property['views'] ?? '0'} views',
-                        style: GoogleFonts.poppins(
-                            color: _dark,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDesktopPhotoPanel() {
-    final photos = _analyticsRows('photoPerformance');
-    return _buildDesktopPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Photo performance',
-              style: GoogleFonts.poppins(
-                  color: _dark, fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 18),
-          if (_isLoading)
-            const Center(child: CircularProgressIndicator(color: _green))
-          else if (photos.isEmpty)
-            Text('Photo engagement will appear as visitors browse listings.',
-                style: GoogleFonts.poppins(color: _grey, fontSize: 13))
-          else
-            ...photos.map((photo) {
-              final image = photo['image']?.toString() ?? '';
-              final rawColor = photo['color'];
-              final color = rawColor is int ? Color(rawColor) : _green;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: buildPropertyImage(
-                        image,
-                        width: 46,
-                        height: 46,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        photo['label']?.toString() ?? 'Listing photo',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.poppins(
-                            color: _dark,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    Text(
-                      photo['engagement']?.toString() ?? '0 views',
-                      style: GoogleFonts.poppins(
-                          color: color,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-
   Widget _buildDesktopDashboard() {
-    final overview = _analyticsSection('overview');
-    final metrics = _analyticsSection('metrics');
-    final insight = _analyticsData['insight'];
     return Scaffold(
-      backgroundColor: _bg, // Keeps background canvas visually separate from cards
+      backgroundColor:
+          _bg, // Keeps background canvas visually separate from cards
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -794,7 +853,8 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                               horizontal: 16, vertical: 4),
                           decoration: BoxDecoration(
                             color: _surface,
-                            borderRadius: BorderRadius.circular(30), // Pill shape
+                            borderRadius:
+                                BorderRadius.circular(30), // Pill shape
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.04),
@@ -821,6 +881,9 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                                 DropdownMenuItem(
                                     value: 'Last 28 Days',
                                     child: Text('Last 28 days')),
+                                DropdownMenuItem(
+                                    value: 'Last 90 Days',
+                                    child: Text('Last 90 days')),
                               ],
                               onChanged: (period) {
                                 if (period == null) return;
@@ -843,60 +906,19 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 20, vertical: 16),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(30)), // Pill button
+                                borderRadius:
+                                    BorderRadius.circular(30)), // Pill button
                             elevation: 0,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 32),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final cardWidth = (constraints.maxWidth - 42) / 4;
-                        return Wrap(
-                          spacing: 14,
-                          runSpacing: 14,
-                          children: [
-                            SizedBox(
-                              width: cardWidth,
-                              child: _buildDesktopMetricCard(
-                                'Properties',
-                                _properties.length.toString(),
-                                '+0',
-                                PhosphorIconsRegular.buildings,
-                              ),
-                            ),
-                            SizedBox(
-                              width: cardWidth,
-                              child: _buildDesktopMetricCard(
-                                'Profile views',
-                                overview['totalViews']?.toString() ?? '0',
-                                overview['growth']?.toString() ?? '0%',
-                                PhosphorIconsRegular.eye,
-                              ),
-                            ),
-                            SizedBox(
-                              width: cardWidth,
-                              child: _buildDesktopMetricCard(
-                                'Bookings',
-                                metrics['totalBookings']?.toString() ?? '0',
-                                metrics['bookingsGrowth']?.toString() ?? '0%',
-                                PhosphorIconsRegular.calendarCheck,
-                              ),
-                            ),
-                            SizedBox(
-                              width: cardWidth,
-                              child: _buildDesktopMetricCard(
-                                'Occupancy',
-                                metrics['occupancyRate']?.toString() ?? '0%',
-                                metrics['occupancyGrowth']?.toString() ?? '0%',
-                                PhosphorIconsRegular.chartLineUp,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
+                    _buildKpiGrid(compact: false),
+                    const SizedBox(height: 14),
+                    _buildRecommendations(),
+                    const SizedBox(height: 14),
+                    _buildPropertyPerformancePanel(),
                     const SizedBox(height: 14),
                     LayoutBuilder(
                       builder: (context, constraints) {
@@ -916,63 +938,6 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                     ),
                     const SizedBox(height: 14),
                     _buildDesktopEngagementPanel(),
-                    const SizedBox(height: 14),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final propertiesWidth =
-                            (constraints.maxWidth - 14) * 0.56;
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: propertiesWidth,
-                              child: _buildDesktopTopPropertiesPanel(),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(child: _buildDesktopPhotoPanel()),
-                          ],
-                        );
-                      },
-                    ),
-                    if (insight is Map &&
-                        insight['message']?.toString().isNotEmpty == true) ...[
-                      const SizedBox(height: 14),
-                      _buildDesktopPanel(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: _green.withOpacity(0.12),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(PhosphorIconsRegular.lightbulb,
-                                  color: _green, size: 20),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Portfolio insight',
-                                      style: GoogleFonts.poppins(
-                                          color: _dark,
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    insight['message'].toString(),
-                                    style: GoogleFonts.poppins(
-                                        color: _grey, fontSize: 13, height: 1.5),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                     if (_errorMessage != null) ...[
                       const SizedBox(height: 14),
                       _buildDesktopPanel(
@@ -984,7 +949,8 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                                 color: Color(0xFFFEF2F2),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(PhosphorIconsRegular.warningCircle,
+                              child: const Icon(
+                                  PhosphorIconsRegular.warningCircle,
                                   color: Color(0xFFB42318)),
                             ),
                             const SizedBox(width: 14),
@@ -1169,36 +1135,36 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                 ),
                 const SizedBox(height: 24),
 
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: DropdownButton<String>(
+                    value: _selectedAnalyticsPeriod,
+                    underline: const SizedBox.shrink(),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'This Week', child: Text('Last 7 days')),
+                      DropdownMenuItem(
+                          value: 'Last 28 Days', child: Text('Last 28 days')),
+                      DropdownMenuItem(
+                          value: 'Last 90 Days', child: Text('Last 90 days')),
+                    ],
+                    onChanged: (period) {
+                      if (period == null) return;
+                      setState(() => _selectedAnalyticsPeriod = period);
+                      _loadData();
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+
                 // ─── STATS GRID ───
                 _isLoading
                     ? _buildShimmerStats()
-                    : GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                        childAspectRatio: 1.25,
-                        children: [
-                          _buildStatCard('Properties',
-                              _properties.length.toString(), '+0', true),
-                          _buildStatCard(
-                              'Bookings',
-                              _metrics['totalBookings']!,
-                              _metrics['bookingsGrowth']!,
-                              !_metrics['bookingsGrowth']!.startsWith('-')),
-                          _buildStatCard(
-                              'Views',
-                              _metrics['totalViews']!,
-                              _metrics['viewsGrowth']!,
-                              !_metrics['viewsGrowth']!.startsWith('-')),
-                          _buildStatCard(
-                              'Occupancy',
-                              _metrics['occupancyRate']!,
-                              _metrics['occupancyGrowth']!,
-                              !_metrics['occupancyGrowth']!.startsWith('-')),
-                        ],
-                      ),
+                    : _buildKpiGrid(compact: true),
+                const SizedBox(height: 24),
+                _buildRecommendations(),
+                const SizedBox(height: 16),
+                _buildPropertyPerformancePanel(),
                 const SizedBox(height: 24),
 
                 // ─── VIEW ANALYTICS BUTTON ───
@@ -1206,11 +1172,7 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) =>
-                                const LandlordAnalyticsPage())),
+                    onPressed: _openAnalytics,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _surface,
                       foregroundColor: _dark,
@@ -1325,72 +1287,6 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
     );
   }
 
-  Widget _buildStatCard(
-      String title, String value, String change, bool isPositive) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _grey.withOpacity(0.1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            title,
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: _grey,
-            ),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                value,
-                style: GoogleFonts.poppins(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: _dark,
-                  letterSpacing: -1.0,
-                  height: 1.0,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isPositive
-                      ? _green.withOpacity(0.1)
-                      : const Color(0xFFFEF2F2),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  change,
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isPositive ? _green : const Color(0xFFEF4444),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildPropertyCard(Map<String, dynamic> property) {
     final imageUrl = mapApiProperty(property).image;
     final title = property['title'] as String? ?? 'Untitled';
@@ -1501,6 +1397,112 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
           const SizedBox(width: 8),
           const Icon(PhosphorIconsRegular.caretRight, color: _grey, size: 20),
         ],
+      ),
+    );
+  }
+}
+
+class _DashboardKpiCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final String detail;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool loading;
+
+  const _DashboardKpiCard({
+    required this.title,
+    required this.value,
+    required this.detail,
+    required this.icon,
+    required this.onTap,
+    required this.loading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = '$title. $value. $detail';
+    return Semantics(
+      button: onTap != null,
+      label: label,
+      child: Material(
+        color: _surface,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 170),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(icon, size: 20, color: _green),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            color: _dark,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (loading)
+                    const SizedBox(
+                      height: 28,
+                      width: 28,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _green,
+                      ),
+                    )
+                  else
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        color:
+                            value == 'Not enough data' || value == 'Unavailable'
+                                ? _grey
+                                : _dark,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  Text(
+                    detail,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      color: _grey,
+                      fontSize: 11,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.bottomRight,
+                    child: Icon(PhosphorIconsRegular.arrowUpRight,
+                        size: 16, color: onTap == null ? _grey : _green),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

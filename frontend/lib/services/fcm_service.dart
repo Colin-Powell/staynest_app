@@ -40,6 +40,14 @@ class FCMService {
 
   // Global key or Navigator state to show modals
   GlobalKey<NavigatorState>? navigatorKey;
+  OverlayEntry? _incomingBannerEntry;
+  Timer? _incomingBannerTimer;
+  Future<void> Function(
+    String? conversationId,
+    String? senderId,
+    String? name,
+    String? avatar,
+  )? onDesktopMessageAction;
 
   Future<void> initialize() async {
     if (kIsWeb || Firebase.apps.isEmpty) {
@@ -172,6 +180,19 @@ class FCMService {
         await MessageService.instance.markAsRead([senderId]);
       }
 
+      final currentContext = navigatorKey?.currentContext;
+      if (currentContext != null &&
+          MediaQuery.sizeOf(currentContext).width >= 768 &&
+          onDesktopMessageAction != null) {
+        await onDesktopMessageAction!(
+          conversationId,
+          senderId,
+          message.notification?.title,
+          message.data['avatar']?.toString(),
+        );
+        return;
+      }
+
       if ((chatId != null || conversationId != null) && navigatorKey != null) {
         navigatorKey!.currentState?.pushNamed(
           conversationId == null || conversationId.isEmpty
@@ -245,16 +266,50 @@ class FCMService {
     final context = navigatorKey?.currentContext;
     if (context == null) return;
 
-    final title = message.notification?.title ?? 'New update';
-    final body = message.notification?.body ?? '';
-    final accent = _notificationAccent(message);
+    if (MediaQuery.sizeOf(context).width >= 768) {
+      final overlay = Overlay.maybeOf(context, rootOverlay: true);
+      if (overlay == null) return;
+
+      _incomingBannerTimer?.cancel();
+      if (_incomingBannerEntry?.mounted == true) {
+        _incomingBannerEntry!.remove();
+      }
+
+      late final OverlayEntry entry;
+      entry = OverlayEntry(
+        builder: (_) => _buildIncomingBanner(
+          message,
+          onTap: () {
+            _incomingBannerTimer?.cancel();
+            if (entry.mounted) entry.remove();
+            unawaited(_handleMessageAction(message));
+          },
+        ),
+      );
+      _incomingBannerEntry = entry;
+      overlay.insert(entry);
+      _incomingBannerTimer = Timer(const Duration(seconds: 6), () {
+        if (entry.mounted) entry.remove();
+        if (identical(_incomingBannerEntry, entry)) {
+          _incomingBannerEntry = null;
+          _incomingBannerTimer = null;
+        }
+      });
+      return;
+    }
 
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Notification',
       barrierColor: Colors.black.withValues(alpha: 0.12),
-      pageBuilder: (context, anim1, anim2) => const SizedBox(),
+      pageBuilder: (dialogContext, anim1, anim2) => _buildIncomingBanner(
+        message,
+        onTap: () {
+          Navigator.of(dialogContext).pop();
+          unawaited(_handleMessageAction(message));
+        },
+      ),
       transitionBuilder: (context, anim1, anim2, child) {
         return SlideTransition(
           position: Tween<Offset>(
@@ -264,108 +319,115 @@ class FCMService {
             parent: anim1,
             curve: Curves.easeOutCubic,
           )),
-          child: SafeArea(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: AppRadius.cardBorderRadius,
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await _handleMessageAction(message);
-                    },
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 520),
-                      padding: const EdgeInsets.all(16),
+          child: child,
+        );
+      },
+    );
+  }
+
+  Widget _buildIncomingBanner(
+    RemoteMessage message, {
+    required VoidCallback onTap,
+  }) {
+    final title = message.notification?.title ?? 'New update';
+    final body = message.notification?.body ?? '';
+    final accent = _notificationAccent(message);
+
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: AppRadius.cardBorderRadius,
+              onTap: onTap,
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 520),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: StayNestColors.surfaceLight,
+                  borderRadius: AppRadius.cardBorderRadius,
+                  border: Border.all(color: accent.withValues(alpha: 0.18)),
+                  boxShadow: AppShadow.lg,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
-                        color: StayNestColors.surfaceLight,
-                        borderRadius: AppRadius.cardBorderRadius,
-                        border: Border.all(
-                          color: accent.withValues(alpha: 0.18),
-                        ),
-                        boxShadow: AppShadow.lg,
+                        color: accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      child: Row(
+                      child: Icon(
+                        _notificationIcon(message),
+                        color: accent,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: accent.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Icon(
-                              _notificationIcon(message),
-                              color: accent,
-                              size: 22,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        'StayNest',
-                                        style: GoogleFonts.poppins(
-                                          color: accent,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.4,
-                                        ),
-                                      ),
-                                    ),
-                                    const Icon(
-                                      PhosphorIconsRegular.arrowUpRight,
-                                      color: StayNestColors.textMutedLight,
-                                      size: 16,
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'StayNest',
                                   style: GoogleFonts.poppins(
-                                    color: StayNestColors.textPrimaryLight,
-                                    fontSize: 15,
+                                    color: accent,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.4,
                                   ),
                                 ),
-                                if (body.isNotEmpty) ...[
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    body,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.poppins(
-                                      color: StayNestColors.textSecondaryLight,
-                                      fontSize: 12,
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                ],
-                              ],
+                              ),
+                              const Icon(
+                                PhosphorIconsRegular.arrowUpRight,
+                                color: StayNestColors.textMutedLight,
+                                size: 16,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.poppins(
+                              color: StayNestColors.textPrimaryLight,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
+                          if (body.isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              body,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.poppins(
+                                color: StayNestColors.textSecondaryLight,
+                                fontSize: 12,
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 

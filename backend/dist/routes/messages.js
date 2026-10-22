@@ -390,6 +390,11 @@ router.get('/conversations', requireAuth, async (req, res, next) => {
            WHERE m2.conversation_id = c.id
            ORDER BY m2.created_at DESC
            LIMIT 1) as last_message_at,
+        (SELECT m2.from_user_id
+          FROM messages m2
+          WHERE m2.conversation_id = c.id
+          ORDER BY m2.created_at DESC
+          LIMIT 1) as last_message_from_user_id,
          (
            SELECT COUNT(*)
            FROM messages m3

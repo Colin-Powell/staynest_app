@@ -17,16 +17,28 @@ const Color _surface = Colors.white;
 const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
 
 class LandlordAnalyticsPage extends StatefulWidget {
-  const LandlordAnalyticsPage({super.key});
+  final String initialFilter;
+  final ValueChanged<String>? onOpenProperty;
+
+  const LandlordAnalyticsPage({
+    super.key,
+    this.initialFilter = 'This Week',
+    this.onOpenProperty,
+  });
 
   @override
   State<LandlordAnalyticsPage> createState() => _LandlordAnalyticsPageState();
 }
 
 class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
-  String _selectedFilter = 'This Week';
-  final List<String> _filters = ['This Week', 'Last 28 Days'];
+  late String _selectedFilter;
+  final List<String> _filters = [
+    'This Week',
+    'Last 28 Days',
+    'Last 90 Days',
+  ];
   bool _isLoading = true;
+  String? _errorMessage;
 
   Offset? _chartTouchPosition; // Tracks user interaction on the graph
 
@@ -46,12 +58,15 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
 
   List<Map<String, dynamic>> _topProperties = [];
   List<Map<String, dynamic>> _funnelSteps = [];
+  String _funnelDefinition =
+      'Stage counts use the selected period and are not a sequential user journey.';
   List<Map<String, dynamic>> _photoPerformance = [];
   Map<String, dynamic>? _insight;
 
   @override
   void initState() {
     super.initState();
+    _selectedFilter = widget.initialFilter;
     _fetchAnalytics();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!OnboardingPrefs.hasSeen('landlordAnalyticsSeen')) {
@@ -70,35 +85,89 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
   Future<void> _fetchAnalytics() async {
     setState(() => _isLoading = true);
     try {
-      final data =
-          await LandlordDashboardService.getLandlordOverview(_selectedFilter);
+      final period = switch (_selectedFilter) {
+        'Last 28 Days' => '28d',
+        'Last 90 Days' => '90d',
+        _ => '7d',
+      };
+      final data = await LandlordDashboardService.getLandlordDashboard(period);
+      if (data == null) throw StateError('Analytics data is unavailable.');
 
       if (!mounted) return;
 
+      final kpis = data['kpis'] is Map
+          ? Map<String, dynamic>.from(data['kpis'] as Map)
+          : <String, dynamic>{};
+      final views = kpis['views'] is Map
+          ? Map<String, dynamic>.from(kpis['views'] as Map)
+          : <String, dynamic>{};
+      final metrics = data['metrics'] is Map
+          ? Map<String, dynamic>.from(data['metrics'] as Map)
+          : <String, dynamic>{};
+      final chartData = data['chartData'] is List
+          ? (data['chartData'] as List)
+              .map((value) => value is num ? value.toDouble() : 0.0)
+              .toList()
+          : <double>[];
+
       setState(() {
-        if (data != null) {
-          if (data['overview'] != null) {
-            _overview = {
-              ..._overview,
-              ...Map<String, dynamic>.from(data['overview']),
-            };
-            _overview['chartData'] ??= <double>[];
-          }
-          _metrics = data['metrics'] != null
-              ? Map<String, String>.from(data['metrics'])
-              : _metrics;
-          _topProperties =
-              List<Map<String, dynamic>>.from(data['topProperties'] ?? []);
-          _funnelSteps = List<Map<String, dynamic>>.from(data['funnel'] ?? []);
-          _photoPerformance =
-              List<Map<String, dynamic>>.from(data['photoPerformance'] ?? []);
-          _insight = data['insight'];
-        }
+        _overview = {
+          'totalViews': views['total']?.toString() ?? 'Unavailable',
+          'growth': views['growth']?.toString() ?? '—',
+          'chartData': chartData,
+        };
+        _metrics = {
+          'uniqueViewers': views['uniqueViewers']?.toString() ?? 'Unavailable',
+          'saves': metrics['saves']?.toString() ?? 'Unavailable',
+          'shares': metrics['shares']?.toString() ?? 'Unavailable',
+          'avgCtr': metrics['avgCtr'] is num
+              ? '${(metrics['avgCtr'] as num).toStringAsFixed(1)}%'
+              : 'Not enough data',
+        };
+        _topProperties = (data['propertyPerformance'] as List? ?? const [])
+            .whereType<Map>()
+            .map((property) => <String, dynamic>{
+                  'id': property['id'],
+                  'name': property['title'],
+                  'location': property['city'] ?? '',
+                  'image': property['imageUrl'],
+                  'views': property['views'],
+                  'conversations': property['enquiries'],
+                  'bookings': property['bookings'],
+                })
+            .toList();
+        _funnelSteps = (data['funnel'] as List? ?? const [])
+            .whereType<Map>()
+            .map((step) => Map<String, dynamic>.from(step))
+            .toList();
+        _funnelDefinition = data['funnelDefinition']?.toString() ??
+            'Stage counts use the selected period and are not a sequential user journey.';
+        _photoPerformance = [];
+        _insight = null;
+        _errorMessage = null;
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
       if (!mounted) return;
+      setState(() {
+        _errorMessage = ApiResult.mapError(e);
+        _overview = {
+          'totalViews': 'Unavailable',
+          'growth': '—',
+          'chartData': <double>[],
+        };
+        _metrics = {
+          'uniqueViewers': 'Unavailable',
+          'saves': 'Unavailable',
+          'shares': 'Unavailable',
+          'avgCtr': 'Unavailable',
+        };
+        _topProperties = [];
+        _funnelSteps = [];
+        _photoPerformance = [];
+        _insight = null;
+        _isLoading = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content:
@@ -310,7 +379,7 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Profile Views',
+                          'Property Detail Views',
                           style: GoogleFonts.poppins(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -363,6 +432,16 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                         ),
                       ],
                     ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _errorMessage!,
+                        style: GoogleFonts.poppins(
+                          color: const Color(0xFFB42318),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
 
                     // ─── Line Chart Section ───
@@ -589,7 +668,8 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 20),
                               child: Center(
-                                  child: Text('No photo data available',
+                                  child: Text(
+                                      'Per-photo engagement is not tracked yet.',
                                       style: GoogleFonts.poppins(
                                           fontSize: 13, color: _grey))),
                             )
@@ -608,7 +688,7 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
 
                     // ─── Conversion Funnel ───
                     Text(
-                      'Conversion Funnel',
+                      'Activity by Stage',
                       style: GoogleFonts.poppins(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
@@ -633,15 +713,19 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                                               color: _grey))),
                                 )
                               : Column(
-                                  children: _funnelSteps.map((step) {
-                                    final pctRaw = step['percentage'];
-                                    final double pct =
-                                        pctRaw is num ? pctRaw.toDouble() : 0.0;
-                                    return _buildFunnelStep(
-                                        step['label'].toString(),
-                                        step['value'].toString(),
-                                        pct);
-                                  }).toList(),
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(_funnelDefinition,
+                                        style: GoogleFonts.poppins(
+                                            color: _grey, fontSize: 12)),
+                                    const SizedBox(height: 12),
+                                    ..._funnelSteps
+                                        .map((step) => _buildFunnelStep(
+                                              step['label']?.toString() ??
+                                                  'Activity',
+                                              step['value']?.toString() ?? '0',
+                                            )),
+                                  ],
                                 ),
                     ),
                     const SizedBox(height: 40),
@@ -685,10 +769,11 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                       )
                     else
                       ..._topProperties.map((prop) => _buildTopPropertyCard(
-                            prop['name'],
-                            prop['location'],
-                            prop['image'],
-                            prop['views'],
+                            id: prop['id']?.toString() ?? '',
+                            name: prop['name']?.toString() ?? 'Property',
+                            location: prop['location']?.toString() ?? '',
+                            image: prop['image']?.toString() ?? '',
+                            views: prop['views']?.toString() ?? '0',
                           )),
 
                     const SizedBox(height: 40),
@@ -748,135 +833,119 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
     );
   }
 
-  Widget _buildFunnelStep(String label, String value, double percentage) {
+  Widget _buildFunnelStep(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                label,
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: _grey,
-                ),
-              ),
-              Text(
-                value,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: _dark,
-                ),
-              ),
-            ],
+          Expanded(
+            child: Text(label,
+                style: GoogleFonts.poppins(fontSize: 13, color: _grey)),
           ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: percentage,
-              backgroundColor: _grey.withOpacity(0.1),
-              valueColor: const AlwaysStoppedAnimation<Color>(_green),
-              minHeight: 8,
-            ),
-          ),
+          Text(value,
+              style: GoogleFonts.poppins(
+                  fontSize: 14, fontWeight: FontWeight.w700, color: _dark)),
         ],
       ),
     );
   }
 
-  Widget _buildTopPropertyCard(
-      String name, String location, String image, String views) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _grey.withOpacity(0.1)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: buildPropertyImage(
-              image,
-              width: 72,
-              height: 72,
-              fit: BoxFit.cover,
-              errorPlaceholder: Container(
+  Widget _buildTopPropertyCard({
+    required String id,
+    required String name,
+    required String location,
+    required String image,
+    required String views,
+  }) {
+    return InkWell(
+      onTap: id.isEmpty ? null : () => widget.onOpenProperty?.call(id),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _grey.withOpacity(0.1)),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4)),
+          ],
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: buildPropertyImage(
+                image,
                 width: 72,
                 height: 72,
-                color: _grey.withOpacity(0.1),
-                child: const Icon(PhosphorIconsRegular.house,
-                    color: _grey, size: 28),
+                fit: BoxFit.cover,
+                errorPlaceholder: Container(
+                  width: 72,
+                  height: 72,
+                  color: _grey.withOpacity(0.1),
+                  child: const Icon(PhosphorIconsRegular.house,
+                      color: _grey, size: 28),
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: GoogleFonts.poppins(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: _dark,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: _dark,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  location,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: _grey,
+                  const SizedBox(height: 2),
+                  Text(
+                    location,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: _grey,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: _green.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(PhosphorIconsRegular.eye, size: 16, color: _green),
-                const SizedBox(width: 6),
-                Text(
-                  views,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: _green,
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(PhosphorIconsRegular.eye, size: 16, color: _green),
+                  const SizedBox(width: 6),
+                  Text(
+                    views,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: _green,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -11,6 +11,7 @@ import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/screens/communication/notifications_view.dart';
 import 'package:property_app/screens/landlord/listing_flow.dart';
 import 'package:property_app/services/notification_api.dart';
+import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/utils/responsive_modal_sheet.dart';
 
 import 'landlord_bookings_page.dart';
@@ -49,6 +50,8 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   String? _calendarPropertyTitle;
   String _bookingDetailReturnNav = 'Bookings';
   int _propertiesRefreshRevision = 0;
+  String? _focusedBookingId;
+  bool _showPendingBookingsOnly = false;
   bool _isChatOpen = false;
   Map<String, dynamic>? _verificationStatus;
   bool _isLoadingStatus = true;
@@ -138,8 +141,35 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
   void _closeBookingDetails(bool changed) {
     setState(() {
       _bookingDetail = null;
+      _focusedBookingId = null;
       _selectedNav = _bookingDetailReturnNav;
     });
+  }
+
+  Future<void> _openRecommendedProperty(String propertyId) async {
+    try {
+      final property = await PropertiesApi.getPropertyById(propertyId);
+      if (!mounted) return;
+      _openListingFlow(property: property, returnNav: 'Properties');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load this property.')),
+      );
+    }
+  }
+
+  Future<void> _openPropertyReport(String propertyId) async {
+    try {
+      final property = await PropertiesApi.getPropertyById(propertyId);
+      if (!mounted) return;
+      _openPropertyManagement(property);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load this property report.')),
+      );
+    }
   }
 
   Future<void> _refreshUnreadNotificationCount() async {
@@ -165,7 +195,10 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
     }
   }
 
-  void _openMessagesModal() {
+  void _openMessagesModal({
+    String? conversationId,
+    bool unansweredOnly = false,
+  }) {
     showResponsiveModalSheet<void>(
       context: context,
       useRootNavigator: true,
@@ -185,6 +218,8 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
               children: [
                 Positioned.fill(
                   child: LandlordMessagesPage(
+                    initialConversationId: conversationId,
+                    initialUnansweredOnly: unansweredOnly,
                     onChatOpen: _handleChatOpen,
                     onChatClose: _handleChatClose,
                   ),
@@ -404,6 +439,9 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
         );
       case 'Bookings':
         return LandlordBookingsPage(
+          key: ValueKey('bookings_$_focusedBookingId'),
+          initialBookingId: _focusedBookingId,
+          initialPendingOnly: _showPendingBookingsOnly,
           onOpenCalendar: _openCalendar,
           onOpenBookingDetail: (booking) =>
               _openBookingDetails(booking, returnNav: 'Bookings'),
@@ -435,6 +473,23 @@ class _LandlordPortalViewState extends State<LandlordPortalView> {
         return LandlordOverviewPage(
           onViewAllProperties: () =>
               setState(() => _selectedNav = 'Properties'),
+          onViewBookings: () => setState(() {
+            _focusedBookingId = null;
+            _showPendingBookingsOnly = true;
+            _selectedNav = 'Bookings';
+          }),
+          onViewMessages: _openMessagesModal,
+          onViewUnansweredMessages: () =>
+              _openMessagesModal(unansweredOnly: true),
+          onOpenConversation: (conversationId) =>
+              _openMessagesModal(conversationId: conversationId),
+          onOpenBooking: (bookingId) => setState(() {
+            _focusedBookingId = bookingId;
+            _showPendingBookingsOnly = true;
+            _selectedNav = 'Bookings';
+          }),
+          onEditProperty: _openRecommendedProperty,
+          onOpenProperty: _openPropertyReport,
         );
     }
   }
