@@ -340,7 +340,6 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
       responseRateRes,
       chartRes,
       activityRes,
-      propertyPerfRes,
       recommendations
     ] = await Promise.all([
       // 1. Property breakdown
@@ -569,55 +568,7 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
         [landlordId, days]
       ),
 
-      // 10. Per-property performance
-      query(
-        `SELECT 
-           p.id,
-           p.title,
-           p.image_url,
-           p.city,
-           COALESCE(NULLIF(p.address, ''), NULLIF(p.town, ''),
-                    NULLIF(p.city, ''), NULLIF(p.county, ''), '') AS location,
-           p.price,
-           p.status,
-           p.availability_status,
-           COALESCE((SELECT COUNT(*) FROM engagement_events e WHERE e.property_id = p.id AND e.event_type = 'property_impression' AND e.created_at >= CURRENT_DATE - ($2::int - 1) AND e.created_at < CURRENT_DATE + 1), 0)::int AS impressions,
-           COALESCE((SELECT COUNT(*) FROM property_unique_views puv WHERE puv.property_id = p.id AND puv.viewed_date >= CURRENT_DATE - ($2::int - 1)), 0)::int AS views,
-           COALESCE((SELECT COUNT(*) FROM property_unique_views puv WHERE puv.property_id = p.id AND puv.viewed_date >= CURRENT_DATE - ($2::int * 2 - 1) AND puv.viewed_date < CURRENT_DATE - ($2::int - 1)), 0)::int AS previous_views,
-           COALESCE((SELECT COUNT(DISTINCT puv.user_id) FROM property_unique_views puv WHERE puv.property_id = p.id AND puv.viewed_date >= CURRENT_DATE - ($2::int - 1)), 0)::int AS unique_viewers,
-           COALESCE((SELECT COUNT(DISTINCT e.user_id) FROM engagement_events e WHERE e.property_id = p.id AND e.event_type = 'property_click' AND e.created_at >= CURRENT_DATE - ($2::int - 1) AND e.created_at < CURRENT_DATE + 1), 0)::int AS clicks,
-           COALESCE((SELECT COUNT(DISTINCT e.user_id) FROM engagement_events e WHERE e.property_id = p.id AND e.event_type = 'property_save' AND e.created_at >= CURRENT_DATE - ($2::int - 1) AND e.created_at < CURRENT_DATE + 1), 0)::int AS saves,
-           COALESCE((SELECT COUNT(DISTINCT e.user_id) FROM engagement_events e WHERE e.property_id = p.id AND e.event_type = 'property_save' AND e.created_at >= CURRENT_DATE - ($2::int * 2 - 1) AND e.created_at < CURRENT_DATE - ($2::int - 1)), 0)::int AS previous_saves,
-           COALESCE((SELECT COUNT(DISTINCT e.user_id) FROM engagement_events e WHERE e.property_id = p.id AND e.event_type = 'property_share' AND e.created_at >= CURRENT_DATE - ($2::int - 1) AND e.created_at < CURRENT_DATE + 1), 0)::int AS shares,
-           COALESCE((SELECT COUNT(DISTINCT mc.id) FROM message_conversations mc WHERE mc.property_id = p.id AND mc.context_type = 'property' AND mc.created_at >= CURRENT_DATE - ($2::int - 1)), 0)::int AS enquiries,
-           COALESCE((SELECT COUNT(DISTINCT mc.id) FROM message_conversations mc WHERE mc.property_id = p.id AND mc.context_type = 'property' AND mc.created_at >= CURRENT_DATE - ($2::int * 2 - 1) AND mc.created_at < CURRENT_DATE - ($2::int - 1)), 0)::int AS previous_enquiries,
-           COALESCE((SELECT COUNT(DISTINCT mc.id)
-             FROM message_conversations mc
-            WHERE mc.property_id = p.id
-              AND mc.context_type = 'property'
-              AND mc.created_at >= CURRENT_DATE - ($2::int - 1)
-              AND mc.created_at < CURRENT_DATE + 1
-              AND EXISTS (
-                SELECT 1 FROM property_unique_views puv
-                 WHERE puv.property_id = p.id
-                   AND puv.user_id = CASE
-                     WHEN mc.participant_one_id = p.landlord_id THEN mc.participant_two_id
-                     ELSE mc.participant_one_id
-                   END
-                   AND puv.viewed_date >= CURRENT_DATE - ($2::int - 1)
-                   AND puv.viewed_date <= CURRENT_DATE
-                   AND puv.viewed_date::timestamptz <= mc.created_at
-              )), 0)::int AS converted_pairs,
-           COALESCE((SELECT COUNT(*) FROM bookings b WHERE b.property_id = p.id AND b.created_at >= CURRENT_DATE - ($2::int - 1) AND b.status NOT IN ('cancelled', 'rejected')), 0)::int AS bookings,
-           COALESCE((SELECT COUNT(*) FROM bookings b WHERE b.property_id = p.id AND b.created_at >= CURRENT_DATE - ($2::int * 2 - 1) AND b.created_at < CURRENT_DATE - ($2::int - 1) AND b.status NOT IN ('cancelled', 'rejected')), 0)::int AS previous_bookings
-         FROM properties p
-         WHERE p.landlord_id = $1
-         ORDER BY views DESC, enquiries DESC
-         LIMIT 4`,
-        [landlordId, days]
-      ),
-
-      // 11. Recommendations
+      // 10. Recommendations
       generateLandlordRecommendations(landlordId!)
     ]);
 
@@ -732,41 +683,227 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
         { label: 'Confirmed or completed bookings', value: Number(activityRow.confirmed_bookings ?? 0) },
       ],
       funnelDefinition: 'Counts use the selected reporting period; stages are not a sequential user journey.',
-      propertyPerformance: propertyPerfRes.rows.map((row: any) => ({
-        id: String(row.id),
-        title: String(row.title),
-        imageUrl: row.image_url ? String(row.image_url) : null,
-        city: row.city ? String(row.city) : null,
-        location: row.location ? String(row.location) : null,
-        price: Number(row.price ?? 0),
-        status: String(row.status ?? 'draft'),
-        availabilityStatus: String(row.availability_status ?? 'available'),
-        impressions: Number(row.impressions ?? 0),
-        views: Number(row.views ?? 0),
-        clicks: Number(row.clicks ?? 0),
-        viewsChangePercent: Number(row.previous_views ?? 0) > 0
-          ? calculateGrowthPercent(Number(row.views ?? 0), Number(row.previous_views))
-          : null,
-        uniqueViewers: Number(row.unique_viewers ?? 0),
-        saves: Number(row.saves ?? 0),
-        savesChangePercent: Number(row.previous_saves ?? 0) > 0
-          ? calculateGrowthPercent(Number(row.saves ?? 0), Number(row.previous_saves))
-          : null,
-        shares: Number(row.shares ?? 0),
-        enquiries: Number(row.enquiries ?? 0),
-        enquiriesChangePercent: Number(row.previous_enquiries ?? 0) > 0
-          ? calculateGrowthPercent(Number(row.enquiries ?? 0), Number(row.previous_enquiries))
-          : null,
-        bookings: Number(row.bookings ?? 0),
-        bookingsChangePercent: Number(row.previous_bookings ?? 0) > 0
-          ? calculateGrowthPercent(Number(row.bookings ?? 0), Number(row.previous_bookings))
-          : null,
-        conversionRate: calculateRate(
-          Number(row.converted_pairs ?? 0),
-          Number(row.unique_viewers ?? 0),
-        ),
-      })),
       recommendations,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/landlord-property-performance', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const period = String(req.query.period ?? '7d');
+    if (!['7d', '28d', '90d'].includes(period)) {
+      return res.status(400).json({ error: 'period must be 7d, 28d, or 90d.' });
+    }
+
+    const days = period === '90d' ? 90 : period === '28d' ? 28 : 7;
+    const search = typeof req.query.search === 'string'
+      ? req.query.search.trim().slice(0, 100)
+      : '';
+    const parsedLimit = Number.parseInt(String(req.query.limit ?? '15'), 10);
+    const parsedOffset = Number.parseInt(String(req.query.offset ?? '0'), 10);
+    const limit = Number.isFinite(parsedLimit) ? Math.min(50, Math.max(1, parsedLimit)) : 15;
+    const offset = Number.isFinite(parsedOffset) ? Math.min(100000, Math.max(0, parsedOffset)) : 0;
+
+    const result = await query(
+      `WITH property_scope AS MATERIALIZED (
+         SELECT p.id, p.title, p.image_url, p.city,
+                COALESCE(NULLIF(p.address, ''), NULLIF(p.town, ''),
+                         NULLIF(p.city, ''), NULLIF(p.county, ''), '') AS location,
+                p.price, p.status, p.availability_status,
+                COUNT(*) OVER()::int AS total_count
+         FROM properties p
+         WHERE p.landlord_id = $1
+           AND ($3::text = '' OR p.title ILIKE '%' || $3 || '%'
+                OR COALESCE(p.city, '') ILIKE '%' || $3 || '%'
+                OR COALESCE(p.address, '') ILIKE '%' || $3 || '%')
+       ), views AS (
+         SELECT puv.property_id,
+                COUNT(*) FILTER (
+                  WHERE puv.viewed_date >= CURRENT_DATE - ($2::int - 1)
+                )::int AS views,
+                COUNT(DISTINCT puv.user_id) FILTER (
+                  WHERE puv.viewed_date >= CURRENT_DATE - ($2::int - 1)
+                )::int AS unique_viewers,
+                COUNT(*) FILTER (
+                  WHERE puv.viewed_date < CURRENT_DATE - ($2::int - 1)
+                )::int AS previous_views
+         FROM property_unique_views puv
+         JOIN property_scope p ON p.id = puv.property_id
+         WHERE puv.viewed_date >= CURRENT_DATE - ($2::int * 2 - 1)
+           AND puv.viewed_date <= CURRENT_DATE
+         GROUP BY puv.property_id
+       ), impressions AS (
+         SELECT e.property_id,
+                COUNT(*) FILTER (
+                  WHERE e.created_at >= CURRENT_DATE - ($2::int - 1)
+                )::int AS impressions
+         FROM engagement_events e
+         JOIN property_scope p ON p.id = e.property_id
+         WHERE e.event_type = 'property_impression'
+           AND e.created_at >= CURRENT_DATE - ($2::int - 1)
+           AND e.created_at < CURRENT_DATE + 1
+         GROUP BY e.property_id
+       ), view_cohorts AS MATERIALIZED (
+         SELECT DISTINCT puv.property_id, puv.user_id, puv.viewed_date,
+                CASE
+                  WHEN puv.viewed_date >= CURRENT_DATE - ($2::int - 1)
+                    THEN 'current'
+                  ELSE 'previous'
+                END AS cohort
+         FROM property_unique_views puv
+         JOIN property_scope p ON p.id = puv.property_id
+         WHERE puv.user_id IS NOT NULL
+           AND puv.viewed_date >= CURRENT_DATE - ($2::int * 2 - 1)
+           AND puv.viewed_date <= CURRENT_DATE
+       ), eligible_engagement AS MATERIALIZED (
+         SELECT DISTINCT e.property_id, e.user_id, e.event_type, e.created_at,
+                v.cohort
+         FROM engagement_events e
+         JOIN property_scope p ON p.id = e.property_id
+         JOIN view_cohorts v
+           ON v.property_id = e.property_id
+          AND v.user_id = e.user_id
+          AND v.viewed_date::timestamptz <= e.created_at
+          AND v.cohort = CASE
+            WHEN e.created_at >= CURRENT_DATE - ($2::int - 1)
+              THEN 'current'
+            ELSE 'previous'
+          END
+         WHERE e.user_id IS NOT NULL
+           AND e.event_type IN ('property_click', 'property_save', 'property_share')
+           AND e.created_at >= CURRENT_DATE - ($2::int * 2 - 1)
+           AND e.created_at < CURRENT_DATE + 1
+       ), engagement AS (
+         SELECT property_id,
+                COUNT(DISTINCT user_id) FILTER (
+                  WHERE event_type = 'property_click' AND cohort = 'current'
+                )::int AS clicks,
+                COUNT(DISTINCT user_id) FILTER (
+                  WHERE event_type = 'property_save' AND cohort = 'current'
+                )::int AS saves,
+                COUNT(DISTINCT user_id) FILTER (
+                  WHERE event_type = 'property_save' AND cohort = 'previous'
+                )::int AS previous_saves,
+                COUNT(DISTINCT user_id) FILTER (
+                  WHERE event_type = 'property_share' AND cohort = 'current'
+                )::int AS shares
+         FROM eligible_engagement
+         GROUP BY property_id
+       ), eligible_conversations AS MATERIALIZED (
+         SELECT DISTINCT mc.property_id, mc.id, mc.created_at, v.cohort
+         FROM message_conversations mc
+         JOIN property_scope p ON p.id = mc.property_id
+         JOIN view_cohorts v
+           ON v.property_id = mc.property_id
+          AND v.user_id = CASE
+            WHEN mc.participant_one_id = $1 THEN mc.participant_two_id
+            ELSE mc.participant_one_id
+          END
+          AND v.viewed_date::timestamptz <= mc.created_at
+          AND v.cohort = CASE
+            WHEN mc.created_at >= CURRENT_DATE - ($2::int - 1)
+              THEN 'current'
+            ELSE 'previous'
+          END
+         WHERE mc.context_type = 'property'
+           AND mc.created_at >= CURRENT_DATE - ($2::int * 2 - 1)
+           AND mc.created_at < CURRENT_DATE + 1
+       ), conversations AS (
+         SELECT property_id,
+                COUNT(DISTINCT id) FILTER (WHERE cohort = 'current')::int AS enquiries,
+                COUNT(DISTINCT id) FILTER (WHERE cohort = 'previous')::int AS previous_enquiries
+         FROM eligible_conversations
+         GROUP BY property_id
+       ), eligible_bookings AS MATERIALIZED (
+         SELECT DISTINCT b.property_id, b.id, b.created_at, v.cohort
+         FROM bookings b
+         JOIN property_scope p ON p.id = b.property_id
+         JOIN view_cohorts v
+           ON v.property_id = b.property_id
+          AND v.user_id = b.tenant_id
+          AND v.viewed_date::timestamptz <= b.created_at
+          AND v.cohort = CASE
+            WHEN b.created_at >= CURRENT_DATE - ($2::int - 1)
+              THEN 'current'
+            ELSE 'previous'
+          END
+         WHERE b.status NOT IN ('cancelled', 'rejected')
+           AND b.created_at >= CURRENT_DATE - ($2::int * 2 - 1)
+           AND b.created_at < CURRENT_DATE + 1
+       ), bookings AS (
+         SELECT property_id,
+                COUNT(DISTINCT id) FILTER (WHERE cohort = 'current')::int AS bookings,
+                COUNT(DISTINCT id) FILTER (WHERE cohort = 'previous')::int AS previous_bookings
+         FROM eligible_bookings
+         GROUP BY property_id
+       ), performance AS (
+         SELECT p.*, COALESCE(i.impressions, 0)::int AS impressions,
+                COALESCE(v.views, 0)::int AS views,
+                COALESCE(v.previous_views, 0)::int AS previous_views,
+                COALESCE(v.unique_viewers, 0)::int AS unique_viewers,
+                COALESCE(e.clicks, 0)::int AS clicks,
+                COALESCE(e.saves, 0)::int AS saves,
+                COALESCE(e.previous_saves, 0)::int AS previous_saves,
+                COALESCE(e.shares, 0)::int AS shares,
+                COALESCE(c.enquiries, 0)::int AS enquiries,
+                COALESCE(c.previous_enquiries, 0)::int AS previous_enquiries,
+                COALESCE(b.bookings, 0)::int AS bookings,
+                COALESCE(b.previous_bookings, 0)::int AS previous_bookings
+         FROM property_scope p
+         LEFT JOIN views v ON v.property_id = p.id
+         LEFT JOIN impressions i ON i.property_id = p.id
+         LEFT JOIN engagement e ON e.property_id = p.id
+         LEFT JOIN conversations c ON c.property_id = p.id
+         LEFT JOIN bookings b ON b.property_id = p.id
+       )
+       SELECT * FROM performance
+       ORDER BY views DESC, enquiries DESC, title ASC, id ASC
+       OFFSET $4 LIMIT $5`,
+      [req.auth?.id, days, search, offset, limit],
+    );
+
+    const total = Number(result.rows[0]?.total_count ?? 0);
+    const propertyPerformance = result.rows.map((row: any) => ({
+      id: String(row.id),
+      title: String(row.title),
+      imageUrl: row.image_url ? String(row.image_url) : null,
+      city: row.city ? String(row.city) : null,
+      location: row.location ? String(row.location) : null,
+      price: Number(row.price ?? 0),
+      status: String(row.status ?? 'draft'),
+      availabilityStatus: String(row.availability_status ?? 'available'),
+      impressions: Number(row.impressions ?? 0),
+      views: Number(row.views ?? 0),
+      clicks: Number(row.clicks ?? 0),
+      viewsChangePercent: Number(row.previous_views ?? 0) > 0
+        ? calculateGrowthPercent(Number(row.views ?? 0), Number(row.previous_views))
+        : null,
+      uniqueViewers: Number(row.unique_viewers ?? 0),
+      saves: Number(row.saves ?? 0),
+      savesChangePercent: Number(row.previous_saves ?? 0) > 0
+        ? calculateGrowthPercent(Number(row.saves ?? 0), Number(row.previous_saves))
+        : null,
+      shares: Number(row.shares ?? 0),
+      enquiries: Number(row.enquiries ?? 0),
+      enquiriesChangePercent: Number(row.previous_enquiries ?? 0) > 0
+        ? calculateGrowthPercent(Number(row.enquiries ?? 0), Number(row.previous_enquiries))
+        : null,
+      bookings: Number(row.bookings ?? 0),
+      bookingsChangePercent: Number(row.previous_bookings ?? 0) > 0
+        ? calculateGrowthPercent(Number(row.bookings ?? 0), Number(row.previous_bookings))
+        : null,
+      conversionRate: calculateRate(
+        Number(row.enquiries ?? 0),
+        Number(row.unique_viewers ?? 0),
+      ),
+    }));
+
+    res.json({
+      propertyPerformance,
+      total,
+      hasMore: offset + propertyPerformance.length < total,
     });
   } catch (error) {
     next(error);

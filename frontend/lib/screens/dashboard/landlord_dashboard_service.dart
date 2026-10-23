@@ -21,7 +21,8 @@ class LandlordDashboardService {
     return null;
   }
 
-  static Future<Map<String, dynamic>?> getLandlordDashboard(String period) async {
+  static Future<Map<String, dynamic>?> getLandlordDashboard(
+      String period) async {
     try {
       final response = await _client.get(Uri.parse(
           '${AppSession.apiBaseUrl}/analytics/landlord-dashboard?period=${Uri.encodeComponent(period)}'));
@@ -30,6 +31,31 @@ class LandlordDashboardService {
       }
     } catch (e) {
       print('Failed to fetch landlord dashboard: $e');
+    }
+    return null;
+  }
+
+  static Future<Map<String, dynamic>?> getLandlordPropertyPerformance({
+    required String period,
+    String search = '',
+    int offset = 0,
+    int limit = 15,
+  }) async {
+    try {
+      final uri = Uri.parse(
+        '${AppSession.apiBaseUrl}/analytics/landlord-property-performance',
+      ).replace(queryParameters: {
+        'period': period,
+        'search': search,
+        'offset': offset.toString(),
+        'limit': limit.toString(),
+      });
+      final response = await _client.get(uri, bypassCache: true);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      print('Failed to fetch landlord property performance: $e');
     }
     return null;
   }

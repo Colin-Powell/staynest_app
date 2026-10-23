@@ -90,7 +90,15 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
         'Last 90 Days' => '90d',
         _ => '7d',
       };
-      final data = await LandlordDashboardService.getLandlordDashboard(period);
+      final results = await Future.wait([
+        LandlordDashboardService.getLandlordDashboard(period),
+        LandlordDashboardService.getLandlordPropertyPerformance(
+          period: period,
+          limit: 4,
+        ),
+      ]);
+      final data = results[0];
+      final performanceData = results[1];
       if (data == null) throw StateError('Analytics data is unavailable.');
 
       if (!mounted) return;
@@ -124,18 +132,19 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
               ? '${(metrics['avgCtr'] as num).toStringAsFixed(1)}%'
               : 'Not enough data',
         };
-        _topProperties = (data['propertyPerformance'] as List? ?? const [])
-            .whereType<Map>()
-            .map((property) => <String, dynamic>{
-                  'id': property['id'],
-                  'name': property['title'],
-                  'location': property['city'] ?? '',
-                  'image': property['imageUrl'],
-                  'views': property['views'],
-                  'conversations': property['enquiries'],
-                  'bookings': property['bookings'],
-                })
-            .toList();
+        _topProperties =
+            (performanceData?['propertyPerformance'] as List? ?? const [])
+                .whereType<Map>()
+                .map((property) => <String, dynamic>{
+                      'id': property['id'],
+                      'name': property['title'],
+                      'location': property['city'] ?? '',
+                      'image': property['imageUrl'],
+                      'views': property['views'],
+                      'conversations': property['enquiries'],
+                      'bookings': property['bookings'],
+                    })
+                .toList();
         _funnelSteps = (data['funnel'] as List? ?? const [])
             .whereType<Map>()
             .map((step) => Map<String, dynamic>.from(step))
