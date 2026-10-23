@@ -27,12 +27,14 @@ Widget buildPropertyImage(
   final resolved = resolvePropertyImageUrl(imagePath);
 
   if (resolved.startsWith('assets/')) {
-    return Image.asset(
-      resolved,
-      width: width,
-      height: height,
-      fit: fit,
-      errorBuilder: (_, __, ___) => placeholder,
+    return ClipRect(
+      child: Image.asset(
+        resolved,
+        width: width,
+        height: height,
+        fit: fit,
+        errorBuilder: (_, __, ___) => placeholder,
+      ),
     );
   }
 
@@ -40,25 +42,27 @@ Widget buildPropertyImage(
     final safeWidth = sanitizeImageDimension(width);
     final safeHeight = sanitizeImageDimension(height);
 
-    return Image.network(
-      resolved,
-      width: safeWidth?.toDouble(),
-      height: safeHeight?.toDouble(),
-      fit: fit,
-      cacheWidth: safeWidth != null ? (safeWidth * 2) : null,
-      cacheHeight: safeHeight != null ? (safeHeight * 2) : null,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return placeholder;
-      },
-      errorBuilder: (context, error, stackTrace) {
-        // TODO: Remove debug logging after image stability is confirmed.
-        // ignore: avoid_print
-        print('IMAGE ERROR: $resolved\nERROR: $error\nSTACK: $stackTrace');
-        return placeholder;
-      },
+    return ClipRect(
+      child: Image.network(
+        resolved,
+        width: safeWidth?.toDouble(),
+        height: safeHeight?.toDouble(),
+        fit: fit,
+        cacheWidth: safeWidth != null ? (safeWidth * 2) : null,
+        cacheHeight: safeHeight != null ? (safeHeight * 2) : null,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return placeholder;
+        },
+        errorBuilder: (context, error, stackTrace) {
+          // TODO: Remove debug logging after image stability is confirmed.
+          // ignore: avoid_print
+          print('IMAGE ERROR: $resolved\nERROR: $error\nSTACK: $stackTrace');
+          return placeholder;
+        },
+      ),
     );
   }
 
-  return placeholder;
+  return ClipRect(child: placeholder);
 }

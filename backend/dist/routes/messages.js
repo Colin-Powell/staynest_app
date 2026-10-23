@@ -1,9 +1,11 @@
-import { Router } from 'express';
-import { query } from '../db.js';
-import { authorize, requireAuth } from '../middleware/auth.js';
-import { queueUserPush } from '../services/queue.js';
-import { isPropertyEligibleForMessaging, orderConversationParticipants, } from '../services/conversation_policy.js';
-import { emitDirectConversationPresence, ioInstance } from '../socket.js';
+import { Router } from "express";
+import { query } from "../db.js";
+import { env } from "../config.js";
+import { authorize, requireAuth } from "../middleware/auth.js";
+import { queueUserPush } from "../services/queue.js";
+import { queuePropertyInquiryEmail } from "../services/email.js";
+import { isPropertyEligibleForMessaging, orderConversationParticipants, } from "../services/conversation_policy.js";
+import { emitDirectConversationPresence, ioInstance } from "../socket.js";
 const router = Router();
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 async function getOrCreateGeneralConversation(first, second) {
@@ -23,6 +25,7 @@ const CONVERSATION_CONTEXT_SELECT = `
          c.participant_two_id,
          c.context_type,
          c.property_id,
+         p.landlord_id AS property_landlord_id,
          p.title AS property_title,
          COALESCE(NULLIF(p.address, ''), NULLIF(p.town, ''),
                   NULLIF(p.city, ''), NULLIF(p.county, ''), '') AS property_location,
@@ -47,11 +50,56 @@ function propertyContext(row) {
         images: row.property_images,
     };
 }
-router.post('/conversations/initiate', requireAuth, authorize('tenant'), async (req, res, next) => {
+function getPropertyEmailImageUrl(row) {
+    let images = row.property_images;
+    if (typeof images === "string") {
+        try {
+            images = JSON.parse(images);
+        }
+        catch {
+            images = [];
+        }
+    }
+    const imageEntries = Array.isArray(images) ? images : [];
+    const candidates = [
+        row.property_image_url,
+        ...imageEntries.map((image) => typeof image === "string"
+            ? image
+            : image && typeof image === "object" && "url" in image
+                ? image.url
+                : null),
+    ];
+    for (const candidate of candidates) {
+        if (typeof candidate !== "string" || !candidate.trim())
+            continue;
+        const imageUrl = candidate.trim();
+        if (/^https?:\/\//i.test(imageUrl))
+            return imageUrl;
+        if (imageUrl.startsWith("/") || imageUrl.startsWith("uploads/")) {
+            try {
+                const apiOrigin = env.apiBaseUrl
+                    .replace(/\/+$/, "")
+                    .replace(/\/api$/i, "");
+                return new URL(imageUrl, `${apiOrigin}/`).toString();
+            }
+            catch {
+                continue;
+            }
+        }
+        if (env.cloudinaryCloudName) {
+            const publicId = imageUrl.includes(".") ? imageUrl : `${imageUrl}.jpg`;
+            return `https://res.cloudinary.com/${env.cloudinaryCloudName}/image/upload/${publicId}`;
+        }
+    }
+    return undefined;
+}
+router.post("/conversations/initiate", requireAuth, authorize("tenant"), async (req, res, next) => {
     try {
         const propertyId = req.body?.property_id?.toString().trim();
         if (!propertyId || !UUID_PATTERN.test(propertyId)) {
-            return res.status(400).json({ error: 'A valid property_id is required.' });
+            return res
+                .status(400)
+                .json({ error: "A valid property_id is required." });
         }
         const propertyResult = await query(`SELECT id, landlord_id, status
          FROM properties
@@ -59,11 +107,13 @@ router.post('/conversations/initiate', requireAuth, authorize('tenant'), async (
         LIMIT 1`, [propertyId]);
         const property = propertyResult.rows[0];
         if (!property || !isPropertyEligibleForMessaging(property.status)) {
-            return res.status(404).json({ error: 'Property not found.' });
+            return res.status(404).json({ error: "Property not found." });
         }
         const tenantId = req.auth.id;
         if (property.landlord_id === tenantId) {
-            return res.status(403).json({ error: 'You cannot message yourself about this property.' });
+            return res
+                .status(403)
+                .json({ error: "You cannot message yourself about this property." });
         }
         const [participantOneId, participantTwoId] = orderConversationParticipants(tenantId, property.landlord_id);
         const conversationResult = await query(`INSERT INTO message_conversations (
@@ -81,7 +131,7 @@ router.post('/conversations/initiate', requireAuth, authorize('tenant'), async (
         const partnerId = context.participant_one_id === tenantId
             ? context.participant_two_id
             : context.participant_one_id;
-        const partnerResult = await query('SELECT id AS user_id, name AS user_name, avatar AS user_avatar FROM users WHERE id = $1 LIMIT 1', [partnerId]);
+        const partnerResult = await query("SELECT id AS user_id, name AS user_name, avatar AS user_avatar FROM users WHERE id = $1 LIMIT 1", [partnerId]);
         return res.status(200).json({
             data: {
                 conversation: {
@@ -98,21 +148,29 @@ router.post('/conversations/initiate', requireAuth, authorize('tenant'), async (
     }
 });
 // Save a message to database
-router.post('/', requireAuth, async (req, res, next) => {
+router.post("/", requireAuth, async (req, res, next) => {
     try {
         const { to_user_id, conversation_id, property_id, text } = req.body;
         if (!text?.trim() || (!conversation_id && !to_user_id)) {
-            return res.status(400).json({ error: 'A recipient or conversation_id and non-empty text are required.' });
+            return res
+                .status(400)
+                .json({
+                error: "A recipient or conversation_id and non-empty text are required.",
+            });
         }
         if (property_id) {
-            return res.status(400).json({ error: 'Start a property conversation before sending a message.' });
+            return res
+                .status(400)
+                .json({
+                error: "Start a property conversation before sending a message.",
+            });
         }
         const from_user_id = req.auth.id;
         let recipientId = to_user_id;
         let conversationId = conversation_id;
         if (conversation_id) {
             if (!UUID_PATTERN.test(conversation_id)) {
-                return res.status(400).json({ error: 'Invalid conversation_id.' });
+                return res.status(400).json({ error: "Invalid conversation_id." });
             }
             const conversationResult = await query(`SELECT participant_one_id, participant_two_id
            FROM message_conversations
@@ -121,59 +179,96 @@ router.post('/', requireAuth, async (req, res, next) => {
           LIMIT 1`, [conversation_id, from_user_id]);
             const conversation = conversationResult.rows[0];
             if (!conversation)
-                return res.status(404).json({ error: 'Conversation not found.' });
-            recipientId = conversation.participant_one_id === from_user_id
-                ? conversation.participant_two_id
-                : conversation.participant_one_id;
+                return res.status(404).json({ error: "Conversation not found." });
+            recipientId =
+                conversation.participant_one_id === from_user_id
+                    ? conversation.participant_two_id
+                    : conversation.participant_one_id;
             if (to_user_id && to_user_id !== recipientId) {
-                return res.status(403).json({ error: 'Recipient does not match this conversation.' });
+                return res
+                    .status(403)
+                    .json({ error: "Recipient does not match this conversation." });
             }
         }
         if (!recipientId || !UUID_PATTERN.test(recipientId)) {
-            return res.status(400).json({ error: 'A valid recipient is required.' });
+            return res.status(400).json({ error: "A valid recipient is required." });
         }
         // Verify both users exist and get sender's name
         const [toUserResult, fromUserResult] = await Promise.all([
-            query('SELECT id FROM users WHERE id = $1 LIMIT 1', [recipientId]),
-            query('SELECT name FROM users WHERE id = $1 LIMIT 1', [from_user_id]),
+            query("SELECT id, name, email, role FROM users WHERE id = $1 LIMIT 1", [
+                recipientId,
+            ]),
+            query("SELECT name, role FROM users WHERE id = $1 LIMIT 1", [
+                from_user_id,
+            ]),
         ]);
         if (toUserResult.rowCount === 0) {
-            return res.status(404).json({ error: 'Recipient not found.' });
+            return res.status(404).json({ error: "Recipient not found." });
         }
         if (!conversationId) {
             conversationId = await getOrCreateGeneralConversation(from_user_id, recipientId);
         }
-        const from_name = fromUserResult.rows[0]?.name || 'Someone';
+        const from_name = fromUserResult.rows[0]?.name || "Someone";
+        const contextResult = await query(`${CONVERSATION_CONTEXT_SELECT} WHERE c.id = $1`, [conversationId]);
+        const conversationContext = contextResult.rows[0] ?? {};
+        const isTenantPropertyInquiry = conversationContext.context_type === "property" &&
+            conversationContext.property_landlord_id === recipientId &&
+            fromUserResult.rows[0]?.role === "tenant";
+        let isFirstPropertyInquiry = false;
+        if (isTenantPropertyInquiry) {
+            const priorMessageResult = await query("SELECT EXISTS (SELECT 1 FROM messages WHERE conversation_id = $1) AS has_messages", [conversationId]);
+            isFirstPropertyInquiry = !priorMessageResult.rows[0]?.has_messages;
+        }
         const result = await query(`INSERT INTO messages (conversation_id, from_user_id, to_user_id, text)
        VALUES ($1, $2, $3, $4)
        RETURNING id, conversation_id, from_user_id, to_user_id, text, created_at`, [conversationId, from_user_id, recipientId, text.trim()]);
-        await query('UPDATE message_conversations SET updated_at = now() WHERE id = $1', [conversationId]);
+        await query("UPDATE message_conversations SET updated_at = now() WHERE id = $1", [conversationId]);
         const payload = {
             ...result.rows[0],
-            property: null,
+            property: propertyContext(conversationContext),
         };
-        const contextResult = await query(`${CONVERSATION_CONTEXT_SELECT} WHERE c.id = $1`, [conversationId]);
-        payload.property = propertyContext(contextResult.rows[0] ?? {});
         // Emit to recipient over socket
         if (ioInstance && recipientId !== from_user_id) {
-            ioInstance.to(`user:${recipientId}`).emit('message', payload);
+            ioInstance.to(`user:${recipientId}`).emit("message", payload);
             void Promise.all([
                 emitDirectConversationPresence(from_user_id, recipientId),
                 emitDirectConversationPresence(recipientId, from_user_id),
             ]).catch((error) => {
-                console.error('[Presence] conversation refresh failed:', error);
+                console.error("[Presence] conversation refresh failed:", error);
             });
         }
         // Send push notification
         if (recipientId !== from_user_id) {
             await queueUserPush(recipientId, `New message from ${from_name}`, text.trim(), {
-                type: 'new_message',
+                type: "new_message",
                 chatId: from_user_id,
                 senderId: from_user_id,
                 conversationId,
-                propertyId: contextResult.rows[0]?.property_id?.toString(),
+                propertyId: conversationContext.property_id?.toString(),
                 messageId: payload.id.toString(),
             });
+        }
+        if (isFirstPropertyInquiry) {
+            const landlord = toUserResult.rows[0];
+            const propertyId = conversationContext.property_id?.toString();
+            if (landlord?.email && propertyId) {
+                try {
+                    await queuePropertyInquiryEmail({
+                        to: landlord.email,
+                        landlordName: landlord.name || "there",
+                        tenantName: from_name,
+                        propertyName: conversationContext.property_title || "your property",
+                        propertyUrl: `https://staynest.top/properties/${encodeURIComponent(propertyId)}`,
+                        propertyImageUrl: getPropertyEmailImageUrl(conversationContext),
+                        message: text.trim(),
+                        conversationId,
+                        messageId: payload.id.toString(),
+                    });
+                }
+                catch (error) {
+                    console.error("[Messages] property inquiry email enqueue failed:", error);
+                }
+            }
         }
         return res.status(201).json({ data: payload });
     }
@@ -181,14 +276,14 @@ router.post('/', requireAuth, async (req, res, next) => {
         next(error);
     }
 });
-router.get('/conversations/:conversationId/messages', requireAuth, async (req, res, next) => {
+router.get("/conversations/:conversationId/messages", requireAuth, async (req, res, next) => {
     try {
         const { conversationId } = req.params;
         const currentUserId = req.auth.id;
         const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 100);
         const offset = Math.max(parseInt(req.query.offset) || 0, 0);
         if (!UUID_PATTERN.test(conversationId)) {
-            return res.status(400).json({ error: 'Invalid conversation_id.' });
+            return res.status(400).json({ error: "Invalid conversation_id." });
         }
         const conversationResult = await query(`${CONVERSATION_CONTEXT_SELECT}
        WHERE c.id = $1
@@ -196,7 +291,7 @@ router.get('/conversations/:conversationId/messages', requireAuth, async (req, r
        LIMIT 1`, [conversationId, currentUserId]);
         const conversation = conversationResult.rows[0];
         if (!conversation)
-            return res.status(404).json({ error: 'Conversation not found.' });
+            return res.status(404).json({ error: "Conversation not found." });
         const messagesResult = await query(`SELECT id, conversation_id, from_user_id, to_user_id, text, created_at
          FROM messages
         WHERE conversation_id = $1
@@ -205,7 +300,7 @@ router.get('/conversations/:conversationId/messages', requireAuth, async (req, r
         const partnerId = conversation.participant_one_id === currentUserId
             ? conversation.participant_two_id
             : conversation.participant_one_id;
-        const partnerResult = await query('SELECT id AS user_id, name AS user_name, avatar AS user_avatar FROM users WHERE id = $1 LIMIT 1', [partnerId]);
+        const partnerResult = await query("SELECT id AS user_id, name AS user_name, avatar AS user_avatar FROM users WHERE id = $1 LIMIT 1", [partnerId]);
         return res.json({
             data: {
                 conversation: {
@@ -223,17 +318,17 @@ router.get('/conversations/:conversationId/messages', requireAuth, async (req, r
         next(error);
     }
 });
-router.delete('/conversations/:conversationId', requireAuth, async (req, res, next) => {
+router.delete("/conversations/:conversationId", requireAuth, async (req, res, next) => {
     try {
         const { conversationId } = req.params;
         if (!UUID_PATTERN.test(conversationId)) {
-            return res.status(400).json({ error: 'Invalid conversation_id.' });
+            return res.status(400).json({ error: "Invalid conversation_id." });
         }
         const result = await query(`DELETE FROM message_conversations
         WHERE id = $1
           AND (participant_one_id = $2 OR participant_two_id = $2)`, [conversationId, req.auth.id]);
         if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Conversation not found.' });
+            return res.status(404).json({ error: "Conversation not found." });
         }
         return res.json({ data: { deleted: true } });
     }
@@ -242,7 +337,7 @@ router.delete('/conversations/:conversationId', requireAuth, async (req, res, ne
     }
 });
 // Fetch conversation history between two users (paginated)
-router.get('/conversation/:userId', requireAuth, async (req, res, next) => {
+router.get("/conversation/:userId", requireAuth, async (req, res, next) => {
     try {
         const { userId } = req.params;
         const limit = Math.min(parseInt(req.query.limit) || 50, 100);
@@ -257,7 +352,9 @@ router.get('/conversation/:userId', requireAuth, async (req, res, next) => {
         LIMIT 1`, [participantOneId, participantTwoId]);
         const conversationId = conversationResult.rows[0]?.id;
         if (!conversationId) {
-            return res.json({ data: { conversation_id: null, messages: [], count: 0 } });
+            return res.json({
+                data: { conversation_id: null, messages: [], count: 0 },
+            });
         }
         const result = await query(`SELECT id, conversation_id, from_user_id, to_user_id, text, created_at
        FROM messages
@@ -276,7 +373,7 @@ router.get('/conversation/:userId', requireAuth, async (req, res, next) => {
         next(error);
     }
 });
-router.post('/mark-read', requireAuth, async (req, res, next) => {
+router.post("/mark-read", requireAuth, async (req, res, next) => {
     try {
         const currentUserId = req.auth.id;
         // Interpret payload as "mark all messages from these users as read for me".
@@ -286,7 +383,7 @@ router.post('/mark-read', requireAuth, async (req, res, next) => {
             .map((value) => value?.toString())
             .filter((value) => Boolean(value));
         if (conversationIds.some((id) => !UUID_PATTERN.test(id))) {
-            return res.status(400).json({ error: 'Invalid conversation_id.' });
+            return res.status(400).json({ error: "Invalid conversation_id." });
         }
         if (conversationIds.length > 0) {
             const authorized = await query(`SELECT id
@@ -294,7 +391,7 @@ router.post('/mark-read', requireAuth, async (req, res, next) => {
           WHERE id = ANY($1::uuid[])
             AND (participant_one_id = $2 OR participant_two_id = $2)`, [conversationIds, currentUserId]);
             if (authorized.rowCount !== conversationIds.length) {
-                return res.status(403).json({ error: 'Conversation access denied.' });
+                return res.status(403).json({ error: "Conversation access denied." });
             }
             const result = await query(`INSERT INTO message_reads (user_id, message_id, read_at)
          SELECT $1, m.id, now()
@@ -356,7 +453,7 @@ router.post('/mark-read', requireAuth, async (req, res, next) => {
     }
 });
 // Fetch all conversations (unique users the current user has messaged)
-router.get('/conversations', requireAuth, async (req, res, next) => {
+router.get("/conversations", requireAuth, async (req, res, next) => {
     try {
         const currentUserId = req.auth.id;
         const result = await query(`SELECT
@@ -425,15 +522,15 @@ router.get('/conversations', requireAuth, async (req, res, next) => {
         next(error);
     }
 });
-router.delete('/conversation/:userId', requireAuth, async (req, res, next) => {
+router.delete("/conversation/:userId", requireAuth, async (req, res, next) => {
     try {
         const currentUserId = req.auth.id;
         const { userId } = req.params;
         if (!userId) {
-            return res.status(400).json({ error: 'userId is required.' });
+            return res.status(400).json({ error: "userId is required." });
         }
         if (!UUID_PATTERN.test(userId)) {
-            return res.status(400).json({ error: 'Invalid userId.' });
+            return res.status(400).json({ error: "Invalid userId." });
         }
         const result = await query(`DELETE FROM message_conversations
         WHERE participant_one_id = LEAST($1::uuid, $2::uuid)

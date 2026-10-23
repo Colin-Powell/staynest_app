@@ -240,35 +240,39 @@ class AppSession {
     }
 
     if (avatar.startsWith('assets/')) {
-      return Image.asset(avatar, width: width, height: height, fit: fit);
+      return ClipOval(
+        child: Image.asset(avatar, width: width, height: height, fit: fit),
+      );
     }
 
     final url = avatar.startsWith('http')
         ? avatar
         : '$cloudinaryBaseUrl/${avatar.contains('.') ? avatar : '$avatar.jpg'}';
 
-    return Image.network(
-      url,
-      width: width,
-      height: height,
-      fit: fit,
-      cacheWidth: width != null ? (width * 2).toInt() : null,
-      cacheHeight: height != null ? (height * 2).toInt() : null,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return const _ShimmerPlaceholder();
-      },
-      errorBuilder: (context, error, stackTrace) => Container(
-        width: width ?? 40,
-        height: height ?? 40,
-        decoration: BoxDecoration(
-          color: Colors.grey[200],
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          Icons.person,
-          color: Colors.grey[500],
-          size: (width ?? 40) * 0.6,
+    return ClipOval(
+      child: Image.network(
+        url,
+        width: width,
+        height: height,
+        fit: fit,
+        cacheWidth: width != null ? (width * 2).toInt() : null,
+        cacheHeight: height != null ? (height * 2).toInt() : null,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return const _ShimmerPlaceholder();
+        },
+        errorBuilder: (context, error, stackTrace) => Container(
+          width: width ?? 40,
+          height: height ?? 40,
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.person,
+            color: Colors.grey[500],
+            size: (width ?? 40) * 0.6,
+          ),
         ),
       ),
     );
