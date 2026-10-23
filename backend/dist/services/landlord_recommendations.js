@@ -201,7 +201,7 @@ export async function generateLandlordRecommendations(landlordId) {
            ) < COUNT(*) FILTER (
              WHERE v.viewed_date >= CURRENT_DATE - 27
                AND v.viewed_date < CURRENT_DATE - 13
-           ) * $3
+           ) * $3::numeric
            ORDER BY current_views ASC
            LIMIT 3`, [
                 landlordId,

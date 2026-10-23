@@ -1422,6 +1422,19 @@ class _LandlordPropertyManagementPageState
       ),
       child: Column(
         children: [
+          if (!_activeBoost) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: AspectRatio(
+                aspectRatio: 700 / 630,
+                child: Image.asset(
+                  'assets/images/boost_card.png',
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           Row(
             children: [
               Container(

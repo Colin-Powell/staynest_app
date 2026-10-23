@@ -241,8 +241,9 @@ class CacheEngine {
     required String key,
     required Future<T> Function() networkFetcher,
     Duration ttl = const Duration(minutes: 10),
+    bool forceCache = false,
   }) async {
-    if (!_cacheEnabled) {
+    if (!_cacheEnabled && !forceCache) {
       return _deduplicatedFetch(key, networkFetcher);
     }
 
@@ -329,9 +330,24 @@ class CacheEngine {
   /// Invalidate specific keys (e.g., when a user updates a property)
   Future<void> invalidate(String key) async {
     _memoryCache.remove(key);
+    if (key == 'landlord_props_me') {
+      _memoryCache.removeWhere(
+        (cacheKey, _) => cacheKey.startsWith('landlord_props_me_page_'),
+      );
+    }
     try {
       await _init();
-      await _box?.delete(key);
+      if (key == 'landlord_props_me') {
+        final keys = _box!.keys
+            .whereType<String>()
+            .where((cacheKey) =>
+                cacheKey == key ||
+                cacheKey.startsWith('landlord_props_me_page_'))
+            .toList(growable: false);
+        if (keys.isNotEmpty) await _box!.deleteAll(keys);
+      } else {
+        await _box?.delete(key);
+      }
     } catch (error) {
       debugPrint('[CacheEngine] Could not invalidate $key: $error');
     }

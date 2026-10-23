@@ -257,7 +257,7 @@ router.post('/track', requireAuth, authorize('tenant'), async (req: Request, res
   }
 });
 
-router.get('/stats/:propertyId', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.get('/stats/:propertyId', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { propertyId } = req.params;
 
@@ -877,23 +877,27 @@ router.get('/landlord-property-performance', requireAuth, authorize('landlord', 
       impressions: Number(row.impressions ?? 0),
       views: Number(row.views ?? 0),
       clicks: Number(row.clicks ?? 0),
-      viewsChangePercent: Number(row.previous_views ?? 0) > 0
-        ? calculateGrowthPercent(Number(row.views ?? 0), Number(row.previous_views))
-        : null,
+      viewsChangePercent: calculateGrowthPercent(
+        Number(row.views ?? 0),
+        Number(row.previous_views ?? 0),
+      ),
       uniqueViewers: Number(row.unique_viewers ?? 0),
       saves: Number(row.saves ?? 0),
-      savesChangePercent: Number(row.previous_saves ?? 0) > 0
-        ? calculateGrowthPercent(Number(row.saves ?? 0), Number(row.previous_saves))
-        : null,
+      savesChangePercent: calculateGrowthPercent(
+        Number(row.saves ?? 0),
+        Number(row.previous_saves ?? 0),
+      ),
       shares: Number(row.shares ?? 0),
       enquiries: Number(row.enquiries ?? 0),
-      enquiriesChangePercent: Number(row.previous_enquiries ?? 0) > 0
-        ? calculateGrowthPercent(Number(row.enquiries ?? 0), Number(row.previous_enquiries))
-        : null,
+      enquiriesChangePercent: calculateGrowthPercent(
+        Number(row.enquiries ?? 0),
+        Number(row.previous_enquiries ?? 0),
+      ),
       bookings: Number(row.bookings ?? 0),
-      bookingsChangePercent: Number(row.previous_bookings ?? 0) > 0
-        ? calculateGrowthPercent(Number(row.bookings ?? 0), Number(row.previous_bookings))
-        : null,
+      bookingsChangePercent: calculateGrowthPercent(
+        Number(row.bookings ?? 0),
+        Number(row.previous_bookings ?? 0),
+      ),
       conversionRate: calculateRate(
         Number(row.enquiries ?? 0),
         Number(row.unique_viewers ?? 0),
@@ -910,12 +914,15 @@ router.get('/landlord-property-performance', requireAuth, authorize('landlord', 
   }
 });
 
-router.get('/landlord-overview', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.get('/landlord-overview', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const filter = String(req.query.filter ?? 'This Week');
+    if (!['This Week', 'Last 28 Days', 'Last 90 Days'].includes(filter)) {
+      return res.status(400).json({ error: 'filter must be This Week, Last 28 Days, or Last 90 Days.' });
+    }
     const window = getTimeWindow(filter);
     const landlordId = req.auth?.id;
-    const daysCount = filter === 'Last 28 Days' ? 28 : 7;
+    const daysCount = filter === 'Last 90 Days' ? 90 : filter === 'Last 28 Days' ? 28 : 7;
 
     // Parallelize all queries to prevent sequential processing bottlenecks 
     // and resolve "Connection reset by peer" errors caused by Render timeouts.
@@ -1150,7 +1157,7 @@ router.get('/landlord-overview', requireAuth, async (req: Request, res: Response
   }
 });
 
-router.get('/management/:propertyId', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+router.get('/management/:propertyId', requireAuth, authorize('landlord', 'host'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { propertyId } = req.params;
 

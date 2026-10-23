@@ -259,7 +259,7 @@ export async function generateLandlordRecommendations(landlordId: string): Promi
            ) < COUNT(*) FILTER (
              WHERE v.viewed_date >= CURRENT_DATE - 27
                AND v.viewed_date < CURRENT_DATE - 13
-           ) * $3
+           ) * $3::numeric
            ORDER BY current_views ASC
            LIMIT 3`,
           [

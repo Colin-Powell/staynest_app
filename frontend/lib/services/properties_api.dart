@@ -90,15 +90,38 @@ class PropertiesApi {
 
   static Future<({List<Map<String, dynamic>> items, bool hasMore})>
       getLandlordPropertiesPage({int offset = 0, int limit = 20}) async {
-    final response = await _client().getJson(
-      '/properties/me',
-      queryParams: {'offset': '$offset', 'limit': '$limit'},
+    final cacheKey =
+        'landlord_props_me_page_${AppSession.currentUserId ?? 'guest'}_${AppSession.currentRole}_${offset}_$limit';
+    final response =
+        await CacheEngine.instance.getOrFetch<Map<String, dynamic>>(
+      key: cacheKey,
+      ttl: CacheTTL.listings,
+      forceCache: true,
+      networkFetcher: () async {
+        final response = await _client().getJson(
+          '/properties/me',
+          queryParams: {'offset': '$offset', 'limit': '$limit'},
+        );
+        final data = response['data'] as List<dynamic>? ?? [];
+        final meta = response['meta'];
+        return {
+          'items': data
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList(),
+          'hasMore': meta is Map && meta['hasMore'] == true,
+        };
+      },
     );
-    final data = response['data'] as List<dynamic>? ?? [];
-    final meta = response['meta'];
+    final data = response['items'];
     return (
-      items: data.cast<Map<String, dynamic>>(),
-      hasMore: meta is Map && meta['hasMore'] == true,
+      items: data is List
+          ? data
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList()
+          : <Map<String, dynamic>>[],
+      hasMore: response['hasMore'] == true,
     );
   }
 
