@@ -73,8 +73,8 @@ Future<void> _initializeFirebaseAsync() async {
   // ── Step 3: FCM service — completely isolated ─────────────────────────────
   // Must never be skipped by a failure in steps 1 or 2.
   try {
-    FCMService.instance.navigatorKey = navigatorKey;
     if (!kIsWeb) {
+      FCMService.instance.navigatorKey = navigatorKey;
       await FCMService.instance.initialize();
       await FCMService.instance.subscribeToTopic('new_listings');
     }

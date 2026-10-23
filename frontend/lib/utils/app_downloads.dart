@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 const stayNestAndroidDownloadUrl =
-    'https://github.com/Colin-Powell/staynest_app/releases/latest/download/staynest-android.apk';
+    'https://github.com/Colin-Powell/staynest_app/releases/latest/download/Staynest.apk';
 
 Future<void> launchAndroidAppDownload(BuildContext context) async {
   final opened = await launchUrl(Uri.parse(stayNestAndroidDownloadUrl));

@@ -10,6 +10,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:property_app/screens/dashboard/landlord_notifications_page.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/services/properties_api.dart';
+import 'package:property_app/services/message_service.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'package:property_app/utils/property_mapper.dart';
 import 'package:property_app/session/app_session.dart';
@@ -26,6 +27,39 @@ const Color _dark = Color(0xFF111827);
 const Color _grey = Color(0xFF9CA3AF);
 const Color _surface = Colors.white;
 const Color _green = Color(0xFF10B981); // Emerald Green for Landlord Theme
+
+class HatchedPainter extends CustomPainter {
+  final Color color;
+  final double stripeWidth;
+  final double gap;
+
+  const HatchedPainter({
+    required this.color,
+    this.stripeWidth = 2,
+    this.gap = 3,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = stripeWidth
+      ..style = PaintingStyle.stroke;
+    for (double x = -size.height; x < size.width; x += stripeWidth + gap) {
+      canvas.drawLine(
+        Offset(x, size.height),
+        Offset(x + size.height, 0),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant HatchedPainter oldDelegate) =>
+      color != oldDelegate.color ||
+      stripeWidth != oldDelegate.stripeWidth ||
+      gap != oldDelegate.gap;
+}
 
 class LandlordOverviewPage extends StatefulWidget {
   final VoidCallback? onViewAllProperties;
@@ -66,11 +100,18 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
   String _selectedAnalyticsPeriod = 'This Week';
   List<Map<String, dynamic>> _properties = [];
   Map<String, dynamic> _analyticsData = {};
-  int _selectedPerformancePropertyIndex = 0; // Added for Split UI state
+
+  // Performance UI State
+  int _selectedPerformancePropertyIndex = 0;
   String? _performanceLeadsPropertyId;
   List<Map<String, dynamic>> _performanceLeads = const [];
   bool _loadingPerformanceLeads = false;
   int _performanceLeadsRequestId = 0;
+  List<ConversationModel> _pendingInquiries = const [];
+
+  // Search
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   final Set<String> _dismissedRecommendationIds = {};
   String get _dismissedRecommendationKey =>
@@ -80,6 +121,7 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
   void initState() {
     super.initState();
     _loadData();
+    unawaited(_loadPendingInquiries());
     _loadDismissedRecommendations();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!OnboardingPrefs.hasSeen('landlordOverviewSeen')) {
@@ -95,6 +137,12 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
     });
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadDismissedRecommendations() async {
     try {
       final preferences = await SharedPreferences.getInstance();
@@ -103,6 +151,23 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
         _dismissedRecommendationIds.addAll(
           preferences.getStringList(_dismissedRecommendationKey) ?? const [],
         );
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadPendingInquiries() async {
+    try {
+      final conversations = await MessageService.instance.fetchConversations();
+      if (!mounted) return;
+      setState(() {
+        _pendingInquiries = conversations
+            .where((conversation) =>
+                conversation.contextType == 'property' &&
+                conversation.lastMessageFromUserId != null &&
+                conversation.lastMessageFromUserId !=
+                    AppSession.currentUserId &&
+                conversation.conversationId?.isNotEmpty == true)
+            .toList();
       });
     } catch (_) {}
   }
@@ -188,8 +253,6 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
     if (raw is! List) return const [];
     return raw.map((value) => value is num ? value.toDouble() : 0.0).toList();
   }
-
-  get dashboardData => null;
 
   Map<String, dynamic> _kpi(String key) => _dashboardAvailable
       ? _analyticsSection('kpis')[key] is Map
@@ -464,14 +527,28 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
         rawProperties.isEmpty) {
       return const SizedBox.shrink();
     }
-    final properties = rawProperties.take(4).toList(growable: false);
+    final properties = rawProperties.take(15).toList(growable: false);
 
-    if (_selectedPerformancePropertyIndex >= properties.length) {
+    // Apply Search Filter
+    final filteredProperties = properties.where((p) {
+      if (_searchQuery.isEmpty) return true;
+      final q = _searchQuery.toLowerCase();
+      final title = (p['title']?.toString() ?? '').toLowerCase();
+      final city = (p['city']?.toString() ?? '').toLowerCase();
+      return title.contains(q) || city.contains(q);
+    }).toList();
+
+    // Reset index if out of bounds after filtering
+    if (_selectedPerformancePropertyIndex >= filteredProperties.length &&
+        filteredProperties.isNotEmpty) {
       _selectedPerformancePropertyIndex = 0;
     }
 
-    final selectedProperty = Map<String, dynamic>.from(
-        properties[_selectedPerformancePropertyIndex]);
+    final Map<String, dynamic>? selectedProperty = filteredProperties.isNotEmpty
+        ? Map<String, dynamic>.from(
+            filteredProperties[_selectedPerformancePropertyIndex])
+        : null;
+
     final isDesktop = MediaQuery.sizeOf(context).width >= 1100;
 
     return LayoutBuilder(
@@ -482,9 +559,29 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildPerformanceLeftSidebar(properties),
+                _buildPerformanceLeftSidebar(filteredProperties),
                 const SizedBox(width: 16),
-                Expanded(child: _buildPerformanceMainDetail(selectedProperty)),
+                Expanded(
+                  child: selectedProperty != null
+                      ? _buildPerformanceMainDetail(selectedProperty)
+                      : Container(
+                          decoration: BoxDecoration(
+                            color: _surface,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 24,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child:
+                                Text('No property found for search criteria.'),
+                          ),
+                        ),
+                ),
               ],
             ),
           );
@@ -492,9 +589,10 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
           // Mobile responsive layout
           return Column(
             children: [
-              _buildPerformanceLeftSidebar(properties, isMobile: true),
+              _buildPerformanceLeftSidebar(filteredProperties, isMobile: true),
               const SizedBox(height: 16),
-              _buildPerformanceMainDetail(selectedProperty, isMobile: true),
+              if (selectedProperty != null)
+                _buildPerformanceMainDetail(selectedProperty, isMobile: true),
             ],
           );
         }
@@ -531,12 +629,37 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
                         color: _dark)),
-                Text('${properties.length}',
-                    style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: _grey,
-                        fontWeight: FontWeight.w500)),
               ],
+            ),
+            const SizedBox(height: 16),
+            // Search TextField
+            TextField(
+              controller: _searchController,
+              onChanged: (val) => setState(() => _searchQuery = val),
+              style: GoogleFonts.poppins(fontSize: 13, color: _dark),
+              decoration: InputDecoration(
+                hintText: 'Search Properties',
+                hintStyle: GoogleFonts.poppins(color: _grey, fontSize: 13),
+                suffixIcon: const Icon(PhosphorIconsRegular.magnifyingGlass,
+                    color: _grey, size: 16),
+                filled: true,
+                fillColor: _surface,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _grey.withOpacity(0.2)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _grey.withOpacity(0.2)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: _green),
+                ),
+              ),
             ),
             const SizedBox(height: 16),
           ],
@@ -563,43 +686,138 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
             )
           else
             Expanded(
-              child: Column(
+              child: ListView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.zero,
                 children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Properties',
+                          style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _dark)),
+                      Text('${properties.length}',
+                          style:
+                              GoogleFonts.poppins(fontSize: 12, color: _grey)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   for (var index = 0; index < properties.length; index++)
                     _buildPerformancePropertyTile(properties, index),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Pending inquiries',
+                          style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _dark)),
+                      Text('${_pendingInquiries.length}',
+                          style:
+                              GoogleFonts.poppins(fontSize: 12, color: _grey)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (_pendingInquiries.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text('No pending property inquiries.',
+                          style:
+                              GoogleFonts.poppins(fontSize: 12, color: _grey)),
+                    )
+                  else
+                    for (final inquiry in _pendingInquiries.take(4))
+                      _buildPendingInquiryTile(inquiry),
                 ],
               ),
             ),
-          _buildPendingReplies(),
+
           const SizedBox(height: 16),
-          // CTA Boost Listing at the remaining space bottom
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () {
-                final property = Map<String, dynamic>.from(
-                  properties[_selectedPerformancePropertyIndex],
-                );
-                final propertyId = property['id']?.toString();
-                if (propertyId != null && propertyId.isNotEmpty) {
-                  BoostListingModal.show(context, propertyId);
-                }
-              },
-              icon: const Icon(PhosphorIconsRegular.rocketLaunch, size: 18),
-              label: Text('Boost listing',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-              style: FilledButton.styleFrom(
-                backgroundColor: _dark, // Dark contrast for CTA
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          // Bottom Actions Split Section
+          Container(
+            padding: const EdgeInsets.only(top: 16),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: _grey.withOpacity(0.1))),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildPendingReplies(),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      if (properties.isEmpty) return;
+                      final property = Map<String, dynamic>.from(
+                        properties[_selectedPerformancePropertyIndex],
+                      );
+                      final propertyId = property['id']?.toString();
+                      if (propertyId != null && propertyId.isNotEmpty) {
+                        BoostListingModal.show(context, propertyId);
+                      }
+                    },
+                    icon:
+                        const Icon(PhosphorIconsRegular.rocketLaunch, size: 18),
+                    label: Text('Boost listing',
+                        style:
+                            GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _dark,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPendingInquiryTile(ConversationModel inquiry) {
+    final name = inquiry.userName;
+    final avatar = inquiry.userAvatar;
+    final subtitle = [inquiry.property?.title, inquiry.lastMessage]
+        .whereType<String>()
+        .where((value) => value.isNotEmpty)
+        .join(' · ');
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: ClipOval(
+        child: avatar == null || avatar.isEmpty
+            ? Container(
+                width: 36,
+                height: 36,
+                color: const Color(0xFFF3F4F6),
+                alignment: Alignment.center,
+                child: Text(name.isEmpty ? '?' : name[0].toUpperCase(),
+                    style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _dark)),
+              )
+            : buildPropertyImage(avatar, width: 36, height: 36),
+      ),
+      title: Text(name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: GoogleFonts.poppins(
+              fontSize: 12, fontWeight: FontWeight.w600, color: _dark)),
+      subtitle: Text(subtitle.isEmpty ? 'New property inquiry' : subtitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: GoogleFonts.poppins(fontSize: 11, color: _grey)),
+      onTap: () => widget.onOpenConversation?.call(inquiry.conversationId!),
     );
   }
 
@@ -614,69 +832,74 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
         property['city']?.toString() ??
         'Location unavailable';
 
-    return GestureDetector(
-      onTap: () => _selectPerformanceProperty(index, properties),
-      child: Container(
-        width: double.infinity,
-        margin: EdgeInsets.only(bottom: isMobile ? 0 : 8, right: 8),
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: isSelected ? _bg : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? _grey.withOpacity(0.2) : Colors.transparent,
-          ),
-        ),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: buildPropertyImage(
-                _propertyPerformanceImage(property),
-                width: 40,
-                height: 40,
-                fit: BoxFit.cover,
-                errorPlaceholder: Container(
-                  width: 40,
-                  height: 40,
-                  color: _grey.withOpacity(0.1),
-                  child: const Icon(PhosphorIconsRegular.image,
-                      color: _grey, size: 20),
-                ),
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () => _selectPerformanceProperty(index, properties),
+          child: Container(
+            width: double.infinity,
+            margin: EdgeInsets.only(bottom: isMobile ? 0 : 4, right: 8),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFFF9FAFB) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color:
+                    isSelected ? _grey.withOpacity(0.15) : Colors.transparent,
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    property['title']?.toString() ?? 'Untitled',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w500,
-                      color: _dark,
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: buildPropertyImage(
+                    _propertyPerformanceImage(property),
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.cover,
+                    errorPlaceholder: Container(
+                      width: 40,
+                      height: 40,
+                      color: _grey.withOpacity(0.1),
+                      child: const Icon(PhosphorIconsRegular.image,
+                          color: _grey, size: 20),
                     ),
                   ),
-                  Text(
-                    city,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(fontSize: 11, color: _grey),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        property['title']?.toString() ?? 'Untitled',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.w500,
+                          color: _dark,
+                        ),
+                      ),
+                      Text(
+                        city,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(fontSize: 11, color: _grey),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                if (isSelected && !isMobile)
+                  const Icon(PhosphorIconsRegular.caretDown,
+                      color: _dark, size: 16),
+              ],
             ),
-            if (isSelected && !isMobile)
-              const Icon(PhosphorIconsRegular.caretDown,
-                  color: _dark, size: 16),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -788,82 +1011,110 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
           Positioned(
             bottom: 24,
             left: 24,
-            child: _buildSelectedPropertyLeads(isMobile: isMobile),
+            right: 24,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Flexible(
+                  child: _buildSelectedPropertyLeads(
+                      isMobile: isMobile, property: property),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    final propertyId = property['id']?.toString();
+                    if (propertyId == null || propertyId.isEmpty) return;
+                    if (widget.onOpenProperty != null) {
+                      widget.onOpenProperty!(propertyId);
+                    } else {
+                      Navigator.of(context).pushNamed(
+                        '/landlord_property_management',
+                        arguments: property,
+                      );
+                    }
+                  },
+                  icon: const Icon(PhosphorIconsRegular.buildings, size: 16),
+                  label: Text('Manage',
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(color: Colors.white.withOpacity(0.75)),
+                    backgroundColor: Colors.black.withOpacity(0.25),
+                    minimumSize: const Size(0, 48),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSelectedPropertyLeads({required bool isMobile}) {
+  Widget _buildSelectedPropertyLeads(
+      {required bool isMobile, required Map<String, dynamic> property}) {
     final displayedLeads = _performanceLeads.take(3).toList();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_loadingPerformanceLeads)
-            const SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-          else if (displayedLeads.isEmpty)
-            const Icon(PhosphorIconsRegular.users,
-                size: 16, color: Colors.white)
-          else
-            SizedBox(
-              width: 24.0 + (displayedLeads.length - 1) * 16.0,
-              height: 26,
-              child: Stack(
-                children: [
-                  for (var index = 0; index < displayedLeads.length; index++)
-                    Positioned(
-                      left: index * 16.0,
-                      child: Tooltip(
-                        message:
-                            displayedLeads[index]['name']?.toString() ?? 'Lead',
-                        child: Container(
-                          width: 26,
-                          height: 26,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 1.5),
-                          ),
-                          child: ClipOval(
-                            child: AppSession.buildAvatar(
-                              displayedLeads[index]['avatar']?.toString(),
-                              width: 24,
-                              height: 24,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          const SizedBox(width: 8),
-          Text(
-            _loadingPerformanceLeads
-                ? 'Loading leads'
-                : _performanceLeads.isEmpty
-                    ? 'No high-intent leads'
-                    : '${_performanceLeads.length} high-intent leads',
-            style: GoogleFonts.poppins(
-              color: Colors.white,
-              fontSize: isMobile ? 10 : 12,
-              fontWeight: FontWeight.w500,
-            ),
+    final stackWidth = displayedLeads.isEmpty
+        ? 0.0
+        : 32.0 + (displayedLeads.length - 1) * 20.0;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: stackWidth,
+          height: 32,
+          child: Stack(
+            children: [
+              for (var index = 0; index < displayedLeads.length; index++)
+                Positioned(
+                  left: index * 20.0,
+                  child: _buildLeadAvatar(displayedLeads[index]),
+                ),
+            ],
           ),
-        ],
+        ),
+        if (displayedLeads.isNotEmpty) const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            _loadingPerformanceLeads
+                ? 'Loading leads…'
+                : '${_performanceLeads.length} high-intent leads',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.poppins(
+                color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLeadAvatar(Map<String, dynamic> lead) {
+    final name = lead['name']?.toString() ?? 'Lead';
+    final avatar = lead['avatar']?.toString() ?? '';
+    return Tooltip(
+      message: name,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 2),
+        ),
+        child: ClipOval(
+          child: avatar.isEmpty
+              ? Container(
+                  color: const Color(0xFFF3F4F6),
+                  alignment: Alignment.center,
+                  child: Text(name.isEmpty ? '?' : name[0].toUpperCase(),
+                      style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _dark)),
+                )
+              : buildPropertyImage(avatar, width: 32, height: 32),
+        ),
       ),
     );
   }
@@ -872,86 +1123,131 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
       {required bool isMobile}) {
     int metric(String key) =>
         int.tryParse(property[key]?.toString() ?? '') ?? 0;
-    final items = <(String, String, IconData)>[
-      (
-        'Impressions',
-        metric('impressions').toString(),
-        PhosphorIconsRegular.images
-      ),
-      ('Detail views', metric('views').toString(), PhosphorIconsRegular.eye),
-      ('Saved', metric('saves').toString(), PhosphorIconsRegular.heart),
-      (
-        'Inquiries',
-        metric('enquiries').toString(),
-        PhosphorIconsRegular.chatTeardropText
-      ),
-      (
-        'Bookings',
-        metric('bookings').toString(),
-        PhosphorIconsRegular.calendarCheck
-      ),
-    ];
 
-    return Container(
-      padding:
-          EdgeInsets.symmetric(horizontal: isMobile ? 14 : 24, vertical: 20),
+    final views = metric('views');
+    final saves = metric('saves');
+    final enquiries = metric('enquiries');
+    final bookings = metric('bookings');
+    double? change(String key) => property[key] is num
+        ? (property[key] as num).toDouble()
+        : double.tryParse(property[key]?.toString() ?? '');
+    final format = NumberFormat.compact();
+
+    final metricsWidget = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = constraints.maxWidth < 560 ? 2 : 5;
-          final gap = 12.0;
-          final itemWidth =
-              (constraints.maxWidth - gap * (columns - 1)) / columns;
-          return Wrap(
-            spacing: gap,
-            runSpacing: 16,
-            children: [
-              for (final item in items)
-                SizedBox(
-                  width: itemWidth,
-                  child: _buildMetricItem(item.$1, item.$2, item.$3),
-                ),
-            ],
-          );
-        },
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _buildMetricItem(
+              'Total Views', format.format(views), change('viewsChangePercent'),
+              hasTrendData: property.containsKey('viewsChangePercent'),
+              hasActivity: views > 0),
+          _buildMetricItem('Saved / Favorites', format.format(saves),
+              change('savesChangePercent'),
+              hasTrendData: property.containsKey('savesChangePercent'),
+              hasActivity: saves > 0),
+          _buildMetricItem('Inquiries', format.format(enquiries),
+              change('enquiriesChangePercent'),
+              hasTrendData: property.containsKey('enquiriesChangePercent'),
+              hasActivity: enquiries > 0),
+          _buildMetricItem('Scheduled Viewings', format.format(bookings),
+              change('bookingsChangePercent'),
+              hasTrendData: property.containsKey('bookingsChangePercent'),
+              hasActivity: bookings > 0),
+        ],
       ),
     );
+
+    if (isMobile) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: SizedBox(width: 600, child: metricsWidget),
+      );
+    }
+    return metricsWidget;
   }
 
-  Widget _buildMetricItem(String label, String value, IconData icon) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 16, color: _green),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.poppins(fontSize: 11, color: _grey),
+  Widget _buildMetricItem(
+    String label,
+    String value,
+    double? changePercent, {
+    required bool hasTrendData,
+    required bool hasActivity,
+  }) {
+    final hasComparablePeriod = hasTrendData && changePercent != null;
+    final isPositive = changePercent != null && changePercent >= 0;
+    final color = !hasTrendData || (changePercent == null && !hasActivity)
+        ? _grey
+        : isPositive
+            ? _green
+            : const Color(0xFFEF4444);
+    final bgColor = color.withOpacity(0.12);
+    final arrowIcon = isPositive
+        ? PhosphorIconsRegular.arrowUp
+        : PhosphorIconsRegular.arrowDown;
+    final trendLabel = hasComparablePeriod
+        ? '${changePercent > 0 ? '+' : ''}${changePercent.toStringAsFixed(1)}%'
+        : !hasTrendData
+            ? 'Unavailable'
+            : hasActivity
+                ? 'New'
+                : 'No baseline';
+
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: GoogleFonts.poppins(fontSize: 13, color: _grey)),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                value,
+                style: GoogleFonts.poppins(
+                  fontSize: 32, // Large metric font size
+                  fontWeight: FontWeight.w600,
+                  color: _dark,
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.poppins(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: _dark,
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hasComparablePeriod) ...[
+                      Icon(arrowIcon, size: 10, color: color),
+                      const SizedBox(width: 2),
+                    ],
+                    Text(trendLabel,
+                        style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: color)),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -959,101 +1255,184 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
       {required bool isMobile}) {
     int metric(String key) =>
         int.tryParse(property[key]?.toString() ?? '') ?? 0;
-    final impressions = metric('impressions');
-    final views = metric('views');
-    final enquiries = metric('enquiries');
-    final bookings = metric('bookings');
-    final maximum = [impressions, views, enquiries, bookings]
-        .fold<int>(0, (current, value) => current > value ? current : value);
 
-    return Container(
-      padding: EdgeInsets.all(isMobile ? 16 : 24),
+    final views = metric('views');
+    final clicks = metric('clicks');
+    final inquiries = metric('enquiries');
+    final viewings = metric('bookings');
+    double rate(int count, int denominator) =>
+        denominator > 0 ? count / denominator : 0.0;
+    String percentage(double value) => '${(value * 100).toStringAsFixed(1)}%';
+    String? dropOff(int current, int previous, String action) {
+      if (previous <= 0 || current >= previous) return null;
+      final percent = ((previous - current) / previous) * 100;
+      return '-${percent.toStringAsFixed(1)}% $action';
+    }
+
+    final format = NumberFormat("#,###");
+
+    final funnelWidget = Container(
+      padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Activity by stage',
+          // Funnel Header
+          Text('Conversion Funnel',
               style: GoogleFonts.poppins(
                   fontSize: 16, fontWeight: FontWeight.w600, color: _dark)),
           const SizedBox(height: 4),
-          Text(
-            'Reporting-period counts; stages are not a sequential user cohort.',
-            style: GoogleFonts.poppins(fontSize: 11, color: _grey),
+          Text('Stage counts and drop-off for the selected period.',
+              style: GoogleFonts.poppins(fontSize: 13, color: _grey)),
+          const SizedBox(height: 32),
+
+          // Funnel Rows
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: [
+                  _buildFunnelRow(
+                    'Views',
+                    '100%',
+                    format.format(views),
+                    1,
+                    isBaseline: true,
+                  ),
+                  const SizedBox(height: 18),
+                  _buildFunnelRow(
+                    'Clicks',
+                    percentage(rate(clicks, views)),
+                    format.format(clicks),
+                    rate(clicks, views),
+                    dropOff: dropOff(clicks, views, 'did not click'),
+                  ),
+                  const SizedBox(height: 18),
+                  _buildFunnelRow(
+                    'Inquiries',
+                    percentage(rate(inquiries, views)),
+                    format.format(inquiries),
+                    rate(inquiries, views),
+                    dropOff: dropOff(inquiries, clicks, 'did not inquire'),
+                  ),
+                  const SizedBox(height: 18),
+                  _buildFunnelRow(
+                    'Viewings',
+                    percentage(rate(viewings, views)),
+                    format.format(viewings),
+                    rate(viewings, views),
+                    dropOff: dropOff(viewings, inquiries, 'did not schedule'),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 16),
-          _buildFunnelRow(
-              'Impressions', impressions, maximum, PhosphorIconsRegular.images),
-          const SizedBox(height: 14),
-          _buildFunnelRow(
-              'Detail views', views, maximum, PhosphorIconsRegular.eye),
-          const SizedBox(height: 14),
-          _buildFunnelRow('Conversations', enquiries, maximum,
-              PhosphorIconsRegular.chatTeardropText),
-          const SizedBox(height: 14),
-          _buildFunnelRow('Booking requests', bookings, maximum,
-              PhosphorIconsRegular.calendarCheck),
         ],
       ),
     );
+
+    if (isMobile) {
+      return SizedBox(
+        height: 420,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(width: 650, child: funnelWidget),
+        ),
+      );
+    }
+
+    return funnelWidget;
   }
 
   Widget _buildFunnelRow(
     String label,
-    int count,
-    int maximum,
-    IconData icon,
-  ) {
-    final fraction =
-        maximum == 0 ? 0.0 : (count / maximum).clamp(0.0, 1.0).toDouble();
-    return Column(
+    String pctStr,
+    String valueStr,
+    double fraction, {
+    bool isBaseline = false,
+    String? dropOff,
+  }) {
+    return Row(
       children: [
-        Row(
-          children: [
-            Icon(icon, size: 15, color: _grey),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(fontSize: 12, color: _dark)),
-            ),
-            Text(count.toString(),
-                style: GoogleFonts.poppins(
-                    fontSize: 12, fontWeight: FontWeight.w600, color: _dark)),
-          ],
+        Icon(PhosphorIconsRegular.info,
+            size: 16, color: _grey.withOpacity(0.5)),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 90,
+          child: Text(label,
+              style: GoogleFonts.poppins(
+                  fontSize: 13, fontWeight: FontWeight.w500, color: _dark)),
         ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: LinearProgressIndicator(
-            value: fraction,
-            minHeight: 7,
-            color: _green,
-            backgroundColor: const Color(0xFFE9ECEA),
+        SizedBox(
+          width: 60,
+          child: Text(pctStr,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.poppins(
+                  fontSize: 13, fontWeight: FontWeight.w600, color: _dark)),
+        ),
+        SizedBox(
+          width: 70,
+          child: Text(valueStr,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.poppins(
+                  fontSize: 13, fontWeight: FontWeight.w600, color: _dark)),
+        ),
+        const SizedBox(width: 24),
+        Expanded(
+          flex: 5,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              height: 12,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (isBaseline)
+                    CustomPaint(
+                      painter: const HatchedPainter(color: Color(0xFFD1D5DB)),
+                    )
+                  else ...[
+                    Container(color: const Color(0xFFF3F4F6)),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FractionallySizedBox(
+                        widthFactor: fraction.clamp(0.0, 1.0),
+                        child: Container(color: const Color(0xFFD1D5DB)),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 20),
+        Expanded(
+          flex: 4,
+          child: Text(
+            dropOff ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFFEF4444),
+            ),
           ),
         ),
       ],
     );
-  }
-
-  String _propertyPerformanceImage(Map<String, dynamic> property) {
-    final imageUrl = property['imageUrl'] ?? property['image_url'];
-    if (imageUrl is String && imageUrl.trim().isNotEmpty) return imageUrl;
-
-    final images = property['images'];
-    if (images is List && images.isNotEmpty) {
-      final firstImage = images.first;
-      final image = firstImage is Map
-          ? firstImage['url']?.toString()
-          : firstImage?.toString();
-      if (image != null && image.trim().isNotEmpty) return image;
-    }
-
-    return mapApiProperty(property).image;
   }
 
   Future<void> _loadPerformanceLeads(String propertyId) async {
@@ -1061,6 +1440,7 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
     final requestId = ++_performanceLeadsRequestId;
     setState(() {
       _performanceLeadsPropertyId = propertyId;
+      _performanceLeads = const [];
       _loadingPerformanceLeads = true;
     });
     final response =
@@ -1096,42 +1476,37 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
 
   Widget _buildPendingReplies() {
     final pending = _unansweredRecommendations.take(3).toList();
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(PhosphorIconsRegular.chatTeardropText,
-                  size: 16, color: _dark),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Pending replies',
-                  style: GoogleFonts.poppins(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: _dark),
-                ),
-              ),
-              if (pending.isNotEmpty)
-                Text(
-                  '${_unansweredRecommendations.length}',
-                  style: GoogleFonts.poppins(fontSize: 12, color: _grey),
-                ),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_dashboardAvailable && pending.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text('No unanswered property messages.',
+                style: GoogleFonts.poppins(fontSize: 12, color: _grey)),
           ),
-          if (_dashboardAvailable && pending.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text('No unanswered property messages.',
-                  style: GoogleFonts.poppins(fontSize: 11, color: _grey)),
+        for (final item in pending)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(12),
+              border:
+                  Border.all(color: const Color(0xFFFCA5A5).withOpacity(0.3)),
             ),
-          for (final item in pending)
-            ListTile(
+            child: ListTile(
               dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(PhosphorIconsRegular.clock,
-                  size: 16, color: Color(0xFFB54708)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              leading: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(PhosphorIconsRegular.chatTeardropText,
+                    size: 16, color: Color(0xFFB54708)),
+              ),
               title: Text(
                 item['property'] is Map
                     ? (item['property'] as Map)['title']?.toString() ??
@@ -1140,13 +1515,13 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.poppins(
-                    fontSize: 11, fontWeight: FontWeight.w500, color: _dark),
+                    fontSize: 12, fontWeight: FontWeight.w600, color: _dark),
               ),
               subtitle: Text(
                 item['body']?.toString() ?? 'A tenant is waiting for a reply.',
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.poppins(fontSize: 10, color: _grey),
+                style: GoogleFonts.poppins(fontSize: 11, color: _grey),
               ),
               onTap: () {
                 final id = item['conversationId']?.toString();
@@ -1157,16 +1532,8 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
                 }
               },
             ),
-          if (pending.isNotEmpty)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: widget.onViewUnansweredMessages,
-                child: const Text('View unanswered messages'),
-              ),
-            ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 
@@ -2037,6 +2404,9 @@ class _LandlordOverviewPageState extends State<LandlordOverviewPage> {
               )),
     );
   }
+
+  String _propertyPerformanceImage(Map<String, dynamic> property) =>
+      mapApiProperty(property).image;
 }
 
 class _DashboardKpiCard extends StatelessWidget {

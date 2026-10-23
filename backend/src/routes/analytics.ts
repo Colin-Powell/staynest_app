@@ -583,10 +583,14 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
            p.availability_status,
            COALESCE((SELECT COUNT(*) FROM engagement_events e WHERE e.property_id = p.id AND e.event_type = 'property_impression' AND e.created_at >= CURRENT_DATE - ($2::int - 1) AND e.created_at < CURRENT_DATE + 1), 0)::int AS impressions,
            COALESCE((SELECT COUNT(*) FROM property_unique_views puv WHERE puv.property_id = p.id AND puv.viewed_date >= CURRENT_DATE - ($2::int - 1)), 0)::int AS views,
+           COALESCE((SELECT COUNT(*) FROM property_unique_views puv WHERE puv.property_id = p.id AND puv.viewed_date >= CURRENT_DATE - ($2::int * 2 - 1) AND puv.viewed_date < CURRENT_DATE - ($2::int - 1)), 0)::int AS previous_views,
            COALESCE((SELECT COUNT(DISTINCT puv.user_id) FROM property_unique_views puv WHERE puv.property_id = p.id AND puv.viewed_date >= CURRENT_DATE - ($2::int - 1)), 0)::int AS unique_viewers,
+           COALESCE((SELECT COUNT(DISTINCT e.user_id) FROM engagement_events e WHERE e.property_id = p.id AND e.event_type = 'property_click' AND e.created_at >= CURRENT_DATE - ($2::int - 1) AND e.created_at < CURRENT_DATE + 1), 0)::int AS clicks,
            COALESCE((SELECT COUNT(DISTINCT e.user_id) FROM engagement_events e WHERE e.property_id = p.id AND e.event_type = 'property_save' AND e.created_at >= CURRENT_DATE - ($2::int - 1) AND e.created_at < CURRENT_DATE + 1), 0)::int AS saves,
+           COALESCE((SELECT COUNT(DISTINCT e.user_id) FROM engagement_events e WHERE e.property_id = p.id AND e.event_type = 'property_save' AND e.created_at >= CURRENT_DATE - ($2::int * 2 - 1) AND e.created_at < CURRENT_DATE - ($2::int - 1)), 0)::int AS previous_saves,
            COALESCE((SELECT COUNT(DISTINCT e.user_id) FROM engagement_events e WHERE e.property_id = p.id AND e.event_type = 'property_share' AND e.created_at >= CURRENT_DATE - ($2::int - 1) AND e.created_at < CURRENT_DATE + 1), 0)::int AS shares,
            COALESCE((SELECT COUNT(DISTINCT mc.id) FROM message_conversations mc WHERE mc.property_id = p.id AND mc.context_type = 'property' AND mc.created_at >= CURRENT_DATE - ($2::int - 1)), 0)::int AS enquiries,
+           COALESCE((SELECT COUNT(DISTINCT mc.id) FROM message_conversations mc WHERE mc.property_id = p.id AND mc.context_type = 'property' AND mc.created_at >= CURRENT_DATE - ($2::int * 2 - 1) AND mc.created_at < CURRENT_DATE - ($2::int - 1)), 0)::int AS previous_enquiries,
            COALESCE((SELECT COUNT(DISTINCT mc.id)
              FROM message_conversations mc
             WHERE mc.property_id = p.id
@@ -604,7 +608,8 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
                    AND puv.viewed_date <= CURRENT_DATE
                    AND puv.viewed_date::timestamptz <= mc.created_at
               )), 0)::int AS converted_pairs,
-           COALESCE((SELECT COUNT(*) FROM bookings b WHERE b.property_id = p.id AND b.created_at >= CURRENT_DATE - ($2::int - 1) AND b.status NOT IN ('cancelled', 'rejected')), 0)::int AS bookings
+           COALESCE((SELECT COUNT(*) FROM bookings b WHERE b.property_id = p.id AND b.created_at >= CURRENT_DATE - ($2::int - 1) AND b.status NOT IN ('cancelled', 'rejected')), 0)::int AS bookings,
+           COALESCE((SELECT COUNT(*) FROM bookings b WHERE b.property_id = p.id AND b.created_at >= CURRENT_DATE - ($2::int * 2 - 1) AND b.created_at < CURRENT_DATE - ($2::int - 1) AND b.status NOT IN ('cancelled', 'rejected')), 0)::int AS previous_bookings
          FROM properties p
          WHERE p.landlord_id = $1
          ORDER BY views DESC, enquiries DESC
@@ -738,11 +743,24 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
         availabilityStatus: String(row.availability_status ?? 'available'),
         impressions: Number(row.impressions ?? 0),
         views: Number(row.views ?? 0),
+        clicks: Number(row.clicks ?? 0),
+        viewsChangePercent: Number(row.previous_views ?? 0) > 0
+          ? calculateGrowthPercent(Number(row.views ?? 0), Number(row.previous_views))
+          : null,
         uniqueViewers: Number(row.unique_viewers ?? 0),
         saves: Number(row.saves ?? 0),
+        savesChangePercent: Number(row.previous_saves ?? 0) > 0
+          ? calculateGrowthPercent(Number(row.saves ?? 0), Number(row.previous_saves))
+          : null,
         shares: Number(row.shares ?? 0),
         enquiries: Number(row.enquiries ?? 0),
+        enquiriesChangePercent: Number(row.previous_enquiries ?? 0) > 0
+          ? calculateGrowthPercent(Number(row.enquiries ?? 0), Number(row.previous_enquiries))
+          : null,
         bookings: Number(row.bookings ?? 0),
+        bookingsChangePercent: Number(row.previous_bookings ?? 0) > 0
+          ? calculateGrowthPercent(Number(row.bookings ?? 0), Number(row.previous_bookings))
+          : null,
         conversionRate: calculateRate(
           Number(row.converted_pairs ?? 0),
           Number(row.unique_viewers ?? 0),

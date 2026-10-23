@@ -17,8 +17,10 @@ Property mapApiProperty(Map<String, dynamic> json) {
       : (json['location']?.toString() ?? (city.isNotEmpty ? city : 'Unknown'));
 
   final images = _extractImages(json);
-  final rawImage =
-      json['image']?.toString() ?? json['image_url']?.toString() ?? '';
+  final rawImage = json['image']?.toString() ??
+      json['image_url']?.toString() ??
+      json['imageUrl']?.toString() ??
+      '';
   final image = images.isNotEmpty
       ? images.first
       : _normalizeUrl(resolvePropertyImageUrl(rawImage));
@@ -133,7 +135,8 @@ List<String> _extractImages(Map<String, dynamic> json) {
         .toList();
   }
 
-  final imageUrl = json['image_url']?.toString();
+  final imageUrl =
+      json['image_url']?.toString() ?? json['imageUrl']?.toString();
   if (imageUrl != null && imageUrl.trim().isNotEmpty) {
     return [_normalizeUrl(resolvePropertyImageUrl(imageUrl))];
   }

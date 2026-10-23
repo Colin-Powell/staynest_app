@@ -37,6 +37,8 @@ class CacheEngine {
   static final CacheEngine instance = CacheEngine._();
   CacheEngine._();
 
+  static const bool _cacheEnabled =
+      bool.fromEnvironment('APP_CACHE_ENABLED', defaultValue: false);
   static const int _currentVersion = 1; // Engine version for schema migration
   static const String _boxName = 'staynest_cache';
   Box? _box;
@@ -113,6 +115,15 @@ class CacheEngine {
     Function(Object error)? onError,
     Duration ttl = const Duration(minutes: 10),
   }) async {
+    if (!_cacheEnabled) {
+      try {
+        onData(await _deduplicatedFetch(key, networkFetcher), false);
+      } catch (error) {
+        onError?.call(error);
+      }
+      return;
+    }
+
     try {
       await _init();
     } catch (error) {
@@ -231,6 +242,10 @@ class CacheEngine {
     required Future<T> Function() networkFetcher,
     Duration ttl = const Duration(minutes: 10),
   }) async {
+    if (!_cacheEnabled) {
+      return _deduplicatedFetch(key, networkFetcher);
+    }
+
     try {
       await _init();
     } catch (error) {

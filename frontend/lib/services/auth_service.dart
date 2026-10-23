@@ -12,6 +12,8 @@ class AuthService {
   /// Call this immediately after a successful login or during app bootstrap
   /// [newToken] can be provided if the token has just refreshed.
   Future<void> syncFCMToken({String? newToken}) async {
+    if (kIsWeb) return;
+
     final userId = AppSession.currentUserId;
     final fcmToken = newToken ?? await FCMService.instance.getToken();
 

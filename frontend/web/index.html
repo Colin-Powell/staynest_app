@@ -134,7 +134,44 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    function loadFlutter() {
+      var bootstrap = document.createElement('script');
+      bootstrap.src = 'flutter_bootstrap.js';
+      bootstrap.async = true;
+      document.body.appendChild(bootstrap);
+    }
+
+    (async function () {
+      try {
+        if ('serviceWorker' in navigator) {
+          var registrations = await navigator.serviceWorker.getRegistrations();
+          var wasControlled = navigator.serviceWorker.controller !== null;
+          await Promise.all(registrations.map(function (registration) {
+            return registration.unregister();
+          }));
+
+          if (wasControlled && registrations.length > 0 &&
+              sessionStorage.getItem('staynest-sw-reset') !== '1') {
+            sessionStorage.setItem('staynest-sw-reset', '1');
+            window.location.reload();
+            return;
+          }
+        }
+
+        if ('caches' in window) {
+          var cacheKeys = await caches.keys();
+          await Promise.all(cacheKeys.map(function (key) {
+            return caches.delete(key);
+          }));
+        }
+      } catch (error) {
+        console.warn('[startup] Could not clear the web cache:', error);
+      }
+
+      loadFlutter();
+    })();
+  </script>
 </body>
 </html>
   <div id="app-loading" role="status" aria-live="polite" aria-label="Loading StayNest">

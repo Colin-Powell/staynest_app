@@ -20,7 +20,7 @@ class FCMService {
   static final FCMService instance = FCMService._();
   FCMService._();
 
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  late final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
@@ -139,6 +139,8 @@ class FCMService {
   }
 
   Future<String?> getToken() async {
+    if (kIsWeb) return null;
+
     return FCMService.runWithFallback<String?>(
       action: () async => _messaging.getToken(),
       label: 'FCM token',
@@ -458,11 +460,13 @@ class FCMService {
 
   /// Subscribe to a topic (e.g., 'announcements' or 'city_london')
   Future<void> subscribeToTopic(String topic) async {
+    if (kIsWeb) return;
     await _messaging.subscribeToTopic(topic);
   }
 
   /// Unsubscribe from a topic
   Future<void> unsubscribeFromTopic(String topic) async {
+    if (kIsWeb) return;
     await _messaging.unsubscribeFromTopic(topic);
   }
 }

@@ -11,6 +11,7 @@ import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
 import 'package:property_app/widgets/property_card.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/widgets/app_footer.dart';
+import 'package:property_app/utils/app_downloads.dart';
 
 import 'package:property_app/models/property.dart';
 import 'package:property_app/screens/home/home_feed_controller.dart';
@@ -961,6 +962,15 @@ class _HomeViewState extends State<HomeView> {
     const cardWidth = 320.0;
     const gap = 16.0;
     final services = <_ServicePromoData>[
+      _ServicePromoData(
+        title: 'Get the StayNest app',
+        description: 'Download Android for faster access to homes you love.',
+        accent: const Color(0xFF3F37C9),
+        icon: Icons.download_rounded,
+        imagePath: 'assets/images/detail.png',
+        badge: 'Android app',
+        onTap: () => launchAndroidAppDownload(context),
+      ),
       const _ServicePromoData(
         title: 'Rehani',
         description: 'Buy and sell second-hand items near you.',
@@ -1020,6 +1030,7 @@ class _ServicePromoData {
   final IconData icon;
   final String? imagePath;
   final String badge;
+  final VoidCallback? onTap;
 
   const _ServicePromoData({
     required this.title,
@@ -1028,6 +1039,7 @@ class _ServicePromoData {
     required this.icon,
     this.imagePath,
     required this.badge,
+    this.onTap,
   });
 }
 
@@ -1042,42 +1054,51 @@ class _ServicePromoCard extends StatelessWidget {
     final isLandscape = width >= 320;
     final cardHeight = isLandscape ? math.min(width / 1.6, 260.0) : width;
 
-    return SizedBox(
-      width: width,
-      height: cardHeight,
-      child: Container(
-        constraints: BoxConstraints.tightFor(width: width, height: cardHeight),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
+    return MouseRegion(
+      cursor: data.onTap == null
+          ? SystemMouseCursors.basic
+          : SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: data.onTap,
+        child: SizedBox(
+          width: width,
+          height: cardHeight,
+          child: Container(
+            constraints:
+                BoxConstraints.tightFor(width: width, height: cardHeight),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.025),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
             ),
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.025),
-              blurRadius: 4,
-              offset: const Offset(0, 1),
-            ),
-          ],
+            clipBehavior: Clip.antiAlias,
+            child: isLandscape
+                ? Row(
+                    children: [
+                      Expanded(flex: 4, child: _buildArtwork()),
+                      Expanded(flex: 6, child: _buildCopy()),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 6, child: _buildArtwork()),
+                      Expanded(flex: 4, child: _buildCopy()),
+                    ],
+                  ),
+          ),
         ),
-        clipBehavior: Clip.antiAlias,
-        child: isLandscape
-            ? Row(
-                children: [
-                  Expanded(flex: 4, child: _buildArtwork()),
-                  Expanded(flex: 6, child: _buildCopy()),
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(flex: 6, child: _buildArtwork()),
-                  Expanded(flex: 4, child: _buildCopy()),
-                ],
-              ),
       ),
     );
   }
