@@ -214,10 +214,22 @@ router.post("/", requireAuth, async (req, res, next) => {
         const isTenantPropertyInquiry = conversationContext.context_type === "property" &&
             conversationContext.property_landlord_id === recipientId &&
             fromUserResult.rows[0]?.role === "tenant";
-        let isFirstPropertyInquiry = false;
+        let pendingInquiryCount = 0;
         if (isTenantPropertyInquiry) {
-            const priorMessageResult = await query("SELECT EXISTS (SELECT 1 FROM messages WHERE conversation_id = $1) AS has_messages", [conversationId]);
-            isFirstPropertyInquiry = !priorMessageResult.rows[0]?.has_messages;
+            const priorMessageResult = await query(`SELECT COUNT(*)::int AS pending_inquiries
+         FROM messages
+         WHERE conversation_id = $1
+           AND from_user_id = $2
+           AND created_at > COALESCE(
+             (
+               SELECT MAX(m2.created_at)
+               FROM messages m2
+               WHERE m2.conversation_id = $1
+                 AND m2.to_user_id = $2
+             ),
+             '1970-01-01'::timestamptz
+           )`, [conversationId, from_user_id]);
+            pendingInquiryCount = Number(priorMessageResult.rows[0]?.pending_inquiries ?? 0);
         }
         const result = await query(`INSERT INTO messages (conversation_id, from_user_id, to_user_id, text)
        VALUES ($1, $2, $3, $4)
@@ -248,7 +260,7 @@ router.post("/", requireAuth, async (req, res, next) => {
                 messageId: payload.id.toString(),
             });
         }
-        if (isFirstPropertyInquiry) {
+        if (pendingInquiryCount > 1) {
             const landlord = toUserResult.rows[0];
             const propertyId = conversationContext.property_id?.toString();
             if (landlord?.email && propertyId) {
@@ -263,6 +275,7 @@ router.post("/", requireAuth, async (req, res, next) => {
                         message: text.trim(),
                         conversationId,
                         messageId: payload.id.toString(),
+                        pendingCount: pendingInquiryCount,
                     });
                 }
                 catch (error) {

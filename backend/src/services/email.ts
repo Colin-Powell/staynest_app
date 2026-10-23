@@ -518,6 +518,7 @@ export interface PropertyInquiryEmailData {
   message: string;
   conversationId: string;
   messageId: string;
+  pendingCount?: number;
 }
 
 function escapeEmailHtml(value: string) {
@@ -534,11 +535,8 @@ function escapeEmailHtml(value: string) {
   );
 }
 
-export async function sendPropertyInquiryEmail(data: PropertyInquiryEmailData) {
-  if (!data.to) return null;
-  ensureTransporter();
-
-  const landlordFirstName = (data.landlordName.trim() || "there").split(" ")[0];
+export function buildPropertyInquiryReminderContent(data: PropertyInquiryEmailData) {
+  const landlordFirstName = (data.landlordName?.trim() || "there").split(" ")[0];
   const tenantName = escapeEmailHtml(data.tenantName || "A tenant");
   const propertyName = escapeEmailHtml(data.propertyName || "your property");
   const message = escapeEmailHtml(data.message);
@@ -546,24 +544,58 @@ export async function sendPropertyInquiryEmail(data: PropertyInquiryEmailData) {
   const propertyImageUrl = data.propertyImageUrl
     ? escapeEmailHtml(data.propertyImageUrl)
     : null;
-  const subject = `New inquiry from ${data.tenantName || "a tenant"} — ${data.propertyName || "your property"}`;
+  const pendingCount = typeof data.pendingCount === "number" ? data.pendingCount : 0;
+  const isReminder = pendingCount > 1;
+  const inquiryLabel = pendingCount === 1 ? "inquiry" : "inquiries";
+
+  const subject = isReminder
+    ? `${pendingCount} unprocessed ${inquiryLabel} about ${data.propertyName || "your property"}`
+    : `New inquiry from ${data.tenantName || "a tenant"} — ${data.propertyName || "your property"}`;
+
   const image = propertyImageUrl
     ? `<a href="${propertyUrl}" style="display:block;margin:0 0 24px;"><img src="${propertyImageUrl}" alt="${propertyName}" width="520" style="display:block;width:100%;max-width:520px;height:auto;max-height:280px;object-fit:cover;border-radius:12px;"/></a>`
     : "";
+
   const html = emailLayout(
-    `
-    <h2 style="margin:0 0 8px;font-size:24px;font-weight:800;color:#111827;">New property inquiry</h2>
-    <p style="margin:0 0 20px;font-size:15px;color:#6B7280;line-height:1.6;">Hi ${escapeEmailHtml(landlordFirstName)}, <strong>${tenantName}</strong> sent you a message about <strong>${propertyName}</strong>.</p>
-    ${image}
-    <div style="background:#F9FAFB;border-left:4px solid #10B981;border-radius:8px;padding:18px 20px;margin:0 0 24px;">
-      <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap;">${message}</p>
-    </div>
-    ${ctaButton("View Property", propertyUrl)}
-    <p style="margin:0;font-size:12px;color:#9CA3AF;">Reply to this inquiry in your StayNest messages. Conversation reference: ${escapeEmailHtml(data.conversationId)}</p>
-  `,
-    `${tenantName} sent an inquiry about ${propertyName}`,
+    isReminder
+      ? `
+        <h2 style="margin:0 0 8px;font-size:24px;font-weight:800;color:#111827;">${pendingCount} unprocessed ${inquiryLabel}</h2>
+        <p style="margin:0 0 20px;font-size:15px;color:#6B7280;line-height:1.6;">Hi ${escapeEmailHtml(landlordFirstName)}, you currently have <strong>${pendingCount}</strong> unprocessed property inquiries waiting for your response on <strong>${propertyName}</strong>.</p>
+        ${image}
+        <div style="background:#F9FAFB;border-left:4px solid #10B981;border-radius:8px;padding:18px 20px;margin:0 0 24px;">
+          <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#374151;">Latest inquiry</p>
+          <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap;">${message}</p>
+        </div>
+        ${ctaButton("Review Inquiries", propertyUrl)}
+        <p style="margin:0;font-size:12px;color:#9CA3AF;">This reminder is based on unprocessed tenant messages in the same conversation. Conversation reference: ${escapeEmailHtml(data.conversationId)}</p>
+      `
+      : `
+        <h2 style="margin:0 0 8px;font-size:24px;font-weight:800;color:#111827;">New property inquiry</h2>
+        <p style="margin:0 0 20px;font-size:15px;color:#6B7280;line-height:1.6;">Hi ${escapeEmailHtml(landlordFirstName)}, <strong>${tenantName}</strong> sent you a message about <strong>${propertyName}</strong>.</p>
+        ${image}
+        <div style="background:#F9FAFB;border-left:4px solid #10B981;border-radius:8px;padding:18px 20px;margin:0 0 24px;">
+          <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap;">${message}</p>
+        </div>
+        ${ctaButton("View Property", propertyUrl)}
+        <p style="margin:0;font-size:12px;color:#9CA3AF;">Reply to this inquiry in your StayNest messages. Conversation reference: ${escapeEmailHtml(data.conversationId)}</p>
+      `,
+    isReminder
+      ? `${tenantName} has ${pendingCount} unprocessed inquiries on ${propertyName}`
+      : `${tenantName} sent an inquiry about ${propertyName}`,
   );
-  const text = `Hi ${landlordFirstName},\n\n${data.tenantName || "A tenant"} sent you a message about ${data.propertyName || "your property"}:\n\n${data.message}\n\nView property: ${data.propertyUrl}\n\nReply to this inquiry in your StayNest messages.\n\nThe StayNest Team`;
+
+  const text = isReminder
+    ? `Hi ${landlordFirstName},\n\nYou have ${pendingCount} unprocessed inquiries about ${data.propertyName || "your property"}.\n\nLatest message:\n${data.message}\n\nReview property: ${data.propertyUrl}\n\nReply in your StayNest messages when you are ready.\n\nThe StayNest Team`
+    : `Hi ${landlordFirstName},\n\n${data.tenantName || "A tenant"} sent you a message about ${data.propertyName || "your property"}:\n\n${data.message}\n\nView property: ${data.propertyUrl}\n\nReply to this inquiry in your StayNest messages.\n\nThe StayNest Team`;
+
+  return { subject, html, text };
+}
+
+export async function sendPropertyInquiryEmail(data: PropertyInquiryEmailData) {
+  if (!data.to) return null;
+  ensureTransporter();
+
+  const { subject, html, text } = buildPropertyInquiryReminderContent(data);
 
   return transporter!.sendMail({
     from: env.emailFrom || env.smtpUser,
