@@ -44,6 +44,7 @@ import 'services/version_service.dart';
 import 'screens/super_admin/super_admin_shell.dart';
 import 'screens/super_admin/super_admin_login.dart';
 import 'package:property_app/firebase_options.dart';
+import 'utils/app_downloads.dart';
 
 Future<void> _initializeFirebaseAsync() async {
   // ── Step 1: Core Firebase init ────────────────────────────────────────────
@@ -573,18 +574,84 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
                   Navigator.pushNamed(context, '/verification_center'),
             ),
         '/portal': (context) => _landlordPortalRoute(),
-        '/become_host': (context) => AppSession.currentUserId == null
-            ? AppShell(onRequireLogin: _showLoginModal)
-            : BecomeHostView(
-                onBack: () => Navigator.maybePop(context),
-                onSubmitted: () {
-                  AppSession.notifyHostApplicationChanged();
-                  navigatorKey.currentState?.popUntil(
-                    (route) => route.settings.name == '/home' || route.isFirst,
-                  );
-                },
-                onSwitchToLandlord: () => _switchActivePortal('landlord'),
+        '/become_host': (context) {
+          if (kIsWeb) {
+            return Scaffold(
+              backgroundColor: const Color(0xFFF5F8F3),
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: Card(
+                      elevation: 0,
+                      color: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(28),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Continue in the app',
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Continue in the app to complete host registration.',
+                              style: TextStyle(
+                                fontSize: 16,
+                                height: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                TextButton(
+                                  onPressed: () => Navigator.maybePop(context),
+                                  child: const Text('Stay here'),
+                                ),
+                                const SizedBox(width: 12),
+                                FilledButton.icon(
+                                  onPressed: () async {
+                                    await launchAndroidAppDownload(context);
+                                  },
+                                  icon: const Icon(Icons.open_in_new_rounded),
+                                  label: const Text('Continue'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
+            );
+          }
+
+          return AppSession.currentUserId == null
+              ? AppShell(onRequireLogin: _showLoginModal)
+              : BecomeHostView(
+                  onBack: () => Navigator.maybePop(context),
+                  onSubmitted: () {
+                    AppSession.notifyHostApplicationChanged();
+                    navigatorKey.currentState?.popUntil(
+                      (route) =>
+                          route.settings.name == '/home' || route.isFirst,
+                    );
+                  },
+                  onSwitchToLandlord: () => _switchActivePortal('landlord'),
+                );
+        },
         '/search': (context) => SearchView(
               onSelectProperty: (id) {},
               onShowMap: (properties, query) {},
