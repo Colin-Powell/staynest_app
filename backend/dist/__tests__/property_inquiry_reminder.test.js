@@ -13,9 +13,9 @@ test("property inquiry reminder summarises unprocessed inquiries when a batch is
         conversationId: "conv-123",
         messageId: "msg-123",
     });
-    assert.match(content.subject, /3 unprocessed inquiry/i);
-    assert.match(content.text, /3 unprocessed inquiry/i);
-    assert.match(content.html, /3 unprocessed inquiry/i);
+    assert.match(content.subject, /3 unprocessed inquiries/i);
+    assert.match(content.text, /3 unprocessed inquiries/i);
+    assert.match(content.html, /3 unprocessed inquiries/i);
     assert.match(content.html, /Nairobi Studio/i);
 });
 //# sourceMappingURL=property_inquiry_reminder.test.js.map

@@ -84,8 +84,18 @@ CREATE TABLE IF NOT EXISTS users (
   landlord_verified boolean NOT NULL DEFAULT false,
   avatar text,
   verified boolean NOT NULL DEFAULT false,
+  email_verification_started_at timestamptz NOT NULL DEFAULT now(),
+  email_verification_reminder_stage smallint NOT NULL DEFAULT 0,
+  email_verification_reminder_sent_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_started_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_reminder_stage smallint NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_reminder_sent_at timestamptz;
+CREATE INDEX IF NOT EXISTS users_email_verification_reminders_idx
+  ON users(email_verification_started_at)
+  WHERE verified = false AND email_verification_reminder_stage < 2;
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at timestamptz;

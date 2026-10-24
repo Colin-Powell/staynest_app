@@ -2,6 +2,7 @@ import { Job, UnrecoverableError, Worker } from "bullmq";
 import { env } from "../config.js";
 import {
   sendOtpEmail,
+  sendOtpReminderEmail,
   sendPropertyInquiryEmail,
   type PropertyInquiryEmailData,
 } from "../services/email.js";
@@ -14,6 +15,8 @@ export const emailWorker = new Worker(
     try {
       if (job.name === "otp-email") {
         await sendOtpEmail(job.data.to, job.data.code);
+      } else if (job.name === "otp-reminder-email") {
+        await sendOtpReminderEmail(job.data.to, job.data.reminderStage);
       } else if (job.name === "property-inquiry-email") {
         await sendPropertyInquiryEmail(job.data as PropertyInquiryEmailData);
       }

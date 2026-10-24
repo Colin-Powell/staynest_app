@@ -149,6 +149,41 @@ export async function queueOtpEmail(to, code) {
         removeOnFail: { age: 24 * 60 * 60, count: 5000 },
     });
 }
+export function buildOtpReminderEmailContent(reminderStage) {
+    const subject = reminderStage >= 2
+        ? "Reminder: verify your StayNest email"
+        : "Finish verifying your StayNest email";
+    const text = "Your StayNest account is waiting for email verification. If you requested a code and haven't received it, check your spam or junk folder. You can request a new code from the verification screen in the app. Codes expire after 10 minutes, and this reminder does not contain a code. If you have already verified your email, no action is needed.";
+    const html = emailLayout(`
+    <h2 style="margin:0 0 12px;font-size:24px;font-weight:800;color:#111827;">Finish verifying your email</h2>
+    <p style="margin:0 0 16px;font-size:15px;color:#6B7280;line-height:1.6;">Your StayNest account is waiting for email verification. Open the app and enter the code sent to your email.</p>
+    <div style="background:#F0FDF4;border-radius:12px;padding:18px 20px;margin:0 0 20px;">
+      <p style="margin:0;font-size:14px;color:#065F46;line-height:1.6;"><strong>Can't find the message?</strong> Check your spam or junk folder. If the code has expired, request a new one from the verification screen in the app.</p>
+    </div>
+    <p style="margin:0;font-size:13px;color:#9CA3AF;line-height:1.6;">Verification codes expire after 10 minutes. For your security, this reminder does not include a code. If you already verified your email, you can ignore this message.</p>
+  `, "Finish verifying your StayNest email");
+    return { subject, text, html };
+}
+export async function queueOtpReminderEmail(userId, to, reminderStage) {
+    await emailQueue.add("otp-reminder-email", { to: to.trim().toLowerCase(), reminderStage }, {
+        jobId: `otp-reminder-${userId}-${reminderStage}`,
+        attempts: 4,
+        backoff: { type: "exponential", delay: 2000 },
+        removeOnComplete: { age: 15 * 60, count: 1000 },
+        removeOnFail: { age: 24 * 60 * 60, count: 5000 },
+    });
+}
+export async function sendOtpReminderEmail(to, reminderStage) {
+    if (!to)
+        return null;
+    ensureTransporter();
+    const content = buildOtpReminderEmailContent(reminderStage);
+    return transporter.sendMail({
+        from: env.emailFrom || env.smtpUser,
+        to,
+        ...content,
+    });
+}
 export async function sendOtpEmail(to, code = "000000") {
     ensureTransporter();
     const subject = "Your StayNest verification code";

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/screens/landlord/verification_flow.dart';
 import 'package:property_app/services/verification_api.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
+import 'package:property_app/utils/app_downloads.dart';
 
 const Color _hostGreen = Color(0xFF10B981);
 const Color _hostDark = Color(0xFF111827);
@@ -139,6 +141,33 @@ class _BecomeHostViewState extends State<BecomeHostView> {
   }
 
   Future<void> _startOrContinue() async {
+    if (kIsWeb && _canEdit && _status != 'approved') {
+      final shouldDownload = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Verify in the StayNest app'),
+          content: const Text(
+            'Start or continue host verification in the native app. Download the app to verify your identity and submit your application.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Not now'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              icon: const Icon(Icons.download_rounded),
+              label: const Text('Download app'),
+            ),
+          ],
+        ),
+      );
+      if (shouldDownload == true && mounted) {
+        await launchAndroidAppDownload(context);
+      }
+      return;
+    }
+
     if (!AppSession.isEmailVerified) {
       Navigator.pushNamed(context, '/otp');
       return;

@@ -65,7 +65,10 @@ router.post('/verify-otp', async (req, res, next) => {
     }
 
     const result = await query(
-      `UPDATE users SET verified = true WHERE email = $1 RETURNING id, name, email, role, avatar, verified`,
+      `UPDATE users
+       SET verified = true, email_verification_reminder_stage = 2
+       WHERE email = $1
+       RETURNING id, name, email, role, avatar, verified`,
       [normalizedEmail],
     );
 

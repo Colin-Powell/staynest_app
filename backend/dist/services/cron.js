@@ -12,7 +12,7 @@
 import cron from 'node-cron';
 import { query } from '../db.js';
 import { queueUserPush } from './queue.js';
-import { sendVerificationReminderEmail, sendWeeklyLandlordDigestEmail, sendDailyListingDigestEmail, sendPersonalizedPromotionEmail, } from './email.js';
+import { sendVerificationReminderEmail, queueOtpReminderEmail, sendWeeklyLandlordDigestEmail, sendDailyListingDigestEmail, sendPersonalizedPromotionEmail, } from './email.js';
 import { refundExpiredBookingEscrows } from './finance_service.js';
 const hostReminderFirstHours = Math.max(1, Number.parseInt(process.env.HOST_REMINDER_FIRST_HOURS ?? '24', 10) || 24);
 const hostReminderSecondHours = Math.max(hostReminderFirstHours + 1, Number.parseInt(process.env.HOST_REMINDER_SECOND_HOURS ?? '72', 10) || 72);
@@ -203,6 +203,51 @@ async function sendWeeklyPerformanceDigest() {
     }
     catch (err) {
         console.error('[cron] weekly digest failed:', err);
+    }
+}
+// --- Email verification follow-ups (1 hour and 24 hours after start) ---------
+async function sendOtpVerificationReminders() {
+    try {
+        const due = await query(`WITH due_users AS (
+         SELECT id, email, email_verification_reminder_stage
+         FROM users
+         WHERE verified = false
+           AND (
+             (email_verification_reminder_stage = 0
+               AND email_verification_started_at <= now() - INTERVAL '1 hour')
+             OR (email_verification_reminder_stage = 1
+               AND email_verification_reminder_sent_at <= now() - INTERVAL '23 hours')
+           )
+         ORDER BY email_verification_started_at
+         FOR UPDATE SKIP LOCKED
+         LIMIT 100
+       )
+       UPDATE users u
+       SET email_verification_reminder_stage = due_users.email_verification_reminder_stage + 1,
+           email_verification_reminder_sent_at = now()
+       FROM due_users
+       WHERE u.id = due_users.id
+       RETURNING u.id, u.email, u.email_verification_reminder_stage AS reminder_stage`, []);
+        for (const user of due.rows) {
+            try {
+                await queueOtpReminderEmail(user.id, user.email, Number(user.reminder_stage));
+            }
+            catch (queueError) {
+                console.error(`[cron] OTP reminder queue failed for userId=${user.id}:`, queueError);
+                const stage = Number(user.reminder_stage);
+                await query(`UPDATE users
+           SET email_verification_reminder_stage = $2 - 1,
+               email_verification_reminder_sent_at = CASE
+                 WHEN $2 = 1 THEN NULL
+                 ELSE now() - INTERVAL '23 hours'
+               END
+           WHERE id = $1 AND email_verification_reminder_stage = $2`, [user.id, stage]);
+            }
+        }
+        console.log(`[cron] OTP verification reminders queued for ${due.rowCount} users`);
+    }
+    catch (err) {
+        console.error('[cron] OTP verification reminders failed:', err);
     }
 }
 // --- 6. Host application reminders (24h and 72h after last saved progress) ---
@@ -405,6 +450,8 @@ export function startCronJobs() {
     cron.schedule('0 9 * * 1', sendWeeklyPerformanceDigest, { timezone: 'Africa/Nairobi' });
     // 6. Host application reminders — evaluated hourly
     cron.schedule('0 * * * *', sendHostApplicationReminders, { timezone: 'Africa/Nairobi' });
+    // Email verification follow-ups — evaluated hourly
+    cron.schedule('0 * * * *', sendOtpVerificationReminders, { timezone: 'Africa/Nairobi' });
     // 7. Daily listing alerts — 10:00 AM EAT
     cron.schedule('0 10 * * *', sendDailyListingAlerts, { timezone: 'Africa/Nairobi' });
     // 8. Personalized promotions — 2:00 PM EAT

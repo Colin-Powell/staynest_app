@@ -22,21 +22,15 @@
   <meta name="description" content="StayNest helps you find, rent, and live in your next home.">
   <meta name="theme-color" content="#3F37C9">
 
-  <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="StayNest">
-
-  <!-- StayNest browser icons -->
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
   <link rel="manifest" href="manifest.json">
-
-  <!-- Google Identity Services client ID and SDK for google_sign_in web (renderButton) -->
   <meta name="google-signin-client_id" content="193200636263-vsbg83ntukhk0vcj8fkgtvfll3b4chk6.apps.googleusercontent.com">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-
   <title>StayNest | Find, Rent, Live</title>
 
   <style>
@@ -108,11 +102,9 @@
       font-weight: 500;
     }
 
-
     @keyframes loading-spin {
       to { transform: rotate(360deg); }
     }
-
 
     @media (prefers-reduced-motion: reduce) {
       *,
@@ -123,63 +115,13 @@
       }
     }
   </style>
-
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
-  <script>
-    function loadFlutter() {
-      var bootstrap = document.createElement('script');
-      bootstrap.src = 'flutter_bootstrap.js';
-      bootstrap.async = true;
-      document.body.appendChild(bootstrap);
-    }
-
-    (async function () {
-      try {
-        if ('serviceWorker' in navigator) {
-          var registrations = await navigator.serviceWorker.getRegistrations();
-          var wasControlled = navigator.serviceWorker.controller !== null;
-          await Promise.all(registrations.map(function (registration) {
-            return registration.unregister();
-          }));
-
-          if (wasControlled && registrations.length > 0 &&
-              sessionStorage.getItem('staynest-sw-reset') !== '1') {
-            sessionStorage.setItem('staynest-sw-reset', '1');
-            window.location.reload();
-            return;
-          }
-        }
-
-        if ('caches' in window) {
-          var cacheKeys = await caches.keys();
-          await Promise.all(cacheKeys.map(function (key) {
-            return caches.delete(key);
-          }));
-        }
-      } catch (error) {
-        console.warn('[startup] Could not clear the web cache:', error);
-      }
-
-      loadFlutter();
-    })();
-  </script>
-</body>
-</html>
   <div id="app-loading" role="status" aria-live="polite" aria-label="Loading StayNest">
     <div class="loading-content">
       <img class="loading-logo" src="logo.svg" alt="StayNest">
       <p class="loading-caption">Preparing your StayNest experience</p>
       <div class="loading-spinner" aria-hidden="true"></div>
-      <div class="loading-track" aria-hidden="true"></div>
     </div>
   </div>
   <script>
@@ -190,3 +132,6 @@
       window.setTimeout(function () { splash.remove(); }, 320);
     }, { once: true });
   </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

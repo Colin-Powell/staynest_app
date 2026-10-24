@@ -59,7 +59,10 @@ router.post('/verify-otp', async (req, res, next) => {
         if (!(await verifyOtp(normalizedEmail, code))) {
             return res.status(403).json({ error: 'Invalid verification code.' });
         }
-        const result = await query(`UPDATE users SET verified = true WHERE email = $1 RETURNING id, name, email, role, avatar, verified`, [normalizedEmail]);
+        const result = await query(`UPDATE users
+       SET verified = true, email_verification_reminder_stage = 2
+       WHERE email = $1
+       RETURNING id, name, email, role, avatar, verified`, [normalizedEmail]);
         if ((result.rowCount ?? 0) === 0) {
             return res.status(404).json({ error: 'User not found.' });
         }

@@ -961,16 +961,12 @@ class _HomeViewState extends State<HomeView> {
   Widget _buildPromoCard(BuildContext context, {double hPad = 24}) {
     const cardWidth = 320.0;
     const gap = 16.0;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isDesktop = screenWidth >= _desktopBreakpoint;
+    final appCardWidth = isDesktop
+        ? math.min(560.0, screenWidth - hPad * 2)
+        : screenWidth - hPad * 2;
     final services = <_ServicePromoData>[
-      _ServicePromoData(
-        title: 'Get the StayNest app',
-        description: 'Download Android for faster access to homes you love.',
-        accent: const Color(0xFF3F37C9),
-        icon: Icons.download_rounded,
-        imagePath: 'assets/images/detail.png',
-        badge: 'Android app',
-        onTap: () => launchAndroidAppDownload(context),
-      ),
       const _ServicePromoData(
         title: 'Rehani',
         description: 'Buy and sell second-hand items near you.',
@@ -1008,14 +1004,177 @@ class _HomeViewState extends State<HomeView> {
     return Padding(
       padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 32),
       child: SizedBox(
-        height: 200,
+        height: 280,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
-          itemCount: services.length,
+          itemCount: services.length + 1,
           separatorBuilder: (_, __) => const SizedBox(width: gap),
-          itemBuilder: (context, index) => _ServicePromoCard(
-            width: cardWidth,
-            data: services[index],
+          itemBuilder: (context, index) => index == 0
+              ? _DownloadAppPromoCard(
+                  width: appCardWidth,
+                  height: 260,
+                  onTap: () => launchAndroidAppDownload(context),
+                )
+              : _ServicePromoCard(
+                  width: cardWidth,
+                  data: services[index - 1],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DownloadAppPromoCard extends StatelessWidget {
+  final double width;
+  final double height;
+  final VoidCallback onTap;
+
+  const _DownloadAppPromoCard({
+    required this.width,
+    required this.height,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF3F37C9);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [accent, Color(0xFF2A24B0)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.22),
+                  blurRadius: 22,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.asset(
+                  'assets/images/detail.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const SizedBox.expand(),
+                ),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        Color(0x663F37C9),
+                        Color(0xE62A24B0),
+                      ],
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            top: 12,
+                            left: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.16),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                'ANDROID APP',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      flex: 6,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 14, 14, 14),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Your next move starts here.',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontSize: width < 360 ? 14 : 17,
+                                height: 1.15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 7),
+                            Text(
+                              'Find verified rentals and connect with landlords in one app.',
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.poppins(
+                                color: Colors.white.withValues(alpha: 0.86),
+                                fontSize: 11,
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed: onTap,
+                              icon:
+                                  const Icon(Icons.download_rounded, size: 16),
+                              label: const Text('Download app'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: accent,
+                                minimumSize: const Size(0, 40),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
+                                textStyle: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1052,7 +1211,7 @@ class _ServicePromoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isLandscape = width >= 320;
-    final cardHeight = isLandscape ? math.min(width / 1.6, 260.0) : width;
+    final cardHeight = isLandscape ? math.min(width / 1.25, 260.0) : width;
 
     return MouseRegion(
       cursor: data.onTap == null

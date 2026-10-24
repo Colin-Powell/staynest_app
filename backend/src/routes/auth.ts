@@ -133,7 +133,13 @@ router.post('/change-email', requireAuth, async (req, res, next) => {
     }
 
     const updated = await query(
-      `UPDATE users SET email = $1, verified = false WHERE id = $2
+      `UPDATE users
+       SET email = $1,
+           verified = false,
+           email_verification_started_at = now(),
+           email_verification_reminder_stage = 0,
+           email_verification_reminder_sent_at = NULL
+       WHERE id = $2
         RETURNING id, name, email, phone, avatar, role, roles, landlord_verified, verified`,
       [email, req.auth!.id],
     );
@@ -224,7 +230,8 @@ router.post('/verify', requireAuth, async (req, res, next) => {
 
     const result = await query(
       `UPDATE users
-       SET verified = true
+         SET verified = true,
+           email_verification_reminder_stage = 2
        WHERE id = $1
       RETURNING id, name, email, role, roles, landlord_verified, avatar, verified`,
       [req.auth!.id],
