@@ -327,6 +327,40 @@ router.post("/", requireAuth, async (req, res, next) => {
       property: propertyContext(conversationContext),
     };
 
+    const isLandlordPropertyReply =
+      conversationContext.context_type === "property" &&
+      conversationContext.property_landlord_id === from_user_id &&
+      text.trim().length > 0;
+    if (isLandlordPropertyReply && conversationContext.property_id) {
+      try {
+        await query(
+          `INSERT INTO engagement_events (user_id, property_id, event_type, metadata)
+           SELECT $1, $2, 'landlord_first_response', $3::jsonb
+           WHERE NOT EXISTS (
+             SELECT 1 FROM messages prior
+             WHERE prior.conversation_id = $4
+               AND prior.from_user_id = $1
+               AND (prior.created_at < $5 OR (prior.created_at = $5 AND prior.id < $6))
+               AND btrim(prior.text) <> ''
+           )
+           ON CONFLICT DO NOTHING`,
+          [
+            from_user_id,
+            conversationContext.property_id,
+            JSON.stringify({ conversation_id: conversationId }),
+            conversationId,
+            payload.created_at,
+            payload.id,
+          ],
+        );
+      } catch (analyticsError) {
+        console.error(
+          "[Messages] first landlord response analytics write failed:",
+          analyticsError,
+        );
+      }
+    }
+
     // Emit to recipient over socket
     if (ioInstance && recipientId !== from_user_id) {
       ioInstance.to(`user:${recipientId}`).emit("message", payload);

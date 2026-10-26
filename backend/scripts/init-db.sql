@@ -862,6 +862,9 @@ CREATE INDEX IF NOT EXISTS idx_events_property_type ON engagement_events(propert
 CREATE INDEX IF NOT EXISTS idx_events_user_type ON engagement_events(user_id, event_type);
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON engagement_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_events_session ON engagement_events(session_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_landlord_first_response_once
+  ON engagement_events(user_id, property_id, event_type, (metadata->>'conversation_id'))
+  WHERE event_type = 'landlord_first_response';
 
 ALTER TABLE engagement_events ADD COLUMN IF NOT EXISTS source_section text;
 ALTER TABLE engagement_events ADD COLUMN IF NOT EXISTS location_context jsonb;

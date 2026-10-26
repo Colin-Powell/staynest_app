@@ -1068,7 +1068,7 @@ class _DownloadAppPromoCard extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 Image.asset(
-                  'assets/images/detail.png',
+                  'assets/images/details.png',
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) =>
                       const SizedBox.expand(),
@@ -1079,16 +1079,18 @@ class _DownloadAppPromoCard extends StatelessWidget {
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                       colors: [
-                        Color(0x663F37C9),
+                        Color(0x003F37C9),
+                        Color(0x223F37C9),
                         Color(0xE62A24B0),
                       ],
+                      stops: [0, 0.48, 0.88],
                     ),
                   ),
                 ),
                 Row(
                   children: [
                     Expanded(
-                      flex: 4,
+                      flex: 5,
                       child: Stack(
                         children: [
                           Positioned(
@@ -1119,7 +1121,7 @@ class _DownloadAppPromoCard extends StatelessWidget {
                     Expanded(
                       flex: 6,
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 14, 14, 14),
+                        padding: const EdgeInsets.fromLTRB(14, 16, 18, 16),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1130,8 +1132,8 @@ class _DownloadAppPromoCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.poppins(
                                 color: Colors.white,
-                                fontSize: width < 360 ? 14 : 17,
-                                height: 1.15,
+                                fontSize: width < 360 ? 15 : 19,
+                                height: 1.2,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -1142,28 +1144,34 @@ class _DownloadAppPromoCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.poppins(
                                 color: Colors.white.withValues(alpha: 0.86),
-                                fontSize: 11,
-                                height: 1.35,
+                                fontSize: width < 360 ? 11 : 13,
+                                height: 1.4,
                               ),
                             ),
                             const SizedBox(height: 12),
-                            FilledButton.icon(
-                              onPressed: onTap,
-                              icon:
-                                  const Icon(Icons.download_rounded, size: 16),
-                              label: const Text('Download app'),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: accent,
-                                minimumSize: const Size(0, 40),
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 12),
-                                textStyle: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: onTap,
+                                icon: const Icon(
+                                  Icons.download_rounded,
+                                  size: 18,
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                                label: const Text('Download app'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: accent,
+                                  minimumSize: const Size(0, 44),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                  ),
+                                  textStyle: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                 ),
                               ),
                             ),

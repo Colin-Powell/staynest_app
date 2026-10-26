@@ -5,11 +5,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/services/message_service.dart';
+import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:uuid/uuid.dart';
 import 'package:property_app/models/communication_models.dart';
 import 'package:property_app/utils/presence_format.dart';
 import 'package:property_app/widgets/property_conversation_header.dart';
+import 'package:property_app/widgets/response_badge_animation.dart';
 
 // ─── Landlord Design System Constants ─────────────────────────────────────────
 const Color _bg = Color(0xFFFAFAFA);
@@ -75,6 +77,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
   final List<ChatMessage> _messages = [];
   late String _peerUserId;
   ConversationModel? _conversation;
+  Map<String, dynamic>? _responseMetrics;
 
   String? get _activeConversationId =>
       widget.conversationId ?? _conversation?.conversationId;
@@ -284,6 +287,14 @@ class _LandlordChatViewState extends State<LandlordChatView>
         }
         _isLoading = false;
       });
+      final currentConversation = _conversation;
+      final propertyId = currentConversation?.property?.id;
+      if (AppSession.isLandlord &&
+          currentConversation?.contextType == 'property' &&
+          propertyId != null &&
+          propertyId.isNotEmpty) {
+        unawaited(_fetchLandlordResponseMetrics(propertyId));
+      }
       await MessageService.instance.markAsRead(
         _activeConversationId == null ? [_peerUserId] : const [],
         conversationIds:
@@ -292,6 +303,17 @@ class _LandlordChatViewState extends State<LandlordChatView>
       _scrollToBottom();
     } catch (err) {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _fetchLandlordResponseMetrics(String propertyId) async {
+    try {
+      final metrics =
+          await PropertiesApi.getPropertyResponseMetrics(propertyId);
+      if (!mounted || _conversation?.property?.id != propertyId) return;
+      setState(() => _responseMetrics = metrics);
+    } catch (_) {
+      if (mounted) setState(() => _responseMetrics = null);
     }
   }
 
@@ -340,6 +362,10 @@ class _LandlordChatViewState extends State<LandlordChatView>
             status: MessageStatus.sent,
           );
         });
+      }
+      final propertyId = _conversation?.property?.id;
+      if (AppSession.isLandlord && propertyId != null) {
+        unawaited(_fetchLandlordResponseMetrics(propertyId));
       }
     } catch (err) {
       if (!mounted) return;
@@ -414,6 +440,9 @@ class _LandlordChatViewState extends State<LandlordChatView>
               _buildHeader(context),
               if (_conversation?.property != null)
                 PropertyConversationHeader(property: _conversation!.property!),
+              if (AppSession.isLandlord &&
+                  _conversation?.contextType == 'property')
+                _buildLandlordResponsePrompt(),
               Expanded(
                 child: _isLoading
                     ? const Center(
@@ -424,6 +453,54 @@ class _LandlordChatViewState extends State<LandlordChatView>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLandlordResponsePrompt() {
+    final latestIsTenantMessage =
+        _messages.isNotEmpty && _messages.last.sender == ChatSender.them;
+    final average = _responseMetrics?['averageFirstResponseMinutes'] is num
+        ? (_responseMetrics!['averageFirstResponseMinutes'] as num).round()
+        : null;
+    final responseRate = _responseMetrics?['responseRate'] is num
+        ? (_responseMetrics!['responseRate'] as num).toInt()
+        : null;
+    final performanceLabel =
+        _responseMetrics?['performanceLabel']?.toString() ??
+            'response_activity_building';
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFD1FAE5)),
+      ),
+      child: Row(
+        children: [
+          ResponseBadgeAnimation(
+            performanceLabel: performanceLabel,
+            size: 30,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              latestIsTenantMessage
+                  ? 'A prospective tenant is waiting for your reply.'
+                  : average != null
+                      ? 'Your average first reply is about $average min${responseRate == null ? '' : ' · $responseRate% response rate'}.'
+                      : 'Reply promptly to help prospective tenants make a decision.',
+              style: GoogleFonts.poppins(
+                color: _dark,
+                fontSize: 11,
+                height: 1.35,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

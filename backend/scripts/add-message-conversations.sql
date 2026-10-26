@@ -25,6 +25,14 @@ CREATE INDEX IF NOT EXISTS idx_message_conversations_property
   ON message_conversations (property_id, updated_at DESC)
   WHERE property_id IS NOT NULL;
 
+ALTER TABLE message_conversations
+  ADD COLUMN IF NOT EXISTS landlord_response_reminder_sent_at timestamptz;
+
+CREATE INDEX IF NOT EXISTS idx_message_conversations_response_reminders
+  ON message_conversations (updated_at)
+  WHERE context_type = 'property'
+    AND landlord_response_reminder_sent_at IS NULL;
+
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS conversation_id uuid;
 
 DO $$

@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config.js';
 import { queueUserPush } from '../services/queue.js';
 import { isPropertyAvailabilityStatus, PROPERTY_AVAILABILITY_STATUSES, } from '../services/property_availability.js';
+import { getLandlordResponseMetrics } from '../services/landlord_response_metrics.js';
 async function getCache(key) {
     const raw = await cache.get(`cache:${key}`);
     if (!raw)
@@ -457,6 +458,23 @@ router.get('/nearby', async (req, res, next) => {
     }
     catch (error) {
         next(error);
+    }
+});
+router.get('/:id([0-9a-fA-F-]{36})/response-metrics', async (req, res, next) => {
+    try {
+        const propertyResult = await query(`SELECT id, landlord_id
+       FROM properties
+       WHERE id = $1 AND COALESCE(status, 'pending_review') = 'approved'
+       LIMIT 1`, [req.params.id]);
+        const property = propertyResult.rows[0];
+        if (!property) {
+            return res.status(404).json({ error: 'Property not found.' });
+        }
+        const responseMetrics = await getLandlordResponseMetrics(property.landlord_id, property.id);
+        return res.json({ data: responseMetrics });
+    }
+    catch (error) {
+        return next(error);
     }
 });
 // /:id must be last among GET routes

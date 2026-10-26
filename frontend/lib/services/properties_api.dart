@@ -270,6 +270,14 @@ class PropertiesApi {
     );
   }
 
+  static Future<Map<String, dynamic>> getPropertyResponseMetrics(
+    String propertyId,
+  ) async {
+    final response = await _client(timeout: const Duration(seconds: 8))
+        .getJson('/properties/$propertyId/response-metrics');
+    return Map<String, dynamic>.from(response['data'] as Map);
+  }
+
   /// Fetch all properties with optional filters.
   static Future<List<Map<String, dynamic>>> getAllProperties({
     String? category,

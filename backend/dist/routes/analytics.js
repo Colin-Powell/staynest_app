@@ -3,6 +3,7 @@ import { pool, query } from '../db.js';
 import { authorize, requireAuth } from '../middleware/auth.js';
 import { calculateRate, calculateGrowthPercent, calculateOccupancyRate, formatGrowthPercent, } from '../services/landlord_metrics.js';
 import { generateLandlordRecommendations } from '../services/landlord_recommendations.js';
+import { getLandlordResponseMetrics } from '../services/landlord_response_metrics.js';
 const router = Router();
 router.post('/impression', requireAuth, authorize('tenant'), async (req, res, next) => {
     const propertyId = typeof req.body?.propertyId === 'string'
@@ -256,7 +257,7 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
         }
         const days = period === '90d' ? 90 : period === '28d' ? 28 : 7;
         const landlordId = req.auth?.id;
-        const [propsRes, viewsRes, prevViewsRes, enquiriesRes, prevEnquiriesRes, conversionRes, unansweredRes, pendingBookingsRes, responseRateRes, chartRes, activityRes, recommendations] = await Promise.all([
+        const [propsRes, viewsRes, prevViewsRes, enquiriesRes, prevEnquiriesRes, conversionRes, pendingBookingsRes, responseMetrics, chartRes, activityRes, recommendations] = await Promise.all([
             // 1. Property breakdown
             query(`SELECT 
            COUNT(*)::int AS total,
@@ -321,52 +322,13 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
            AND view_event.event_type IN ('property_view', 'property_detail_view')
            AND view_event.created_at >= CURRENT_DATE - ($2::int - 1)
            AND view_event.created_at < CURRENT_DATE + 1`, [landlordId, days]),
-            // 6. Unanswered enquiries
-            query(`WITH last_msgs AS (
-           SELECT DISTINCT ON (m.conversation_id)
-             m.conversation_id,
-             m.from_user_id,
-             m.created_at
-           FROM messages m
-           JOIN message_conversations mc ON mc.id = m.conversation_id
-           JOIN properties p ON p.id = mc.property_id
-           WHERE p.landlord_id = $1
-             AND mc.context_type = 'property'
-           ORDER BY m.conversation_id, m.created_at DESC
-         )
-         SELECT COUNT(*)::int AS unanswered
-         FROM last_msgs
-         WHERE from_user_id != $1
-           AND created_at <= NOW() - INTERVAL '12 hours'`, [landlordId]),
             // 7. Pending bookings
             query(`SELECT COUNT(*)::int AS pending_count
          FROM bookings
          WHERE landlord_id = $1
            AND status = 'pending'
            AND check_out_date >= CURRENT_DATE`, [landlordId]),
-            // Response rate uses tenant-started property conversations in this period.
-            query(`WITH first_tenant_message AS (
-           SELECT m.conversation_id, MIN(m.created_at) AS created_at
-           FROM messages m
-           JOIN message_conversations mc ON mc.id = m.conversation_id
-           JOIN properties p ON p.id = mc.property_id
-           WHERE p.landlord_id = $1
-             AND mc.context_type = 'property'
-             AND m.from_user_id <> p.landlord_id
-           GROUP BY m.conversation_id
-         )
-         SELECT
-           COUNT(*) FILTER (WHERE EXISTS (
-             SELECT 1 FROM messages reply
-             WHERE reply.conversation_id = first_tenant_message.conversation_id
-               AND reply.from_user_id = $1
-               AND reply.created_at > first_tenant_message.created_at
-           ))::int AS replied_count,
-           COUNT(*)::int AS total_count
-         FROM first_tenant_message
-         WHERE first_tenant_message.created_at >= CURRENT_DATE - ($2::int - 1)
-           AND first_tenant_message.created_at < CURRENT_DATE + 1
-           AND first_tenant_message.created_at <= NOW() - INTERVAL '12 hours'`, [landlordId, days]),
+            getLandlordResponseMetrics(landlordId),
             // 9. Chart data
             query(`SELECT puv.viewed_date AS day, COUNT(*)::int AS total
          FROM property_unique_views puv
@@ -448,9 +410,7 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
         const enquiriesRow = enquiriesRes.rows[0] ?? {};
         const prevEnquiriesRow = prevEnquiriesRes.rows[0] ?? {};
         const conversionRow = conversionRes.rows[0] ?? {};
-        const unansweredRow = unansweredRes.rows[0] ?? {};
         const pendingBookingsRow = pendingBookingsRes.rows[0] ?? {};
-        const responseRateRow = responseRateRes.rows[0] ?? {};
         const activityRow = activityRes.rows[0] ?? {};
         const currViews = Number(viewsRow.total_views ?? 0);
         const prevViews = Number(prevViewsRow.total_views ?? 0);
@@ -474,9 +434,9 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
         else if (currEnquiries > 0) {
             enquiriesGrowth = '+100%';
         }
-        const repliedCount = Number(responseRateRow.replied_count ?? 0);
-        const totalConvs = Number(responseRateRow.total_count ?? 0);
-        const responseRatePercent = calculateRate(repliedCount, totalConvs);
+        const repliedCount = responseMetrics.answeredInquiries;
+        const totalConvs = responseMetrics.totalValidInquiries;
+        const responseRatePercent = responseMetrics.responseRate ?? 0;
         const eligibleViewers = Number(conversionRow.eligible_viewers ?? 0);
         const convertedPairs = Number(conversionRow.converted_pairs ?? 0);
         const conversionPercent = calculateRate(convertedPairs, eligibleViewers);
@@ -515,7 +475,7 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
                 enquiries: {
                     total: currEnquiries,
                     uniqueTenants: uniqueEnquirers,
-                    unanswered: Number(unansweredRow.unanswered ?? 0),
+                    unanswered: responseMetrics.unansweredInquiries,
                     growth: enquiriesGrowth,
                 },
                 pendingBookings: {
@@ -538,6 +498,7 @@ router.get('/landlord-dashboard', requireAuth, authorize('landlord', 'host'), as
                 shares: Number(activityRow.shares ?? 0),
                 avgCtr: clickThroughRate,
             },
+            responseMetrics,
             chartData: seriesData,
             funnel: [
                 { label: 'Listing impressions', value: Number(activityRow.impressions ?? 0) },

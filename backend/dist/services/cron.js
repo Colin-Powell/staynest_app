@@ -133,6 +133,70 @@ async function sendUnreadMessageNudges() {
         console.error('[cron] unread nudges failed:', err);
     }
 }
+// --- 5. Unanswered property inquiry nudge (once, after 30 minutes) -----------
+async function sendLandlordInquiryReminders() {
+    try {
+        const due = await query(`WITH due_conversations AS (
+         SELECT mc.id AS conversation_id,
+                p.landlord_id,
+                p.id AS property_id,
+                tenant_message.from_user_id AS tenant_id
+         FROM message_conversations mc
+         JOIN properties p ON p.id = mc.property_id
+         JOIN users landlord ON landlord.id = p.landlord_id
+         JOIN LATERAL (
+           SELECT m.from_user_id, m.created_at
+           FROM messages m
+           JOIN users tenant ON tenant.id = m.from_user_id
+           WHERE m.conversation_id = mc.id
+             AND m.from_user_id <> p.landlord_id
+             AND btrim(m.text) <> ''
+             AND (tenant.role = 'tenant' OR 'tenant' = ANY(tenant.roles))
+           ORDER BY m.created_at, m.id
+           LIMIT 1
+         ) tenant_message ON true
+         WHERE mc.context_type = 'property'
+           AND mc.landlord_response_reminder_sent_at IS NULL
+           AND tenant_message.created_at <= now() - INTERVAL '30 minutes'
+           AND NOT EXISTS (
+             SELECT 1 FROM messages landlord_reply
+             WHERE landlord_reply.conversation_id = mc.id
+               AND landlord_reply.from_user_id = p.landlord_id
+               AND landlord_reply.created_at > tenant_message.created_at
+               AND btrim(landlord_reply.text) <> ''
+           )
+           AND landlord.settings->>'push' IS DISTINCT FROM 'false'
+           AND landlord.settings #>> '{notifications,push_messages}' IS DISTINCT FROM 'false'
+         ORDER BY tenant_message.created_at
+         FOR UPDATE OF mc SKIP LOCKED
+         LIMIT 100
+       )
+       UPDATE message_conversations mc
+       SET landlord_response_reminder_sent_at = now()
+       FROM due_conversations due
+       WHERE mc.id = due.conversation_id
+       RETURNING due.conversation_id, due.landlord_id, due.property_id, due.tenant_id`, []);
+        for (const conversation of due.rows) {
+            try {
+                await queueUserPush(conversation.landlord_id, 'A prospective tenant is waiting', 'A tenant is waiting for your reply about one of your properties.', {
+                    type: 'landlord_inquiry_reminder',
+                    conversationId: conversation.conversation_id,
+                    propertyId: conversation.property_id,
+                });
+            }
+            catch (error) {
+                console.error(`[cron] landlord inquiry reminder failed for conversationId=${conversation.conversation_id}:`, error);
+                await query(`UPDATE message_conversations
+           SET landlord_response_reminder_sent_at = NULL
+           WHERE id = $1`, [conversation.conversation_id]);
+            }
+        }
+        console.log(`[cron] landlord inquiry reminders queued for ${due.rowCount} conversations`);
+    }
+    catch (error) {
+        console.error('[cron] landlord inquiry reminders failed:', error);
+    }
+}
 // --- 5. Weekly landlord performance digest (Mon 9 AM) ------------------------
 async function sendWeeklyPerformanceDigest() {
     try {
@@ -446,6 +510,8 @@ export function startCronJobs() {
     cron.schedule('10 1 * * *', refundExpiredBookings, { timezone: 'Africa/Nairobi' });
     // 4. Unread message nudge — every 2 hours
     cron.schedule('0 */2 * * *', sendUnreadMessageNudges, { timezone: 'Africa/Nairobi' });
+    // Property inquiry reminder — hourly, once per unanswered conversation
+    cron.schedule('30 * * * *', sendLandlordInquiryReminders, { timezone: 'Africa/Nairobi' });
     // 5. Weekly landlord digest — every Monday 9:00 AM
     cron.schedule('0 9 * * 1', sendWeeklyPerformanceDigest, { timezone: 'Africa/Nairobi' });
     // 6. Host application reminders — evaluated hourly

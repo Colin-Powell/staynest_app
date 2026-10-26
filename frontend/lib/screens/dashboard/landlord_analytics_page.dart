@@ -7,6 +7,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
 import 'package:property_app/session/onboarding_prefs.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/widgets/response_badge_animation.dart';
 import 'package:property_app/utils/api_result.dart';
 import 'landlord_dashboard_service.dart';
 import 'boost_listing_modal.dart';
@@ -88,6 +89,7 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
     'shares': '0',
     'avgCtr': '0%',
   };
+  Map<String, dynamic> _responseMetrics = const {};
 
   List<Map<String, dynamic>> _topProperties = [];
   List<Map<String, dynamic>> _funnelSteps = [];
@@ -162,6 +164,9 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
               .map((value) => value is num ? value.toDouble() : 0.0)
               .toList()
           : <double>[];
+      final responseMetrics = data['responseMetrics'] is Map
+          ? Map<String, dynamic>.from(data['responseMetrics'] as Map)
+          : <String, dynamic>{};
 
       setState(() {
         _overview = {
@@ -177,6 +182,7 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
               ? '${(metrics['avgCtr'] as num).toStringAsFixed(1)}%'
               : 'Not enough data',
         };
+        _responseMetrics = responseMetrics;
         _topProperties =
             (performanceData['propertyPerformance'] as List? ?? const [])
                 .whereType<Map>()
@@ -233,6 +239,174 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
     }
     return labels;
   }
+
+  Widget _buildResponsePerformanceCard() {
+    final average = _responseMetrics['averageFirstResponseMinutes'] is num
+        ? (_responseMetrics['averageFirstResponseMinutes'] as num).round()
+        : null;
+    final responseRate = _responseMetrics['responseRate'] is num
+        ? (_responseMetrics['responseRate'] as num).toInt()
+        : null;
+    final total =
+        (_responseMetrics['totalValidInquiries'] as num?)?.toInt() ?? 0;
+    final answered =
+        (_responseMetrics['answeredInquiries'] as num?)?.toInt() ?? 0;
+    final unanswered =
+        (_responseMetrics['unansweredInquiries'] as num?)?.toInt() ?? 0;
+    final trend = _responseMetrics['trendPercentage'] is num
+        ? (_responseMetrics['trendPercentage'] as num).toInt()
+        : null;
+    final label = _responseMetrics['performanceLabel']?.toString() ??
+        'response_activity_building';
+    final labelText = switch (label) {
+      'lightning_fast' => 'Lightning Fast',
+      'quick_responder' => 'Quick Responder',
+      'getting_faster' => 'Getting Faster',
+      'needs_improvement' => 'Needs Improvement',
+      'steady_responder' => 'Steady Responder',
+      _ => 'Response Activity Building',
+    };
+    final accent =
+        label == 'needs_improvement' ? const Color(0xFF64748B) : _green;
+    final progress = average == null || average <= 0
+        ? 0.0
+        : (15 / average).clamp(0.0, 1.0).toDouble();
+    final conversion = _responseMetrics['bookingConversion'] is Map
+        ? Map<String, dynamic>.from(
+            _responseMetrics['bookingConversion'] as Map)
+        : null;
+    final fastConversion = conversion?['fastResponse'] is Map
+        ? Map<String, dynamic>.from(conversion!['fastResponse'] as Map)
+        : null;
+    final slowConversion = conversion?['slowerOrUnanswered'] is Map
+        ? Map<String, dynamic>.from(conversion!['slowerOrUnanswered'] as Map)
+        : null;
+
+    return _buildCardWrapper(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ResponseBadgeAnimation(
+                performanceLabel: label,
+                size: 32,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Inquiry response performance',
+                  style: GoogleFonts.poppins(
+                    color: _dark,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  labelText,
+                  style: GoogleFonts.poppins(
+                    color: accent,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 20,
+            runSpacing: 12,
+            children: [
+              _responseMetricValue(
+                'Average first reply',
+                average == null ? 'Not enough data' : '$average min',
+              ),
+              _responseMetricValue(
+                'Response rate',
+                responseRate == null
+                    ? '—'
+                    : '$responseRate% ($answered/$total)',
+              ),
+              _responseMetricValue('Unanswered', '$unanswered'),
+              _responseMetricValue(
+                '30-day trend',
+                trend == null
+                    ? 'Not enough data'
+                    : trend >= 0
+                        ? '+$trend% faster'
+                        : '${trend.abs()}% slower',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (average != null) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 7,
+                      backgroundColor: const Color(0xFFE5E7EB),
+                      color: _green,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '15-minute goal',
+                  style: GoogleFonts.poppins(color: _grey, fontSize: 11),
+                ),
+              ],
+            ),
+          ] else
+            Text(
+              'Goal progress will appear when there is enough response data.',
+              style: GoogleFonts.poppins(color: _grey, fontSize: 11),
+            ),
+          const SizedBox(height: 10),
+          Text(
+            unanswered > 0
+                ? 'A prospective tenant is waiting. Reply to their property inquiry when you can.'
+                : 'Prompt replies help prospective tenants make informed decisions.',
+            style: GoogleFonts.poppins(color: _grey, fontSize: 12, height: 1.4),
+          ),
+          if (fastConversion != null && slowConversion != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Observed confirmed bookings: ${fastConversion['conversionRate']}% after a reply within 15 minutes (${fastConversion['sampleSize']} inquiries), compared with ${slowConversion['conversionRate']}% later or unanswered (${slowConversion['sampleSize']} inquiries). These group results do not establish causation.',
+              style:
+                  GoogleFonts.poppins(color: _grey, fontSize: 11, height: 1.4),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _responseMetricValue(String label, String value) => SizedBox(
+        width: 150,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(value,
+                style: GoogleFonts.poppins(
+                    color: _dark, fontSize: 16, fontWeight: FontWeight.w700)),
+            Text(label, style: GoogleFonts.poppins(color: _grey, fontSize: 11)),
+          ],
+        ),
+      );
 
   // ─── SHARED UI BUILDERS ──────────────────────────────────────────────────────
 
@@ -1091,6 +1265,8 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                _buildResponsePerformanceCard(),
+                const SizedBox(height: 24),
 
                 // MIDDLE ROW: Funnel + Insights
                 SizedBox(
@@ -1468,6 +1644,8 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
             _buildShimmerChart()
           else
             _buildDesktopChartCard(), // Reusing chart card structure
+          const SizedBox(height: 32),
+          _buildResponsePerformanceCard(),
           const SizedBox(height: 32),
 
           Text('Engagement Metrics',

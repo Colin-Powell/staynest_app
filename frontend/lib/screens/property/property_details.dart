@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -13,10 +14,12 @@ import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/services/message_service.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
+import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/utils/property_links.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/widgets/response_badge_animation.dart';
 
 import 'amenities_view.dart';
 import 'booking_view.dart';
@@ -58,8 +61,14 @@ class PropertyDetails extends StatefulWidget {
   State<PropertyDetails> createState() => _PropertyDetailsState();
 }
 
-class _PropertyDetailsState extends State<PropertyDetails> {
+class _PropertyDetailsState extends State<PropertyDetails>
+    with SingleTickerProviderStateMixin {
   late final ScrollController _scrollController;
+  late final AnimationController _responseEntranceController;
+  late final Animation<double> _responseCardFade;
+  late final Animation<Offset> _responseCardSlide;
+  late final Animation<double> _responseIconScale;
+  late final Animation<double> _responseDetailsFade;
 
   final GlobalKey _photosKey = GlobalKey();
   final GlobalKey _amenitiesKey = GlobalKey();
@@ -79,6 +88,8 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   bool _hasBookingHistory = false;
   String? _activeBookingStatus;
   bool _startingConversation = false;
+  bool _responseMetricsLoading = true;
+  Map<String, dynamic>? _responseMetrics;
 
   List<Review> _reviews = [];
   List<Property> _landlordProperties = [];
@@ -91,10 +102,62 @@ class _PropertyDetailsState extends State<PropertyDetails> {
   void initState() {
     super.initState();
     _scrollController = ScrollController()..addListener(_handleScroll);
+    _responseEntranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    _responseCardFade = CurvedAnimation(
+      parent: _responseEntranceController,
+      curve: Curves.easeOutCubic,
+    );
+    _responseCardSlide = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(_responseCardFade);
+    _responseIconScale = Tween<double>(begin: 0.72, end: 1).animate(
+      CurvedAnimation(
+        parent: _responseEntranceController,
+        curve: const Interval(0.1, 0.8, curve: Curves.elasticOut),
+      ),
+    );
+    _responseDetailsFade = CurvedAnimation(
+      parent: _responseEntranceController,
+      curve: const Interval(0.28, 1, curve: Curves.easeOut),
+    );
     _viewStartTime = DateTime.now();
     _fetchReviews();
     _fetchLandlordProperties();
     _checkBookingEligibility();
+    _fetchResponseMetrics();
+  }
+
+  Future<void> _fetchResponseMetrics() async {
+    try {
+      final metrics = await PropertiesApi.getPropertyResponseMetrics(
+        widget.property.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _responseMetrics = metrics;
+        _responseMetricsLoading = false;
+      });
+      if (MediaQuery.of(context).disableAnimations) {
+        _responseEntranceController.value = 1;
+      } else {
+        _responseEntranceController.forward(from: 0);
+      }
+      unawaited(AnalyticsService.logEvent('response_card_displayed', {
+        'property_id': widget.property.id,
+        'has_reliable_data':
+            metrics['performanceLabel'] != 'response_activity_building',
+      }));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _responseMetrics = null;
+        _responseMetricsLoading = false;
+      });
+    }
   }
 
   void _handleScroll() {
@@ -241,6 +304,230 @@ class _PropertyDetailsState extends State<PropertyDetails> {
     if (shared) await AnalyticsService.trackPropertyShare(widget.property.id);
   }
 
+  Widget _buildResponseCard() {
+    if (_responseMetricsLoading) {
+      return Container(
+        height: 88,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3FAF6),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Color(0xFF10B981),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildResponseSkeletonLine(width: 148),
+                  const SizedBox(height: 8),
+                  _buildResponseSkeletonLine(width: 204),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final metrics = _responseMetrics;
+    if (metrics == null) return const SizedBox.shrink();
+
+    final label =
+        metrics['performanceLabel']?.toString() ?? 'response_activity_building';
+    final average = metrics['averageFirstResponseMinutes'] is num
+        ? (metrics['averageFirstResponseMinutes'] as num).round()
+        : null;
+    final total = metrics['totalValidInquiries'] is num
+        ? (metrics['totalValidInquiries'] as num).toInt()
+        : 0;
+    final answered = metrics['answeredInquiries'] is num
+        ? (metrics['answeredInquiries'] as num).toInt()
+        : 0;
+    final responseRate = metrics['responseRate'] is num
+        ? (metrics['responseRate'] as num).toInt()
+        : null;
+    final reliable = total >= 3 && answered >= 3 && average != null;
+    final (badge, headline, accent) = switch (label) {
+      'lightning_fast' => (
+          'Lightning Fast',
+          'This landlord replies fast!',
+          const Color(0xFF059669),
+        ),
+      'quick_responder' => (
+          'Quick Responder',
+          'This landlord replies promptly.',
+          const Color(0xFF059669),
+        ),
+      'getting_faster' => (
+          'Getting Faster',
+          'Response times are improving.',
+          const Color(0xFF0F766E),
+        ),
+      'needs_improvement' => (
+          'Needs Improvement',
+          'Response activity varies.',
+          const Color(0xFF64748B),
+        ),
+      'steady_responder' => (
+          'Steady Responder',
+          'This landlord responds to inquiries.',
+          const Color(0xFF0F766E),
+        ),
+      _ => (
+          '',
+          'Response activity is still building.',
+          const Color(0xFF0F766E),
+        ),
+    };
+    final detail = reliable
+        ? 'Average first reply: about $average ${average == 1 ? 'minute' : 'minutes'}.'
+        : 'Send an inquiry to start the conversation.';
+
+    final card = Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3FAF6),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFD9F0E4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ScaleTransition(
+            scale: _responseIconScale,
+            child: ResponseBadgeAnimation(
+              performanceLabel: label,
+              size: 44,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FadeTransition(
+              opacity: _responseDetailsFade,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          headline,
+                          style: GoogleFonts.poppins(
+                            color: _dark,
+                            fontSize: 13,
+                            height: 1.3,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (reliable) ...[
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: accent.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              badge,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.poppins(
+                                color: accent,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    detail,
+                    style: GoogleFonts.poppins(
+                      color: _grey,
+                      fontSize: 11,
+                      height: 1.4,
+                    ),
+                  ),
+                  if (reliable && responseRate != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: responseRate / 100,
+                              minHeight: 5,
+                              backgroundColor: const Color(0xFFDCE7E1),
+                              color: accent,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '$responseRate% response rate',
+                          style: GoogleFonts.poppins(
+                            color: _grey,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 4),
+                  Text(
+                    'Based on recent property inquiries. Send a message to ask about this home.',
+                    style: GoogleFonts.poppins(
+                      color: _grey,
+                      fontSize: 10,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return FadeTransition(
+      opacity: _responseCardFade,
+      child: SlideTransition(position: _responseCardSlide, child: card),
+    );
+  }
+
+  Widget _buildResponseSkeletonLine({required double width}) => Container(
+        height: 9,
+        width: width,
+        constraints: const BoxConstraints(maxWidth: double.infinity),
+        decoration: BoxDecoration(
+          color: const Color(0xFFDCEBE2),
+          borderRadius: BorderRadius.circular(8),
+        ),
+      );
+
   Future<void> _handleMessageTap() async {
     if (_startingConversation) return;
     AnalyticsService.logListingInteraction(
@@ -362,6 +649,7 @@ class _PropertyDetailsState extends State<PropertyDetails> {
       }
     }
     _scrollController.dispose();
+    _responseEntranceController.dispose();
     super.dispose();
   }
 
@@ -1155,6 +1443,10 @@ class _PropertyDetailsState extends State<PropertyDetails> {
             ],
           ),
           const SizedBox(height: 20),
+          if (_responseMetricsLoading || _responseMetrics != null) ...[
+            _buildResponseCard(),
+            const SizedBox(height: 18),
+          ],
           const Divider(height: 1, color: _dividerColor),
           const SizedBox(height: 20),
           SizedBox(
