@@ -25,7 +25,7 @@ class ResponseBadgeAnimation extends StatelessWidget {
   const ResponseBadgeAnimation({
     super.key,
     required this.performanceLabel,
-    this.size = 40,
+    this.size = 64,
   });
 
   @override
@@ -35,18 +35,16 @@ class ResponseBadgeAnimation extends StatelessWidget {
       label: responseBadgeDescription(performanceLabel),
       child: SizedBox.square(
         dimension: size,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.asset(
-            responseBadgeAssetForLabel(performanceLabel),
-            width: size,
-            height: size,
-            fit: BoxFit.contain,
-            gaplessPlayback: true,
-            errorBuilder: (context, error, stackTrace) => const Icon(
-              Icons.bolt_rounded,
-              color: Color(0xFF10B981),
-            ),
+        child: Image.asset(
+          responseBadgeAssetForLabel(performanceLabel),
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+          errorBuilder: (context, error, stackTrace) => Icon(
+            Icons.bolt_rounded,
+            color: const Color(0xFF10B981),
+            size: size * 0.7,
           ),
         ),
       ),

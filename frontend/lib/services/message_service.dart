@@ -5,30 +5,55 @@ import 'package:uuid/uuid.dart';
 
 class MessageModel {
   final String id;
+  final String? clientMessageId;
   final String? conversationId;
   final String fromUserId;
   final String toUserId;
   final String text;
   final DateTime createdAt;
+  final String? replyToMessageId;
+  final String? replyToText;
+  final String? replyToFromUserId;
+  final bool isDeleted;
+  final bool isDelivered;
+  final bool isRead;
 
   MessageModel({
     required this.id,
+    this.clientMessageId,
     this.conversationId,
     required this.fromUserId,
     required this.toUserId,
     required this.text,
     required this.createdAt,
+    this.replyToMessageId,
+    this.replyToText,
+    this.replyToFromUserId,
+    this.isDeleted = false,
+    this.isDelivered = false,
+    this.isRead = false,
   });
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
+    final reply = json['reply_to'] is Map
+        ? Map<String, dynamic>.from(json['reply_to'] as Map)
+        : null;
     return MessageModel(
       id: json['id']?.toString() ?? '',
+      clientMessageId: json['client_message_id']?.toString(),
       conversationId: json['conversation_id']?.toString(),
       fromUserId: json['from_user_id']?.toString() ?? '',
       toUserId: json['to_user_id']?.toString() ?? '',
       text: json['text']?.toString() ?? '',
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
+      replyToMessageId:
+          json['reply_to_message_id']?.toString() ?? reply?['id']?.toString(),
+      replyToText: reply?['text']?.toString(),
+      replyToFromUserId: reply?['from_user_id']?.toString(),
+      isDeleted: json['is_deleted'] == true,
+      isDelivered: json['is_delivered'] == true,
+      isRead: json['is_read'] == true,
     );
   }
 }
@@ -240,6 +265,7 @@ class MessageService {
       {required String toUserId,
       required String text,
       String? conversationId,
+      String? replyToMessageId,
       String? idempotencyKey}) async {
     final key = idempotencyKey ?? const Uuid().v4();
     final response = await _client.post(
@@ -250,6 +276,7 @@ class MessageService {
       body: {
         'to_user_id': toUserId,
         if (conversationId != null) 'conversation_id': conversationId,
+        if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
         'text': text,
       },
     );
@@ -260,17 +287,26 @@ class MessageService {
     );
   }
 
+  Future<void> deleteMessage(String messageId, {required String scope}) async {
+    await _client.delete(
+      Uri.parse('$_baseUrl/messages/$messageId?scope=$scope'),
+    );
+  }
+
   Future<List<MessageModel>> fetchConversation(
     String userId, {
     String? conversationId,
     int limit = 50,
     int offset = 0,
   }) async {
-    final response = await _client.get(conversationId == null
-        ? Uri.parse(
-            '$_baseUrl/messages/conversation/$userId?limit=$limit&offset=$offset')
-        : Uri.parse(
-            '$_baseUrl/messages/conversations/$conversationId/messages?limit=$limit&offset=$offset'));
+    final response = await _client.get(
+      conversationId == null
+          ? Uri.parse(
+              '$_baseUrl/messages/conversation/$userId?limit=$limit&offset=$offset')
+          : Uri.parse(
+              '$_baseUrl/messages/conversations/$conversationId/messages?limit=$limit&offset=$offset'),
+      bypassCache: true,
+    );
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     final messages = (json['data']?['messages'] as List<dynamic>?)
@@ -287,9 +323,11 @@ class MessageService {
     int limit = 50,
     int offset = 0,
   }) async {
-    final response = await _client.get(Uri.parse(
-      '$_baseUrl/messages/conversation/$userId?limit=$limit&offset=$offset',
-    ));
+    final response = await _client.get(
+        Uri.parse(
+          '$_baseUrl/messages/conversation/$userId?limit=$limit&offset=$offset',
+        ),
+        bypassCache: true);
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     final data = Map<String, dynamic>.from(json['data'] as Map);
     final messages = (data['messages'] as List<dynamic>? ?? const [])

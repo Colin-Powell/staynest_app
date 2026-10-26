@@ -1480,6 +1480,7 @@ class _AppShellState extends State<AppShell> {
   String? _desktopProfileHelperRoute;
   int _unreadNotificationCount = 0;
   int _unreadMessageCount = 0;
+  StreamSubscription<Map<String, dynamic>>? _messageDeletedSubscription;
   Map<String, dynamic> _activeFilters = {};
   List<Property>? _searchCollectionProperties;
   String? _searchCollectionTitle;
@@ -1522,11 +1523,15 @@ class _AppShellState extends State<AppShell> {
       SocketService.instance
           .connect(url: AppSession.apiBaseUrl, token: AppSession.apiToken);
     } catch (_) {}
+    _messageDeletedSubscription = SocketService.instance.deleted.listen((_) {
+      unawaited(_refreshDesktopCounts());
+    });
     _refreshDesktopCounts();
   }
 
   @override
   void dispose() {
+    _messageDeletedSubscription?.cancel();
     if (identical(
       FCMService.instance.onDesktopMessageAction,
       _desktopMessageAction,
@@ -1631,6 +1636,11 @@ class _AppShellState extends State<AppShell> {
       _desktopSelectedConversation = null;
     });
     _refreshDesktopCounts();
+  }
+
+  void _minimizeDesktopMessages() {
+    if (!_showDesktopMessages) return;
+    setState(() => _showDesktopMessages = false);
   }
 
   void _returnToDesktopInbox() {
@@ -2224,6 +2234,7 @@ class _AppShellState extends State<AppShell> {
                         : ChatView(
                             onBack: _returnToDesktopInbox,
                             onClose: _closeDesktopMessages,
+                            onMinimize: _minimizeDesktopMessages,
                             userId: _desktopSelectedConversation!.userId,
                             name: _desktopSelectedConversation!.userName,
                             avatar:

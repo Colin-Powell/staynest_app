@@ -51,6 +51,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
   List<ConversationModel> _conversations = [];
   StreamSubscription? _messageSubscription;
   StreamSubscription? _presenceSubscription;
+  StreamSubscription? _deletedSubscription;
 
   @override
   void initState() {
@@ -102,6 +103,14 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
           preferredConversationId: msg.conversationId,
         );
       }
+    });
+
+    _deletedSubscription = SocketService.instance.deleted.listen((event) {
+      final userId = event['userId']?.toString();
+      if (event['scope'] == 'me' && userId != AppSession.currentUserId) return;
+      _loadConversations(
+        preferredConversationId: _selectedConversation?.conversationId,
+      );
     });
 
     _presenceSubscription = SocketService.instance.presence.listen((data) {
@@ -212,6 +221,7 @@ class _LandlordMessagesPageState extends State<LandlordMessagesPage> {
     _searchController.dispose();
     _messageSubscription?.cancel();
     _presenceSubscription?.cancel();
+    _deletedSubscription?.cancel();
     super.dispose();
   }
 

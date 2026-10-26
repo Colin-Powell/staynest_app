@@ -904,6 +904,18 @@ class _MyBubble extends StatelessWidget {
           size: 14,
           color: Colors.white70,
         );
+      case MessageStatus.delivered:
+        return const Icon(
+          PhosphorIconsRegular.checks,
+          size: 14,
+          color: Colors.white70,
+        );
+      case MessageStatus.read:
+        return const Icon(
+          PhosphorIconsRegular.checks,
+          size: 14,
+          color: Color(0xFFBFDBFE),
+        );
       case MessageStatus.failed:
         return GestureDetector(
           onTap: onRetry,

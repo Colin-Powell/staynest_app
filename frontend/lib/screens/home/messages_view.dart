@@ -89,6 +89,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
   List<_ChatItem> _suggestedContacts = [];
   StreamSubscription? _messageSubscription;
   StreamSubscription? _presenceSubscription;
+  StreamSubscription? _deletedSubscription;
 
   @override
   void initState() {
@@ -148,7 +149,8 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
           final item = _chats.removeAt(index);
           _chats.insert(0, item);
         });
-        if (false && msg.from != currentUserId &&
+        if (false &&
+            msg.from != currentUserId &&
             MediaQuery.sizeOf(context).width >= 768 &&
             !_isSelectionMode) {
           final chat = _chats.firstWhere((item) => item.id == otherId);
@@ -167,6 +169,12 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
           preferredConversationId: msg.conversationId,
         );
       }
+    });
+
+    _deletedSubscription = SocketService.instance.deleted.listen((event) {
+      final userId = event['userId']?.toString();
+      if (event['scope'] == 'me' && userId != AppSession.currentUserId) return;
+      _loadConversations();
     });
 
     _presenceSubscription = SocketService.instance.presence.listen((data) {
@@ -193,6 +201,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
     _searchController.dispose();
     _messageSubscription?.cancel();
     _presenceSubscription?.cancel();
+    _deletedSubscription?.cancel();
     super.dispose();
   }
 

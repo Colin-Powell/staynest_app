@@ -8,6 +8,8 @@ import { isPropertyEligibleForMessaging, orderConversationParticipants, } from "
 import { emitDirectConversationPresence, ioInstance } from "../socket.js";
 const router = Router();
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const DELETE_FOR_EVERYONE_WINDOW_MS = env.messageDeleteForEveryoneWindowMinutes * 60 * 1000;
+const MAX_MESSAGE_LENGTH = 5000;
 async function getOrCreateGeneralConversation(first, second) {
     const [participantOneId, participantTwoId] = orderConversationParticipants(first, second);
     const result = await query(`INSERT INTO message_conversations (
@@ -150,7 +152,8 @@ router.post("/conversations/initiate", requireAuth, authorize("tenant"), async (
 // Save a message to database
 router.post("/", requireAuth, async (req, res, next) => {
     try {
-        const { to_user_id, conversation_id, property_id, text } = req.body;
+        const { to_user_id, conversation_id, property_id, text, reply_to_message_id } = req.body;
+        const idempotencyKey = String(req.get("Idempotency-Key") ?? "").trim();
         if (!text?.trim() || (!conversation_id && !to_user_id)) {
             return res
                 .status(400)
@@ -190,6 +193,12 @@ router.post("/", requireAuth, async (req, res, next) => {
                     .json({ error: "Recipient does not match this conversation." });
             }
         }
+        if (text.trim().length > MAX_MESSAGE_LENGTH) {
+            return res.status(413).json({ error: "Messages cannot exceed 5,000 characters." });
+        }
+        if (idempotencyKey.length > 128) {
+            return res.status(400).json({ error: "Idempotency-Key is too long." });
+        }
         if (!recipientId || !UUID_PATTERN.test(recipientId)) {
             return res.status(400).json({ error: "A valid recipient is required." });
         }
@@ -208,6 +217,17 @@ router.post("/", requireAuth, async (req, res, next) => {
         if (!conversationId) {
             conversationId = await getOrCreateGeneralConversation(from_user_id, recipientId);
         }
+        if (reply_to_message_id) {
+            if (!UUID_PATTERN.test(reply_to_message_id)) {
+                return res.status(400).json({ error: "Invalid reply_to_message_id." });
+            }
+            const replyResult = await query(`SELECT id FROM messages
+          WHERE id = $1 AND conversation_id = $2
+          LIMIT 1`, [reply_to_message_id, conversationId]);
+            if (replyResult.rowCount === 0) {
+                return res.status(400).json({ error: "Reply target is not in this conversation." });
+            }
+        }
         const from_name = fromUserResult.rows[0]?.name || "Someone";
         const contextResult = await query(`${CONVERSATION_CONTEXT_SELECT} WHERE c.id = $1`, [conversationId]);
         const conversationContext = contextResult.rows[0] ?? {};
@@ -220,23 +240,71 @@ router.post("/", requireAuth, async (req, res, next) => {
          FROM messages
          WHERE conversation_id = $1
            AND from_user_id = $2
+           AND deleted_for_everyone_at IS NULL
            AND created_at > COALESCE(
              (
                SELECT MAX(m2.created_at)
                FROM messages m2
                WHERE m2.conversation_id = $1
                  AND m2.to_user_id = $2
+                 AND m2.deleted_for_everyone_at IS NULL
              ),
              '1970-01-01'::timestamptz
            )`, [conversationId, from_user_id]);
             pendingInquiryCount = Number(priorMessageResult.rows[0]?.pending_inquiries ?? 0);
         }
-        const result = await query(`INSERT INTO messages (conversation_id, from_user_id, to_user_id, text)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, conversation_id, from_user_id, to_user_id, text, created_at`, [conversationId, from_user_id, recipientId, text.trim()]);
+        const result = await query(`INSERT INTO messages (
+         conversation_id, from_user_id, to_user_id, text,
+         reply_to_message_id, idempotency_key
+       ) VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''))
+       ON CONFLICT (from_user_id, idempotency_key)
+         WHERE idempotency_key IS NOT NULL
+       DO NOTHING
+       RETURNING id, conversation_id, from_user_id, to_user_id, text,
+                 created_at, reply_to_message_id, idempotency_key`, [conversationId, from_user_id, recipientId, text.trim(), reply_to_message_id ?? null, idempotencyKey]);
+        if (result.rowCount === 0 && idempotencyKey) {
+            const existingResult = await query(`SELECT id, conversation_id, from_user_id, to_user_id, text,
+          created_at, reply_to_message_id, idempotency_key
+           FROM messages
+          WHERE from_user_id = $1 AND idempotency_key = $2
+          LIMIT 1`, [from_user_id, idempotencyKey]);
+            const existing = existingResult.rows[0];
+            if (!existing || existing.conversation_id !== conversationId ||
+                existing.to_user_id !== recipientId || existing.text !== text.trim() ||
+                existing.reply_to_message_id !== (reply_to_message_id ?? null)) {
+                return res.status(409).json({ error: "Idempotency key was already used for another message." });
+            }
+            ioInstance?.to(`user:${recipientId}`).emit("message", {
+                ...existing,
+                client_message_id: existing.idempotency_key,
+                property: propertyContext(conversationContext),
+            });
+            return res.status(200).json({
+                data: {
+                    ...existing,
+                    client_message_id: existing.idempotency_key,
+                    property: propertyContext(conversationContext),
+                },
+            });
+        }
+        const savedMessage = result.rows[0];
+        const replyResult = savedMessage.reply_to_message_id
+            ? await query(`SELECT id, from_user_id,
+                  CASE WHEN deleted_for_everyone_at IS NOT NULL
+                       THEN 'This message was deleted'
+                       WHEN EXISTS (
+                         SELECT 1 FROM message_user_deletions mud
+                          WHERE mud.message_id = messages.id
+                            AND mud.user_id = $2
+                       ) THEN 'Message unavailable'
+                       ELSE text END AS text
+             FROM messages WHERE id = $1 LIMIT 1`, [savedMessage.reply_to_message_id, from_user_id])
+            : { rows: [] };
         await query("UPDATE message_conversations SET updated_at = now() WHERE id = $1", [conversationId]);
         const payload = {
-            ...result.rows[0],
+            ...savedMessage,
+            client_message_id: savedMessage.idempotency_key,
+            reply_to: replyResult.rows[0] ?? null,
             property: propertyContext(conversationContext),
         };
         const isLandlordPropertyReply = conversationContext.context_type === "property" &&
@@ -250,6 +318,7 @@ router.post("/", requireAuth, async (req, res, next) => {
              SELECT 1 FROM messages prior
              WHERE prior.conversation_id = $4
                AND prior.from_user_id = $1
+               AND prior.deleted_for_everyone_at IS NULL
                AND (prior.created_at < $5 OR (prior.created_at = $5 AND prior.id < $6))
                AND btrim(prior.text) <> ''
            )
@@ -278,7 +347,7 @@ router.post("/", requireAuth, async (req, res, next) => {
         }
         // Send push notification
         if (recipientId !== from_user_id) {
-            await queueUserPush(recipientId, `New message from ${from_name}`, text.trim(), {
+            await queueUserPush(recipientId, `New message from ${from_name}`, "You have a new message in StayNest.", {
                 type: "new_message",
                 chatId: from_user_id,
                 senderId: from_user_id,
@@ -316,6 +385,67 @@ router.post("/", requireAuth, async (req, res, next) => {
         next(error);
     }
 });
+router.delete("/:messageId", requireAuth, async (req, res, next) => {
+    try {
+        const { messageId } = req.params;
+        const currentUserId = req.auth.id;
+        const scope = req.query.scope?.toString();
+        if (!UUID_PATTERN.test(messageId)) {
+            return res.status(400).json({ error: "Invalid message_id." });
+        }
+        if (scope !== "me" && scope !== "everyone") {
+            return res.status(400).json({ error: "scope must be 'me' or 'everyone'." });
+        }
+        const messageResult = await query(`SELECT m.conversation_id, m.from_user_id, m.created_at,
+              m.deleted_for_everyone_at,
+              c.participant_one_id, c.participant_two_id
+         FROM messages m
+         JOIN message_conversations c ON c.id = m.conversation_id
+        WHERE m.id = $1
+          AND (c.participant_one_id = $2 OR c.participant_two_id = $2)
+        LIMIT 1`, [messageId, currentUserId]);
+        const message = messageResult.rows[0];
+        if (!message)
+            return res.status(404).json({ error: "Message not found." });
+        if (scope === "me") {
+            await query(`INSERT INTO message_user_deletions (user_id, message_id)
+         VALUES ($1, $2) ON CONFLICT (user_id, message_id) DO NOTHING`, [currentUserId, messageId]);
+            ioInstance?.to(`user:${currentUserId}`).emit("message_deleted", {
+                messageId,
+                conversationId: message.conversation_id,
+                scope,
+                userId: currentUserId,
+            });
+            return res.json({ data: { deleted: true, scope } });
+        }
+        if (message.from_user_id !== currentUserId) {
+            return res.status(403).json({ error: "Only the sender can delete this message for everyone." });
+        }
+        if (message.deleted_for_everyone_at) {
+            return res.json({ data: { deleted: true, scope } });
+        }
+        if (Date.now() - new Date(message.created_at).getTime() > DELETE_FOR_EVERYONE_WINDOW_MS) {
+            return res.status(409).json({ error: "The delete-for-everyone time limit has passed." });
+        }
+        await query(`UPDATE messages
+          SET text = '', deleted_for_everyone_at = now(), deleted_by_user_id = $2
+        WHERE id = $1 AND deleted_for_everyone_at IS NULL`, [messageId, currentUserId]);
+        const deletionEvent = {
+            messageId,
+            conversationId: message.conversation_id,
+            scope,
+            userId: currentUserId,
+        };
+        ioInstance?.to(`user:${message.participant_one_id}`).emit("message_deleted", deletionEvent);
+        if (message.participant_two_id !== message.participant_one_id) {
+            ioInstance?.to(`user:${message.participant_two_id}`).emit("message_deleted", deletionEvent);
+        }
+        return res.json({ data: { deleted: true, scope } });
+    }
+    catch (error) {
+        next(error);
+    }
+});
 router.get("/conversations/:conversationId/messages", requireAuth, async (req, res, next) => {
     try {
         const { conversationId } = req.params;
@@ -332,11 +462,37 @@ router.get("/conversations/:conversationId/messages", requireAuth, async (req, r
         const conversation = conversationResult.rows[0];
         if (!conversation)
             return res.status(404).json({ error: "Conversation not found." });
-        const messagesResult = await query(`SELECT id, conversation_id, from_user_id, to_user_id, text, created_at
-         FROM messages
-        WHERE conversation_id = $1
-        ORDER BY created_at DESC
-        LIMIT $2 OFFSET $3`, [conversationId, limit, offset]);
+        const messagesResult = await query(`SELECT m.id, m.idempotency_key AS client_message_id,
+          m.conversation_id, m.from_user_id, m.to_user_id,
+                CASE WHEN m.deleted_for_everyone_at IS NOT NULL
+                     THEN 'This message was deleted' ELSE m.text END AS text,
+                m.created_at, m.deleted_for_everyone_at IS NOT NULL AS is_deleted,
+                m.delivered_at IS NOT NULL AS is_delivered,
+          EXISTS (
+            SELECT 1 FROM message_reads mr
+             WHERE mr.message_id = m.id AND mr.user_id = m.to_user_id
+          ) AS is_read,
+                m.reply_to_message_id,
+                CASE WHEN reply.id IS NULL THEN NULL ELSE jsonb_build_object(
+                  'id', reply.id,
+                  'from_user_id', reply.from_user_id,
+                  'text', CASE WHEN reply.deleted_for_everyone_at IS NOT NULL
+                               THEN 'This message was deleted'
+                               WHEN EXISTS (
+                                 SELECT 1 FROM message_user_deletions mud
+                                  WHERE mud.message_id = reply.id AND mud.user_id = $4
+                               ) THEN 'Message unavailable'
+                               ELSE reply.text END
+                ) END AS reply_to
+           FROM messages m
+           LEFT JOIN messages reply ON reply.id = m.reply_to_message_id
+          WHERE m.conversation_id = $1
+            AND NOT EXISTS (
+              SELECT 1 FROM message_user_deletions mud
+               WHERE mud.message_id = m.id AND mud.user_id = $4
+            )
+        ORDER BY m.created_at DESC, m.id DESC
+        LIMIT $2 OFFSET $3`, [conversationId, limit, offset, currentUserId]);
         const partnerId = conversation.participant_one_id === currentUserId
             ? conversation.participant_two_id
             : conversation.participant_one_id;
@@ -396,11 +552,37 @@ router.get("/conversation/:userId", requireAuth, async (req, res, next) => {
                 data: { conversation_id: null, messages: [], count: 0 },
             });
         }
-        const result = await query(`SELECT id, conversation_id, from_user_id, to_user_id, text, created_at
-       FROM messages
-       WHERE conversation_id = $1
-       ORDER BY created_at DESC
-       LIMIT $2 OFFSET $3`, [conversationId, limit, offset]);
+        const result = await query(`SELECT m.id, m.idempotency_key AS client_message_id,
+              m.conversation_id, m.from_user_id, m.to_user_id,
+              CASE WHEN m.deleted_for_everyone_at IS NOT NULL
+                   THEN 'This message was deleted' ELSE m.text END AS text,
+              m.created_at, m.deleted_for_everyone_at IS NOT NULL AS is_deleted,
+              m.delivered_at IS NOT NULL AS is_delivered,
+              EXISTS (
+          SELECT 1 FROM message_reads mr
+           WHERE mr.message_id = m.id AND mr.user_id = m.to_user_id
+              ) AS is_read,
+              m.reply_to_message_id,
+              CASE WHEN reply.id IS NULL THEN NULL ELSE jsonb_build_object(
+                'id', reply.id,
+                'from_user_id', reply.from_user_id,
+                'text', CASE WHEN reply.deleted_for_everyone_at IS NOT NULL
+                             THEN 'This message was deleted'
+                             WHEN EXISTS (
+                               SELECT 1 FROM message_user_deletions mud
+                                WHERE mud.message_id = reply.id AND mud.user_id = $4
+                             ) THEN 'Message unavailable'
+                             ELSE reply.text END
+              ) END AS reply_to
+         FROM messages m
+         LEFT JOIN messages reply ON reply.id = m.reply_to_message_id
+        WHERE m.conversation_id = $1
+          AND NOT EXISTS (
+            SELECT 1 FROM message_user_deletions mud
+             WHERE mud.message_id = m.id AND mud.user_id = $4
+          )
+      ORDER BY m.created_at DESC, m.id DESC
+       LIMIT $2 OFFSET $3`, [conversationId, limit, offset, currentUserId]);
         return res.json({
             data: {
                 conversation_id: conversationId,
@@ -438,6 +620,11 @@ router.post("/mark-read", requireAuth, async (req, res, next) => {
            FROM messages m
           WHERE m.conversation_id = ANY($2::uuid[])
             AND m.to_user_id = $1
+            AND m.deleted_for_everyone_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM message_user_deletions mud
+               WHERE mud.message_id = m.id AND mud.user_id = $1
+            )
             AND NOT EXISTS (
               SELECT 1 FROM message_reads mr
                WHERE mr.user_id = $1 AND mr.message_id = m.id
@@ -452,11 +639,16 @@ router.post("/mark-read", requireAuth, async (req, res, next) => {
             const unreadFromResult = await query(`SELECT DISTINCT from_user_id
          FROM messages
          WHERE to_user_id = $1
+           AND deleted_for_everyone_at IS NULL
            AND NOT EXISTS (
              SELECT 1
              FROM message_reads mr
              WHERE mr.user_id = $1
                AND mr.message_id = messages.id
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM message_user_deletions mud
+              WHERE mud.message_id = messages.id AND mud.user_id = $1
            )`, [currentUserId]);
             const allPartnerIds = unreadFromResult.rows.map((r) => r.from_user_id);
             if (allPartnerIds.length === 0) {
@@ -469,6 +661,11 @@ router.post("/mark-read", requireAuth, async (req, res, next) => {
          FROM messages m
          WHERE m.to_user_id = $1
            AND m.from_user_id = ANY($3)
+           AND m.deleted_for_everyone_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM message_user_deletions mud
+              WHERE mud.message_id = m.id AND mud.user_id = $1
+           )
            AND NOT EXISTS (
              SELECT 1 FROM message_reads mr
              WHERE mr.user_id = $1 AND mr.message_id = m.id
@@ -482,6 +679,11 @@ router.post("/mark-read", requireAuth, async (req, res, next) => {
        FROM messages m
        WHERE m.to_user_id = $1
          AND m.from_user_id = ANY($3)
+         AND m.deleted_for_everyone_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM message_user_deletions mud
+            WHERE mud.message_id = m.id AND mud.user_id = $1
+         )
          AND NOT EXISTS (
            SELECT 1 FROM message_reads mr
            WHERE mr.user_id = $1 AND mr.message_id = m.id
@@ -520,23 +722,43 @@ router.get("/conversations", requireAuth, async (req, res, next) => {
          (SELECT m2.text
             FROM messages m2
            WHERE m2.conversation_id = c.id
-           ORDER BY m2.created_at DESC
+           AND m2.deleted_for_everyone_at IS NULL
+           AND NOT EXISTS (
+            SELECT 1 FROM message_user_deletions mud
+             WHERE mud.message_id = m2.id AND mud.user_id = $1
+           )
+           ORDER BY m2.created_at DESC, m2.id DESC
            LIMIT 1) as last_message,
          (SELECT m2.created_at
             FROM messages m2
            WHERE m2.conversation_id = c.id
-           ORDER BY m2.created_at DESC
+           AND m2.deleted_for_everyone_at IS NULL
+           AND NOT EXISTS (
+            SELECT 1 FROM message_user_deletions mud
+             WHERE mud.message_id = m2.id AND mud.user_id = $1
+           )
+           ORDER BY m2.created_at DESC, m2.id DESC
            LIMIT 1) as last_message_at,
         (SELECT m2.from_user_id
           FROM messages m2
           WHERE m2.conversation_id = c.id
-          ORDER BY m2.created_at DESC
+          AND m2.deleted_for_everyone_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM message_user_deletions mud
+            WHERE mud.message_id = m2.id AND mud.user_id = $1
+          )
+          ORDER BY m2.created_at DESC, m2.id DESC
           LIMIT 1) as last_message_from_user_id,
          (
            SELECT COUNT(*)
            FROM messages m3
            WHERE m3.conversation_id = c.id
              AND m3.to_user_id = $1
+             AND m3.deleted_for_everyone_at IS NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM message_user_deletions mud
+                WHERE mud.message_id = m3.id AND mud.user_id = $1
+             )
              AND NOT EXISTS (
                SELECT 1
                FROM message_reads mr

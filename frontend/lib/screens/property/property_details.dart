@@ -307,23 +307,36 @@ class _PropertyDetailsState extends State<PropertyDetails>
   Widget _buildResponseCard() {
     if (_responseMetricsLoading) {
       return Container(
-        height: 88,
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFFF3FAF6),
-          borderRadius: BorderRadius.circular(10),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _grey.withValues(alpha: 0.1)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           children: [
             const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Color(0xFF10B981),
+              width: 44,
+              height: 44,
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF10B981),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -395,11 +408,19 @@ class _PropertyDetailsState extends State<PropertyDetails>
         : 'Send an inquiry to start the conversation.';
 
     final card = Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(20), // Increased padding for a premium, airy feel
       decoration: BoxDecoration(
-        color: const Color(0xFFF3FAF6),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFD9F0E4)),
+        color: Colors.white, // Pure white background
+        borderRadius: BorderRadius.circular(20), // High squircle radius
+        border: Border.all(color: _grey.withValues(alpha: 0.1)), // Faint crisp border
+        boxShadow: [
+          // StayNest standard premium shadow
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,10 +429,10 @@ class _PropertyDetailsState extends State<PropertyDetails>
             scale: _responseIconScale,
             child: ResponseBadgeAnimation(
               performanceLabel: label,
-              size: 44,
+              size: 44, // The badge widget now handles its own padding natively
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
           Expanded(
             child: FadeTransition(
               opacity: _responseDetailsFade,
@@ -426,7 +447,7 @@ class _PropertyDetailsState extends State<PropertyDetails>
                           headline,
                           style: GoogleFonts.poppins(
                             color: _dark,
-                            fontSize: 13,
+                            fontSize: 14, // Slightly larger for better hierarchy
                             height: 1.3,
                             fontWeight: FontWeight.w700,
                           ),
@@ -437,7 +458,7 @@ class _PropertyDetailsState extends State<PropertyDetails>
                         Flexible(
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
+                              horizontal: 8,
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
@@ -450,7 +471,7 @@ class _PropertyDetailsState extends State<PropertyDetails>
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.poppins(
                                 color: accent,
-                                fontSize: 9,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -459,17 +480,17 @@ class _PropertyDetailsState extends State<PropertyDetails>
                       ],
                     ],
                   ),
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 6),
                   Text(
                     detail,
                     style: GoogleFonts.poppins(
                       color: _grey,
-                      fontSize: 11,
+                      fontSize: 12,
                       height: 1.4,
                     ),
                   ),
                   if (reliable && responseRate != null) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(
@@ -477,31 +498,31 @@ class _PropertyDetailsState extends State<PropertyDetails>
                             borderRadius: BorderRadius.circular(4),
                             child: LinearProgressIndicator(
                               value: responseRate / 100,
-                              minHeight: 5,
-                              backgroundColor: const Color(0xFFDCE7E1),
+                              minHeight: 6,
+                              backgroundColor: const Color(0xFFF3F4F6), // Clean grey track
                               color: accent,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         Text(
                           '$responseRate% response rate',
                           style: GoogleFonts.poppins(
                             color: _grey,
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
                     ),
                   ],
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
                     'Based on recent property inquiries. Send a message to ask about this home.',
                     style: GoogleFonts.poppins(
                       color: _grey,
-                      fontSize: 10,
-                      height: 1.35,
+                      fontSize: 11,
+                      height: 1.4,
                     ),
                   ),
                 ],
@@ -519,11 +540,11 @@ class _PropertyDetailsState extends State<PropertyDetails>
   }
 
   Widget _buildResponseSkeletonLine({required double width}) => Container(
-        height: 9,
+        height: 10,
         width: width,
         constraints: const BoxConstraints(maxWidth: double.infinity),
         decoration: BoxDecoration(
-          color: const Color(0xFFDCEBE2),
+          color: const Color(0xFFF3F4F6), // Match skeleton color to light theme
           borderRadius: BorderRadius.circular(8),
         ),
       );

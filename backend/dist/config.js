@@ -41,6 +41,7 @@ export const env = {
     storagePath: process.env.STORAGE_PATH || 'uploads',
     rateLimitWindowMs: parseIntOrDefault(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
     rateLimitMax: parseIntOrDefault(process.env.RATE_LIMIT_MAX, 120),
+    messageDeleteForEveryoneWindowMinutes: Math.min(Math.max(parseIntOrDefault(process.env.MESSAGE_DELETE_FOR_EVERYONE_MINUTES, 15), 1), 1440),
     cloudinaryCloudName: cloudinaryConfig.cloudinaryCloudName,
     cloudinaryApiKey: cloudinaryConfig.cloudinaryApiKey,
     cloudinaryApiSecret: cloudinaryConfig.cloudinaryApiSecret,

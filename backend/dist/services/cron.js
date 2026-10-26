@@ -118,6 +118,11 @@ async function sendUnreadMessageNudges() {
        FROM messages m
        WHERE m.created_at < now() - INTERVAL '1 hour'
          AND m.created_at >= now() - INTERVAL '3 hours'
+         AND m.deleted_for_everyone_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM message_user_deletions mud
+            WHERE mud.message_id = m.id AND mud.user_id = m.to_user_id
+         )
          AND NOT EXISTS (
            SELECT 1 FROM message_reads mr
            WHERE mr.message_id = m.id AND mr.user_id = m.to_user_id

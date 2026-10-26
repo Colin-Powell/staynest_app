@@ -201,16 +201,67 @@ export function initSocket(server) {
             const isTyping = data?.isTyping === true;
             io.to(`user:${to}`).emit('typing', { userId: uid, isTyping });
         });
-        // Seen receipts: client emits { to, messageIds }
-        // For now we forward receipt event to the recipient; DB persistence is handled by REST `mark-read`.
-        socket.on('mark_seen', (data) => {
+        // Seen receipts: REST persists the receipt; Socket.IO only notifies its sender.
+        socket.on('mark_seen', async (data) => {
             if (!uid)
                 return;
             const to = data?.to;
-            if (!to)
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            if (!to || !uuidPattern.test(to))
                 return;
-            const messageIds = (data?.messageIds ?? []).map((x) => x?.toString()).filter(Boolean);
-            io.to(`user:${to}`).emit('mark_seen', { userId: uid, messageIds });
+            const requestedIds = (data?.messageIds ?? [])
+                .map((value) => value?.toString())
+                .filter((value) => uuidPattern.test(value))
+                .slice(0, 100);
+            if (requestedIds.length === 0)
+                return;
+            try {
+                const readMessages = await query(`SELECT m.id
+             FROM messages m
+            WHERE m.id = ANY($1::uuid[])
+              AND m.from_user_id = $2
+              AND m.to_user_id = $3
+              AND m.deleted_for_everyone_at IS NULL
+              AND EXISTS (
+                SELECT 1 FROM message_reads mr
+                 WHERE mr.message_id = m.id AND mr.user_id = $3
+              )`, [requestedIds, to, uid]);
+                if (readMessages.rows.length > 0) {
+                    io.to(`user:${to}`).emit('mark_seen', {
+                        userId: uid,
+                        messageIds: readMessages.rows.map((message) => message.id),
+                    });
+                }
+            }
+            catch (error) {
+                console.error('[Messages] seen receipt failed:', error);
+            }
+        });
+        socket.on('message_delivered', async (data) => {
+            const messageIds = (data?.messageIds ?? [])
+                .map((value) => value?.toString())
+                .filter((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value))
+                .slice(0, 100);
+            if (messageIds.length === 0)
+                return;
+            try {
+                const delivered = await query(`UPDATE messages
+              SET delivered_at = COALESCE(delivered_at, now())
+            WHERE id = ANY($1::uuid[])
+              AND to_user_id = $2
+              AND deleted_for_everyone_at IS NULL
+            RETURNING id, from_user_id, conversation_id`, [messageIds, uid]);
+                for (const message of delivered.rows) {
+                    io.to(`user:${message.from_user_id}`).emit('message_delivered', {
+                        userId: uid,
+                        conversationId: message.conversation_id,
+                        messageIds: [message.id],
+                    });
+                }
+            }
+            catch (error) {
+                console.error('[Messages] delivery receipt failed:', error);
+            }
         });
         // Signaling events for WebRTC: offer/answer/ice
         socket.on('offer', (data) => {

@@ -39,3 +39,17 @@ test('migration preserves general threads and uniquely scopes property threads',
   assert.match(sql, /ALTER TABLE messages ALTER COLUMN conversation_id SET NOT NULL/);
   assert.match(sql, /ON DELETE CASCADE/);
 });
+
+test('message actions migration preserves independent visibility and reply links', () => {
+  const migrationPath = fileURLToPath(
+    new URL('../../scripts/add-message-actions.sql', import.meta.url),
+  );
+  const sql = readFileSync(migrationPath, 'utf8');
+
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS message_user_deletions/);
+  assert.match(sql, /deleted_for_everyone_at timestamptz/);
+  assert.match(sql, /delivered_at timestamptz/);
+  assert.match(sql, /reply_to_message_id uuid/);
+  assert.match(sql, /idempotency_key text/);
+  assert.match(sql, /idx_messages_sender_idempotency/);
+});

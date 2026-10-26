@@ -77,6 +77,18 @@ class SocketService {
       StreamController.broadcast();
   Stream<Map<String, dynamic>> get seen => _seenController.stream;
 
+  final StreamController<Map<String, dynamic>> _deletedController =
+      StreamController.broadcast();
+  Stream<Map<String, dynamic>> get deleted => _deletedController.stream;
+
+  final StreamController<Map<String, dynamic>> _deliveredController =
+      StreamController.broadcast();
+  Stream<Map<String, dynamic>> get delivered => _deliveredController.stream;
+
+  final StreamController<bool> _connectionController =
+      StreamController.broadcast();
+  Stream<bool> get connectionChanges => _connectionController.stream;
+
   void connect({String? url, String? token}) {
     disconnect();
     _seenMessageKeys.clear();
@@ -98,6 +110,7 @@ class SocketService {
     _socket = socket;
 
     socket.onConnect((_) {
+      _connectionController.add(true);
       socket.emit('presence:heartbeat');
       _presenceHeartbeatTimer?.cancel();
       _presenceHeartbeatTimer = Timer.periodic(
@@ -105,7 +118,10 @@ class SocketService {
         (_) => socket.emit('presence:heartbeat'),
       );
     });
-    socket.onDisconnect((_) => _presenceHeartbeatTimer?.cancel());
+    socket.onDisconnect((_) {
+      _connectionController.add(false);
+      _presenceHeartbeatTimer?.cancel();
+    });
 
     socket.on('message', (data) {
       final message = data is Map<String, dynamic>
@@ -123,6 +139,9 @@ class SocketService {
       }
 
       _msgController.add(message);
+      if (message.id.isNotEmpty) {
+        markDelivered([message.id]);
+      }
     });
 
     socket.on('presence', (data) {
@@ -148,6 +167,16 @@ class SocketService {
 
     socket.on('mark_seen', (data) {
       if (data is Map) _seenController.add(Map<String, dynamic>.from(data));
+    });
+
+    socket.on('message_deleted', (data) {
+      if (data is Map) _deletedController.add(Map<String, dynamic>.from(data));
+    });
+
+    socket.on('message_delivered', (data) {
+      if (data is Map) {
+        _deliveredController.add(Map<String, dynamic>.from(data));
+      }
     });
 
     socket.on('offer', (data) {
@@ -184,6 +213,11 @@ class SocketService {
     _socket?.emit('mark_seen', {'to': to, 'messageIds': messageIds});
   }
 
+  void markDelivered(List<String> messageIds) {
+    if (messageIds.isEmpty) return;
+    _socket?.emit('message_delivered', {'messageIds': messageIds});
+  }
+
   void sendOffer({required String to, required Map<String, dynamic> sdp}) {
     _socket?.emit('offer', {'to': to, 'sdp': sdp});
   }
@@ -203,5 +237,8 @@ class SocketService {
     _signalController.close();
     _typingController.close();
     _seenController.close();
+    _deletedController.close();
+    _deliveredController.close();
+    _connectionController.close();
   }
 }
