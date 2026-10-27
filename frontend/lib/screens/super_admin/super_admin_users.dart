@@ -5,6 +5,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/super_admin_service.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/theme.dart';
+import 'package:property_app/utils/date_time_format.dart';
 
 class SuperAdminUsersPage extends StatefulWidget {
   const SuperAdminUsersPage({super.key});
@@ -202,7 +203,10 @@ class _SuperAdminUsersPageState extends State<SuperAdminUsersPage> {
     final email = user['email']?.toString() ?? 'No email provided';
     final phone = user['phone']?.toString() ?? 'No phone provided';
     final role = (user['role']?.toString() ?? 'tenant').toUpperCase();
-    final joinDate = user['created_at']?.toString() ?? 'N/A';
+    final joinDate = formatReadableDateString(
+      user['created_at']?.toString(),
+      fallback: 'N/A',
+    );
     final propertyCount = user['property_count']?.toString() ?? '0';
     final activePropertyCount =
         user['active_property_count']?.toString() ?? '0';
@@ -210,7 +214,10 @@ class _SuperAdminUsersPageState extends State<SuperAdminUsersPage> {
         user['booking_count_as_landlord']?.toString() ?? '0';
     final tenantBookings = user['booking_count_as_tenant']?.toString() ?? '0';
     final revenue = user['total_revenue']?.toString() ?? '0';
-    final lastActive = user['last_active_at']?.toString() ?? 'N/A';
+    final lastActive = formatReadableTimestampString(
+      user['last_active_at']?.toString(),
+      fallback: 'N/A',
+    );
 
     final isVerified = user['verified'] == true;
     final isSuspended = user['status'] == 'suspended';

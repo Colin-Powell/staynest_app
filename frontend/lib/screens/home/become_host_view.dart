@@ -7,6 +7,7 @@ import 'package:property_app/services/verification_api.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/utils/app_downloads.dart';
+import 'package:property_app/utils/date_time_format.dart';
 
 const Color _hostGreen = Color(0xFF10B981);
 const Color _hostDark = Color(0xFF111827);
@@ -134,10 +135,10 @@ class _BecomeHostViewState extends State<BecomeHostView> {
       ].contains(_status);
 
   String _formatDate(dynamic raw) {
-    if (raw == null) return 'Not submitted';
-    final date = DateTime.tryParse(raw.toString())?.toLocal();
-    if (date == null) return 'Not submitted';
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+    return formatReadableDateString(
+      raw?.toString(),
+      fallback: 'Not submitted',
+    );
   }
 
   Future<void> _startOrContinue() async {

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/super_admin_service.dart';
 import 'package:property_app/theme.dart';
+import 'package:property_app/utils/date_time_format.dart';
 import 'package:property_app/utils/responsive_layout.dart';
 import 'package:property_app/utils/api_result.dart';
 
@@ -305,7 +306,7 @@ class _SuperAdminSettingsPageState extends State<SuperAdminSettingsPage> {
                     style: GoogleFonts.inter(
                         fontSize: 13, fontWeight: FontWeight.w600)),
                 subtitle: Text(
-                    '${log['admin_name'] ?? 'System'} • ${log['created_at'] ?? ''}',
+                    '${log['admin_name'] ?? 'System'} • ${formatReadableTimestampString(log['created_at']?.toString())}',
                     style: GoogleFonts.inter(
                         fontSize: 11, color: AppColors.gray500)),
               )),

@@ -9,6 +9,7 @@ import 'package:property_app/services/message_service.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/api_result.dart';
+import 'package:property_app/utils/date_time_format.dart';
 
 // ─── Design System Constants ──────────────────────────────────────────────────
 const Color _bg = Color(0xFFFAFAFA);
@@ -316,18 +317,7 @@ class _MessagesViewScreenState extends State<MessagesViewScreen> {
   }
 
   String _formatTime(DateTime? dt) {
-    if (dt == null) return '';
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-    if (diff.inHours < 24) return '${diff.inHours}h';
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) {
-      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      return days[dt.weekday - 1];
-    }
-    return '${dt.day}/${dt.month}';
+    return formatRelativeTimestamp(dt);
   }
 
   // ── Selection mode ──────────────────────────────────────────────────────────

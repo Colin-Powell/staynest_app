@@ -8,6 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:property_app/services/fcm_service.dart';
 import 'package:property_app/services/notification_api.dart';
 import 'package:property_app/theme.dart';
+import 'package:property_app/utils/date_time_format.dart';
 
 // ─── Design System Constants ──────────────────────────────────────────────────
 const _bg = StayNestColors.surfaceVariantLight;
@@ -192,13 +193,7 @@ class _NotificationsViewState extends State<NotificationsView>
   }
 
   String _formatTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final diff = now.difference(dateTime);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    return formatRelativeTimestamp(dateTime);
   }
 
   // ─── Actions ────────────────────────────────────────────────────────────────

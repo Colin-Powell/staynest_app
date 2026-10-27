@@ -6,6 +6,7 @@ import 'package:property_app/widgets/shared.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:property_app/screens/home/map_view.dart';
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/utils/date_time_format.dart';
 
 class LandlordReviewsView extends StatefulWidget {
   final VoidCallback onClose;
@@ -364,7 +365,10 @@ class _ReviewCardState extends State<_ReviewCard>
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          widget.review['date'],
+                          formatReadableTimestampString(
+                            widget.review['date']?.toString(),
+                            fallback: widget.review['date']?.toString() ?? '',
+                          ),
                           style: GoogleFonts.poppins(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,

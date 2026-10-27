@@ -5,6 +5,7 @@ import 'package:property_app/theme.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/responsive_layout.dart';
 import 'package:property_app/services/notification_api.dart';
+import 'package:property_app/utils/date_time_format.dart';
 import 'super_admin_dashboard.dart';
 import 'super_admin_properties.dart';
 import 'super_admin_users.dart';
@@ -75,13 +76,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
   }
 
   String _notificationTime(dynamic value) {
-    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
-    if (date == null) return '';
-    final diff = DateTime.now().difference(date);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
-    if (diff.inDays < 1) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+    return formatRelativeTimestampString(value?.toString());
   }
 
   int get _mobileSelectedIndex {
@@ -510,7 +505,8 @@ class _NotificationItem extends StatelessWidget {
       {required this.title,
       required this.time,
       required this.icon,
-      required this.unread, this.iconColor});
+      required this.unread,
+      this.iconColor});
 
   @override
   Widget build(BuildContext context) {

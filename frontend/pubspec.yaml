@@ -12,6 +12,7 @@ dependencies:
   flutter_web_plugins:
     sdk: flutter
   flutter_map: ^6.1.0
+  lottie: ^3.1.0
   latlong2: ^0.9.0
   http: ^1.6.0
   flutter_dotenv: ^5.0.3
@@ -85,3 +86,4 @@ flutter:
     - config.env
     - assets/images/
     - assets/illustrations/
+    - assets/animations/

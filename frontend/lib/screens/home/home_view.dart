@@ -1629,7 +1629,11 @@ class _DesktopCollectionState extends State<_DesktopCollection> {
   }
 }
 
-class _ViewMorePropertyCard extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────
+// REDESIGNED ISLAND VIEW-MORE CARD (image only + animation)
+// ─────────────────────────────────────────────────────────────
+
+class _ViewMorePropertyCard extends StatefulWidget {
   final double width;
   final double height;
   final List<Property> properties;
@@ -1643,106 +1647,219 @@ class _ViewMorePropertyCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final collage = properties.take(4).toList(growable: false);
+  State<_ViewMorePropertyCard> createState() => _ViewMorePropertyCardState();
+}
 
-    Widget imageAt(int index) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(7),
-        child: buildPropertyImage(
-          collage[index % collage.length].image,
-          width: double.infinity,
-          height: double.infinity,
-          fit: BoxFit.cover,
-        ),
-      );
-    }
+class _ViewMorePropertyCardState extends State<_ViewMorePropertyCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+  late Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+
+    _scale = Tween<double>(begin: 0.86, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+    );
+    _fade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+
+    // Staggered entrance
+    Future.delayed(const Duration(milliseconds: 120), () {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final collage = widget.properties.take(4).toList(growable: false);
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: width,
-          height: height,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: _border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+        onTap: widget.onTap,
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return Transform.scale(
+              scale: _scale.value,
+              child: Opacity(
+                opacity: _fade.value,
+                child: child,
               ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Expanded(child: imageAt(0)),
-                            const SizedBox(width: 4),
-                            Expanded(child: imageAt(1)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Expanded(child: imageAt(2)),
-                            const SizedBox(width: 4),
-                            Expanded(child: imageAt(3)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+            );
+          },
+          child: Container(
+            width: widget.width,
+            height: widget.height,
+            decoration: BoxDecoration(
+              color: const Color(0xFF111827),
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.22),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
                 ),
-              ),
-              const SizedBox(height: 14),
-              Row(
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  // ── Pure image collage (no text, no icons) ──
+                  if (collage.isEmpty)
+                    Container(color: const Color(0xFF1F2937))
+                  else if (collage.length == 1)
+                    buildPropertyImage(
+                      collage[0].image,
+                      width: double.infinity,
+                      height: double.infinity,
+                      fit: BoxFit.cover,
+                    )
+                  else
+                    Column(
                       children: [
-                        Text(
-                          'View more',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: _dark,
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: buildPropertyImage(
+                                  collage[0].image,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              if (collage.length > 1) ...[
+                                const SizedBox(width: 3),
+                                Expanded(
+                                  child: buildPropertyImage(
+                                    collage[1].image,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'See all ${properties.length} stays',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            color: _grey,
+                        if (collage.length > 2) ...[
+                          const SizedBox(height: 3),
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: buildPropertyImage(
+                                    collage[2].image,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                                if (collage.length > 3) ...[
+                                  const SizedBox(width: 3),
+                                  Expanded(
+                                    child: buildPropertyImage(
+                                      collage[3].image,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
+
+                  // Soft dark gradient at the bottom for depth
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 80,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.35),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                  const Icon(PhosphorIconsBold.arrowRight,
-                      size: 18, color: _dark),
+
+                  // Subtle continuous breathing so the island feels alive
+                  const _BreathingOverlay(),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Very subtle continuous scale pulse so the island feels alive
+class _BreathingOverlay extends StatefulWidget {
+  const _BreathingOverlay();
+
+  @override
+  State<_BreathingOverlay> createState() => _BreathingOverlayState();
+}
+
+class _BreathingOverlayState extends State<_BreathingOverlay>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _breath;
+
+  @override
+  void initState() {
+    super.initState();
+    _breath = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2800),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _breath,
+      builder: (context, child) {
+        final scale = 1.0 + (_breath.value * 0.012); // extremely subtle
+        return Transform.scale(
+          scale: scale,
+          child: const SizedBox.expand(),
+        );
+      },
     );
   }
 }

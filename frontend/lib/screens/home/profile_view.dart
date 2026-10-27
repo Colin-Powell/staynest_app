@@ -9,6 +9,7 @@ import 'package:property_app/utils/app_downloads.dart';
 import 'package:property_app/repository/remote_database_repository.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/services/verification_api.dart';
+import 'package:property_app/utils/date_time_format.dart';
 
 // --- Airbnb Style Constants ---
 const Color _textDark = Color(0xFF222222);
@@ -720,7 +721,7 @@ class _ProfileViewState extends State<ProfileView>
           if (date != null) ...[
             const SizedBox(height: 6),
             Text(
-              'Submitted ${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}',
+              'Submitted ${formatReadableDate(date)}',
               style: GoogleFonts.poppins(color: _textLight, fontSize: 11),
             ),
           ],

@@ -71,25 +71,17 @@ class OnboardingBottomSheet extends StatelessWidget {
           ),
           const SizedBox(height: 32),
           if (imagePath != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(24),
+            SizedBox(
+              height: 160,
+              width: double.infinity,
               child: Image.asset(
                 imagePath!,
-                height: 160,
-                width: double.infinity,
+                gaplessPlayback: true,
                 fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  height: 160,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: AppColors.gray100,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.image_not_supported_outlined,
-                        size: 48, color: AppColors.gray400),
-                  ),
-                ),
+                errorBuilder: (context, error, stackTrace) {
+                  debugPrint('Onboarding image failed to load: $error');
+                  return const SizedBox(height: 160);
+                },
               ),
             )
           else

@@ -773,24 +773,30 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
             ),
           );
         },
-        '/commute': (context) => CommuteMethodsView(
-              targetLocation: (ModalRoute.of(context)?.settings.arguments
-                  as Map<String, dynamic>?)?['targetLocation'] as LatLng?,
-              targetProperty: (ModalRoute.of(context)?.settings.arguments
-                  as Map<String, dynamic>?)?['property'] as Property?,
-              onClose: () => Navigator.pop(context),
-              onStartNavigation: () {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => MapViewScreen(
-                            onBack: () => Navigator.pop(context),
-                            onFilter: () {},
-                            isNavigation: true,
-                            navOrigin: null,
-                            navDestination: null)));
-              },
-            ),
+        '/commute': (context) {
+          final arguments = ModalRoute.of(context)?.settings.arguments;
+          final routeArguments = arguments is Map ? arguments : const {};
+          final targetLocation = routeArguments['targetLocation'];
+          final targetProperty =
+              routeArguments['targetProperty'] ?? routeArguments['property'];
+
+          return CommuteMethodsView(
+            targetLocation: targetLocation is LatLng ? targetLocation : null,
+            targetProperty: targetProperty is Property ? targetProperty : null,
+            onClose: () => Navigator.pop(context),
+            onStartNavigation: () {
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => MapViewScreen(
+                          onBack: () => Navigator.pop(context),
+                          onFilter: () {},
+                          isNavigation: true,
+                          navOrigin: null,
+                          navDestination: null)));
+            },
+          );
+        },
         '/booking': (context) {
           final args = ModalRoute.of(context)!.settings.arguments
               as Map<String, String>?;
@@ -2127,7 +2133,8 @@ class _AppShellState extends State<AppShell> {
       child: _buildScreen(),
     );
 
-    final bool hideBottomNav = _isOverlayOpen || _isMessageSelectionMode;
+    final bool hideBottomNav =
+        _isOverlayOpen || _isMessageSelectionMode || _screen == _AppScreen.map;
 
     return LayoutBuilder(builder: (context, constraints) {
       final isMobile = constraints.maxWidth < 768;

@@ -7,6 +7,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:property_app/services/fcm_service.dart';
 import 'package:property_app/services/notification_api.dart';
+import 'package:property_app/utils/date_time_format.dart';
 
 // ─── Design System Constants ──────────────────────────────────────────────────
 const Color _bg = Color(0xFFFAFAFA);
@@ -113,10 +114,13 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
       setState(() {
         _items.clear();
         for (var item in data) {
-          final created = DateTime.tryParse(item['created_at'].toString())?.toLocal() ?? DateTime.now();
+          final created =
+              DateTime.tryParse(item['created_at'].toString())?.toLocal() ??
+                  DateTime.now();
           final dataMap = item['data'] ?? {};
-          final unreadCount = int.tryParse(dataMap['unreadCount']?.toString() ?? '') ?? 0;
-          
+          final unreadCount =
+              int.tryParse(dataMap['unreadCount']?.toString() ?? '') ?? 0;
+
           _items.add(AdminNotificationItem(
             id: item['id']?.toString() ?? UniqueKey().toString(),
             title: item['title'] ?? 'Notification',
@@ -141,13 +145,7 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
   }
 
   String _formatTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final diff = now.difference(dateTime);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    return formatRelativeTimestamp(dateTime);
   }
 
   // ─── Actions ────────────────────────────────────────────────────────────────
@@ -218,7 +216,8 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
         GestureDetector(
           onTap: () => Navigator.pop(context),
           behavior: HitTestBehavior.opaque,
-          child: const Icon(PhosphorIconsRegular.caretLeft, color: _dark, size: 28),
+          child: const Icon(PhosphorIconsRegular.caretLeft,
+              color: _dark, size: 28),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -233,8 +232,10 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
           ),
         ),
         PopupMenuButton<String>(
-          icon: const Icon(PhosphorIconsRegular.dotsThreeVertical, color: _dark, size: 28),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          icon: const Icon(PhosphorIconsRegular.dotsThreeVertical,
+              color: _dark, size: 28),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           color: _surface,
           elevation: 8,
           offset: const Offset(0, 40),
@@ -247,9 +248,12 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
               value: 'read_all',
               child: Row(
                 children: [
-                  const Icon(PhosphorIconsRegular.checkCircle, color: _dark, size: 20),
+                  const Icon(PhosphorIconsRegular.checkCircle,
+                      color: _dark, size: 20),
                   const SizedBox(width: 12),
-                  Text('Mark all as read', style: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 14)),
+                  Text('Mark all as read',
+                      style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w500, fontSize: 14)),
                 ],
               ),
             ),
@@ -257,9 +261,12 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
               value: 'select',
               child: Row(
                 children: [
-                  const Icon(PhosphorIconsRegular.checkSquareOffset, color: _dark, size: 20),
+                  const Icon(PhosphorIconsRegular.checkSquareOffset,
+                      color: _dark, size: 20),
                   const SizedBox(width: 12),
-                  Text('Select messages', style: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 14)),
+                  Text('Select messages',
+                      style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w500, fontSize: 14)),
                 ],
               ),
             ),
@@ -294,7 +301,9 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
           onTap: _selectAll,
           behavior: HitTestBehavior.opaque,
           child: Text(
-            _selectedIds.length == _items.length ? 'Unselect All' : 'Select All',
+            _selectedIds.length == _items.length
+                ? 'Unselect All'
+                : 'Select All',
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -323,7 +332,8 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                 child: Container(
                   width: 48,
                   height: 48,
-                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                  decoration: const BoxDecoration(
+                      color: Colors.white, shape: BoxShape.circle),
                 ),
               ),
               const SizedBox(width: 16),
@@ -332,18 +342,36 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Shimmer.fromColors(
-                      baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                      child: Container(width: 150, height: 16, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                      baseColor: Colors.grey.shade200,
+                      highlightColor: Colors.grey.shade100,
+                      child: Container(
+                          width: 150,
+                          height: 16,
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4))),
                     ),
                     const SizedBox(height: 8),
                     Shimmer.fromColors(
-                      baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                      child: Container(width: double.infinity, height: 14, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                      baseColor: Colors.grey.shade200,
+                      highlightColor: Colors.grey.shade100,
+                      child: Container(
+                          width: double.infinity,
+                          height: 14,
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4))),
                     ),
                     const SizedBox(height: 6),
                     Shimmer.fromColors(
-                      baseColor: Colors.grey.shade200, highlightColor: Colors.grey.shade100,
-                      child: Container(width: 200, height: 14, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4))),
+                      baseColor: Colors.grey.shade200,
+                      highlightColor: Colors.grey.shade100,
+                      child: Container(
+                          width: 200,
+                          height: 14,
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4))),
                     ),
                   ],
                 ),
@@ -364,13 +392,16 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
           children: [
             Container(
               padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(color: _grey.withOpacity(0.1), shape: BoxShape.circle),
-              child: const Icon(PhosphorIconsRegular.bellSlash, color: _grey, size: 48),
+              decoration: BoxDecoration(
+                  color: _grey.withOpacity(0.1), shape: BoxShape.circle),
+              child: const Icon(PhosphorIconsRegular.bellSlash,
+                  color: _grey, size: 48),
             ),
             const SizedBox(height: 24),
             Text(
               'No notifications yet',
-              style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: _dark),
+              style: GoogleFonts.poppins(
+                  fontSize: 20, fontWeight: FontWeight.w700, color: _dark),
             ),
             const SizedBox(height: 8),
             Text(
@@ -397,7 +428,8 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
     return FadeTransition(
       opacity: animation,
       child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(animation),
+        position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
+            .animate(animation),
         child: GestureDetector(
           onLongPress: () {
             if (!_isSelectionMode) {
@@ -422,12 +454,21 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
               color: item.isRead ? _surface : _primaryText.withOpacity(0.04),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isSelected ? _primaryText : (item.isRead ? _grey.withOpacity(0.15) : _primaryText.withOpacity(0.1)),
+                color: isSelected
+                    ? _primaryText
+                    : (item.isRead
+                        ? _grey.withOpacity(0.15)
+                        : _primaryText.withOpacity(0.1)),
                 width: isSelected ? 2.0 : 1.0,
               ),
               boxShadow: (item.isRead && !isSelected)
                   ? []
-                  : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+                  : [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4))
+                    ],
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -436,7 +477,9 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                   Padding(
                     padding: const EdgeInsets.only(right: 16, top: 12),
                     child: Icon(
-                      isSelected ? PhosphorIconsFill.checkCircle : PhosphorIconsRegular.circle,
+                      isSelected
+                          ? PhosphorIconsFill.checkCircle
+                          : PhosphorIconsRegular.circle,
                       color: isSelected ? _primaryText : _grey,
                       size: 24,
                     ),
@@ -446,7 +489,8 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                     margin: const EdgeInsets.only(right: 12, top: 18),
                     width: 8,
                     height: 8,
-                    decoration: const BoxDecoration(color: _primaryText, shape: BoxShape.circle),
+                    decoration: const BoxDecoration(
+                        color: _primaryText, shape: BoxShape.circle),
                   ),
 
                 // Icon Container
@@ -456,10 +500,14 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                   decoration: BoxDecoration(
                     color: item.isRead ? _bg : _surface,
                     shape: BoxShape.circle,
-                    border: item.isRead ? null : Border.all(color: _primaryText.withOpacity(0.2)),
+                    border: item.isRead
+                        ? null
+                        : Border.all(color: _primaryText.withOpacity(0.2)),
                   ),
                   child: Icon(
-                    item.isRead ? PhosphorIconsRegular.bell : PhosphorIconsFill.bellRinging,
+                    item.isRead
+                        ? PhosphorIconsRegular.bell
+                        : PhosphorIconsFill.bellRinging,
                     color: item.isRead ? _grey : _primaryText,
                     size: 20,
                   ),
@@ -478,7 +526,9 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                               item.title,
                               style: GoogleFonts.poppins(
                                 fontSize: 15,
-                                fontWeight: item.isRead ? FontWeight.w600 : FontWeight.w700,
+                                fontWeight: item.isRead
+                                    ? FontWeight.w600
+                                    : FontWeight.w700,
                                 color: _dark,
                               ),
                               maxLines: 1,
@@ -491,7 +541,9 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                             style: GoogleFonts.poppins(
                               fontSize: 12,
                               color: item.isRead ? _grey : _primaryText,
-                              fontWeight: item.isRead ? FontWeight.w500 : FontWeight.w600,
+                              fontWeight: item.isRead
+                                  ? FontWeight.w500
+                                  : FontWeight.w600,
                             ),
                           ),
                         ],
@@ -502,7 +554,8 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                         style: GoogleFonts.poppins(
                           fontSize: 13,
                           color: item.isRead ? _grey : _dark.withOpacity(0.8),
-                          fontWeight: item.isRead ? FontWeight.w400 : FontWeight.w500,
+                          fontWeight:
+                              item.isRead ? FontWeight.w400 : FontWeight.w500,
                           height: 1.4,
                         ),
                         maxLines: 2,
@@ -523,7 +576,8 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
-      bottom: _isSelectionMode ? MediaQuery.of(context).padding.bottom + 24 : -100,
+      bottom:
+          _isSelectionMode ? MediaQuery.of(context).padding.bottom + 24 : -100,
       left: 24,
       right: 24,
       child: Container(
@@ -549,11 +603,17 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(PhosphorIconsRegular.envelopeOpen,
-                      color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white),
+                      color: _selectedIds.isEmpty
+                          ? _grey.withOpacity(0.5)
+                          : Colors.white),
                   const SizedBox(height: 4),
                   Text('Read',
                       style: GoogleFonts.poppins(
-                          fontSize: 12, fontWeight: FontWeight.w600, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : Colors.white)),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _selectedIds.isEmpty
+                              ? _grey.withOpacity(0.5)
+                              : Colors.white)),
                 ],
               ),
             ),
@@ -565,11 +625,17 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(PhosphorIconsRegular.trash,
-                      color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444)),
+                      color: _selectedIds.isEmpty
+                          ? _grey.withOpacity(0.5)
+                          : const Color(0xFFEF4444)),
                   const SizedBox(height: 4),
                   Text('Delete',
                       style: GoogleFonts.poppins(
-                          fontSize: 12, fontWeight: FontWeight.w600, color: _selectedIds.isEmpty ? _grey.withOpacity(0.5) : const Color(0xFFEF4444))),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _selectedIds.isEmpty
+                              ? _grey.withOpacity(0.5)
+                              : const Color(0xFFEF4444))),
                 ],
               ),
             ),
@@ -598,7 +664,9 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                       padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
-                        child: _isSelectionMode ? _buildSelectionHeader() : _buildNormalHeader(),
+                        child: _isSelectionMode
+                            ? _buildSelectionHeader()
+                            : _buildNormalHeader(),
                       ),
                     ),
                     Expanded(
@@ -611,11 +679,19 @@ class _AdminNotificationsViewState extends State<AdminNotificationsView>
                                   backgroundColor: _surface,
                                   onRefresh: _loadNotifications,
                                   child: ListView.builder(
-                                    padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(context).padding.bottom + 120),
-                                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                                    padding: EdgeInsets.fromLTRB(
+                                        24,
+                                        8,
+                                        24,
+                                        MediaQuery.of(context).padding.bottom +
+                                            120),
+                                    physics: const BouncingScrollPhysics(
+                                        parent:
+                                            AlwaysScrollableScrollPhysics()),
                                     itemCount: _items.length,
                                     itemBuilder: (context, index) {
-                                      return _buildAdminNotificationItem(index, _items[index]);
+                                      return _buildAdminNotificationItem(
+                                          index, _items[index]);
                                     },
                                   ),
                                 ),

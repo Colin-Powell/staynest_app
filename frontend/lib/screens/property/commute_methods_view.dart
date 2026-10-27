@@ -12,6 +12,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:property_app/models/property.dart';
+import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/services/property_service.dart';
 import 'package:property_app/services/cache_engine.dart';
 import 'package:property_app/widgets/property_image.dart';
@@ -186,6 +187,9 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
   final ValueNotifier<double> _headingNotifier = ValueNotifier(0);
 
   bool _fetchingLocation = true;
+  bool _checkingBookingAccess = false;
+  bool _hasBookingAccess = true;
+  bool _resolvingDestination = false;
   _TransportMode _selectedMode = _TransportMode.drive;
   String? _locationError;
   Set<_TransportMode> _failedModes = {};
@@ -248,6 +252,9 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
             parent: _animController, curve: Curves.easeOutCubic));
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
 
+    _checkingBookingAccess = widget.targetProperty != null;
+    _hasBookingAccess = widget.targetProperty == null;
+
     if (widget.targetProperty != null) {
       _activeProperty = widget.targetProperty;
       _toController.text = widget.targetProperty!.name;
@@ -259,6 +266,8 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
     final hasPropCoords = prop != null && prop.lat != 0 && prop.lng != 0;
     _destination = widget.targetLocation ??
         (hasPropCoords ? LatLng(prop!.lat, prop.lng) : null);
+    _resolvingDestination =
+        widget.targetProperty != null && _destination == null;
 
     _animController.forward();
     _initializeData();
@@ -280,6 +289,27 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
 
   Future<void> _initializeData() async {
     setState(() => _fetchingLocation = true);
+
+    final targetProperty = widget.targetProperty;
+    if (targetProperty != null) {
+      final hasBooking = await _hasLocationBooking(targetProperty.id);
+      if (!mounted) return;
+      setState(() {
+        _checkingBookingAccess = false;
+        _hasBookingAccess = hasBooking;
+      });
+      if (!hasBooking) return;
+
+      if (_destination == null) {
+        final destination =
+            await _geocodePropertyAddress(targetProperty.location);
+        if (!mounted) return;
+        setState(() {
+          _destination = destination;
+          _resolvingDestination = false;
+        });
+      }
+    }
 
     try {
       _allProperties = await PropertyService.instance.fetchProperties();
@@ -326,6 +356,63 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
       _finishLoadingLocation(
         error: 'Could not read your location. Check permissions and try again.',
       );
+    }
+  }
+
+  Future<bool> _hasLocationBooking(String propertyId) async {
+    try {
+      final bookings = await BookingService.fetchBookings();
+      return bookings.any((booking) {
+        if (booking is! Map) return false;
+        final bookingPropertyId =
+            (booking['property_id'] ?? booking['propertyId'])
+                ?.toString()
+                .trim();
+        final status = booking['status']?.toString().trim().toLowerCase();
+        return bookingPropertyId == propertyId &&
+            const {'confirmed', 'completed'}.contains(status);
+      });
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<LatLng?> _geocodePropertyAddress(String address) async {
+    if (address.trim().isEmpty) return null;
+    try {
+      final cacheKey =
+          'commute_property_geocode_${Uri.encodeComponent(address.trim().toLowerCase())}';
+      final cached =
+          await CacheEngine.instance.getOrFetch<Map<String, dynamic>>(
+        key: cacheKey,
+        ttl: const Duration(days: 30),
+        networkFetcher: () async {
+          final uri = Uri.parse(
+            'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(address)}&format=json&limit=1',
+          );
+          final response = await http.get(
+            uri,
+            headers: {'User-Agent': 'PropertyApp/1.0'},
+          ).timeout(const Duration(seconds: 10));
+          if (response.statusCode != 200) {
+            throw StateError('Property geocoding failed');
+          }
+          final results = jsonDecode(response.body);
+          if (results is! List || results.isEmpty || results.first is! Map) {
+            throw StateError('Property location not found');
+          }
+          return {
+            'lat': results.first['lat'],
+            'lng': results.first['lon'],
+          };
+        },
+      );
+      final latitude = double.tryParse(cached['lat']?.toString() ?? '');
+      final longitude = double.tryParse(cached['lng']?.toString() ?? '');
+      if (latitude == null || longitude == null) return null;
+      return LatLng(latitude, longitude);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -567,6 +654,47 @@ class _CommuteMethodsViewState extends State<CommuteMethodsView>
 
   @override
   Widget build(BuildContext context) {
+    if (_checkingBookingAccess) {
+      return const Scaffold(
+        backgroundColor: _bg,
+        body: Center(child: CircularProgressIndicator(color: _primary)),
+      );
+    }
+
+    if (widget.targetProperty != null && !_hasBookingAccess) {
+      return Scaffold(
+        backgroundColor: _bg,
+        appBar: AppBar(
+          backgroundColor: _bg,
+          leading: IconButton(
+            onPressed: widget.onClose,
+            icon: const Icon(Icons.arrow_back_rounded, color: _dark),
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'A confirmed booking is required to view this property route.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                color: _dark,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_resolvingDestination) {
+      return const Scaffold(
+        backgroundColor: _bg,
+        body: Center(child: CircularProgressIndicator(color: _primary)),
+      );
+    }
+
     if (_destination == null) {
       return Scaffold(
         backgroundColor: _bg,

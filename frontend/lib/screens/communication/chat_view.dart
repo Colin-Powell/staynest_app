@@ -10,6 +10,7 @@ import 'package:property_app/services/message_service.dart';
 import 'package:property_app/services/socket_service.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/presence_format.dart';
+import 'package:property_app/utils/date_time_format.dart';
 import 'package:property_app/widgets/property_conversation_header.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
@@ -527,10 +528,7 @@ class _ChatViewState extends State<ChatView> {
   }
 
   String _formatTime(DateTime dateTime) {
-    final local = dateTime.toLocal();
-    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '$hour:$minute ${local.hour >= 12 ? 'PM' : 'AM'}';
+    return formatReadableTimestamp(dateTime);
   }
 
   Widget _messageMenu(ChatMessage message) {

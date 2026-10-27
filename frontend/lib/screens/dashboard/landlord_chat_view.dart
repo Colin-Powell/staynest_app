@@ -10,6 +10,7 @@ import 'package:property_app/session/app_session.dart';
 import 'package:uuid/uuid.dart';
 import 'package:property_app/models/communication_models.dart';
 import 'package:property_app/utils/presence_format.dart';
+import 'package:property_app/utils/date_time_format.dart';
 import 'package:property_app/widgets/property_conversation_header.dart';
 import 'package:property_app/widgets/response_badge_animation.dart';
 
@@ -403,11 +404,7 @@ class _LandlordChatViewState extends State<LandlordChatView>
   }
 
   String _formatTime(DateTime dt) {
-    final hour = dt.hour;
-    final minute = dt.minute.toString().padLeft(2, '0');
-    final period = hour >= 12 ? 'PM' : 'AM';
-    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-    return '$displayHour:$minute $period';
+    return formatReadableTimestamp(dt);
   }
 
   Widget _buildStaggered({required Widget child, required int index}) {

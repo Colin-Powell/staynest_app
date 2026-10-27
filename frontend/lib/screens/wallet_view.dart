@@ -7,6 +7,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:property_app/services/wallet_api.dart';
 import 'package:property_app/services/landlord_payment_methods_service.dart';
 import 'package:property_app/utils/api_result.dart';
+import 'package:property_app/utils/date_time_format.dart';
 
 // ─── Design System Constants ──────────────────────────────────────────────────
 const Color _bg = Color(0xFFFAFAFA);
@@ -78,20 +79,7 @@ class _WalletViewState extends State<WalletView> {
   }
 
   String _formatDate(String dateStr) {
-    try {
-      final date = DateTime.parse(dateStr).toLocal();
-      final now = DateTime.now();
-      final diff = now.difference(date);
-
-      if (diff.inDays == 0 && now.day == date.day) {
-        return 'Today, ${DateFormat.jm().format(date)}';
-      } else if (diff.inDays == 1 && now.day - 1 == date.day) {
-        return 'Yesterday, ${DateFormat.jm().format(date)}';
-      }
-      return DateFormat('MMM d, yyyy • h:mm a').format(date);
-    } catch (_) {
-      return dateStr;
-    }
+    return formatReadableTimestampString(dateStr, fallback: dateStr);
   }
 
   // ─── FINTECH ACTIONS & MODALS ───────────────────────────────────────────────

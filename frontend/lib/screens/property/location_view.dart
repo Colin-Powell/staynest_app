@@ -11,11 +11,11 @@ import 'package:latlong2/latlong.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:property_app/models/property.dart';
-import 'package:property_app/repository/remote_database_repository.dart';
-import 'package:property_app/session/app_session.dart';
+import 'package:property_app/services/booking_service.dart';
 import 'package:property_app/services/property_service.dart';
 import 'package:property_app/services/cache_engine.dart';
 import 'package:property_app/widgets/property_image.dart';
+import 'package:property_app/widgets/onboarding_bottom_sheet.dart';
 
 // ─── Tenant Design System Constants ───────────────────────────────────────────
 const Color _bg = Color(0xFFFAFAFA);
@@ -121,11 +121,10 @@ class _LocationViewState extends State<LocationView> {
   bool _desktopSearchFocused = false;
   bool _desktopSidebarCollapsed = false;
 
-  bool _loadingPlaces = false;
   bool _fetchingLocation = true;
   bool _mapReady = false;
   bool _checkingBookingAccess = false;
-  bool _hasCompletedBooking = true;
+  bool _hasConfirmedBooking = true;
   bool _commuteLoading = false;
   String? _commuteError;
   String? _locationError;
@@ -160,11 +159,24 @@ class _LocationViewState extends State<LocationView> {
     super.initState();
     _activeProperty = widget.property;
     _checkingBookingAccess = widget.property != null;
-    _hasCompletedBooking = widget.property == null;
+    _hasConfirmedBooking = widget.property == null;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _prepareLocation();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _showOnboardingIfNeeded();
+      if (mounted) await _prepareLocation();
     });
+  }
+
+  Future<void> _showOnboardingIfNeeded() async {
+    if (!mounted) return;
+    await OnboardingBottomSheet.show(
+      context: context,
+      title: 'Plan your route',
+      subtitle:
+          'Check the property location, compare travel options, and open directions when you are ready.',
+      ctaText: 'Get started',
+      imagePath: 'assets/images/map-route.gif',
+    );
   }
 
   @override
@@ -175,24 +187,37 @@ class _LocationViewState extends State<LocationView> {
 
   Future<void> _prepareLocation() async {
     if (_activeProperty != null) {
-      var hasCompletedBooking = false;
-      if (!AppSession.isGuest) {
-        try {
-          final eligibility = await RemoteDatabaseRepository()
-              .getReviewEligibility(_activeProperty!.id);
-          hasCompletedBooking =
-              eligibility['bookingId']?.toString().isNotEmpty == true;
-        } catch (_) {}
-      }
+      final hasConfirmedBooking =
+          await _hasConfirmedBookingFor(_activeProperty!.id);
       if (!mounted) return;
       setState(() {
         _checkingBookingAccess = false;
-        _hasCompletedBooking = hasCompletedBooking;
+        _hasConfirmedBooking = hasConfirmedBooking;
       });
-      if (!hasCompletedBooking) return;
+      if (!hasConfirmedBooking) return;
     }
 
     await _initializeLocation();
+  }
+
+  Future<bool> _hasConfirmedBookingFor(String propertyId) async {
+    try {
+      final bookings = await BookingService.fetchBookings();
+      return bookings.any(
+        (booking) {
+          if (booking is! Map) return false;
+          final bookingPropertyId =
+              (booking['property_id'] ?? booking['propertyId'])
+                  ?.toString()
+                  .trim();
+          final status = booking['status']?.toString().trim().toLowerCase();
+          return bookingPropertyId == propertyId &&
+              const {'confirmed', 'completed'}.contains(status);
+        },
+      );
+    } catch (_) {
+      return false;
+    }
   }
 
   // ─────────────────────────────────────────────
@@ -519,15 +544,8 @@ class _LocationViewState extends State<LocationView> {
   }
 
   Future<bool> _hasLocationAccess(Property property) async {
-    if (widget.property?.id == property.id && _hasCompletedBooking) return true;
-    if (AppSession.isGuest) return false;
-    try {
-      final eligibility =
-          await RemoteDatabaseRepository().getReviewEligibility(property.id);
-      return eligibility['bookingId']?.toString().isNotEmpty == true;
-    } catch (_) {
-      return false;
-    }
+    if (widget.property?.id == property.id && _hasConfirmedBooking) return true;
+    return _hasConfirmedBookingFor(property.id);
   }
 
   Future<void> _openDesktopProperty(Property property, LatLng? location) async {
@@ -693,14 +711,9 @@ class _LocationViewState extends State<LocationView> {
       return;
     }
 
-    setState(() => _loadingPlaces = true);
-
     if (!_hasGoogleApiKeyConfigured) {
       if (mounted) {
-        setState(() {
-          nearbyPlaces = _localNearbyPlaces(location);
-          _loadingPlaces = false;
-        });
+        setState(() => nearbyPlaces = _localNearbyPlaces(location));
       }
       return;
     }
@@ -727,8 +740,6 @@ class _LocationViewState extends State<LocationView> {
     } catch (_) {
       if (mounted) setState(() => nearbyPlaces = _localNearbyPlaces(location));
     }
-
-    if (mounted) setState(() => _loadingPlaces = false);
   }
 
   List<Map<String, dynamic>> _localNearbyPlaces(LatLng origin) {
@@ -833,7 +844,7 @@ class _LocationViewState extends State<LocationView> {
       );
     }
 
-    if (widget.property != null && !_hasCompletedBooking) {
+    if (widget.property != null && !_hasConfirmedBooking) {
       return Scaffold(
         backgroundColor: _bg,
         appBar: AppBar(
@@ -847,7 +858,7 @@ class _LocationViewState extends State<LocationView> {
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
-              'Complete a booking for this property to access its location services.',
+              'A confirmed booking is required to access this property location.',
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
                 color: _dark,
@@ -1337,7 +1348,7 @@ class _LocationViewState extends State<LocationView> {
                 return Marker(
                   point: point,
                   width: 100, // Adjusted width for cleaner pill shape
-                  height: 40,
+                  height: 48,
                   alignment: Alignment.topCenter,
                   child: GestureDetector(
                     onTap: () {
@@ -1467,49 +1478,6 @@ class _LocationViewState extends State<LocationView> {
           overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 24),
-
-        // Nearby Places Header
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Nearby Places',
-              style: GoogleFonts.poppins(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: _dark,
-              ),
-            ),
-            IconButton(
-              tooltip: 'Refresh nearby places',
-              onPressed: () => fetchNearbyPlaces(),
-              icon: const Icon(PhosphorIconsRegular.arrowsClockwise,
-                  color: _desktopAccent, size: 18),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        // Nearby Places List
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: _fetchingLocation || _loadingPlaces
-              ? const Padding(
-                  padding: EdgeInsets.all(20),
-                  child:
-                      Center(child: CircularProgressIndicator(color: _primary)),
-                )
-              : nearbyPlaces.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Center(
-                        child: Text('No nearby places found.',
-                            style: GoogleFonts.poppins(color: _grey)),
-                      ),
-                    )
-                  : _buildPlacesList(isDesktop: isDesktop),
-        ),
-
         if (isDesktop)
           _buildDesktopCommutePanel()
         else ...[
@@ -1520,14 +1488,7 @@ class _LocationViewState extends State<LocationView> {
             child: ElevatedButton(
               onPressed: widget.onGetDirections ??
                   () {
-                    final targetLoc = _activePropertyLocation ??
-                        (nearbyPlaces.isNotEmpty
-                            ? LatLng(
-                                nearbyPlaces.first['geometry']['location']
-                                    ['lat'],
-                                nearbyPlaces.first['geometry']['location']
-                                    ['lng'])
-                            : null);
+                    final targetLoc = _activePropertyLocation;
                     if (targetLoc != null) {
                       _openDirections(targetLoc.latitude, targetLoc.longitude);
                     } else {
@@ -1722,160 +1683,6 @@ class _LocationViewState extends State<LocationView> {
         ),
       ],
     );
-  }
-
-  Widget _buildPlacesList({required bool isDesktop}) {
-    final normalizedQuery = isDesktop ? _searchQuery.toLowerCase() : '';
-    final visiblePlaces = nearbyPlaces.where((place) {
-      if (normalizedQuery.isEmpty) return true;
-      return place['name']
-              ?.toString()
-              .toLowerCase()
-              .contains(normalizedQuery) ==
-          true;
-    }).toList();
-
-    if (visiblePlaces.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Text(
-          normalizedQuery.isEmpty
-              ? 'No nearby places found.'
-              : 'No matches found.',
-          style: GoogleFonts.poppins(color: _grey, fontSize: 13),
-        ),
-      );
-    }
-
-    final listView = ListView.builder(
-      physics: isDesktop
-          ? const NeverScrollableScrollPhysics()
-          : const BouncingScrollPhysics(),
-      shrinkWrap: isDesktop,
-      padding: EdgeInsets.zero,
-      itemCount: visiblePlaces.length,
-      itemBuilder: (context, index) {
-        final place = visiblePlaces[index];
-        final property = _propertyForPlace(place);
-        final Color iconColor = isDesktop && property != null
-            ? _desktopAccent
-            : getPlaceColor(place);
-        final placeImage =
-            place is Map ? place['image']?.toString().trim() ?? '' : '';
-        final imageUrl =
-            placeImage.isNotEmpty ? placeImage : property?.image ?? '';
-
-        return GestureDetector(
-          onTap: () {
-            final propertyId =
-                place is Map ? place['property_id']?.toString() : null;
-            final geometry = place is Map ? place['geometry'] : null;
-            final locationData = geometry is Map ? geometry['location'] : null;
-            if (locationData is! Map ||
-                locationData['lat'] is! num ||
-                locationData['lng'] is! num) {
-              return;
-            }
-            final location = LatLng(
-              (locationData['lat'] as num).toDouble(),
-              (locationData['lng'] as num).toDouble(),
-            );
-
-            if (isDesktop) {
-              if (property != null) {
-                unawaited(_openDesktopProperty(property, location));
-              } else {
-                _mapController.move(location, 15.5);
-              }
-              return;
-            }
-
-            _mapController.move(location, 15.5);
-
-            if (propertyId != null) {
-              final prop = property;
-              if (prop != null) {
-                setState(() {
-                  _activeProperty = prop;
-                  _activePropertyLocation = location;
-                });
-                _showPropertyDrawer(context, prop, location: location);
-              }
-            }
-          },
-          behavior: HitTestBehavior.opaque,
-          child: MouseRegion(
-            cursor: isDesktop ? SystemMouseCursors.click : MouseCursor.defer,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Row(
-                children: [
-                  if (isDesktop) ...[
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: imageUrl.isNotEmpty
-                          ? buildPropertyImage(
-                              imageUrl,
-                              width: 56,
-                              height: 56,
-                              fit: BoxFit.cover,
-                            )
-                          : Container(
-                              width: 56,
-                              height: 56,
-                              color: iconColor.withOpacity(0.1),
-                              child: Icon(PhosphorIconsFill.mapPin,
-                                  color: iconColor, size: 20),
-                            ),
-                    ),
-                    const SizedBox(width: 12),
-                  ] else ...[
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: iconColor.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(PhosphorIconsFill.mapPin,
-                          color: iconColor, size: 16),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Expanded(
-                    child: Text(
-                      place is Map
-                          ? place['name']?.toString() ?? 'Unknown'
-                          : 'Unknown',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: _dark,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    getDistance(place),
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _grey,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    return isDesktop
-        ? listView
-        : SizedBox(height: 120, child: listView); // Constrain height on mobile
   }
 
   Property? _propertyForPlace(dynamic place) {

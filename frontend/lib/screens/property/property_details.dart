@@ -18,6 +18,7 @@ import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/utils/property_links.dart';
+import 'package:property_app/utils/date_time_format.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/widgets/response_badge_animation.dart';
 
@@ -408,11 +409,13 @@ class _PropertyDetailsState extends State<PropertyDetails>
         : 'Send an inquiry to start the conversation.';
 
     final card = Container(
-      padding: const EdgeInsets.all(20), // Increased padding for a premium, airy feel
+      padding: const EdgeInsets.all(
+          20), // Increased padding for a premium, airy feel
       decoration: BoxDecoration(
         color: Colors.white, // Pure white background
         borderRadius: BorderRadius.circular(20), // High squircle radius
-        border: Border.all(color: _grey.withValues(alpha: 0.1)), // Faint crisp border
+        border: Border.all(
+            color: _grey.withValues(alpha: 0.1)), // Faint crisp border
         boxShadow: [
           // StayNest standard premium shadow
           BoxShadow(
@@ -447,7 +450,8 @@ class _PropertyDetailsState extends State<PropertyDetails>
                           headline,
                           style: GoogleFonts.poppins(
                             color: _dark,
-                            fontSize: 14, // Slightly larger for better hierarchy
+                            fontSize:
+                                14, // Slightly larger for better hierarchy
                             height: 1.3,
                             fontWeight: FontWeight.w700,
                           ),
@@ -499,7 +503,8 @@ class _PropertyDetailsState extends State<PropertyDetails>
                             child: LinearProgressIndicator(
                               value: responseRate / 100,
                               minHeight: 6,
-                              backgroundColor: const Color(0xFFF3F4F6), // Clean grey track
+                              backgroundColor:
+                                  const Color(0xFFF3F4F6), // Clean grey track
                               color: accent,
                             ),
                           ),
@@ -682,6 +687,12 @@ class _PropertyDetailsState extends State<PropertyDetails>
       body: LayoutBuilder(
         builder: (context, constraints) {
           final isDesktop = constraints.maxWidth > 900;
+          final responseSeconds = widget.property.agent.responseTimeSeconds;
+          final responseHours =
+              responseSeconds == null ? null : (responseSeconds / 3600).ceil();
+          final responseBadgeLabel =
+              _responseMetrics?['performanceLabel']?.toString() ??
+                  'response_activity_building';
           return Stack(
             children: [
               isDesktop
@@ -749,6 +760,57 @@ class _PropertyDetailsState extends State<PropertyDetails>
                     ),
                   ),
                 ),
+              if (!isDesktop && responseHours != null && responseHours > 0)
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: MediaQuery.of(context).padding.bottom + 100,
+                  child: IgnorePointer(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: _dividerColor),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.12),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ScaleTransition(
+                              scale: _responseIconScale,
+                              child: ResponseBadgeAnimation(
+                                performanceLabel: responseBadgeLabel,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 7),
+                            Text(
+                              responseHours == 1
+                                  ? 'Usually responds within 1 hour'
+                                  : 'Usually responds within $responseHours hours',
+                              style: GoogleFonts.poppins(
+                                color: _dark,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           );
         },
@@ -760,114 +822,279 @@ class _PropertyDetailsState extends State<PropertyDetails>
     final image = widget.property.images.isNotEmpty
         ? widget.property.images.first
         : widget.property.image;
+    final heroHeight = constraints.maxHeight * 0.5;
+    final bottomPadding = MediaQuery.of(context).padding.bottom + 150;
 
-    return CustomScrollView(
-      controller: _scrollController,
-      physics: const BouncingScrollPhysics(),
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Row(
-              children: [
-                if (widget.onBack != null)
-                  IconButton(
-                    tooltip: 'Back',
-                    onPressed: widget.onBack,
-                    icon: const Icon(Icons.arrow_back_rounded),
+    Widget metadataItem(IconData icon, String label) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: _grey),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: GoogleFonts.poppins(fontSize: 12, color: _dark),
+            ),
+          ],
+        );
+
+    return Stack(
+      children: [
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: heroHeight,
+          child: GestureDetector(
+            onTap: widget.onViewGallery,
+            child: buildPropertyImage(
+              image,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+            ),
+          ),
+        ),
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 12,
+          left: 16,
+          right: 16,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildMobileHeroAction(
+                tooltip: 'Back',
+                icon: Icons.arrow_back_rounded,
+                onPressed:
+                    widget.onBack ?? () => Navigator.of(context).maybePop(),
+              ),
+              _buildMobileHeroAction(
+                tooltip: 'Share property',
+                icon: Icons.ios_share_rounded,
+                onPressed: _shareProperty,
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          right: 16,
+          bottom: constraints.maxHeight - heroHeight + 12,
+          child: FilledButton.icon(
+            onPressed: widget.onViewGallery,
+            icon: const Icon(Icons.grid_view_rounded, size: 17),
+            label: Text(
+              'View gallery',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: _dark,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: const StadiumBorder(),
+              elevation: 2,
+            ),
+          ),
+        ),
+        DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.6,
+          maxChildSize: 0.94,
+          snap: true,
+          snapSizes: const [0.6],
+          builder: (context, sheetScrollController) => Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(26)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.16),
+                  blurRadius: 20,
+                  offset: const Offset(0, -5),
+                ),
+              ],
+            ),
+            child: CustomScrollView(
+              controller: sheetScrollController,
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 10, bottom: 8),
+                    child: Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD1D5DB),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
                   ),
-                const Spacer(),
-                IconButton(
-                  tooltip: 'Share property',
-                  onPressed: _shareProperty,
-                  icon: const Icon(Icons.ios_share_rounded),
+                ),
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(24, 12, 24, bottomPadding),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      Text(
+                        widget.property.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: _dark,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on_outlined,
+                            size: 16,
+                            color: _grey,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              widget.property.location,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: _grey,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Ksh ${NumberFormat('#,##0').format(widget.property.price)}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: _dark,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 2),
+                            child: Text(
+                              'per month',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: _grey,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 14,
+                        runSpacing: 8,
+                        children: [
+                          if (widget.property.category.isNotEmpty)
+                            metadataItem(
+                              Icons.apartment_rounded,
+                              widget.property.category,
+                            ),
+                          metadataItem(
+                            Icons.door_front_door_outlined,
+                            '${widget.property.features.rooms} rooms',
+                          ),
+                          metadataItem(
+                            Icons.bed_outlined,
+                            '${widget.property.features.beds} beds',
+                          ),
+                          metadataItem(
+                            Icons.bathtub_outlined,
+                            '${widget.property.features.baths} baths',
+                          ),
+                          if (_reviewCount > 0)
+                            metadataItem(
+                              Icons.star_rounded,
+                              '${_avgRating.toStringAsFixed(1)} ($_reviewCount)',
+                            ),
+                        ],
+                      ),
+                      _buildDivider(isDesktop: true),
+                      _buildHostSection(),
+                      _buildDivider(isDesktop: true),
+                      Text(
+                        'About this space',
+                        style: GoogleFonts.poppins(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                          color: _dark,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        widget.property.description.isNotEmpty
+                            ? widget.property.description
+                            : 'No description provided for this property.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          height: 1.6,
+                          color: _dark.withValues(alpha: 0.85),
+                        ),
+                      ),
+                      _buildDivider(isDesktop: true),
+                      SizedBox(
+                        key: _amenitiesKey,
+                        child: _buildAmenitiesSection(),
+                      ),
+                      _buildDivider(isDesktop: true),
+                      SizedBox(
+                        key: _locationKey,
+                        child: _buildLocationSection(),
+                      ),
+                      _buildDivider(isDesktop: true),
+                      SizedBox(
+                        key: _landlordKey,
+                        child: _buildLandlordSection(),
+                      ),
+                      _buildDivider(isDesktop: true),
+                      SizedBox(
+                        key: _reviewsKey,
+                        child: _buildReviewsSection(),
+                      ),
+                    ]),
+                  ),
                 ),
               ],
             ),
           ),
         ),
-        SliverToBoxAdapter(
-          child: GestureDetector(
-            onTap: widget.onViewGallery,
-            child: AspectRatio(
-              aspectRatio: 1.15,
-              child: buildPropertyImage(
-                image,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-              ),
-            ),
-          ),
-        ),
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(
-            24,
-            24,
-            24,
-            MediaQuery.of(context).padding.bottom + 150,
-          ),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              Text(
-                'Entire home in ${widget.property.location}',
-                style: GoogleFonts.poppins(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: _dark,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${widget.property.features.rooms} bedrooms · ${widget.property.features.beds} beds · ${widget.property.features.baths} baths',
-                style: GoogleFonts.poppins(fontSize: 15, color: _dark),
-              ),
-              const SizedBox(height: 24),
-              _buildHostSection(),
-              _buildDivider(),
-              Text(
-                'About this space',
-                style: GoogleFonts.poppins(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: _dark,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                widget.property.description.isNotEmpty
-                    ? widget.property.description
-                    : 'No description provided for this property.',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  height: 1.6,
-                  color: _dark.withValues(alpha: 0.85),
-                ),
-              ),
-              _buildDivider(),
-              SizedBox(
-                key: _amenitiesKey,
-                child: _buildAmenitiesSection(),
-              ),
-              _buildDivider(),
-              SizedBox(
-                key: _locationKey,
-                child: _buildLocationSection(),
-              ),
-              _buildDivider(),
-              SizedBox(
-                key: _landlordKey,
-                child: _buildLandlordSection(),
-              ),
-              _buildDivider(),
-              SizedBox(
-                key: _reviewsKey,
-                child: _buildReviewsSection(),
-              ),
-            ]),
-          ),
-        ),
       ],
+    );
+  }
+
+  Widget _buildMobileHeroAction({
+    required String tooltip,
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.96),
+      shape: const CircleBorder(),
+      elevation: 3,
+      child: SizedBox.square(
+        dimension: 46,
+        child: IconButton(
+          tooltip: tooltip,
+          onPressed: onPressed,
+          icon: Icon(icon, size: 21, color: _dark),
+        ),
+      ),
     );
   }
 
@@ -1625,7 +1852,8 @@ class _PropertyDetailsState extends State<PropertyDetails>
                 Text('${agent.propertyCount} listings',
                     style: GoogleFonts.poppins(fontSize: 13, color: _grey)),
               if ((agent.memberSince ?? '').isNotEmpty)
-                Text('Member since ${agent.memberSince}',
+                Text(
+                    'Member since ${formatReadableDateString(agent.memberSince, fallback: agent.memberSince ?? '')}',
                     style: GoogleFonts.poppins(fontSize: 13, color: _grey)),
               if (agent.responseTimeSeconds != null)
                 Text(
@@ -1835,6 +2063,9 @@ class _PropertyDetailsState extends State<PropertyDetails>
         ? agent.propertyCount
         : _landlordProperties.length + 1;
     final memberSince = agent.memberSince?.trim();
+    final memberSinceLabel = memberSince == null || memberSince.isEmpty
+        ? null
+        : formatReadableDateString(memberSince, fallback: memberSince);
     final description = agent.businessDescription?.trim();
     final hasDescription = description != null && description.isNotEmpty;
 
@@ -2009,10 +2240,10 @@ class _PropertyDetailsState extends State<PropertyDetails>
             Icons.shield_outlined,
             'StayNest-verified host',
           ),
-        if (memberSince != null && memberSince.isNotEmpty)
+        if (memberSinceLabel != null)
           _buildLandlordDetailRow(
             Icons.calendar_today_outlined,
-            'Member since $memberSince',
+            'Member since $memberSinceLabel',
           ),
         if (agent.responseTimeSeconds != null)
           _buildLandlordDetailRow(
