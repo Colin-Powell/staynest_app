@@ -205,6 +205,23 @@ export async function sendOtpEmail(to, code = "000000") {
         html,
     });
 }
+export async function sendOtpImmediately(to) {
+    const normalizedEmail = to.trim().toLowerCase();
+    const otp = await createOtp(normalizedEmail);
+    try {
+        await sendOtpEmail(normalizedEmail, otp.code);
+    }
+    catch (error) {
+        try {
+            await revokeOtp(normalizedEmail);
+        }
+        catch (revokeError) {
+            console.error(`[OTP] failed to revoke code after send failure for ${normalizedEmail}:`, revokeError);
+        }
+        throw error;
+    }
+    return { expiresAt: otp.expiresAt };
+}
 export async function sendAlertEmail(to, subject, text, html) {
     ensureTransporter();
     return transporter.sendMail({

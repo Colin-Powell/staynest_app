@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db.js';
-import { createOtp, queueOtpEmail, revokeOtp, sendAlertEmail, verifyOtp } from '../services/email.js';
+import { sendOtpImmediately, revokeOtp, sendAlertEmail, verifyOtp } from '../services/email.js';
 import { requireAuth } from '../middleware/auth.js';
 import rateLimit from 'express-rate-limit';
 const router = Router();
@@ -20,11 +20,9 @@ router.post('/send-otp', otpRateLimiter, async (req, res, next) => {
         console.info(`[OTP] send request received for ${email ? email.trim().toLowerCase() : '(missing email)'}`);
         if (!email)
             return res.status(400).json({ error: 'Email is required.' });
-        let code;
         let expiresAt;
         try {
-            const otp = await createOtp(email);
-            code = otp.code;
+            const otp = await sendOtpImmediately(email);
             expiresAt = otp.expiresAt;
         }
         catch (error) {
@@ -40,8 +38,7 @@ router.post('/send-otp', otpRateLimiter, async (req, res, next) => {
             }
             throw error;
         }
-        await queueOtpEmail(email, code);
-        console.info(`[OTP] email queued for ${email.trim().toLowerCase()}`);
+        console.info(`[OTP] email accepted by SMTP for ${email.trim().toLowerCase()}`);
         return res.json({ data: { sent: true, expiresAt } });
     }
     catch (err) {

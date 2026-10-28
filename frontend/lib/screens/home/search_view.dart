@@ -406,6 +406,8 @@ class _SearchViewState extends State<SearchView> {
           property: property,
           isHorizontal: false,
           isGrid: true,
+          showHighlights: false,
+          titleFirst: true,
           onTap: () => widget.onSelectProperty?.call(property),
           onRequireAuthentication: widget.onRequireAuthentication,
           onFavoriteChanged: null,

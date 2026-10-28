@@ -33,9 +33,22 @@ void main() {
     expect(property.name, 'Harbor View Apartment');
     expect(property.image, 'https://cdn.example.com/property/cover.jpg');
     expect(property.location, 'Nairobi');
+    expect(property.category, 'Apartment');
+    expect(property.features.rooms, 2);
+    expect(property.features.beds, 0);
+    expect(property.features.baths, 2);
     expect(property.agent.name, 'Jane Doe');
     expect(property.agent.propertyCount, 3);
     expect(property.agent.responseTimeSeconds, 7200);
+  });
+
+  test('missing property details are not filled with display defaults', () {
+    final property = mapApiProperty({});
+
+    expect(property.category, isEmpty);
+    expect(property.features.rooms, 0);
+    expect(property.features.beds, 0);
+    expect(property.features.baths, 0);
   });
 
   test('moderation and availability remain separate in mapped properties', () {

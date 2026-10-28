@@ -239,6 +239,15 @@ class _PropertyDetailsState extends State<PropertyDetails>
     return 'Reserve';
   }
 
+  String get _propertyFeatureSummary {
+    final features = widget.property.features;
+    final items = <String>[];
+    if (features.rooms > 0) items.add('${features.rooms} bedrooms');
+    if (features.beds > 0) items.add('${features.beds} beds');
+    if (features.baths > 0) items.add('${features.baths} baths');
+    return items.join(' · ');
+  }
+
   bool get _canStartBooking =>
       !_checkingBooking &&
       _activeBookingStatus == null &&
@@ -355,22 +364,30 @@ class _PropertyDetailsState extends State<PropertyDetails>
     }
 
     final metrics = _responseMetrics;
-    if (metrics == null) return const SizedBox.shrink();
+    final responseSeconds = widget.property.agent.responseTimeSeconds;
+    final responseHours = responseSeconds != null && responseSeconds > 0
+        ? (responseSeconds / 3600).ceil()
+        : null;
+    final responseTimeText = responseHours == null
+        ? null
+        : responseHours == 1
+            ? 'Usually responds within 1 hour.'
+            : 'Usually responds within $responseHours hours.';
+    if (metrics == null && responseTimeText == null) {
+      return const SizedBox.shrink();
+    }
 
-    final label =
-        metrics['performanceLabel']?.toString() ?? 'response_activity_building';
-    final average = metrics['averageFirstResponseMinutes'] is num
-        ? (metrics['averageFirstResponseMinutes'] as num).round()
-        : null;
-    final total = metrics['totalValidInquiries'] is num
-        ? (metrics['totalValidInquiries'] as num).toInt()
-        : 0;
-    final answered = metrics['answeredInquiries'] is num
-        ? (metrics['answeredInquiries'] as num).toInt()
-        : 0;
-    final responseRate = metrics['responseRate'] is num
-        ? (metrics['responseRate'] as num).toInt()
-        : null;
+    final label = metrics?['performanceLabel']?.toString() ??
+        'response_activity_building';
+    final averageValue = metrics?['averageFirstResponseMinutes'];
+    final average = averageValue is num ? averageValue.round() : null;
+    final totalValue = metrics?['totalValidInquiries'];
+    final total = totalValue is num ? totalValue.toInt() : 0;
+    final answeredValue = metrics?['answeredInquiries'];
+    final answered = answeredValue is num ? answeredValue.toInt() : 0;
+    final responseRateValue = metrics?['responseRate'];
+    final responseRate =
+        responseRateValue is num ? responseRateValue.toInt() : null;
     final reliable = total >= 3 && answered >= 3 && average != null;
     final (badge, headline, accent) = switch (label) {
       'lightning_fast' => (
@@ -404,9 +421,18 @@ class _PropertyDetailsState extends State<PropertyDetails>
           const Color(0xFF0F766E),
         ),
     };
-    final detail = reliable
-        ? 'Average first reply: about $average ${average == 1 ? 'minute' : 'minutes'}.'
-        : 'Send an inquiry to start the conversation.';
+    final displayHeadline =
+        !reliable && responseTimeText != null ? responseTimeText : headline;
+    final detailParts = <String>[];
+    if (reliable) {
+      if (responseTimeText != null) detailParts.add(responseTimeText);
+      detailParts.add(
+        'Average first reply: about $average ${average == 1 ? 'minute' : 'minutes'}.',
+      );
+    } else if (responseTimeText == null) {
+      detailParts.add('Send an inquiry to start the conversation.');
+    }
+    final detail = detailParts.join(' ');
 
     final card = Container(
       padding: const EdgeInsets.all(
@@ -447,7 +473,7 @@ class _PropertyDetailsState extends State<PropertyDetails>
                     children: [
                       Expanded(
                         child: Text(
-                          headline,
+                          displayHeadline,
                           style: GoogleFonts.poppins(
                             color: _dark,
                             fontSize:
@@ -1006,18 +1032,21 @@ class _PropertyDetailsState extends State<PropertyDetails>
                               Icons.apartment_rounded,
                               widget.property.category,
                             ),
-                          metadataItem(
-                            Icons.door_front_door_outlined,
-                            '${widget.property.features.rooms} rooms',
-                          ),
-                          metadataItem(
-                            Icons.bed_outlined,
-                            '${widget.property.features.beds} beds',
-                          ),
-                          metadataItem(
-                            Icons.bathtub_outlined,
-                            '${widget.property.features.baths} baths',
-                          ),
+                          if (widget.property.features.rooms > 0)
+                            metadataItem(
+                              Icons.door_front_door_outlined,
+                              '${widget.property.features.rooms} bedrooms',
+                            ),
+                          if (widget.property.features.beds > 0)
+                            metadataItem(
+                              Icons.bed_outlined,
+                              '${widget.property.features.beds} beds',
+                            ),
+                          if (widget.property.features.baths > 0)
+                            metadataItem(
+                              Icons.bathtub_outlined,
+                              '${widget.property.features.baths} baths',
+                            ),
                           if (_reviewCount > 0)
                             metadataItem(
                               Icons.star_rounded,
@@ -1269,11 +1298,12 @@ class _PropertyDetailsState extends State<PropertyDetails>
                                 color: _dark),
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            '${widget.property.features.rooms} bedrooms · ${widget.property.features.beds} beds · ${widget.property.features.baths} baths',
-                            style:
-                                GoogleFonts.poppins(fontSize: 16, color: _dark),
-                          ),
+                          if (_propertyFeatureSummary.isNotEmpty)
+                            Text(
+                              _propertyFeatureSummary,
+                              style: GoogleFonts.poppins(
+                                  fontSize: 16, color: _dark),
+                            ),
                           const SizedBox(height: 24),
 
                           // Big Review Banner
@@ -1577,6 +1607,7 @@ class _PropertyDetailsState extends State<PropertyDetails>
   }
 
   Widget _buildDesktopBookingCard({bool isSticky = false}) {
+    final responseSeconds = widget.property.agent.responseTimeSeconds;
     if (isSticky) {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -1691,7 +1722,9 @@ class _PropertyDetailsState extends State<PropertyDetails>
             ],
           ),
           const SizedBox(height: 20),
-          if (_responseMetricsLoading || _responseMetrics != null) ...[
+          if (_responseMetricsLoading ||
+              _responseMetrics != null ||
+              (responseSeconds != null && responseSeconds > 0)) ...[
             _buildResponseCard(),
             const SizedBox(height: 18),
           ],

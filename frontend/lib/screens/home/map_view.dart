@@ -681,6 +681,8 @@ class _MapViewScreenState extends State<MapViewScreen>
           property: p,
           isGrid: true,
           isHorizontal: false,
+          showHighlights: false,
+          titleFirst: true,
           imageAspectRatio: 1.3,
           onTap: () => _openPropertyDetails(p),
           onRequireAuthentication: widget.onRequireAuthentication,
@@ -1578,6 +1580,13 @@ class _PropertyPreviewCardState extends State<_PropertyPreviewCard>
   bool _canReview = false;
   bool _hasReviewed = false;
 
+  String get _compactLocation => widget.property.location
+      .split(',')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .take(3)
+      .join(', ');
+
   late final AnimationController _ctrl = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 380));
   late final Animation<Offset> _slide =
@@ -1655,11 +1664,13 @@ class _PropertyPreviewCardState extends State<_PropertyPreviewCard>
                                 fontSize: 15,
                                 color: AppColors.gray900)),
                         const SizedBox(height: 3),
-                        Text(widget.property.location,
+                        Text(_compactLocation,
                             style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.gray500)),
+                                fontSize: 12,
+                                fontWeight: FontWeight.normal,
+                                color: AppColors.gray500),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 6),
                         if (_completedBookingId?.isNotEmpty == true) ...[
                           const SizedBox(height: 6),

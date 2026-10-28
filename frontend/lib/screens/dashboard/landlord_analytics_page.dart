@@ -1298,7 +1298,7 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
     );
   }
 
-  Widget _buildDesktopChartCard() {
+  Widget _buildDesktopChartCard({bool chartTouchEnabled = true}) {
     final chartData = (_overview['chartData'] as List)
         .map((value) => (value as num).toDouble())
         .toList();
@@ -1370,6 +1370,7 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
                             minY: 0,
                             maxY: maxY,
                             barTouchData: BarTouchData(
+                              enabled: chartTouchEnabled,
                               touchTooltipData: BarTouchTooltipData(
                                 getTooltipColor: (_) => _dark,
                                 getTooltipItem:
@@ -1639,28 +1640,23 @@ class _LandlordAnalyticsPageState extends State<LandlordAnalyticsPage> {
             ],
           ),
           const SizedBox(height: 24),
-
           if (_isLoading)
             _buildShimmerChart()
           else
-            _buildDesktopChartCard(), // Reusing chart card structure
+            _buildDesktopChartCard(chartTouchEnabled: false),
           const SizedBox(height: 32),
           _buildResponsePerformanceCard(),
           const SizedBox(height: 32),
-
           Text('Engagement Metrics',
               style: GoogleFonts.poppins(
                   fontSize: 18, fontWeight: FontWeight.w700, color: _dark)),
           const SizedBox(height: 16),
           if (_isLoading) _buildShimmerGrid() else _buildDesktopMetricsGrid(),
           const SizedBox(height: 32),
-
           _buildFunnelCard(),
           const SizedBox(height: 32),
-
           _buildDesktopInsightsSide(),
           const SizedBox(height: 32),
-
           _buildAdvancedPropertyAnalytics(false),
         ],
       ),

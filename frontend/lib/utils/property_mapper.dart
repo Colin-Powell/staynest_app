@@ -31,13 +31,14 @@ Property mapApiProperty(Map<String, dynamic> json) {
   );
 
   final featuresMap = json['features'];
-  final beds = featuresMap is Map
-      ? _toInt(featuresMap['beds'])
-      : _toInt(json['bedrooms']);
+  final beds =
+      featuresMap is Map ? _toInt(featuresMap['beds']) : _toInt(json['beds']);
   final baths = featuresMap is Map
       ? _toInt(featuresMap['baths'])
       : _toInt(json['bathrooms']);
-  final rooms = featuresMap is Map ? _toInt(featuresMap['rooms']) : beds + 1;
+  final rooms = featuresMap is Map
+      ? _toInt(featuresMap['rooms'] ?? json['bedrooms'])
+      : _toInt(json['rooms'] ?? json['bedrooms']);
   final featuresFurnished =
       featuresMap is Map && featuresMap['furnished'] is bool
           ? featuresMap['furnished'] as bool
@@ -87,7 +88,7 @@ Property mapApiProperty(Map<String, dynamic> json) {
     price: _toInt(json['price']),
     rating: rating,
     reviews: reviews,
-    category: json['category']?.toString() ?? 'Apartment',
+    category: json['category']?.toString() ?? '',
     image: image,
     images: images.isNotEmpty ? images : (image.isNotEmpty ? [image] : null),
     videoUrl: json['video_url']?.toString(),

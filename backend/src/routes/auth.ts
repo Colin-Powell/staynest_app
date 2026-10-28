@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
 import { env } from '../config.js';
 import { requireAuth } from '../middleware/auth.js';
-import { verifyOtp, createOtp, queueOtpEmail, revokeOtp } from '../services/email.js';
+import { verifyOtp, sendOtpImmediately, revokeOtp } from '../services/email.js';
 import { randomBytes } from 'crypto';
 
 const router = Router();
@@ -106,12 +106,8 @@ router.post('/register', async (req, res, next) => {
       { expiresIn: '30d' },
     );
 
-    // Generate and queue the OTP before confirming registration.
-    const otpInfo = await createOtp(created.email);
-    await queueOtpEmail(created.email, otpInfo.code);
-    console.info(`OTP email queued for ${created.email}`);
-
-    return res.status(201).json({ data: { token: accessToken, accessToken, refreshToken, user: created, otpSent: true } });
+    // The OTP screen sends the code on entry, avoiding a duplicate request.
+    return res.status(201).json({ data: { token: accessToken, accessToken, refreshToken, user: created, otpSent: false } });
   } catch (error) {
     next(error);
   }
@@ -132,24 +128,35 @@ router.post('/change-email', requireAuth, async (req, res, next) => {
       return res.status(409).json({ error: 'Email already registered.' });
     }
 
-    const updated = await query(
-      `UPDATE users
-       SET email = $1,
-           verified = false,
-           email_verification_started_at = now(),
-           email_verification_reminder_stage = 0,
-           email_verification_reminder_sent_at = NULL
-       WHERE id = $2
-        RETURNING id, name, email, phone, avatar, role, roles, landlord_verified, verified`,
-      [email, req.auth!.id],
-    );
+    await sendOtpImmediately(email);
+
+    let updated;
+    try {
+      updated = await query(
+        `UPDATE users
+         SET email = $1,
+             verified = false,
+             email_verification_started_at = now(),
+             email_verification_reminder_stage = 0,
+             email_verification_reminder_sent_at = NULL
+         WHERE id = $2
+          RETURNING id, name, email, phone, avatar, role, roles, landlord_verified, verified`,
+        [email, req.auth!.id],
+      );
+    } catch (error) {
+      await revokeOtp(email);
+      throw error;
+    }
     if ((updated.rowCount ?? 0) === 0) {
+      await revokeOtp(email);
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    await revokeOtp(req.auth!.email);
-    const otp = await createOtp(email);
-    await queueOtpEmail(email, otp.code);
+    try {
+      await revokeOtp(req.auth!.email);
+    } catch (error) {
+      console.error(`[OTP] failed to revoke previous address code for ${req.auth!.email}:`, error);
+    }
     return res.json({ data: { user: updated.rows[0], otpSent: true } });
   } catch (error) {
     next(error);

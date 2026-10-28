@@ -19,6 +19,8 @@ class PropertyCard extends StatefulWidget {
   final bool isHorizontal;
   final double width;
   final bool isGrid;
+  final bool showHighlights;
+  final bool titleFirst;
   final double imageAspectRatio;
   final String? badgeLabel;
   final ValueChanged<bool>? onFavoriteChanged;
@@ -34,6 +36,8 @@ class PropertyCard extends StatefulWidget {
     this.isHorizontal = true,
     this.width = 300,
     this.isGrid = false,
+    this.showHighlights = true,
+    this.titleFirst = false,
     this.imageAspectRatio = 1,
     this.badgeLabel,
     this.onFavoriteChanged,
@@ -260,22 +264,43 @@ class _PropertyCardState extends State<PropertyCard> {
 
   Widget _buildDetails() {
     final property = widget.property;
+    final location = widget.titleFirst
+        ? property.location
+            .split(',')
+            .map((part) => part.trim())
+            .where((part) => part.isNotEmpty)
+            .take(3)
+            .join(', ')
+        : property.location;
+    final title = Text(
+      property.name,
+      style: GoogleFonts.poppins(
+        fontSize: widget.titleFirst ? 15 : 14,
+        fontWeight: widget.titleFirst ? FontWeight.w600 : FontWeight.normal,
+        color: widget.titleFirst ? AppColors.gray900 : AppColors.gray500,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (widget.titleFirst) title,
+        if (widget.titleFirst) const SizedBox(height: 2),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Text(
-                property.location,
+                location,
                 style: GoogleFonts.poppins(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+                  fontSize: widget.titleFirst ? 12 : 15,
+                  fontWeight:
+                      widget.titleFirst ? FontWeight.normal : FontWeight.w600,
                   color: AppColors.gray900,
                 ),
-                maxLines: 1,
+                maxLines: widget.titleFirst ? 2 : 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -297,19 +322,13 @@ class _PropertyCardState extends State<PropertyCard> {
               ),
           ],
         ),
+        if (!widget.titleFirst) const SizedBox(height: 2),
+        if (!widget.titleFirst) title,
         const SizedBox(height: 2),
-        Text(
-          property.name,
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            color: AppColors.gray500,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 2),
-        _buildHighlights(property.amenities),
-        const SizedBox(height: 6),
+        if (widget.showHighlights) ...[
+          _buildHighlights(property.amenities),
+          const SizedBox(height: 6),
+        ],
         RichText(
           text: TextSpan(
             children: [
@@ -317,7 +336,8 @@ class _PropertyCardState extends State<PropertyCard> {
                 text: "Ksh. ${property.price.toInt()}",
                 style: GoogleFonts.poppins(
                   fontSize: 15,
-                  fontWeight: FontWeight.w600,
+                  fontWeight:
+                      widget.titleFirst ? FontWeight.w800 : FontWeight.w600,
                   color: AppColors.gray900,
                 ),
               ),

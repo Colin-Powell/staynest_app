@@ -27,9 +27,11 @@ class _FilterViewState extends State<FilterView> {
   static const Color _primary = Color(0xFF3F37C9); // Tenant Blue Accent
   static const Color _textDark = Color(0xFF111827); // Dark Grey/Black Accent
   static const Color _textLight = Color(0xFF6B7280);
+  static const double _minPrice = 1500;
+  static const double _maxPrice = 15000;
 
   String _selectedType = 'Apartment';
-  RangeValues _priceRange = const RangeValues(10000, 200000);
+  RangeValues _priceRange = const RangeValues(_minPrice, _maxPrice);
   final Set<String> _selectedAmenities = {};
   int _selectedBeds = 0;
   int _selectedBaths = 0;
@@ -71,7 +73,7 @@ class _FilterViewState extends State<FilterView> {
   void _reset() {
     setState(() {
       _selectedType = 'Apartment';
-      _priceRange = const RangeValues(10000, 200000);
+      _priceRange = const RangeValues(_minPrice, _maxPrice);
       _selectedAmenities.clear();
       _selectedBeds = 0;
       _selectedBaths = 0;
@@ -390,7 +392,8 @@ class _FilterViewState extends State<FilterView> {
               children: List.generate(_priceDistribution.length, (index) {
                 // Calculate the price point this bar represents
                 final double percent = index / (_priceDistribution.length - 1);
-                final double priceAtBar = 10000 + (percent * (200000 - 10000));
+                final double priceAtBar =
+                    _minPrice + (percent * (_maxPrice - _minPrice));
 
                 // Highlight if within selected range
                 final bool inRange = priceAtBar >= _priceRange.start &&
@@ -427,8 +430,8 @@ class _FilterViewState extends State<FilterView> {
           ),
           child: RangeSlider(
             values: _priceRange,
-            min: 10000,
-            max: 200000,
+            min: _minPrice,
+            max: _maxPrice,
             onChanged: (values) => setState(() => _priceRange = values),
           ),
         ),
@@ -450,7 +453,7 @@ class _FilterViewState extends State<FilterView> {
                 ),
               ),
               Text(
-                'Ksh. ${_priceRange.end.toInt()}${_priceRange.end >= 200000 ? '+' : ''}',
+                'Ksh. ${_priceRange.end.toInt()}',
                 style: GoogleFonts.poppins(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
@@ -724,7 +727,8 @@ class _GlassContainer extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     required this.blur,
     required this.opacity,
-    required this.borderWidth, this.borderRadius,
+    required this.borderWidth,
+    this.borderRadius,
   });
 
   @override

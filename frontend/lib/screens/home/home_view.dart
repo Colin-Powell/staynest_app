@@ -12,6 +12,7 @@ import 'package:property_app/widgets/property_card.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/widgets/app_footer.dart';
 import 'package:property_app/utils/app_downloads.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 import 'package:property_app/models/property.dart';
 import 'package:property_app/screens/home/home_feed_controller.dart';
@@ -552,6 +553,8 @@ class _HomeViewState extends State<HomeView> {
                         : MediaQuery.of(context).size.width * 0.75,
                     child: PropertyCard(
                       property: properties[index],
+                      showHighlights: false,
+                      titleFirst: true,
                       badgeLabel: badgeLabel,
                       onTap: () =>
                           widget.onSelectProperty?.call(properties[index]),
@@ -1616,6 +1619,8 @@ class _DesktopCollectionState extends State<_DesktopCollection> {
                 width: widget.cardWidth,
                 child: PropertyCard(
                   property: property,
+                  showHighlights: false,
+                  titleFirst: true,
                   badgeLabel: widget.badgeLabel,
                   onTap: () => widget.onSelectProperty?.call(property),
                   onRequireAuthentication: widget.onRequireAuthentication,
@@ -1630,7 +1635,7 @@ class _DesktopCollectionState extends State<_DesktopCollection> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// REDESIGNED ISLAND VIEW-MORE CARD (image only + animation)
+// Collection action card with a property image collage.
 // ─────────────────────────────────────────────────────────────
 
 class _ViewMorePropertyCard extends StatefulWidget {
@@ -1665,16 +1670,11 @@ class _ViewMorePropertyCardState extends State<_ViewMorePropertyCard>
     );
 
     _scale = Tween<double>(begin: 0.86, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
     );
     _fade = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOut),
     );
-
-    // Staggered entrance
-    Future.delayed(const Duration(milliseconds: 120), () {
-      if (mounted) _controller.forward();
-    });
   }
 
   @override
@@ -1683,183 +1683,278 @@ class _ViewMorePropertyCardState extends State<_ViewMorePropertyCard>
     super.dispose();
   }
 
+  void _handleVisibilityChanged(VisibilityInfo info) {
+    if (info.visibleFraction <= 0 ||
+        _controller.status != AnimationStatus.dismissed) {
+      return;
+    }
+    _controller.forward();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final collage = widget.properties.take(4).toList(growable: false);
+    final properties = widget.properties;
+    final pageCount = math.max(properties.length, 1);
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            return Transform.scale(
-              scale: _scale.value,
-              child: Opacity(
-                opacity: _fade.value,
-                child: child,
-              ),
-            );
-          },
-          child: Container(
-            width: widget.width,
-            height: widget.height,
-            decoration: BoxDecoration(
-              color: const Color(0xFF111827),
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.22),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
-                ),
-              ],
+    Widget propertyCard(
+      Property property, {
+      required bool isFront,
+      required bool isMiddle,
+      required int depth,
+    }) {
+      final location = property.location.split(',').first.trim();
+      return Transform.rotate(
+        angle: isFront ? 0 : (depth.isEven ? 0.008 : -0.008) * math.pi * 2,
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: const Color(0xFF111827),
+            borderRadius: BorderRadius.circular(isFront ? 22 : 18),
+            border: Border.all(
+              color: Colors.white.withOpacity(isFront ? 0.9 : 0.65),
+              width: isFront ? 2 : 1,
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(28),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // ── Pure image collage (no text, no icons) ──
-                  if (collage.isEmpty)
-                    Container(color: const Color(0xFF1F2937))
-                  else if (collage.length == 1)
-                    buildPropertyImage(
-                      collage[0].image,
-                      width: double.infinity,
-                      height: double.infinity,
-                      fit: BoxFit.cover,
-                    )
-                  else
-                    Column(
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: buildPropertyImage(
-                                  collage[0].image,
-                                  width: double.infinity,
-                                  height: double.infinity,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              if (collage.length > 1) ...[
-                                const SizedBox(width: 3),
-                                Expanded(
-                                  child: buildPropertyImage(
-                                    collage[1].image,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        if (collage.length > 2) ...[
-                          const SizedBox(height: 3),
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: buildPropertyImage(
-                                    collage[2].image,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                if (collage.length > 3) ...[
-                                  const SizedBox(width: 3),
-                                  Expanded(
-                                    child: buildPropertyImage(
-                                      collage[3].image,
-                                      width: double.infinity,
-                                      height: double.infinity,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-
-                  // Soft dark gradient at the bottom for depth
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    height: 80,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withOpacity(0.35),
-                          ],
-                        ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isFront ? 0.3 : 0.2),
+                blurRadius: isFront ? 18 : 10,
+                offset: Offset(0, isFront ? 8 : 4),
+              ),
+            ],
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              buildPropertyImage(
+                property.image,
+                width: double.infinity,
+                height: double.infinity,
+                fit: BoxFit.cover,
+              ),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.center,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      isFront
+                          ? const Color(0xE6000000)
+                          : const Color(0xB3000000),
+                    ],
+                    stops: [isFront ? 0.25 : 0.05, 1],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: isFront ? 14 : 10,
+                right: isFront ? 14 : 10,
+                bottom: isFront ? 12 : 7,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      property.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isFront
+                            ? 14
+                            : isMiddle
+                                ? 11
+                                : 9,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ),
+                    if (isFront && location.isNotEmpty)
+                      Text(
+                        location,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
-                  // Subtle continuous breathing so the island feels alive
-                  const _BreathingOverlay(),
+    return VisibilityDetector(
+      key: ValueKey(
+        'view_more_${identityHashCode(widget.properties)}_${widget.width}',
+      ),
+      onVisibilityChanged: _handleVisibilityChanged,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              return Transform.scale(
+                scale: _scale.value,
+                child: Opacity(
+                  opacity: _fade.value,
+                  child: child,
+                ),
+              );
+            },
+            child: Container(
+              width: widget.width,
+              height: widget.height,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE7E8EB),
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (properties.isEmpty) {
+                          return const Center(
+                            child: Icon(Icons.home_rounded,
+                                color: Colors.black38, size: 36),
+                          );
+                        }
+
+                        final stackHeight = constraints.maxHeight;
+                        final compactTop = math.max(0.0, stackHeight * 0.015);
+                        final compactMiddle = stackHeight * 0.14;
+                        final frontTop = stackHeight * 0.31;
+                        final frontHeight = math.min(
+                          190.0,
+                          math.max(120.0, stackHeight - frontTop - 2),
+                        );
+                        final propertyIndices = List<int>.generate(
+                          properties.length,
+                          (index) => index,
+                        ).reversed;
+
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            for (final propertyIndex in propertyIndices)
+                              Builder(builder: (context) {
+                                final property = properties[propertyIndex];
+                                final depth = propertyIndex;
+                                final isFront = depth == 0;
+                                final isMiddle = depth == 1;
+                                final backDepth = math.max(depth - 2, 0);
+                                final cardWidth = isFront
+                                    ? constraints.maxWidth
+                                    : constraints.maxWidth *
+                                        (isMiddle
+                                            ? 0.9
+                                            : math.max(
+                                                0.58,
+                                                0.72 - backDepth * 0.025,
+                                              ));
+                                final cardHeight = isFront
+                                    ? frontHeight
+                                    : isMiddle
+                                        ? 72.0
+                                        : math.max(
+                                            44.0,
+                                            58.0 - backDepth * 2.0,
+                                          );
+                                final backTop = compactTop +
+                                    math.min(
+                                      backDepth * 8.0,
+                                      math.max(
+                                        0.0,
+                                        frontTop - compactTop - cardHeight,
+                                      ),
+                                    );
+                                final left =
+                                    (constraints.maxWidth - cardWidth) / 2;
+
+                                return Positioned(
+                                  key: ValueKey(property.id),
+                                  top: isFront
+                                      ? frontTop
+                                      : isMiddle
+                                          ? compactMiddle
+                                          : backTop,
+                                  left: left,
+                                  width: cardWidth,
+                                  height: cardHeight,
+                                  child: propertyCard(
+                                    property,
+                                    isFront: isFront,
+                                    isMiddle: isMiddle,
+                                    depth: depth,
+                                  ),
+                                );
+                              }),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Row(
+                        children: List.generate(
+                          math.min(pageCount, 5),
+                          (index) => Container(
+                            width: index == 0 ? 15 : 5,
+                            height: 5,
+                            margin: const EdgeInsets.only(right: 4),
+                            decoration: BoxDecoration(
+                              color: index == 0 ? Colors.black : Colors.black26,
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: widget.onTap,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                        label: const Text(
+                          'See all',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Very subtle continuous scale pulse so the island feels alive
-class _BreathingOverlay extends StatefulWidget {
-  const _BreathingOverlay();
-
-  @override
-  State<_BreathingOverlay> createState() => _BreathingOverlayState();
-}
-
-class _BreathingOverlayState extends State<_BreathingOverlay>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _breath;
-
-  @override
-  void initState() {
-    super.initState();
-    _breath = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2800),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _breath.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _breath,
-      builder: (context, child) {
-        final scale = 1.0 + (_breath.value * 0.012); // extremely subtle
-        return Transform.scale(
-          scale: scale,
-          child: const SizedBox.expand(),
-        );
-      },
     );
   }
 }

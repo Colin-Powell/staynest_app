@@ -234,8 +234,8 @@ class Property {
       images: imagesList,
       videoUrl: json['video_url']?.toString(),
       features: PropertyFeatures(
-        beds: integerValue(json['bedrooms']),
-        rooms: integerValue(json['bedrooms']),
+        beds: integerValue(json['beds']),
+        rooms: integerValue(json['rooms'] ?? json['bedrooms']),
         baths: integerValue(json['bathrooms']),
         furnished: json['amenities'] is List
             ? (json['amenities'] as List).contains('Furnished')
