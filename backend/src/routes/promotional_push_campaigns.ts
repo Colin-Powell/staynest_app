@@ -180,6 +180,10 @@ router.post('/', requireCurrentAdmin, async (req, res, next) => {
       return res.status(409).json({ error: 'This property is no longer eligible for a campaign.' });
     }
     const imageUrl = normalizeCampaignImageUrl(property.image_url);
+    if (!imageUrl) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'The selected property does not have a supported campaign image.' });
+    }
 
     const recipientQuery = buildCampaignRecipientQuery();
     const recipientCountResult = await client.query(

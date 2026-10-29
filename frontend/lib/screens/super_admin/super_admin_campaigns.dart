@@ -708,7 +708,9 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
               tooltip: property['image_valid'] == true
                   ? 'Select property'
                   : 'Select property; image unavailable',
-              onPressed: () => _selectProperty(property),
+              onPressed: property['image_valid'] == true
+                  ? () => _selectProperty(property)
+                  : null,
               icon: const Icon(PhosphorIconsRegular.checkCircle,
                   color: _primaryBlue),
             ),
@@ -728,7 +730,8 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _PropertyImage(url: property['image_url']?.toString(), size: 64),
+          _PropertyImage(
+              url: property['campaign_image_url']?.toString(), size: 64),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -945,7 +948,7 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
               child: AspectRatio(
                 aspectRatio: 16 / 9,
                 child: buildPropertyImage(
-                    property['image_url']?.toString() ?? '',
+                    property['campaign_image_url']?.toString() ?? '',
                     fit: BoxFit.cover),
               ),
             ),

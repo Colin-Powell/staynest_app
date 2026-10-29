@@ -9,6 +9,7 @@ import 'package:property_app/services/fcm_service.dart';
 import 'package:property_app/services/notification_api.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/utils/date_time_format.dart';
+import 'package:property_app/widgets/property_image.dart';
 
 // ─── Design System Constants ──────────────────────────────────────────────────
 const _bg = StayNestColors.surfaceVariantLight;
@@ -23,6 +24,7 @@ class NotificationItem {
   final String subtitle;
   final String time;
   final IconData icon;
+  final Map<String, dynamic> data;
   bool isRead;
 
   NotificationItem({
@@ -31,6 +33,7 @@ class NotificationItem {
     required this.subtitle,
     required this.time,
     this.icon = Icons.notifications_none,
+    this.data = const {},
     this.isRead = false,
   });
 }
@@ -147,6 +150,7 @@ class _NotificationsViewState extends State<NotificationsView>
             subtitle: subtitle,
             time: _formatTime(now),
             icon: icon,
+            data: Map<String, dynamic>.from(message.data),
             isRead: false,
           ),
         );
@@ -167,13 +171,17 @@ class _NotificationsViewState extends State<NotificationsView>
               DateTime.tryParse(item['created_at'].toString())?.toLocal() ??
                   DateTime.now();
           final dataMap = item['data'] ?? {};
+          final notificationData = dataMap is Map
+              ? Map<String, dynamic>.from(dataMap)
+              : <String, dynamic>{};
 
           _items.add(NotificationItem(
             id: item['id']?.toString() ?? UniqueKey().toString(),
             title: item['title'] ?? 'Notification',
             subtitle: item['body'] ?? '',
             time: _formatTime(created),
-            icon: _notificationIcon(dataMap),
+            icon: _notificationIcon(notificationData),
+            data: notificationData,
             isRead: item['is_read'] == true,
           ));
         }
@@ -253,6 +261,14 @@ class _NotificationsViewState extends State<NotificationsView>
       }
     });
     NotificationApi.markAllAsRead().catchError((_) {});
+  }
+
+  void _openNotification(NotificationItem item) {
+    setState(() => item.isRead = true);
+    if (RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(item.id)) {
+      unawaited(NotificationApi.markAsRead(item.id).catchError((_) {}));
+    }
+    unawaited(FCMService.instance.openNotificationData(item.data));
   }
 
   // ─── UI Builders ────────────────────────────────────────────────────────────
@@ -425,6 +441,7 @@ class _NotificationsViewState extends State<NotificationsView>
     );
 
     final isSelected = _selectedIds.contains(item.id);
+    final imageUrl = item.data['imageUrl']?.toString() ?? '';
 
     return FadeTransition(
       opacity: animation,
@@ -442,8 +459,7 @@ class _NotificationsViewState extends State<NotificationsView>
             if (_isSelectionMode) {
               _toggleItemSelection(item.id);
             } else {
-              setState(() => item.isRead = true);
-              // Handle regular tap (navigation, etc)
+              _openNotification(item);
             }
           },
           child: Container(
@@ -483,6 +499,19 @@ class _NotificationsViewState extends State<NotificationsView>
                           : PhosphorIconsRegular.circle,
                       color: isSelected ? _primaryText : _grey,
                       size: 24,
+                    ),
+                  )
+                else if (imageUrl.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: buildPropertyImage(
+                        imageUrl,
+                        width: 46,
+                        height: 46,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   )
                 else

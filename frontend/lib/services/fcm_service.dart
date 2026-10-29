@@ -206,6 +206,9 @@ class FCMService with WidgetsBindingObserver {
   bool _isNavigatingFromNotification = false;
   bool _lifecycleObserverAdded = false;
 
+  Future<void> openNotificationData(Map<String, dynamic> data) =>
+      _handleMessageAction(RemoteMessage(data: data));
+
   Future<void> _handleMessageAction(RemoteMessage message) async {
     if (_isNavigatingFromNotification) return;
     _isNavigatingFromNotification = true;

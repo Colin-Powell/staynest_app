@@ -1,6 +1,7 @@
 import { pool, query } from '../db.js';
 import { sendPromotionalPushBatch } from './firebase.js';
 import { isEligibleCampaignAvailability } from './promotional_campaign_policy.js';
+import { buildPromotionalCampaignData } from './promotional_campaign_payload.js';
 const BATCH_SIZE = 500;
 const TRANSIENT_ERROR_CODES = new Set([
     'messaging/server-unavailable',
@@ -101,6 +102,20 @@ export async function processPromotionalCampaign(campaignId) {
          WHERE id = $5`, [status, result.messageId ?? null, errorCode, errorCode ? 'FCM rejected this message.' : null, recipient.delivery_id]);
             if (invalidToken) {
                 await query('UPDATE users SET fcm_token = NULL WHERE id = $1 AND fcm_token = $2', [recipient.user_id, recipient.fcm_token]);
+            }
+            if (result.success) {
+                const data = buildPromotionalCampaignData({
+                    campaignId,
+                    propertyId: campaign.property_id,
+                    imageUrl: campaign.image_url,
+                });
+                try {
+                    await query(`INSERT INTO notifications (user_id, title, body, data)
+             VALUES ($1, $2, $3, $4::jsonb)`, [recipient.user_id, campaign.title, campaign.body, JSON.stringify(data)]);
+                }
+                catch (error) {
+                    console.error(`[PushCampaign] in-app notification insert failed campaign=${campaignId} user=${recipient.user_id}:`, error);
+                }
             }
         }
         await query(`UPDATE promotional_push_campaigns c

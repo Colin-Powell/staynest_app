@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildCampaignRecipientQuery, hasCampaignAdminRole, isApprovedCampaignImage, isEligibleCampaignAvailability, normalizeCampaignImageUrl, normalizeCampaignAudience, } from '../services/promotional_campaign_policy.js';
-import { buildPromotionalCampaignMessage } from '../services/promotional_campaign_payload.js';
+import { buildPromotionalCampaignData, buildPromotionalCampaignMessage, } from '../services/promotional_campaign_payload.js';
 test('campaign administration accepts persisted admin aliases and rejects ordinary roles', () => {
     assert.equal(hasCampaignAdminRole({ role: 'admin' }), true);
     assert.equal(hasCampaignAdminRole({ role: 'tenant', roles: ['tenant', 'super_admin'] }), true);
@@ -63,6 +63,19 @@ test('campaign FCM payload falls back to text when a listing has no image', () =
     assert.equal('imageUrl' in message.notification, false);
     assert.equal('imageUrl' in message.android.notification, false);
     assert.equal(message.data.imageUrl, '');
+});
+test('campaign notification-center data retains the property route and image', () => {
+    assert.deepEqual(buildPromotionalCampaignData({
+        campaignId: '123e4567-e89b-42d3-a456-426614174001',
+        propertyId: '123e4567-e89b-42d3-a456-426614174000',
+        imageUrl: 'https://res.cloudinary.com/staynest/image/upload/property.jpg',
+    }), {
+        type: 'property_promotion',
+        campaignId: '123e4567-e89b-42d3-a456-426614174001',
+        propertyId: '123e4567-e89b-42d3-a456-426614174000',
+        route: '/properties/123e4567-e89b-42d3-a456-426614174000',
+        imageUrl: 'https://res.cloudinary.com/staynest/image/upload/property.jpg',
+    });
 });
 test('campaign property images normalize Cloudinary URLs and relative public IDs safely', () => {
     assert.equal(isApprovedCampaignImage('https://res.cloudinary.com/staynest/image/upload/v1/listing.jpg', 'staynest'), true);

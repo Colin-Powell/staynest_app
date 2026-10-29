@@ -7,6 +7,16 @@ export interface PromotionalCampaignPayloadInput {
   propertyId: string;
 }
 
+export function buildPromotionalCampaignData(input: Pick<PromotionalCampaignPayloadInput, 'campaignId' | 'propertyId' | 'imageUrl'>) {
+  return {
+    type: 'property_promotion',
+    campaignId: input.campaignId,
+    propertyId: input.propertyId,
+    route: `/properties/${input.propertyId}`,
+    imageUrl: input.imageUrl ?? '',
+  };
+}
+
 export function buildPromotionalCampaignMessage(input: PromotionalCampaignPayloadInput) {
   return {
     token: input.token,
@@ -22,12 +32,6 @@ export function buildPromotionalCampaignMessage(input: PromotionalCampaignPayloa
         ...(input.imageUrl ? { imageUrl: input.imageUrl } : {}),
       },
     },
-    data: {
-      type: 'property_promotion',
-      campaignId: input.campaignId,
-      propertyId: input.propertyId,
-      route: `/properties/${input.propertyId}`,
-      imageUrl: input.imageUrl ?? '',
-    },
+    data: buildPromotionalCampaignData(input),
   };
 }

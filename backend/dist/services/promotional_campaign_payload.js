@@ -1,3 +1,12 @@
+export function buildPromotionalCampaignData(input) {
+    return {
+        type: 'property_promotion',
+        campaignId: input.campaignId,
+        propertyId: input.propertyId,
+        route: `/properties/${input.propertyId}`,
+        imageUrl: input.imageUrl ?? '',
+    };
+}
 export function buildPromotionalCampaignMessage(input) {
     return {
         token: input.token,
@@ -13,13 +22,7 @@ export function buildPromotionalCampaignMessage(input) {
                 ...(input.imageUrl ? { imageUrl: input.imageUrl } : {}),
             },
         },
-        data: {
-            type: 'property_promotion',
-            campaignId: input.campaignId,
-            propertyId: input.propertyId,
-            route: `/properties/${input.propertyId}`,
-            imageUrl: input.imageUrl ?? '',
-        },
+        data: buildPromotionalCampaignData(input),
     };
 }
 //# sourceMappingURL=promotional_campaign_payload.js.map
