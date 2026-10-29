@@ -1,4 +1,5 @@
 // lib/screens/edit_profile_view.dart
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -42,6 +43,7 @@ class _EditProfileViewState extends State<EditProfileView>
   bool _isLoadingProfile = true;
   bool _formHasEdits = false;
   String? _profileLoadError;
+  List<String> _missingPersonalFields = [];
 
   @override
   void initState() {
@@ -57,6 +59,7 @@ class _EditProfileViewState extends State<EditProfileView>
     _pageFade = CurvedAnimation(parent: _pageCtrl, curve: Curves.easeIn);
 
     _populateFromSession();
+    unawaited(_loadPersonalProfileCompletion());
 
     // Staggered Content Animation
     _staggerCtrl = AnimationController(
@@ -90,6 +93,21 @@ class _EditProfileViewState extends State<EditProfileView>
 
     if (!mounted) return;
     setState(() => _isLoadingProfile = false);
+  }
+
+  Future<void> _loadPersonalProfileCompletion() async {
+    try {
+      final summary = await RemoteDatabaseRepository().fetchProfileCompletion();
+      final profile = summary?['profile'];
+      final missing = profile is Map && profile['missingFields'] is List
+          ? (profile['missingFields'] as List)
+              .whereType<String>()
+              .toList(growable: false)
+          : <String>[];
+      if (mounted) setState(() => _missingPersonalFields = missing);
+    } catch (_) {
+      // The form remains editable if completion data is unavailable.
+    }
   }
 
   @override
@@ -189,6 +207,8 @@ class _EditProfileViewState extends State<EditProfileView>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                if (_missingPersonalFields.isNotEmpty)
+                                  _buildProfileCompletionPrompt(),
                                 _buildStaggered(
                                     index: 1, child: _buildAvatarSection()),
                                 const SizedBox(height: 40),
@@ -258,6 +278,58 @@ class _EditProfileViewState extends State<EditProfileView>
                     ),
                   ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileCompletionPrompt() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 28),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F8F3),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFD8EBDD)),
+        ),
+        child: Row(
+          children: [
+            Image.asset(
+              'assets/images/profile_complete.gif',
+              width: 76,
+              height: 76,
+              fit: BoxFit.contain,
+              excludeFromSemantics: true,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Finish your personal profile',
+                    style: TextStyle(
+                      color: Color(0xFF17312A),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _missingPersonalFields.contains('name')
+                        ? 'Add your full name to complete this profile.'
+                        : 'A few personal details are still missing.',
+                    style: const TextStyle(
+                      color: Color(0xFF5E6E65),
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -272,13 +272,19 @@ router.get('/recommendations', async (req: Request, res: Response, next: NextFun
     const whereParts: string[] = [];
 
     if (profile && profile.opt_in_personalized) {
+      const budgetConditions: string[] = [];
       if (profile.budget_min != null) {
         params.push(Number(profile.budget_min));
-        whereParts.push(`p.price >= $${params.length}`);
+        budgetConditions.push(`p.price >= $${params.length}`);
       }
       if (profile.budget_max != null) {
         params.push(Number(profile.budget_max));
-        whereParts.push(`p.price <= $${params.length}`);
+        budgetConditions.push(`p.price <= $${params.length}`);
+      }
+      if (budgetConditions.length > 0) {
+        orderParts.push(
+          `(CASE WHEN ${budgetConditions.join(' AND ')} THEN 0 ELSE 1 END)`,
+        );
       }
       if (Array.isArray(profile.preferred_categories) && profile.preferred_categories.length > 0) {
         params.push(profile.preferred_categories);

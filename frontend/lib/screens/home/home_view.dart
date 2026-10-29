@@ -17,10 +17,13 @@ import 'package:visibility_detector/visibility_detector.dart';
 import 'package:property_app/models/property.dart';
 import 'package:property_app/screens/home/home_feed_controller.dart';
 import 'package:property_app/services/device_location_service.dart';
+import 'package:property_app/repository/remote_database_repository.dart';
+import 'package:property_app/services/analytics/analytics_service.dart';
 
 const _bg = Color(0xFFFAFAFA);
 const _dark = Color(0xFF111827);
 const _grey = Color(0xFF9CA3AF);
+const _greyDark = Color(0xFF4B5563);
 const _primaryText = Color(0xFF4F70F8);
 const _border = Color(0xFFE5E7EB);
 
@@ -76,6 +79,7 @@ class _HomeViewState extends State<HomeView> {
   final ScrollController _scrollController = ScrollController();
   final HomeFeedController _feedController = HomeFeedController();
   int _feedRequestId = 0;
+  Map<String, dynamic>? _onboardingSummary;
 
   String _selectedCategory = 'All';
 
@@ -85,6 +89,7 @@ class _HomeViewState extends State<HomeView> {
     _feedController.addListener(_onFeedUpdated);
     _scrollController.addListener(_maybeLoadMore);
     _loadFeed();
+    unawaited(_loadOnboardingSummary());
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!OnboardingPrefs.hasSeen('homeSeen')) {
@@ -171,6 +176,153 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 
+  Future<void> _loadOnboardingSummary() async {
+    if (AppSession.currentUserId == null || AppSession.isLandlord) return;
+    try {
+      final summary = await RemoteDatabaseRepository().fetchProfileCompletion();
+      if (!mounted) return;
+      setState(() => _onboardingSummary = summary);
+      final reminder = summary?['reminder'];
+      final field = reminder is Map ? reminder['reminderField'] : null;
+      if (field is String && reminder['shouldShowReminder'] == true) {
+        unawaited(RemoteDatabaseRepository().recordOnboardingReminder(
+          action: 'shown',
+          field: field,
+        ));
+        unawaited(AnalyticsService.logEvent('onboarding_reminder_shown', {
+          'field': field,
+        }));
+      }
+    } catch (_) {
+      // Property discovery remains available if onboarding data is offline.
+    }
+  }
+
+  Future<void> _openTenantOnboarding() async {
+    unawaited(AnalyticsService.logEvent('profile_completion_started'));
+    await Navigator.of(context).pushNamed<void>('/tenant_onboarding');
+    await _loadOnboardingSummary();
+  }
+
+  Future<void> _snoozeOnboardingReminder(String field) async {
+    await RemoteDatabaseRepository().recordOnboardingReminder(
+      action: 'snooze',
+      field: field,
+    );
+    await _loadOnboardingSummary();
+  }
+
+  Widget _buildProfileCompletionCard({double hPad = 24}) {
+    final preferences = _onboardingSummary?['preferences'];
+    final reminder = _onboardingSummary?['reminder'];
+    if (preferences is! Map ||
+        reminder is! Map ||
+        reminder['shouldShowReminder'] != true) {
+      return const SizedBox.shrink();
+    }
+
+    final completed = (preferences['completedFields'] as num?)?.toInt() ?? 0;
+    final total = (preferences['totalFields'] as num?)?.toInt() ?? 0;
+    final percent = (preferences['completionPercentage'] as num?)?.toInt() ?? 0;
+    final field = reminder['reminderField']?.toString();
+    if (total == 0 || field == null) return const SizedBox.shrink();
+    final benefit = switch (field) {
+      'preferredLocation' =>
+        'Choose an area to find homes closer to where you want to live.',
+      'budgetRange' =>
+        'Set your budget to narrow down homes within your price range.',
+      'propertyType' =>
+        'Choose a home type to focus on the stays you are looking for.',
+      _ => 'Add a few details to make property discovery more relevant.',
+    };
+    final action = switch (field) {
+      'preferredLocation' => 'Choose location',
+      'budgetRange' => 'Set budget',
+      'propertyType' => 'Choose home type',
+      _ => 'Add preferences',
+    };
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 24),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 148),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F8F3),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFD8EBDD)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.home_work_outlined,
+                color: Color(0xFF167447), size: 28),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Make StayNest work for you',
+                      style: GoogleFonts.poppins(
+                        color: _dark,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      )),
+                  const SizedBox(height: 4),
+                  Text(
+                    benefit,
+                    style: GoogleFonts.poppins(color: _greyDark, fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  Semantics(
+                    label: 'Housing preferences $percent percent complete',
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: percent / 100,
+                        minHeight: 6,
+                        backgroundColor: const Color(0xFFDCE9E0),
+                        color: const Color(0xFF167447),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text('$completed of $total housing details completed',
+                      style:
+                          GoogleFonts.poppins(color: _greyDark, fontSize: 12)),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      FilledButton(
+                        onPressed: _openTenantOnboarding,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF167447),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: Text(action),
+                      ),
+                      TextButton(
+                        onPressed: () => _snoozeOnboardingReminder(field),
+                        child: const Text('Remind me later'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _onCategoryTap(String label) {
     setState(() {
       if (_selectedCategory == label) {
@@ -235,6 +387,7 @@ class _HomeViewState extends State<HomeView> {
                 slivers: [
                   SliverToBoxAdapter(child: _buildHeader()),
                   SliverToBoxAdapter(child: _buildCategoryPills()),
+                  SliverToBoxAdapter(child: _buildProfileCompletionCard()),
                   if (_feedController.isLoading)
                     SliverToBoxAdapter(child: _buildShimmerLoading(context))
                   else if (_feedController.hasError)
@@ -664,6 +817,9 @@ class _HomeViewState extends State<HomeView> {
                       physics: const ClampingScrollPhysics(),
                       slivers: [
                         const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                        SliverToBoxAdapter(
+                          child: _buildProfileCompletionCard(hPad: hPad),
+                        ),
                         ..._buildDesktopSlivers(
                           hPad: hPad,
                           inner: inner,

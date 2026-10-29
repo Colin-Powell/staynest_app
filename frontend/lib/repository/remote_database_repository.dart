@@ -515,6 +515,7 @@ class RemoteDatabaseRepository {
   Future<Map<String, dynamic>?> fetchTenantProfileMe() async {
     final response = await apiClient.get(
       Uri.parse('${AppSession.apiBaseUrl}/tenant_profiles/me'),
+      bypassCache: true,
     );
 
     if (response.body.isEmpty) return null;
@@ -524,6 +525,29 @@ class RemoteDatabaseRepository {
     if (data == null) return null;
     if (data is Map<String, dynamic>) return data;
     return null;
+  }
+
+  Future<Map<String, dynamic>?> fetchProfileCompletion() async {
+    final response = await apiClient.get(
+      Uri.parse('${AppSession.apiBaseUrl}/tenant_profiles/completion'),
+      bypassCache: true,
+    );
+    return _decodeData(response);
+  }
+
+  Future<bool> recordOnboardingReminder({
+    required String action,
+    required String field,
+  }) async {
+    try {
+      final response = await apiClient.post(
+        Uri.parse('${AppSession.apiBaseUrl}/tenant_profiles/reminder'),
+        body: {'action': action, 'field': field},
+      );
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<Map<String, dynamic>?> saveTenantProfile(

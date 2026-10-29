@@ -13,6 +13,7 @@ import 'package:property_app/widgets/property_card.dart';
 import 'package:property_app/widgets/app_footer.dart';
 import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/utils/geocoding.dart';
+import 'package:property_app/repository/remote_database_repository.dart';
 
 // ─── Design System Constants ──────────────────────────────────────────────────
 const _bg = Color(0xFFFAFAFA);
@@ -63,6 +64,11 @@ class _SearchViewState extends State<SearchView> {
 
   final String _sortBy = 'recommended';
   Map<String, dynamic> _activeFilters = {};
+  Map<String, dynamic>? _savedPreferences;
+  Map<String, dynamic>? _completionSummary;
+  bool _savedPreferencesApplied = false;
+  bool _isLoadingSavedPreferences = true;
+  bool _savedPreferencesLoadFailed = false;
 
   final _propertyService = PropertyService.instance;
   List<Property> _all = [];
@@ -80,6 +86,305 @@ class _SearchViewState extends State<SearchView> {
     } else {
       _load();
     }
+    unawaited(_loadSavedPreferences());
+  }
+
+  Future<void> _loadSavedPreferences() async {
+    if (AppSession.currentUserId == null) {
+      if (mounted) setState(() => _isLoadingSavedPreferences = false);
+      return;
+    }
+    try {
+      final values = await Future.wait([
+        RemoteDatabaseRepository().fetchTenantProfileMe(),
+        RemoteDatabaseRepository().fetchProfileCompletion(),
+      ]);
+      final profile = values[0] as Map<String, dynamic>?;
+      final completion = values[1] as Map<String, dynamic>?;
+      if (!mounted) return;
+      final savedProfile = profile ?? <String, dynamic>{};
+      setState(() {
+        _savedPreferences = savedProfile;
+        _completionSummary = completion;
+        _isLoadingSavedPreferences = false;
+        _savedPreferencesLoadFailed = false;
+      });
+      final reminder = completion?['reminder'];
+      final field = reminder is Map ? reminder['reminderField'] : null;
+      if (field is String && reminder?['shouldShowReminder'] == true) {
+        unawaited(RemoteDatabaseRepository().recordOnboardingReminder(
+          action: 'shown',
+          field: field,
+        ));
+        unawaited(AnalyticsService.logEvent('onboarding_reminder_shown', {
+          'field': field,
+          'context': 'search',
+        }));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingSavedPreferences = false;
+        _savedPreferencesLoadFailed = true;
+      });
+    }
+  }
+
+  bool get _hasSavedPreferences {
+    final preferences = _savedPreferences;
+    if (preferences == null) return false;
+    return (preferences['preferred_cities'] is List &&
+            (preferences['preferred_cities'] as List).isNotEmpty) ||
+        preferences['budget_min'] != null ||
+        preferences['budget_max'] != null ||
+        (preferences['preferred_categories'] is List &&
+            (preferences['preferred_categories'] as List).isNotEmpty);
+  }
+
+  List<String> get _missingPreferenceFields {
+    final preferences = _completionSummary?['preferences'];
+    return preferences is Map && preferences['missingFields'] is List
+        ? (preferences['missingFields'] as List).whereType<String>().toList()
+        : const ['preferredLocation', 'budgetRange', 'propertyType'];
+  }
+
+  Future<void> _openPreferenceSetup() async {
+    final route = _missingPreferenceFields.isEmpty
+        ? '/tenant_profile'
+        : '/tenant_onboarding';
+    await Navigator.of(context).pushNamed<void>(route);
+    await _loadSavedPreferences();
+  }
+
+  Future<void> _requestPreferenceSignIn() async {
+    if (widget.onRequireAuthentication != null) {
+      await widget.onRequireAuthentication!(
+        onAuthenticated: () {
+          if (mounted) unawaited(_openPreferenceSetup());
+        },
+      );
+      return;
+    }
+    await Navigator.of(context).pushNamed<void>('/login');
+  }
+
+  void _applySavedPreferences() {
+    final preferences = _savedPreferences;
+    if (preferences == null) return;
+    final filters = Map<String, dynamic>.from(_activeFilters);
+    if (filters['minPrice'] == null && preferences['budget_min'] != null) {
+      filters['minPrice'] = preferences['budget_min'];
+    }
+    if (filters['maxPrice'] == null && preferences['budget_max'] != null) {
+      filters['maxPrice'] = preferences['budget_max'];
+    }
+    final categories = preferences['preferred_categories'];
+    if (filters['propertyType'] == null &&
+        categories is List &&
+        categories.isNotEmpty) {
+      filters['propertyType'] = categories.first;
+    }
+    final cities = preferences['preferred_cities'];
+    final city =
+        cities is List && cities.isNotEmpty ? cities.first.toString() : '';
+    setState(() {
+      _activeFilters = filters;
+      if (query.trim().isEmpty && city.isNotEmpty) {
+        query = city;
+        _searchController.text = city;
+      }
+      _savedPreferencesApplied = true;
+    });
+    widget.onFiltersChanged?.call(filters);
+    unawaited(AnalyticsService.logEvent('saved_preferences_applied', {
+      'filter_count': filters.length,
+    }));
+  }
+
+  Widget _buildSavedPreferencesBanner() {
+    final isAuthenticated = AppSession.currentUserId != null;
+    final hasSaved = _hasSavedPreferences;
+    final missing = _missingPreferenceFields;
+    final completion = _completionSummary?['preferences'];
+    final completedCount = completion is Map
+        ? (completion['completedFields'] as num?)?.toInt() ?? 0
+        : 0;
+    final totalCount = completion is Map
+        ? (completion['totalFields'] as num?)?.toInt() ?? 3
+        : 3;
+    final percent = completion is Map
+        ? (completion['completionPercentage'] as num?)?.toInt() ?? 0
+        : 0;
+    final isSearching = query.trim().isNotEmpty || _activeFilters.isNotEmpty;
+
+    final String title;
+    final String message;
+    if (_isLoadingSavedPreferences) {
+      title = 'Checking your saved preferences';
+      message = 'Your search stays available while we load them.';
+    } else if (_savedPreferencesLoadFailed) {
+      title = 'Preferences are temporarily unavailable';
+      message = 'You can keep browsing, or try loading them again.';
+    } else if (!isAuthenticated) {
+      title = 'Find homes that fit you';
+      message = 'Sign in to save a location, budget, and home type for your searches.';
+    } else if (_savedPreferencesApplied) {
+      title = 'Preferences applied';
+      message = 'We use your saved house preferences to match properties that suit you and your budget. You can still browse all available homes.';
+    } else if (hasSaved) {
+      title = isSearching ? 'Make this search fit you' : 'Your house preferences';
+      message = 'We use your saved house preferences to match properties that suit you and your budget.';
+    } else {
+      title = 'Set up your house preferences';
+      message = 'Save a preferred area, monthly budget, or home type to make future searches more useful.';
+    }
+
+    final actions = <Widget>[];
+    if (_savedPreferencesLoadFailed) {
+      actions.add(OutlinedButton(
+        onPressed: _loadSavedPreferences,
+        child: const Text('Try again'),
+      ));
+    } else if (!isAuthenticated && !_isLoadingSavedPreferences) {
+      actions.add(FilledButton(
+        onPressed: _requestPreferenceSignIn,
+        style: FilledButton.styleFrom(backgroundColor: _primaryText),
+        child: const Text('Sign in'),
+      ));
+    } else if (isAuthenticated && !_isLoadingSavedPreferences) {
+      if (hasSaved && !_savedPreferencesApplied) {
+        actions.add(FilledButton.icon(
+          onPressed: _applySavedPreferences,
+          style: FilledButton.styleFrom(backgroundColor: _primaryText),
+          icon: const Icon(Icons.tune, size: 17),
+          label: const Text('Apply to search'),
+        ));
+      }
+      if (missing.isNotEmpty) {
+        actions.add(OutlinedButton(
+          onPressed: _openPreferenceSetup,
+          child: Text(hasSaved ? 'Complete preferences' : 'Set preferences'),
+        ));
+      } else if (hasSaved) {
+        actions.add(OutlinedButton(
+          onPressed: _openPreferenceSetup,
+          child: const Text('Edit preferences'),
+        ));
+      } else {
+        actions.add(FilledButton(
+          onPressed: _openPreferenceSetup,
+          style: FilledButton.styleFrom(backgroundColor: _primaryText),
+          child: const Text('Set preferences'),
+        ));
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 14),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 620;
+          return Container(
+            padding: EdgeInsets.all(compact ? 14 : 18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: _border),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Image.asset(
+                      'assets/images/preference.gif',
+                      width: compact ? 52 : 64,
+                      height: compact ? 52 : 64,
+                      fit: BoxFit.contain,
+                      excludeFromSemantics: true,
+                    ),
+                    SizedBox(width: compact ? 12 : 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: GoogleFonts.poppins(
+                              color: _dark,
+                              fontSize: compact ? 14 : 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            message,
+                            style: GoogleFonts.poppins(
+                              color: const Color(0xFF6B7280),
+                              fontSize: compact ? 12 : 13,
+                              height: 1.4,
+                            ),
+                          ),
+                          if (isAuthenticated &&
+                              !_isLoadingSavedPreferences &&
+                              !_savedPreferencesLoadFailed &&
+                              completion is Map) ...[
+                            const SizedBox(height: 8),
+                            Semantics(
+                              label:
+                                  '$completedCount of $totalCount house preferences complete',
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: LinearProgressIndicator(
+                                  value: (percent / 100).clamp(0.0, 1.0),
+                                  minHeight: 5,
+                                  color: _primaryText,
+                                  backgroundColor: const Color(0xFFE5E7EB),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$completedCount of $totalCount preferences set',
+                              style: GoogleFonts.poppins(
+                                color: const Color(0xFF6B7280),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (_isLoadingSavedPreferences) ...[
+                      const SizedBox(width: 12),
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ],
+                  ],
+                ),
+                if (actions.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: compact
+                        ? Alignment.centerLeft
+                        : Alignment.centerRight,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: actions,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -586,12 +891,19 @@ class _SearchViewState extends State<SearchView> {
 
                 /// RESULTS (2-Column Grid View)
                 Expanded(
-                  child: _buildResultsScrollView(
-                    columns: 2,
-                    extent: 280,
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-                    crossSpacing: 16,
-                    mainSpacing: 24,
+                  child: Column(
+                    children: [
+                      _buildSavedPreferencesBanner(),
+                      Expanded(
+                        child: _buildResultsScrollView(
+                          columns: 2,
+                          extent: 280,
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                          crossSpacing: 16,
+                          mainSpacing: 24,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -681,6 +993,7 @@ class _SearchViewState extends State<SearchView> {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    _buildSavedPreferencesBanner(),
                     if (widget.initialTitle != null)
                       Padding(
                         padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 12),

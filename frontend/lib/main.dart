@@ -29,6 +29,7 @@ import 'screens/dashboard/landlord_bookings_page.dart';
 import 'screens/home/become_host_view.dart';
 import 'screens/privacy_policy.dart';
 import 'screens/auth/tenant_survey.dart';
+import 'screens/tenant_onboarding_view.dart';
 import 'repository/remote_database_repository.dart';
 import 'screens/notification_settings_view.dart';
 import 'screens/property/write_review_view.dart';
@@ -172,38 +173,6 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _enforceTenantPreferencesIfMissing(BuildContext context) async {
-    if (AppSession.isLandlord) return;
-    if (!AppSession.currentUserVerified) return;
-
-    final repo = RemoteDatabaseRepository();
-
-    try {
-      final tenantProfile = await repo.fetchTenantProfileMe();
-      final hasPrefs = tenantProfile != null;
-
-      if (!hasPrefs) {
-        await showResponsiveModalSheet<void>(
-          context: context,
-          isScrollControlled: true,
-          isDismissible: false,
-          enableDrag: false,
-          useSafeArea: true,
-          backgroundColor: Colors.transparent,
-          builder: (sheetContext) {
-            return WillPopScope(
-              onWillPop: () async => false,
-              child: const Material(
-                color: Colors.transparent,
-                child: TenantSurveyView(),
-              ),
-            );
-          },
-        );
-      }
-    } catch (_) {}
-  }
-
   void _handleRoleChange() {
     if (mounted) {
       setState(() => _role = AppSession.currentRole);
@@ -316,7 +285,6 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
         return;
       }
 
-      await _enforceTenantPreferencesIfMissing(dialogContext);
       if (!mounted || !dialogContext.mounted) return;
       _closeLoginModal(dialogContext, onClosed: onAuthenticated);
     } finally {
@@ -363,7 +331,6 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
       return;
     }
 
-    await _enforceTenantPreferencesIfMissing(context);
     if (!context.mounted) return;
     Navigator.pushReplacementNamed(context, '/home');
     onAuthenticated?.call();
@@ -732,6 +699,7 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
         '/tenant_profile': (context) => TenantProfileView(
               onBack: () => Navigator.pop(context),
             ),
+        '/tenant_onboarding': (context) => const TenantOnboardingView(),
         '/list_property': (context) => _landlordOnlyRoute(
               () => AddListingFlow(
                   property: ModalRoute.of(context)?.settings.arguments

@@ -51,11 +51,11 @@ router.post('/', async (req, res, next) => {
       );
       user = result.rows[0];
     } else {
-      // update avatar/name if missing, and upgrade to landlord role if selected and user was tenant
+      // Google identity initializes empty account details without replacing user edits.
       const newRole = (requestedRole === 'landlord' && user.role === 'tenant') ? 'landlord' : user.role;
       const updateRes = await query(
         `UPDATE users
-         SET name = COALESCE(NULLIF($1, ''), name),
+        SET name = COALESCE(NULLIF(name, ''), NULLIF($1, ''), name),
              avatar = COALESCE(avatar, $2),
              role = $4
          WHERE id = $3

@@ -71,6 +71,9 @@ class _ProfileViewState extends State<ProfileView>
 
   int _selectedDesktopMenuIndex = 0;
   Map<String, dynamic>? _hostingApplication;
+  Map<String, dynamic>? _personalProfileCompletion;
+  Map<String, dynamic>? _housingPreferenceCompletion;
+  bool _isProfileCompletionLoading = true;
 
   @override
   void initState() {
@@ -107,7 +110,18 @@ class _ProfileViewState extends State<ProfileView>
 
     _pageCtrl.forward().then((_) => _staggerCtrl.forward());
     _refreshProfile();
+    _refreshPersonalProfileCompletion();
     _refreshHostingApplication();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.desktopHelperContent != null &&
+        widget.desktopHelperContent == null) {
+      _refreshProfile();
+      _refreshPersonalProfileCompletion();
+    }
   }
 
   void _loadSessionData() {
@@ -133,6 +147,29 @@ class _ProfileViewState extends State<ProfileView>
       setState(() => _loadSessionData());
     } catch (_) {
       // Keep existing cached session data if refresh fails.
+    }
+  }
+
+  Future<void> _refreshPersonalProfileCompletion() async {
+    try {
+      final summary = await RemoteDatabaseRepository().fetchProfileCompletion();
+      final profile = summary?['profile'];
+      final preferences = summary?['preferences'];
+      if (!mounted) return;
+      setState(() {
+        _personalProfileCompletion =
+            profile is Map ? Map<String, dynamic>.from(profile) : null;
+        _housingPreferenceCompletion =
+            preferences is Map ? Map<String, dynamic>.from(preferences) : null;
+        _isProfileCompletionLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _personalProfileCompletion = null;
+        _housingPreferenceCompletion = null;
+        _isProfileCompletionLoading = false;
+      });
     }
   }
 
@@ -384,7 +421,11 @@ class _ProfileViewState extends State<ProfileView>
                     ),
                     child: widget.desktopHelperContent == null
                         ? _selectedDesktopMenuIndex == 0
-                            ? _buildDesktopAboutMeContent()
+                            ? SingleChildScrollView(
+                                physics: const ClampingScrollPhysics(),
+                                padding: const EdgeInsets.only(bottom: 24),
+                                child: _buildDesktopAboutMeContent(),
+                              )
                             : Center(
                                 child: Text(
                                   'Content for this section goes here.',
@@ -407,6 +448,14 @@ class _ProfileViewState extends State<ProfileView>
     // Determine user initial for the mockup avatar fallback
     final initial =
         _displayName.isNotEmpty ? _displayName[0].toUpperCase() : 'U';
+    final completion = _personalProfileCompletion;
+    final completedFields =
+        (completion?['completedFields'] as num?)?.toInt() ?? 0;
+    final totalFields = (completion?['totalFields'] as num?)?.toInt() ?? 1;
+    final completionPercent =
+        (completion?['completionPercentage'] as num?)?.toInt() ?? 0;
+    final missingFields = completion?['missingFields'];
+    final isComplete = missingFields is List && missingFields.isEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -427,7 +476,7 @@ class _ProfileViewState extends State<ProfileView>
             MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
-                onTap: widget.onMyProfile,
+                onTap: widget.onEditProfile,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -459,7 +508,7 @@ class _ProfileViewState extends State<ProfileView>
             // Mockup Left Card
             Container(
               width: 340,
-              height: 260,
+              height: 300,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
@@ -528,7 +577,9 @@ class _ProfileViewState extends State<ProfileView>
                 children: [
                   const SizedBox(height: 12),
                   Text(
-                    'Complete your profile',
+                    isComplete
+                        ? 'Your profile is complete'
+                        : 'Complete your profile',
                     style: GoogleFonts.poppins(
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
@@ -537,18 +588,42 @@ class _ProfileViewState extends State<ProfileView>
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Your StayNest profile is an important part of every reservation. Complete yours to help other hosts and guests get to know you.',
+                    isComplete
+                        ? 'Your personal details are up to date. You can edit them anytime.'
+                        : 'Add your name to make your StayNest account feel more personal.',
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       color: _textLight,
                       height: 1.5,
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+                  if (_isProfileCompletionLoading)
+                    const LinearProgressIndicator(minHeight: 6)
+                  else ...[
+                    Semantics(
+                      label:
+                          'Personal profile $completionPercent percent complete',
+                      child: _buildStrokeProgressBar(
+                        percent: completionPercent,
+                        color:
+                            isComplete ? const Color(0xFF167447) : _airbnbPink,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '$completedFields of $totalFields personal details completed',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: _textLight,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
                   MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: ElevatedButton(
-                      onPressed: widget.onMyProfile ?? () {},
+                      onPressed: widget.onEditProfile ?? () {},
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _airbnbPink,
                         elevation: 0,
@@ -559,7 +634,9 @@ class _ProfileViewState extends State<ProfileView>
                         ),
                       ),
                       child: Text(
-                        'Get started',
+                        _isProfileCompletionLoading || !isComplete
+                            ? 'Get started'
+                            : 'Edit profile',
                         style: GoogleFonts.poppins(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -574,10 +651,12 @@ class _ProfileViewState extends State<ProfileView>
           ],
         ),
 
-        const SizedBox(height: 64),
-        _buildHostApplicationCard(isDesktop: true),
+        const SizedBox(height: 32),
+        _buildHousingPreferencesSection(),
         const SizedBox(height: 32),
         const Divider(color: _dividerColor, thickness: 1),
+        const SizedBox(height: 32),
+        _buildHostApplicationCard(isDesktop: true),
         const SizedBox(height: 32),
 
         // Reviews Link
@@ -603,6 +682,147 @@ class _ProfileViewState extends State<ProfileView>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildHousingPreferencesSection({bool compact = false}) {
+    final completion = _housingPreferenceCompletion;
+    final completedFields =
+        (completion?['completedFields'] as num?)?.toInt() ?? 0;
+    final totalFields = (completion?['totalFields'] as num?)?.toInt() ?? 3;
+    final percent = (completion?['completionPercentage'] as num?)?.toInt() ?? 0;
+    final missingFields = completion?['missingFields'];
+    final isComplete = missingFields is List && missingFields.isEmpty;
+
+    return Container(
+      width: double.infinity,
+      constraints: BoxConstraints(minHeight: compact ? 0 : 260),
+      padding: EdgeInsets.all(compact ? 18 : 28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _dividerColor),
+      ),
+      child: Row(
+        children: [
+          Image.asset(
+            'assets/images/profile_complete.gif',
+            width: compact ? 68 : 92,
+            height: compact ? 68 : 92,
+            fit: BoxFit.contain,
+            excludeFromSemantics: true,
+          ),
+          SizedBox(width: compact ? 12 : 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'House preferences',
+                  style: GoogleFonts.poppins(
+                    color: _textDark,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isComplete
+                      ? 'Your location, budget, and home type preferences are set.'
+                      : 'Choose a location, monthly budget, and home type to make browsing more useful.',
+                  style: GoogleFonts.poppins(
+                    color: _textLight,
+                    fontSize: 13,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (_isProfileCompletionLoading)
+                  const LinearProgressIndicator(
+                    minHeight: 6,
+                    color: _airbnbPink,
+                    backgroundColor: Color(0xFFF1F1F1),
+                  )
+                else ...[
+                  Semantics(
+                    label: 'House preferences $percent percent complete',
+                    child: _buildStrokeProgressBar(
+                      percent: percent,
+                      color: _airbnbPink,
+                      compact: compact,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    '$completedFields of $totalFields housing details completed',
+                    style: GoogleFonts.poppins(
+                      color: _textLight,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: widget.onMyProfile,
+                  icon: const Icon(Icons.tune, size: 18),
+                  label: Text(compact
+                      ? (isComplete ? 'Edit preferences' : 'Set preferences')
+                      : (isComplete
+                          ? 'Edit preferences'
+                          : 'Complete preferences')),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _airbnbPink,
+                    side: const BorderSide(color: _dividerColor),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 12 : 16,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStrokeProgressBar({
+    required int percent,
+    required Color color,
+    bool compact = false,
+  }) {
+    final strokeWidth = compact ? 5.0 : 7.0;
+    final strokeGap = compact ? 3.0 : 5.0;
+    final strokeHeight = compact ? 20.0 : 24.0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final count = constraints.maxWidth.isFinite
+            ? ((constraints.maxWidth + strokeGap) / (strokeWidth + strokeGap))
+                .floor()
+                .clamp(1, 64)
+            : (compact ? 16 : 24);
+        final completedStrokes =
+            ((percent.clamp(0, 100) / 100) * count).round();
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(count, (index) {
+            return DecoratedBox(
+              decoration: BoxDecoration(
+                color:
+                    index < completedStrokes ? color : const Color(0xFFE5E7EB),
+                borderRadius: BorderRadius.circular(strokeWidth / 2),
+              ),
+              child: SizedBox(width: strokeWidth, height: strokeHeight),
+            );
+          }),
+        );
+      },
     );
   }
 
@@ -855,13 +1075,21 @@ class _ProfileViewState extends State<ProfileView>
                     ),
                   ),
 
-                  // Menu Items
                   _buildStaggered(
                     index: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _buildHousingPreferencesSection(compact: true),
+                    ),
+                  ),
+
+                  // Menu Items
+                  _buildStaggered(
+                    index: 3,
                     child: _buildHostApplicationCard(),
                   ),
                   _buildStaggered(
-                    index: 3,
+                    index: 4,
                     child: _MenuItem(
                       icon: Icons.person,
                       label: 'Personal Information',
@@ -870,7 +1098,7 @@ class _ProfileViewState extends State<ProfileView>
                     ),
                   ),
                   _buildStaggered(
-                    index: 4,
+                    index: 5,
                     child: _MenuItem(
                       icon: Icons.event_available_rounded,
                       label: 'My Bookings',
@@ -878,7 +1106,7 @@ class _ProfileViewState extends State<ProfileView>
                     ),
                   ),
                   _buildStaggered(
-                    index: 5,
+                    index: 6,
                     child: _MenuItem(
                       icon: Icons.credit_card,
                       label: 'Payment Methods',
@@ -886,7 +1114,7 @@ class _ProfileViewState extends State<ProfileView>
                     ),
                   ),
                   _buildStaggered(
-                    index: 6,
+                    index: 7,
                     child: _MenuItem(
                       icon: Icons.account_balance_wallet_outlined,
                       label: 'Wallet',
@@ -894,7 +1122,7 @@ class _ProfileViewState extends State<ProfileView>
                     ),
                   ),
                   _buildStaggered(
-                    index: 8,
+                    index: 9,
                     child: _MenuItem(
                       icon: Icons.share,
                       label: 'Refer a Friend',
@@ -902,7 +1130,7 @@ class _ProfileViewState extends State<ProfileView>
                     ),
                   ),
                   _buildStaggered(
-                    index: 9,
+                    index: 10,
                     child: _MenuItem(
                       icon: Icons.settings,
                       label: 'Settings',
@@ -910,7 +1138,7 @@ class _ProfileViewState extends State<ProfileView>
                     ),
                   ),
                   _buildStaggered(
-                    index: 10,
+                    index: 11,
                     child: _MenuItem(
                       icon: Icons.info,
                       label: 'Help & Support',
@@ -919,7 +1147,7 @@ class _ProfileViewState extends State<ProfileView>
                   ),
                   if (kIsWeb)
                     _buildStaggered(
-                      index: 11,
+                      index: 12,
                       child: _MenuItem(
                         icon: Icons.android_rounded,
                         label: 'Download Android app',
@@ -929,7 +1157,7 @@ class _ProfileViewState extends State<ProfileView>
 
                   if (AppSession.isLandlord)
                     _buildStaggered(
-                      index: 12,
+                      index: 13,
                       child: _MenuItem(
                         icon: Icons.add_business_rounded,
                         label: 'List a Property',
@@ -940,7 +1168,7 @@ class _ProfileViewState extends State<ProfileView>
                     ),
                   if (AppSession.isLandlord)
                     _buildStaggered(
-                      index: 13,
+                      index: 14,
                       child: _MenuItem(
                         icon: Icons.verified,
                         label: 'Verification Center',
@@ -954,7 +1182,7 @@ class _ProfileViewState extends State<ProfileView>
 
                   // Logout Button
                   _buildStaggered(
-                    index: 13,
+                    index: 15,
                     child: _MenuItem(
                       icon: Icons.logout_rounded,
                       label: 'Logout',

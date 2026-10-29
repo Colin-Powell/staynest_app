@@ -11,7 +11,7 @@
     "build": "tsc",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
-    "test": "npm run build && node --test --test-force-exit dist/__tests__/property_inquiry_reminder.test.js dist/__tests__/otp_reminder.test.js dist/__tests__/landlord_response_metrics.test.js dist/__tests__/role_access.test.js dist/__tests__/booking_fee.test.js dist/__tests__/discovery_rules.test.js dist/__tests__/property_availability.test.js dist/__tests__/conversation_policy.test.js dist/__tests__/landlord_metrics.test.js",
+    "test": "npm run build && node --test --test-force-exit dist/__tests__/property_inquiry_reminder.test.js dist/__tests__/otp_reminder.test.js dist/__tests__/landlord_response_metrics.test.js dist/__tests__/role_access.test.js dist/__tests__/booking_fee.test.js dist/__tests__/discovery_rules.test.js dist/__tests__/property_availability.test.js dist/__tests__/conversation_policy.test.js dist/__tests__/landlord_metrics.test.js dist/__tests__/profile_completion.test.js",
     "seed": "node ./scripts/seed-admin.js",
     "migrate": "node ./scripts/apply-schema.js"
   },
