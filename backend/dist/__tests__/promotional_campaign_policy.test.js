@@ -8,17 +8,21 @@ test('campaign administration accepts persisted admin aliases and rejects ordina
     assert.equal(hasCampaignAdminRole({ role: 'landlord', roles: ['tenant', 'landlord'] }), false);
     assert.equal(hasCampaignAdminRole(undefined), false);
 });
-test('campaign audience accepts only the supported preference filters', () => {
-    assert.deepEqual(normalizeCampaignAudience({ location: true, propertyType: false }), {
-        location: true,
-        propertyType: false,
-    });
-    assert.deepEqual(normalizeCampaignAudience({}), {
-        location: false,
-        propertyType: false,
-    });
+test('campaign audience accepts no additional targeting parameters', () => {
+    assert.deepEqual(normalizeCampaignAudience({}), {});
+    assert.equal(normalizeCampaignAudience({ location: true }), null);
+    assert.equal(normalizeCampaignAudience({ propertyType: true }), null);
     assert.equal(normalizeCampaignAudience({ role: 'admin' }), null);
     assert.equal(normalizeCampaignAudience({ location: 'Nairobi' }), null);
+});
+test('campaign recipients include every account with a nonblank FCM token', () => {
+    const { sql, params } = buildCampaignRecipientQuery();
+    assert.deepEqual(params, []);
+    assert.match(sql, /u\.fcm_token IS NOT NULL AND btrim\(u\.fcm_token\) <> ''/);
+    assert.doesNotMatch(sql, /is_suspended|promotional_push|push_permission_granted|preferred_cities|preferred_categories|tenant/);
+});
+test('campaign audience rejects legacy location and property-type targeting filters', () => {
+    assert.equal(normalizeCampaignAudience({ location: true, propertyType: false }), null);
 });
 test('campaign eligibility matches existing bookability rules', () => {
     for (const status of ['rented', 'fully_booked', 'maintenance', 'inactive', 'archived', 'expired', 'unknown', null]) {
@@ -26,24 +30,6 @@ test('campaign eligibility matches existing bookability rules', () => {
     }
     assert.equal(isEligibleCampaignAvailability('available'), true);
     assert.equal(isEligibleCampaignAvailability('pending_booking'), true);
-});
-test('campaign recipient query requires opt-in and excludes non-tenant roles', () => {
-    const { sql, params } = buildCampaignRecipientQuery({ city: 'Kilifi', category: 'Bedsitter' }, { location: true, propertyType: true });
-    assert.deepEqual(params, ['kilifi', 'bedsitter']);
-    assert.match(sql, /u\.settings->>'promotional_push' = 'true'/);
-    assert.match(sql, /u\.settings->>'push_permission_granted' = 'true'/);
-    assert.match(sql, /u\.is_suspended = false/);
-    assert.match(sql, /u\.fcm_token IS NOT NULL/);
-    assert.match(sql, /ARRAY\['landlord', 'host', 'admin', 'super_admin', 'administrator'\]/);
-    assert.match(sql, /unnest\(coalesce\(tp\.preferred_cities/);
-    assert.match(sql, /unnest\(coalesce\(tp\.preferred_categories/);
-    assert.match(sql, /SELECT DISTINCT u\.id/);
-});
-test('missing preference filters do not become an all-location or all-type match', () => {
-    const locationQuery = buildCampaignRecipientQuery({ city: 'Kilifi', category: 'Bedsitter' }, { location: true, propertyType: false });
-    assert.match(locationQuery.sql, /EXISTS \(\s*SELECT 1 FROM tenant_profiles tp/);
-    assert.match(locationQuery.sql, /preferred_cities/);
-    assert.doesNotMatch(locationQuery.sql, /preferred_categories/);
 });
 test('campaign FCM payload includes only the approved image and exact property route data', () => {
     const message = buildPromotionalCampaignMessage({

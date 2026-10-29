@@ -40,33 +40,18 @@ async function loadEligibleProperty(propertyId: string, lock = false) {
   return property && isEligibleCampaignAvailability(property.availability_status) ? property : null;
 }
 
-async function estimateAudience(property: { city: string; category: string }, audience: { location: boolean; propertyType: boolean }) {
-  const recipientQuery = buildCampaignRecipientQuery(property, audience);
+async function estimateAudience() {
+  const recipientQuery = buildCampaignRecipientQuery();
   const result = await query(`SELECT count(*)::int AS count FROM (${recipientQuery.sql}) eligible`, recipientQuery.params);
   return Number(result.rows[0]?.count ?? 0);
 }
 
 async function getCampaignAudienceDiagnostics() {
   const result = await query(`
-    WITH user_checks AS (
-      SELECT
-        lower(coalesce(u.role, '')) = 'tenant'
-          AND u.is_suspended = false
-          AND NOT (coalesce(u.roles, '{}'::text[]) && ARRAY['landlord', 'host', 'admin', 'super_admin', 'administrator']::text[]) AS eligible_tenant,
-        u.fcm_token IS NOT NULL AND btrim(u.fcm_token) <> '' AS has_active_token,
-        u.settings->>'push_permission_granted' = 'true' AS os_permission_granted,
-        u.settings->>'promotional_push' = 'true' AS promotional_opt_in,
-        u.settings->>'push' IS DISTINCT FROM 'false'
-          AND u.settings->'notifications'->>'push_messages' IS DISTINCT FROM 'false' AS push_enabled
-      FROM users u
-    )
     SELECT
-      count(*) FILTER (WHERE eligible_tenant)::int AS eligible_tenants,
-      count(*) FILTER (WHERE eligible_tenant AND has_active_token)::int AS tenants_with_token,
-      count(*) FILTER (WHERE eligible_tenant AND has_active_token AND os_permission_granted)::int AS tenants_with_permission,
-      count(*) FILTER (WHERE eligible_tenant AND has_active_token AND os_permission_granted AND promotional_opt_in)::int AS promotional_opt_ins,
-      count(*) FILTER (WHERE eligible_tenant AND has_active_token AND os_permission_granted AND promotional_opt_in AND push_enabled)::int AS eligible_before_targeting
-    FROM user_checks
+      count(*)::int AS total_accounts,
+      count(*) FILTER (WHERE u.fcm_token IS NOT NULL AND btrim(u.fcm_token) <> '')::int AS accounts_with_token
+    FROM users u
   `);
   const values = result.rows[0] ?? {};
   return Object.fromEntries(Object.entries(values).map(([key, value]) => [key, Number(value ?? 0)]));
@@ -108,16 +93,15 @@ router.post('/estimate', requireCurrentAdmin, async (req, res, next) => {
     }
     const property = await loadEligibleProperty(propertyId);
     if (!property) return res.status(404).json({ error: 'This property is not eligible for a campaign.' });
-    const count = await estimateAudience(property, audience);
+    const count = await estimateAudience();
     const diagnostics = await getCampaignAudienceDiagnostics();
     res.json({ data: {
       estimatedRecipients: count,
       diagnostics,
       audience,
       notes: [
-        'Only opted-in tenant accounts with an active token and granted OS notification permission are counted.',
-        ...(audience.location ? ['Tenants without a matching saved city preference are excluded.'] : []),
-        ...(audience.propertyType ? ['Tenants without a matching saved property-type preference are excluded.'] : []),
+        'All accounts with a registered FCM token are included, regardless of role, suspension status, notification preferences, or saved targeting preferences.',
+        'FCM-invalid tokens are cleared after a delivery attempt is rejected.',
       ],
     } });
   } catch (error) { next(error); }
@@ -197,7 +181,7 @@ router.post('/', requireCurrentAdmin, async (req, res, next) => {
     }
     const imageUrl = normalizeCampaignImageUrl(property.image_url);
 
-    const recipientQuery = buildCampaignRecipientQuery(property, audience);
+    const recipientQuery = buildCampaignRecipientQuery();
     const recipientCountResult = await client.query(
       `SELECT count(*)::int AS count FROM (${recipientQuery.sql}) eligible`,
       recipientQuery.params,
@@ -205,7 +189,7 @@ router.post('/', requireCurrentAdmin, async (req, res, next) => {
     const eligibleCount = Number(recipientCountResult.rows[0]?.count ?? 0);
     if (eligibleCount === 0) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'No opted-in recipients match this audience.' });
+      return res.status(409).json({ error: 'No accounts with a registered FCM token are available.' });
     }
 
     const campaignResult = await client.query(

@@ -44,33 +44,10 @@ export async function processPromotionalCampaign(campaignId) {
          JOIN users u ON u.id = d.user_id
          WHERE d.campaign_id = $1
            AND (d.status = 'pending' OR (d.status = 'sending' AND d.last_attempt_at < now() - INTERVAL '30 minutes'))
-           AND lower(coalesce(u.role, '')) = 'tenant'
-           AND u.is_suspended = false
-           AND NOT (coalesce(u.roles, '{}'::text[]) && ARRAY['landlord', 'host', 'admin', 'super_admin', 'administrator']::text[])
-           AND u.settings->>'promotional_push' = 'true'
-           AND u.settings->>'push_permission_granted' = 'true'
-           AND u.settings->>'push' IS DISTINCT FROM 'false'
-           AND u.settings->'notifications'->>'push_messages' IS DISTINCT FROM 'false'
            AND u.fcm_token IS NOT NULL AND btrim(u.fcm_token) <> ''
-           AND (NOT COALESCE(($2::jsonb->>'location')::boolean, false) OR EXISTS (
-             SELECT 1 FROM tenant_profiles tp
-             WHERE tp.user_id = u.id
-               AND EXISTS (
-                 SELECT 1 FROM unnest(coalesce(tp.preferred_cities, '{}'::text[])) AS pref_city(value)
-                 WHERE lower(btrim(pref_city.value)) = lower($3)
-               )
-           ))
-           AND (NOT COALESCE(($2::jsonb->>'propertyType')::boolean, false) OR EXISTS (
-             SELECT 1 FROM tenant_profiles tp
-             WHERE tp.user_id = u.id
-               AND EXISTS (
-                 SELECT 1 FROM unnest(coalesce(tp.preferred_categories, '{}'::text[])) AS pref_category(value)
-                 WHERE lower(btrim(pref_category.value)) = lower($4)
-               )
-           ))
          ORDER BY d.created_at
-         LIMIT $5
-         FOR UPDATE OF d SKIP LOCKED`, [campaignId, campaign.audience, campaign.city, campaign.category, BATCH_SIZE]);
+         LIMIT $2
+         FOR UPDATE OF d SKIP LOCKED`, [campaignId, BATCH_SIZE]);
             recipients = recipientResult.rows;
             if (recipients.length > 0) {
                 await client.query(`UPDATE promotional_push_deliveries
@@ -140,32 +117,8 @@ export async function processPromotionalCampaign(campaignId) {
        AND NOT EXISTS (
          SELECT 1 FROM users u
          JOIN promotional_push_campaigns c ON c.id = d.campaign_id
-         JOIN properties p ON p.id = c.property_id
          WHERE u.id = d.user_id
-           AND lower(coalesce(u.role, '')) = 'tenant'
-           AND u.is_suspended = false
-           AND NOT (coalesce(u.roles, '{}'::text[]) && ARRAY['landlord', 'host', 'admin', 'super_admin', 'administrator']::text[])
-           AND u.settings->>'promotional_push' = 'true'
-           AND u.settings->>'push_permission_granted' = 'true'
-           AND u.settings->>'push' IS DISTINCT FROM 'false'
-           AND u.settings->'notifications'->>'push_messages' IS DISTINCT FROM 'false'
            AND u.fcm_token IS NOT NULL AND btrim(u.fcm_token) <> ''
-           AND (NOT COALESCE((c.audience->>'location')::boolean, false) OR EXISTS (
-             SELECT 1 FROM tenant_profiles tp
-             WHERE tp.user_id = u.id
-               AND EXISTS (
-                 SELECT 1 FROM unnest(coalesce(tp.preferred_cities, '{}'::text[])) AS pref_city(value)
-                 WHERE lower(btrim(pref_city.value)) = lower(p.city)
-               )
-           ))
-           AND (NOT COALESCE((c.audience->>'propertyType')::boolean, false) OR EXISTS (
-             SELECT 1 FROM tenant_profiles tp
-             WHERE tp.user_id = u.id
-               AND EXISTS (
-                 SELECT 1 FROM unnest(coalesce(tp.preferred_categories, '{}'::text[])) AS pref_category(value)
-                 WHERE lower(btrim(pref_category.value)) = lower(p.category)
-               )
-           ))
        )`, [campaignId]);
     await query(`UPDATE promotional_push_campaigns c
      SET submitted_count = (SELECT count(*)::int FROM promotional_push_deliveries d WHERE d.campaign_id = c.id AND d.status = 'submitted'),

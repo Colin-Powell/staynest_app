@@ -39,10 +39,7 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
   Map<String, dynamic>? _selectedProperty;
 
   List<String> _audienceNotes = [];
-  Map<String, int> _audienceDiagnostics = {};
   int? _estimatedRecipients;
-  bool _targetLocation = false;
-  bool _targetPropertyType = false;
 
   bool _loadingProperties = true;
   bool _loadingCampaigns = false;
@@ -54,23 +51,9 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
   // Firebase-style stepper state
   int _currentStep = 0;
 
-  Map<String, bool> get _audience => {
-        'location': _targetLocation,
-        'propertyType': _targetPropertyType,
-      };
+  Map<String, bool> get _audience => const {};
 
-  String get _audienceSummary {
-    final filters = <String>['Opted-in tenants'];
-    if (_targetLocation) {
-      filters.add(
-          'saved city: ${_selectedProperty?['city'] ?? 'selected property'}');
-    }
-    if (_targetPropertyType) {
-      filters.add(
-          'preferred type: ${_selectedProperty?['category'] ?? 'selected property'}');
-    }
-    return filters.join(' + ');
-  }
+  String get _audienceSummary => 'All accounts with a registered FCM token';
 
   @override
   void initState() {
@@ -141,7 +124,6 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
       _selectedProperty = property;
       _estimatedRecipients = null;
       _audienceNotes = [];
-      _audienceDiagnostics = {};
       final title = property['title']?.toString() ?? 'this home';
       final city = property['city']?.toString() ?? '';
       final category = property['category']?.toString() ?? 'property';
@@ -172,13 +154,6 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
         _audienceNotes = (estimate['notes'] as List<dynamic>? ?? [])
             .map((note) => note.toString())
             .toList();
-        final diagnostics = estimate['diagnostics'];
-        _audienceDiagnostics = diagnostics is Map
-            ? diagnostics.map((key, value) => MapEntry(
-                  key.toString(),
-                  int.tryParse('$value') ?? 0,
-                ))
-            : {};
       });
     } catch (error) {
       if (mounted) {
@@ -511,43 +486,9 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Select the user segments to receive this campaign.',
+                Text(
+                    'Every account with a registered FCM token is included, regardless of role, suspension status, or notification preferences.',
                     style: GoogleFonts.inter(color: _grey, fontSize: 13)),
-                const SizedBox(height: 16),
-                _buildTargetCheckbox(
-                    'All eligible opted-in tenants',
-                    'Includes tenants with a valid active device token.',
-                    !_targetLocation && !_targetPropertyType, (v) {
-                  setState(() {
-                    _targetLocation = false;
-                    _targetPropertyType = false;
-                    _estimatedRecipients = null;
-                  });
-                }),
-                _buildTargetCheckbox(
-                    'Location matches ${_selectedProperty?['city'] ?? 'property city'}',
-                    'Targets users looking in this area.',
-                    _targetLocation,
-                    _selectedProperty == null
-                        ? null
-                        : (v) {
-                            setState(() {
-                              _targetLocation = v ?? false;
-                              _estimatedRecipients = null;
-                            });
-                          }),
-                _buildTargetCheckbox(
-                    'Preference matches ${_selectedProperty?['category'] ?? 'property type'}',
-                    'Targets users seeking this property type.',
-                    _targetPropertyType,
-                    _selectedProperty == null
-                        ? null
-                        : (v) {
-                            setState(() {
-                              _targetPropertyType = v ?? false;
-                              _estimatedRecipients = null;
-                            });
-                          }),
                 const SizedBox(height: 16),
                 OutlinedButton.icon(
                   onPressed: _selectedProperty == null || _estimating
@@ -593,7 +534,6 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  _buildEligibilityFunnel(),
                 ],
                 for (final note in _audienceNotes)
                   Padding(
@@ -606,54 +546,6 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildEligibilityFunnel() {
-    const steps = <(String, String)>[
-      ('Tenant accounts', 'eligible_tenants'),
-      ('With active FCM token', 'tenants_with_token'),
-      ('OS permission granted', 'tenants_with_permission'),
-      ('Promotional opt-in', 'promotional_opt_ins'),
-      ('Push enabled', 'eligible_before_targeting'),
-    ];
-    return Column(
-      children: [
-        for (final step in steps)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(step.$1,
-                      style: GoogleFonts.inter(fontSize: 11, color: _grey)),
-                ),
-                Text('${_audienceDiagnostics[step.$2] ?? 0}',
-                    style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _dark)),
-              ],
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.only(top: 5),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text('Match selected filters',
-                    style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _dark)),
-              ),
-              Text('$_estimatedRecipients',
-                  style: GoogleFonts.inter(
-                      fontSize: 11, fontWeight: FontWeight.w700, color: _dark)),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
@@ -767,51 +659,6 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTargetCheckbox(
-      String title, String subtitle, bool value, Function(bool?)? onChanged) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        onTap: onChanged == null ? null : () => onChanged(!value),
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: Checkbox(
-                  value: value,
-                  onChanged: onChanged,
-                  activeColor: _primaryBlue,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title,
-                        style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: _dark)),
-                    Text(subtitle,
-                        style: GoogleFonts.inter(fontSize: 12, color: _grey)),
-                  ],
-                ),
-              )
-            ],
-          ),
-        ),
       ),
     );
   }

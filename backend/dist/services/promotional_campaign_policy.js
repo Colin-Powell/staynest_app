@@ -8,14 +8,9 @@ export function normalizeCampaignAudience(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value))
         return null;
     const audience = value;
-    if (Object.keys(audience).some((key) => !['location', 'propertyType'].includes(key)))
+    if (Object.keys(audience).length > 0)
         return null;
-    if (Object.values(audience).some((filter) => typeof filter !== 'boolean'))
-        return null;
-    return {
-        location: audience.location === true,
-        propertyType: audience.propertyType === true,
-    };
+    return {};
 }
 export function isEligibleCampaignAvailability(value) {
     return new Set(['available', 'pending_booking']).has(String(value ?? '').trim().toLowerCase());
@@ -47,43 +42,10 @@ export function normalizeCampaignImageUrl(value, cloudName = env.cloudinaryCloud
 export function isApprovedCampaignImage(value, cloudName = env.cloudinaryCloudName) {
     return normalizeCampaignImageUrl(value, cloudName) !== null;
 }
-export function buildCampaignRecipientQuery(property, audience) {
-    const conditions = [
-        "lower(coalesce(u.role, '')) = 'tenant'",
-        'u.is_suspended = false',
-        "NOT (coalesce(u.roles, '{}'::text[]) && ARRAY['landlord', 'host', 'admin', 'super_admin', 'administrator']::text[])",
-        "u.fcm_token IS NOT NULL AND btrim(u.fcm_token) <> ''",
-        "u.settings->>'promotional_push' = 'true'",
-        "u.settings->>'push_permission_granted' = 'true'",
-        "u.settings->>'push' IS DISTINCT FROM 'false'",
-        "u.settings->'notifications'->>'push_messages' IS DISTINCT FROM 'false'",
-    ];
-    const params = [];
-    if (audience.location) {
-        params.push(property.city.trim().toLowerCase());
-        conditions.push(`EXISTS (
-      SELECT 1 FROM tenant_profiles tp
-      WHERE tp.user_id = u.id
-        AND EXISTS (
-          SELECT 1 FROM unnest(coalesce(tp.preferred_cities, '{}'::text[])) AS pref_city(value)
-          WHERE lower(btrim(pref_city.value)) = $${params.length}
-        )
-    )`);
-    }
-    if (audience.propertyType) {
-        params.push(property.category.trim().toLowerCase());
-        conditions.push(`EXISTS (
-      SELECT 1 FROM tenant_profiles tp
-      WHERE tp.user_id = u.id
-        AND EXISTS (
-          SELECT 1 FROM unnest(coalesce(tp.preferred_categories, '{}'::text[])) AS pref_category(value)
-          WHERE lower(btrim(pref_category.value)) = $${params.length}
-        )
-    )`);
-    }
+export function buildCampaignRecipientQuery() {
     return {
-        sql: `SELECT DISTINCT u.id FROM users u WHERE ${conditions.join(' AND ')} ORDER BY u.id`,
-        params,
+        sql: "SELECT DISTINCT u.id FROM users u WHERE u.fcm_token IS NOT NULL AND btrim(u.fcm_token) <> '' ORDER BY u.id",
+        params: [],
     };
 }
 //# sourceMappingURL=promotional_campaign_policy.js.map
