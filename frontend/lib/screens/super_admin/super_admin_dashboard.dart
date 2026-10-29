@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -94,9 +97,12 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     return summary is Map ? Map<String, dynamic>.from(summary) : const {};
   }
 
+  Color? get _primaryBlue => null;
+
+  Color? get _grey => null;
+
   // Helper to wrap horizontally scrolling areas with a fade + indicator
-  Widget _buildScrollableWithIndicator(
-      {required Widget child, required double height}) {
+  Widget _buildScrollableWithIndicator({required Widget child, required double height}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -105,14 +111,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Swipe for more',
-                  style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: _greyLight,
-                      fontWeight: FontWeight.w500)),
+              Text('Swipe for more', style: GoogleFonts.inter(fontSize: 11, color: _greyLight, fontWeight: FontWeight.w500)),
               const SizedBox(width: 4),
-              const Icon(PhosphorIconsRegular.arrowRight,
-                  size: 12, color: _greyLight),
+              const Icon(PhosphorIconsRegular.arrowRight, size: 12, color: _greyLight),
             ],
           ),
         ),
@@ -165,7 +166,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'StayNest operations',
+                    'Firebase overview',
                     style: GoogleFonts.inter(
                       fontSize: 22,
                       fontWeight: FontWeight.w400,
@@ -174,16 +175,28 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  _buildPropertyMap(),
-                  const SizedBox(height: 16),
+
+                  // 1. STATS ROW
                   _buildStatsGrid(context),
                   const SizedBox(height: 16),
+                  
+                  // 2. PROPERTY MAP (Contained Card to prevent scroll blocking)
+                  _buildPropertyMapCard(),
+                  const SizedBox(height: 16),
+
+                  // 3. MAIN ANALYTICS
                   _buildAnalyticsGrid1(context),
                   const SizedBox(height: 16),
+
+                  // 4. RETENTION & COHORTS
                   _buildAnalyticsGrid2(context),
                   const SizedBox(height: 16),
+
+                  // 5. LISTS
                   _buildListsGrid(context),
                   const SizedBox(height: 16),
+
+                  // 6. MAIN CONTENT AREA
                   _buildMainContentArea(context),
                 ],
               ),
@@ -199,169 +212,122 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   // ---------------------------------------------------------------------------
   Widget _buildStatsGrid(BuildContext context) {
     final monthlyRevenue = _number(_overview['monthlyRevenue']);
-    final metrics = [
-      (
-        'Registered users',
-        _loading ? '...' : '${_overview['totalUsers'] ?? 0}',
-        '+${_overview['newUsersThisWeek'] ?? 0} this week',
-        _gaBlue
-      ),
-      (
-        'Approved listings',
-        _loading ? '...' : '${_overview['activeListings'] ?? 0}',
-        '${_overview['pendingProperties'] ?? 0} awaiting review',
-        _gaGreen
-      ),
-      (
-        'Pending bookings',
-        _loading ? '...' : '${_overview['pendingBookings'] ?? 0}',
-        '${_overview['pendingVerifications'] ?? 0} KYC reviews',
-        _gaPink
-      ),
-      (
-        'Revenue · 30 days',
-        _loading ? '...' : 'KSh ${monthlyRevenue.toStringAsFixed(0)}',
-        '${_overview['weeklyConfirmedBookings'] ?? 0} bookings confirmed this week',
-        _greyDark
-      ),
+    final stats = [
+      _StatCard(title: 'Total Users', value: _loading ? '...' : '${_overview['totalUsers'] ?? 0}', trend: 'All registered accounts', icon: null,),
+      _StatCard(title: 'Total Properties', value: _loading ? '...' : '${_overview['totalProperties'] ?? 0}', trend: 'Submitted listings', icon: null,),
+      _StatCard(title: 'Pending Operations', value: _loading ? '...' : '${_overview['pendingVerifications'] ?? 0}', trend: 'KYC reviews waiting', icon: null,),
+      _StatCard(title: '30-Day Revenue', value: _loading ? '...' : 'KSh ${monthlyRevenue.toStringAsFixed(0)}', trend: 'Completed bookings', icon: null,),
     ];
 
     return LayoutBuilder(builder: (context, constraints) {
-      final columns = constraints.maxWidth >= 900
-          ? 4
-          : constraints.maxWidth >= 520
-              ? 2
-              : 1;
-      final itemWidth = (constraints.maxWidth - (columns - 1) * 20) / columns;
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: _surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _divider),
-        ),
-        child: Wrap(
-          spacing: 20,
-          runSpacing: 18,
-          children: metrics
-              .map((metric) => SizedBox(
-                    width: itemWidth,
-                    child: _buildMetricCell(
-                      metric.$1,
-                      metric.$2,
-                      metric.$3,
-                      metric.$4,
-                    ),
-                  ))
-              .toList(),
-        ),
-      );
+      if (constraints.maxWidth >= 1024) {
+        return Row(
+          children: stats.map((stat) => Expanded(
+            child: Padding(padding: EdgeInsets.only(right: stat == stats.last ? 0 : 16), child: stat),
+          )).toList(),
+        );
+      } else {
+        return _buildScrollableWithIndicator(
+          height: 120,
+          child: Row(
+            children: stats.map((stat) => SizedBox(
+              width: 240,
+              child: Padding(padding: const EdgeInsets.only(right: 16), child: stat),
+            )).toList(),
+          ),
+        );
+      }
     });
   }
 
-  Widget _buildMetricCell(
-      String title, String value, String detail, Color color) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 3,
-          height: 48,
-          margin: const EdgeInsets.only(right: 12, top: 2),
-          decoration: BoxDecoration(
-              color: color, borderRadius: BorderRadius.circular(2)),
-        ),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title,
-                  style: GoogleFonts.inter(fontSize: 12, color: _greyLight)),
-              const SizedBox(height: 4),
-              Text(value,
-                  style: GoogleFonts.inter(
-                      fontSize: 21, fontWeight: FontWeight.w600, color: _dark)),
-              const SizedBox(height: 3),
-              Text(detail,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(fontSize: 11, color: _greyLight)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPropertyMap() {
+  // ---------------------------------------------------------------------------
+  // 2. PROPERTY MAP CARD
+  // ---------------------------------------------------------------------------
+  Widget _buildPropertyMapCard() {
     final summary = _mapSummary;
     final properties = _mapProperties;
+
     return _ChartCardBase(
-      title: 'Property locations across Kenya',
-      height: 500,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            FlutterMap(
+      title: 'Geographic Distribution',
+      height: 400,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6), // Keep map inside GA card radius
+            child: FlutterMap(
               options: const MapOptions(
                 initialCenter: LatLng(-0.4, 37.8),
                 initialZoom: 6.1,
                 minZoom: 4.5,
                 maxZoom: 17,
+                interactionOptions: InteractionOptions(
+                  // We disable scrolling on the map so the page scrolls easily on mobile
+                  flags: InteractiveFlag.pinchZoom | InteractiveFlag.doubleTapZoom,
+                ),
               ),
               children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.rashoti.staynest',
+                ColorFiltered(
+                  colorFilter: const ColorFilter.matrix(<double>[
+                    0.2126, 0.7152, 0.0722, 0, 0,
+                    0.2126, 0.7152, 0.0722, 0, 0,
+                    0.2126, 0.7152, 0.0722, 0, 0,
+                    0, 0, 0, 1, 0,
+                  ]),
+                  child: TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.rashoti.staynest',
+                  ),
                 ),
                 MarkerLayer(markers: _buildPropertyMarkers(properties)),
-                const RichAttributionWidget(
-                  attributions: [
-                    TextSourceAttribution('OpenStreetMap contributors')
-                  ],
+              ],
+            ),
+          ),
+          Positioned(
+            top: 12,
+            left: 12,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _surface,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: _divider),
+                  ),
+                  child: Text('KENYA / PROPERTY REGISTER',
+                      style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: _dark)),
+                ),
+                const SizedBox(height: 6),
+                _MapSummaryBadge(
+                  mapped: _number(summary['mapped_properties']).toInt(),
+                  total: _number(summary['total_properties']).toInt(),
+                  loading: _mapLoading,
+                  error: _mapError,
                 ),
               ],
             ),
-            Positioned(
-              top: 12,
-              left: 12,
-              child: _MapSummaryBadge(
-                mapped: _number(summary['mapped_properties']).toInt(),
-                total: _number(summary['total_properties']).toInt(),
-                loading: _mapLoading,
-                error: _mapError,
-              ),
-            ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: _MapLegend(),
-            ),
-            if (!_mapLoading && properties.isEmpty)
-              Center(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.94),
-                      borderRadius: BorderRadius.circular(6)),
-                  child: Text(
-                      _mapError ?? 'No property coordinates in Kenya yet.',
-                      style: GoogleFonts.inter(fontSize: 12, color: _greyDark)),
+          ),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: _MapLegend(),
+          ),
+          if (!_mapLoading && properties.isEmpty)
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: _surface,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: _divider),
                 ),
-              ),
-            Positioned(
-              bottom: 10,
-              left: 10,
-              child: _MapUnlocatedBadge(
-                count: _number(summary['unmapped_properties']).toInt(),
+                child: Text(_mapError ?? 'No property coordinates yet.',
+                    style: GoogleFonts.inter(fontSize: 12, color: _greyDark)),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -377,16 +343,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     }
 
     return buckets.values.map((bucket) {
-      final latitude = bucket
-              .map((property) => double.parse('${property['lat']}'))
-              .reduce((a, b) => a + b) /
-          bucket.length;
-      final longitude = bucket
-              .map((property) => double.parse('${property['lng']}'))
-              .reduce((a, b) => a + b) /
-          bucket.length;
+      final latitude = bucket.map((property) => double.parse('${property['lat']}')).reduce((a, b) => a + b) / bucket.length;
+      final longitude = bucket.map((property) => double.parse('${property['lng']}')).reduce((a, b) => a + b) / bucket.length;
       final color = _clusterColor(bucket);
-      final size = bucket.length == 1 ? 18.0 : 40.0;
+      final size = bucket.length == 1 ? 14.0 : 36.0;
+      
       return Marker(
         point: LatLng(latitude, longitude),
         width: size,
@@ -395,21 +356,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           onTap: () => _showPropertyCluster(bucket),
           child: Container(
             decoration: BoxDecoration(
-              color: color.withValues(alpha: bucket.length == 1 ? 0.88 : 0.94),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-              boxShadow: const [
-                BoxShadow(color: Color(0x33000000), blurRadius: 5)
-              ],
+              color: color,
+              shape: bucket.length == 1 ? BoxShape.circle : BoxShape.rectangle,
+              borderRadius: bucket.length == 1 ? null : BorderRadius.circular(6),
+              border: Border.all(color: Colors.white, width: 1.5),
             ),
             alignment: Alignment.center,
             child: bucket.length == 1
                 ? const SizedBox.shrink()
-                : Text('${bucket.length}',
-                    style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700)),
+                : Text('${bucket.length}', style: GoogleFonts.inter(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w700)),
           ),
         ),
       );
@@ -417,19 +372,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   Color _clusterColor(List<Map<String, dynamic>> properties) {
-    if (properties.any((property) => property['status'] == 'pending_review')) {
-      return const Color(0xFFD99000);
-    }
-    if (properties.every((property) => property['status'] == 'approved')) {
-      return _gaGreen;
-    }
-    return _greyDark;
+    if (properties.any((property) => property['status'] == 'pending_review')) return _gaPink;
+    if (properties.every((property) => property['status'] == 'approved')) return _gaBlue;
+    return _greyLight;
   }
 
   void _showPropertyCluster(List<Map<String, dynamic>> properties) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      backgroundColor: _surface,
       builder: (context) => SafeArea(
         child: SizedBox(
           height: 320,
@@ -439,10 +391,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
                 child: Text('${properties.length} mapped properties',
-                    style: GoogleFonts.inter(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: _dark)),
+                    style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: _dark)),
               ),
               Expanded(
                 child: ListView.builder(
@@ -450,12 +399,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   itemBuilder: (context, index) {
                     final property = properties[index];
                     return ListTile(
-                      title: Text(
-                          property['title']?.toString() ?? 'Untitled listing'),
-                      subtitle: Text(
-                          '${property['city'] ?? property['town'] ?? 'Kenya'} · ${property['status'] ?? 'unknown'}'),
-                      leading: Icon(Icons.location_on_outlined,
-                          color: _clusterColor([property])),
+                      title: Text(property['title']?.toString() ?? 'Untitled listing', style: GoogleFonts.inter(fontSize: 14)),
+                      subtitle: Text('${property['city'] ?? property['town'] ?? 'Kenya'} · ${property['status'] ?? 'unknown'}', style: GoogleFonts.inter(fontSize: 12, color: _greyLight)),
+                      leading: Container(width: 12, height: 12, decoration: BoxDecoration(color: _clusterColor([property]), shape: BoxShape.circle)),
                     );
                   },
                 ),
@@ -468,22 +414,18 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   // ---------------------------------------------------------------------------
-  // 2. ANALYTICS ROW 1 (Massive Graph + Stacked Side Graphs)
+  // 3. ANALYTICS ROW 1 (Line Graph + Stacked Side Graphs)
   // ---------------------------------------------------------------------------
   Widget _buildAnalyticsGrid1(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final isDesktop = constraints.maxWidth >= 1024;
-      final isTablet =
-          constraints.maxWidth >= 768 && constraints.maxWidth < 1024;
+      final isTablet = constraints.maxWidth >= 768 && constraints.maxWidth < 1024;
 
       if (isDesktop) {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-                flex: 5,
-                child: _buildLineChartCard('User activity over time',
-                    height: 440)),
+            Expanded(flex: 5, child: _buildLineChartCard('User activity over time', height: 440)),
             const SizedBox(width: 16),
             Expanded(
                 flex: 3,
@@ -491,8 +433,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   children: [
                     _buildRealtimeBarChartCard(height: 212),
                     const SizedBox(height: 16),
-                    _buildSingleLineChartCard('Verification Success Rate',
-                        height: 212),
+                    _buildSingleLineChartCard('Verification Success Rate', height: 212),
                   ],
                 )),
           ],
@@ -506,10 +447,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               children: [
                 Expanded(child: _buildRealtimeBarChartCard(height: 280)),
                 const SizedBox(width: 16),
-                Expanded(
-                    child: _buildSingleLineChartCard(
-                        'Verification Success Rate',
-                        height: 280)),
+                Expanded(child: _buildSingleLineChartCard('Verification Success Rate', height: 280)),
               ],
             ),
           ],
@@ -519,18 +457,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         height: 360,
         child: Row(
           children: [
-            SizedBox(
-                width: 340,
-                child: _buildLineChartCard('User activity over time',
-                    height: 360)),
+            SizedBox(width: 340, child: _buildLineChartCard('User activity over time', height: 360)),
             const SizedBox(width: 16),
-            SizedBox(
-                width: 320, child: _buildRealtimeBarChartCard(height: 360)),
+            SizedBox(width: 320, child: _buildRealtimeBarChartCard(height: 360)),
             const SizedBox(width: 16),
-            SizedBox(
-                width: 320,
-                child: _buildSingleLineChartCard('Verification Success Rate',
-                    height: 360)),
+            SizedBox(width: 320, child: _buildSingleLineChartCard('Verification Success Rate', height: 360)),
           ],
         ),
       );
@@ -538,7 +469,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   // ---------------------------------------------------------------------------
-  // 3. ANALYTICS ROW 2 (Medium Size)
+  // 4. ANALYTICS ROW 2 (Medium Size)
   // ---------------------------------------------------------------------------
   Widget _buildAnalyticsGrid2(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
@@ -552,7 +483,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             const SizedBox(width: 16),
             Expanded(child: _buildCohortTableCard(height: 340)),
             const SizedBox(width: 16),
-            Expanded(child: _buildOperationsBreakdownCard(height: 340)),
+            Expanded(child: _buildEmptyStateCard('Flagged Properties Impact', height: 340)),
           ],
         );
       } else {
@@ -560,14 +491,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           height: 320,
           child: Row(
             children: [
-              SizedBox(
-                  width: 320, child: _buildRetentionChartCard(height: 320)),
+              SizedBox(width: 320, child: _buildRetentionChartCard(height: 320)),
               const SizedBox(width: 16),
               SizedBox(width: 320, child: _buildCohortTableCard(height: 320)),
               const SizedBox(width: 16),
-              SizedBox(
-                  width: 320,
-                  child: _buildOperationsBreakdownCard(height: 320)),
+              SizedBox(width: 320, child: _buildEmptyStateCard('Flagged Properties Impact', height: 320)),
             ],
           ),
         );
@@ -575,69 +503,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     });
   }
 
-  Widget _buildOperationsBreakdownCard({required double height}) {
-    final funnel = _overview['verificationFunnel'] is Map
-        ? Map<String, dynamic>.from(_overview['verificationFunnel'] as Map)
-        : const <String, dynamic>{};
-    return _ChartCardBase(
-      title: 'Moderation & verification queue',
-      height: height,
-      child: Column(
-        children: [
-          _buildAdminQueueRow(
-            'Listings awaiting review',
-            _overview['pendingProperties'],
-            const Color(0xFFD99000),
-          ),
-          const Divider(height: 1, color: _divider),
-          _buildAdminQueueRow(
-            'KYC submitted',
-            funnel['submitted'],
-            _gaBlue,
-          ),
-          const Divider(height: 1, color: _divider),
-          _buildAdminQueueRow(
-            'KYC under review',
-            funnel['under_review'],
-            _gaPink,
-          ),
-          const Divider(height: 1, color: _divider),
-          _buildAdminQueueRow(
-            'Pending bookings',
-            _overview['pendingBookings'],
-            _gaGreen,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAdminQueueRow(String title, dynamic count, Color color) {
-    return Expanded(
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(fontSize: 12, color: _greyDark)),
-          ),
-          Text(_loading ? '...' : '${count ?? 0}',
-              style: GoogleFonts.inter(
-                  fontSize: 15, fontWeight: FontWeight.w600, color: _dark)),
-        ],
-      ),
-    );
-  }
-
   // ---------------------------------------------------------------------------
-  // 4. ANALYTICS ROW 3 (Tall Lists)
+  // 5. ANALYTICS ROW 3 (Tall Lists)
   // ---------------------------------------------------------------------------
   Widget _buildListsGrid(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
@@ -647,20 +514,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-                child: _buildListCard(
-                    'Most Viewed Locations', _analyticsMap('topLocations'),
-                    height: 360)),
+            Expanded(child: _buildListCard('Most Viewed Locations', _analyticsMap('topLocations'), height: 360)),
             const SizedBox(width: 16),
-            Expanded(
-                child: _buildListCard(
-                    'Top KYC Rejections', _analyticsMap('kycRejections'),
-                    height: 360)),
+            Expanded(child: _buildListCard('Top KYC Rejections', _analyticsMap('kycRejections'), height: 360)),
             const SizedBox(width: 16),
-            Expanded(
-                child: _buildListCard(
-                    'Key Events by Event Name', _analyticsMap('keyEvents'),
-                    height: 360)),
+            Expanded(child: _buildListCard('Key Events by Event Name', _analyticsMap('keyEvents'), height: 360)),
           ],
         );
       } else {
@@ -668,17 +526,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           height: 280,
           child: Row(
             children: [
-              SizedBox(
-                  width: 300,
-                  child: _buildListCard(
-                      'Most Viewed Locations', _analyticsMap('topLocations'),
-                      height: 280)),
+              SizedBox(width: 300, child: _buildListCard('Most Viewed Locations', _analyticsMap('topLocations'), height: 280)),
               const SizedBox(width: 16),
-              SizedBox(
-                  width: 300,
-                  child: _buildListCard(
-                      'Top KYC Rejections', _analyticsMap('kycRejections'),
-                      height: 280)),
+              SizedBox(width: 300, child: _buildListCard('Top KYC Rejections', _analyticsMap('kycRejections'), height: 280)),
             ],
           ),
         );
@@ -687,7 +537,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   }
 
   // ---------------------------------------------------------------------------
-  // 5. MAIN CONTENT AREA
+  // 6. MAIN CONTENT AREA
   // ---------------------------------------------------------------------------
   Widget _buildMainContentArea(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
@@ -697,7 +547,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           children: [
             Expanded(flex: 2, child: _buildLiveSummarySection()),
             const SizedBox(width: 16),
-            Expanded(flex: 1, child: _buildAttentionSection()),
+            Expanded(flex: 1, child: _buildQuickActionsSection()),
           ],
         );
       } else {
@@ -706,7 +556,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           children: [
             _buildLiveSummarySection(),
             const SizedBox(height: 16),
-            _buildAttentionSection(),
+            _buildQuickActionsSection(),
           ],
         );
       }
@@ -720,37 +570,28 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildActivityTile('Revenue from completed bookings',
-              'KSh ${_number(_overview['totalRevenue']).toStringAsFixed(0)}'),
+          _buildActivityTile('Revenue from completed bookings', 'KSh ${_number(_overview['totalRevenue']).toStringAsFixed(0)}'),
           const Divider(height: 1, color: _divider),
-          _buildActivityTile('Pending KYC submissions',
-              '${_overview['pendingVerifications'] ?? 0} waiting review'),
+          _buildActivityTile('Pending KYC submissions', '${_overview['pendingVerifications'] ?? 0} waiting review'),
           const Divider(height: 1, color: _divider),
-          _buildActivityTile('Registered accounts',
-              '${_overview['totalUsers'] ?? 0} total users'),
+          _buildActivityTile('Registered accounts', '${_overview['totalUsers'] ?? 0} total users'),
         ],
       ),
     );
   }
 
-  Widget _buildAttentionSection() {
+  Widget _buildQuickActionsSection() {
     return _ChartCardBase(
-      title: 'Requires attention',
+      title: 'Quick Actions',
       height: 300,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildAdminQueueRow('Listings awaiting review',
-              _overview['pendingProperties'], const Color(0xFFD99000)),
-          const Divider(height: 1, color: _divider),
-          _buildAdminQueueRow('KYC reviews waiting',
-              _overview['pendingVerifications'], _gaPink),
-          const Divider(height: 1, color: _divider),
-          _buildAdminQueueRow(
-              'Pending bookings', _overview['pendingBookings'], _gaBlue),
-          const Divider(height: 1, color: _divider),
-          _buildAdminQueueRow('Listings without Kenya coordinates',
-              _mapSummary['unmapped_properties'], _greyDark),
+          _ActionButton(label: 'Verify Listings', onTap: () {}, icon: null,),
+          const SizedBox(height: 8),
+          _ActionButton(label: 'Review KYC', onTap: () {}, icon: null,),
+          const SizedBox(height: 8),
+          _ActionButton(label: 'Moderation Queue', onTap: () {}, icon: null,),
         ],
       ),
     );
@@ -762,15 +603,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       child: Row(
         children: [
           Expanded(
-            child: Text(title,
-                style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                    color: _greyDark)),
+            child: Text(title, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w400, color: _greyDark)),
           ),
-          Text(value,
-              style: GoogleFonts.inter(
-                  fontSize: 13, fontWeight: FontWeight.w600, color: _dark)),
+          Text(value, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: _dark)),
         ],
       ),
     );
@@ -785,11 +620,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(PhosphorIconsRegular.chartLineDown,
-              size: 32, color: _greyLight.withValues(alpha: 0.5)),
+          Icon(PhosphorIconsRegular.chartLineDown, size: 32, color: _greyLight.withOpacity(0.5)),
           const SizedBox(height: 16),
-          Text(message,
-              style: GoogleFonts.inter(fontSize: 13, color: _greyLight)),
+          Text(message, style: GoogleFonts.inter(fontSize: 13, color: _greyLight)),
         ],
       ),
     );
@@ -818,14 +651,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         if (b > maxY) maxY = b;
       }
     } else {
-      return _ChartCardBase(
-          title: title,
-          height: height,
-          child: _buildEmptyChartState('No activity recorded.'));
+      return _ChartCardBase(title: title, height: height, child: _buildEmptyChartState('No activity recorded in the last 7 days.'));
     }
 
     if (maxY == 0) maxY = 5; // Fallback so graph draws empty axes correctly
-
+    
     // Create clean GA steps (e.g. 0, 20, 40, 60, 80)
     double yInterval = (maxY / 4).ceilToDouble();
     if (yInterval == 0) yInterval = 1;
@@ -843,22 +673,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 lineTouchData: LineTouchData(
                   touchTooltipData: LineTouchTooltipData(
                     getTooltipColor: (spot) => Colors.white,
-                    tooltipPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    tooltipBorder: const BorderSide(
-                        color: _divider, width: 1), // GA style tooltip
+                    tooltipPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    tooltipBorder: const BorderSide(color: _divider, width: 1), // GA style tooltip
                     getTooltipItems: (List<LineBarSpot> touchedSpots) {
                       return touchedSpots.map((spot) {
                         final isFirst = touchedSpots.indexOf(spot) == 0;
                         final index = spot.x.toInt();
-
+                        
                         String dateLabel = '';
-                        if (chartData.isNotEmpty &&
-                            index >= 0 &&
-                            index < chartData.length) {
-                          // Format to "Mon 10 Aug"
-                          final rawLabel = chartData[index]['label'] ??
-                              ''; // e.g. "2026-09-07"
+                        if (chartData.isNotEmpty && index >= 0 && index < chartData.length) {
+                          final rawLabel = chartData[index]['label'] ?? '';
                           try {
                             final dt = DateTime.parse(rawLabel);
                             dateLabel = DateFormat('EEE d MMM').format(dt);
@@ -868,21 +692,13 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         }
 
                         final isUsers = spot.barIndex == 0;
-                        final color = isUsers ? _gaBlue : _gaGreen;
+                        final color = isUsers ? _gaBlue : _gaGreen; 
 
                         return LineTooltipItem(
                           isFirst ? '$dateLabel\n' : '',
-                          GoogleFonts.inter(
-                              color: _greyLight,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500),
+                          GoogleFonts.inter(color: _greyLight, fontSize: 11, fontWeight: FontWeight.w500),
                           children: [
-                            TextSpan(
-                                text: '●  ${spot.y.toInt()}',
-                                style: GoogleFonts.inter(
-                                    color: color,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13))
+                            TextSpan(text: '●  ${spot.y.toInt()}', style: GoogleFonts.inter(color: color, fontWeight: FontWeight.w600, fontSize: 13))
                           ],
                         );
                       }).toList();
@@ -894,66 +710,50 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   show: true,
                   drawVerticalLine: false,
                   horizontalInterval: yInterval,
-                  getDrawingHorizontalLine: (value) =>
-                      const FlLine(color: _divider, strokeWidth: 1),
+                  getDrawingHorizontalLine: (value) => const FlLine(color: _divider, strokeWidth: 1),
                 ),
                 titlesData: FlTitlesData(
                   rightTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 32,
-                          interval: yInterval,
-                          getTitlesWidget: (val, meta) {
-                            return Padding(
-                              padding: const EdgeInsets.only(left: 8.0),
-                              child: Text(val.toInt().toString(),
-                                  style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      color: _greyLight,
-                                      fontWeight: FontWeight.w400)),
-                            );
-                          })),
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  leftTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 32,
+                      interval: yInterval,
+                      getTitlesWidget: (val, meta) {
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: Text(val.toInt().toString(), style: GoogleFonts.inter(fontSize: 11, color: _greyLight, fontWeight: FontWeight.w400)),
+                        );
+                      }
+                    )
+                  ),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                          showTitles: true,
-                          interval:
-                              1, // Draw for every spot, but conditionally render
-                          getTitlesWidget: (val, meta) {
-                            final index = val.toInt();
-                            if (chartData.isNotEmpty &&
-                                index >= 0 &&
-                                index < chartData.length) {
-                              // Show approx 4-5 labels evenly spaced
-                              final step = (chartData.length / 4).ceil();
-                              if (index == 0 ||
-                                  index == chartData.length - 1 ||
-                                  index % step == 0) {
-                                final rawLabel =
-                                    chartData[index]['label'] ?? '';
-                                try {
-                                  final dt = DateTime.parse(rawLabel);
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 8.0),
-                                    child: Text(
-                                        '${dt.day}\n${DateFormat('MMM').format(dt)}',
-                                        textAlign: TextAlign.center,
-                                        style: GoogleFonts.inter(
-                                            fontSize: 11,
-                                            color: _greyLight,
-                                            fontWeight: FontWeight.w400,
-                                            height: 1.2)),
-                                  );
-                                } catch (_) {
-                                  return const SizedBox.shrink();
-                                }
-                              }
-                            }
-                            return const SizedBox.shrink();
-                          })),
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 1, // Draw for every spot, but conditionally render
+                      getTitlesWidget: (val, meta) {
+                        final index = val.toInt();
+                        if (chartData.isNotEmpty && index >= 0 && index < chartData.length) {
+                          // Show approx 4-5 labels evenly spaced
+                          final step = (chartData.length / 4).ceil();
+                          if (index == 0 || index == chartData.length - 1 || index % step == 0) {
+                             final rawLabel = chartData[index]['label'] ?? '';
+                             try {
+                               final dt = DateTime.parse(rawLabel);
+                               return Padding(
+                                 padding: const EdgeInsets.only(top: 8.0),
+                                 child: Text('${dt.day}\n${DateFormat('MMM').format(dt)}', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 11, color: _greyLight, fontWeight: FontWeight.w400, height: 1.2)),
+                               );
+                             } catch (_) {
+                               return const SizedBox.shrink();
+                             }
+                          }
+                        }
+                        return const SizedBox.shrink();
+                      }
+                    )
+                  ),
                 ),
                 borderData: FlBorderData(show: false),
                 minY: 0,
@@ -966,14 +766,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     barWidth: 2,
                     isStrokeCapRound: true,
                     // GA Style prominent dots with white borders
-                    dotData: FlDotData(
-                        show: true,
-                        getDotPainter: (spot, percent, barData, index) =>
-                            FlDotCirclePainter(
-                                radius: 3.5,
-                                color: _gaBlue,
-                                strokeWidth: 1.5,
-                                strokeColor: Colors.white)),
+                    dotData: FlDotData(show: true, getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: 3.5, color: _gaBlue, strokeWidth: 1.5, strokeColor: Colors.white)),
                     belowBarData: BarAreaData(show: false),
                   ),
                   LineChartBarData(
@@ -982,21 +775,14 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     color: _gaGreen,
                     barWidth: 2,
                     isStrokeCapRound: true,
-                    dotData: FlDotData(
-                        show: true,
-                        getDotPainter: (spot, percent, barData, index) =>
-                            FlDotCirclePainter(
-                                radius: 3.5,
-                                color: _gaGreen,
-                                strokeWidth: 1.5,
-                                strokeColor: Colors.white)),
+                    dotData: FlDotData(show: true, getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: 3.5, color: _gaGreen, strokeWidth: 1.5, strokeColor: Colors.white)),
                     belowBarData: BarAreaData(show: false),
                   ),
                 ],
               ),
             ),
           ),
-
+          
           // GA Right-side legend
           Container(
             width: 80,
@@ -1021,40 +807,24 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       children: [
         Row(
           children: [
-            Container(
-                width: 8,
-                height: 8,
-                decoration:
-                    BoxDecoration(color: color, shape: BoxShape.circle)),
+            Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
             const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: _greyDark,
-                    letterSpacing: 0.5),
-              ),
-            ),
+            Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: _greyDark, letterSpacing: 0.5))),
           ],
         ),
         const SizedBox(height: 4),
-        Text(value.toString(),
-            style: GoogleFonts.inter(
-                fontSize: 24, fontWeight: FontWeight.w400, color: _dark)),
+        Text(value.toString(), style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w400, color: _dark)),
       ],
     );
   }
 
   Widget _buildRealtimeBarChartCard({required double height}) {
     final backlogData = (_overview['backlogData'] as List?) ?? const [];
-
+    
     if (backlogData.isEmpty) {
       return _ChartCardBase(
         title: 'ACTIVE USERS IN LAST 30 MINUTES',
+        titleStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: _greyDark, letterSpacing: 0.5),
         height: height,
         child: _buildEmptyChartState('No real-time data.'),
       );
@@ -1062,31 +832,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
     return _ChartCardBase(
       title: 'ACTIVE USERS IN LAST 30 MINUTES',
-      titleStyle: GoogleFonts.inter(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: _greyDark,
-          letterSpacing: 0.5),
+      titleStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: _greyDark, letterSpacing: 0.5),
       height: height,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '${_overview['pendingVerifications'] ?? 0}', // Mocking data for visual
-            style: GoogleFonts.inter(
-                fontSize: 36,
-                fontWeight: FontWeight.w400,
-                color: _dark,
-                letterSpacing: -1.0,
-                height: 1.0),
+            style: GoogleFonts.inter(fontSize: 36, fontWeight: FontWeight.w400, color: _dark, letterSpacing: -1.0, height: 1.0),
           ),
-          const SizedBox(height: 4),
-          Text('ACTIVE USERS PER MINUTE',
-              style: GoogleFonts.inter(
-                  fontSize: 10,
-                  color: _greyLight,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5)),
+          const SizedBox(height: 12),
+          Text('ACTIVE USERS PER MINUTE', style: GoogleFonts.inter(fontSize: 10, color: _greyLight, fontWeight: FontWeight.w500, letterSpacing: 0.5)),
           const SizedBox(height: 16),
           Expanded(
             child: BarChart(
@@ -1095,19 +851,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 maxY: 10,
                 titlesData: const FlTitlesData(show: false),
                 gridData: const FlGridData(show: false),
-                borderData: FlBorderData(
-                    show: true,
-                    border: const Border(
-                        bottom: BorderSide(color: _divider, width: 1))),
+                borderData: FlBorderData(show: true, border: Border(bottom: BorderSide(color: _divider, width: 1))),
                 barGroups: List.generate(
                   backlogData.length,
                   (i) => BarChartGroupData(x: i, barRods: [
                     BarChartRodData(
-                        toY: _number(backlogData[i]['value']),
-                        color: _gaBlue,
-                        width: 8,
-                        borderRadius: BorderRadius.zero // Flat tops
-                        )
+                      toY: _number(backlogData[i]['value']),
+                      color: _primaryBlue,
+                      width: 8,
+                      borderRadius: BorderRadius.zero // Flat tops
+                    )
                   ]),
                 ),
               ),
@@ -1120,12 +873,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   Widget _buildSingleLineChartCard(String title, {required double height}) {
     final List<dynamic> data = _overview['verificationData'] ?? [];
-    if (data.isEmpty) {
-      return _ChartCardBase(
-          title: title,
-          height: height,
-          child: _buildEmptyChartState('No trends available.'));
-    }
+    if (data.isEmpty) return _ChartCardBase(title: title, height: height, child: _buildEmptyChartState('No verification trends.'));
 
     bool allZero = true;
     List<FlSpot> spots = [];
@@ -1135,12 +883,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       spots.add(FlSpot(i.toDouble(), val));
     }
 
-    if (allZero || spots.length < 2) {
-      return _ChartCardBase(
-          title: title,
-          height: height,
-          child: _buildEmptyChartState('Not enough data recorded.'));
-    }
+    if (allZero || spots.length < 2) return _ChartCardBase(title: title, height: height, child: _buildEmptyChartState('Not enough data recorded.'));
 
     return _ChartCardBase(
       title: title,
@@ -1150,28 +893,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
               getTooltipColor: (spot) => Colors.white,
-              tooltipPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              tooltipPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               tooltipBorder: const BorderSide(color: _divider, width: 1),
               getTooltipItems: (List<LineBarSpot> touchedSpots) {
                 return touchedSpots.map((spot) {
                   final index = spot.x.toInt();
-                  final dateLabel = (index >= 0 && index < data.length)
-                      ? (data[index]['label'] ?? '')
-                      : '';
+                  final dateLabel = (index >= 0 && index < data.length) ? (data[index]['label'] ?? '') : '';
                   return LineTooltipItem(
                     '$dateLabel\n',
-                    GoogleFonts.inter(
-                        color: _greyLight,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500),
+                    GoogleFonts.inter(color: _greyLight, fontSize: 11, fontWeight: FontWeight.w500),
                     children: [
-                      TextSpan(
-                          text: '• Success: ${spot.y.toInt()}%',
-                          style: GoogleFonts.inter(
-                              color: _gaBlue,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13))
+                      TextSpan(text: '• Success: ${spot.y.toInt()}%', style: GoogleFonts.inter(color: _gaBlue, fontWeight: FontWeight.w600, fontSize: 13))
                     ],
                   );
                 }).toList();
@@ -1179,27 +911,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             ),
             handleBuiltInTouches: true,
           ),
-          gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              horizontalInterval: 25,
-              getDrawingHorizontalLine: (value) =>
-                  const FlLine(color: _divider, strokeWidth: 1)),
+          gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: 25, getDrawingHorizontalLine: (value) => const FlLine(color: _divider, strokeWidth: 1)),
           titlesData: FlTitlesData(
-            rightTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            topTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 32,
                 interval: 25,
-                getTitlesWidget: (val, meta) => Text("${val.toInt()}%",
-                    style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: _greyLight,
-                        fontWeight: FontWeight.w400)),
+                getTitlesWidget: (val, meta) => Text("${val.toInt()}%", style: GoogleFonts.inter(fontSize: 11, color: _greyLight, fontWeight: FontWeight.w400)),
               ),
             ),
             bottomTitles: AxisTitles(
@@ -1208,16 +929,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 getTitlesWidget: (val, meta) {
                   final index = val.toInt();
                   if (index >= 0 && index < data.length) {
-                    if (data.length > 5 && index % 2 != 0) {
-                      return const SizedBox.shrink();
-                    }
+                    if (data.length > 5 && index % 2 != 0) return const SizedBox.shrink();
                     return Padding(
                       padding: const EdgeInsets.only(top: 8.0),
-                      child: Text(data[index]['label'] ?? '',
-                          style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: _greyLight,
-                              fontWeight: FontWeight.w400)),
+                      child: Text(data[index]['label'] ?? '', style: GoogleFonts.inter(fontSize: 11, color: _greyLight, fontWeight: FontWeight.w400)),
                     );
                   }
                   return const SizedBox.shrink();
@@ -1235,14 +950,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               color: _gaBlue,
               barWidth: 2,
               isStrokeCapRound: true,
-              dotData: FlDotData(
-                  show: true,
-                  getDotPainter: (spot, percent, barData, index) =>
-                      FlDotCirclePainter(
-                          radius: 3.5,
-                          color: _gaBlue,
-                          strokeWidth: 1.5,
-                          strokeColor: Colors.white)),
+              dotData: FlDotData(show: true, getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: 3.5, color: _gaBlue, strokeWidth: 1.5, strokeColor: Colors.white)),
               belowBarData: BarAreaData(show: false),
             )
           ],
@@ -1253,12 +961,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   Widget _buildRetentionChartCard({required double height}) {
     final List<dynamic> data = _overview['retentionData'] ?? [];
-    if (data.isEmpty) {
-      return _ChartCardBase(
-          title: 'User retention',
-          height: height,
-          child: _buildEmptyChartState('Insufficient data for retention.'));
-    }
+    if (data.isEmpty) return _ChartCardBase(title: 'User retention', height: height, child: _buildEmptyChartState('Insufficient data for retention.'));
 
     bool allZero = true;
     List<FlSpot> spots = [];
@@ -1267,13 +970,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       if (val > 0) allZero = false;
       spots.add(FlSpot(i.toDouble(), val));
     }
-
-    if (allZero || spots.length < 2) {
-      return _ChartCardBase(
-          title: 'User retention',
-          height: height,
-          child: _buildEmptyChartState('Not enough returning users yet.'));
-    }
+    
+    if (allZero || spots.length < 2) return _ChartCardBase(title: 'User retention', height: height, child: _buildEmptyChartState('Not enough returning users yet.'));
 
     return _ChartCardBase(
       title: 'User retention',
@@ -1286,28 +984,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 lineTouchData: LineTouchData(
                   touchTooltipData: LineTouchTooltipData(
                     getTooltipColor: (spot) => Colors.white,
-                    tooltipPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                    tooltipPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     tooltipBorder: const BorderSide(color: _divider, width: 1),
                     getTooltipItems: (List<LineBarSpot> touchedSpots) {
                       return touchedSpots.map((spot) {
                         final index = spot.x.toInt();
-                        final day = (index >= 0 && index < data.length)
-                            ? (data[index]['label_day'] ?? '')
-                            : '';
+                        final day = (index >= 0 && index < data.length) ? (data[index]['label_day'] ?? '') : '';
                         return LineTooltipItem(
                           'Day $day\n',
-                          GoogleFonts.inter(
-                              color: _greyLight,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500),
+                          GoogleFonts.inter(color: _greyLight, fontSize: 11, fontWeight: FontWeight.w500),
                           children: [
-                            TextSpan(
-                                text: '• Retention: ${spot.y.toInt()}%',
-                                style: GoogleFonts.inter(
-                                    color: _gaBlue,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13))
+                            TextSpan(text: '• Retention: ${spot.y.toInt()}%', style: GoogleFonts.inter(color: _primaryBlue, fontWeight: FontWeight.w600, fontSize: 13))
                           ],
                         );
                       }).toList();
@@ -1315,27 +1002,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   ),
                   handleBuiltInTouches: true,
                 ),
-                gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    horizontalInterval: 25,
-                    getDrawingHorizontalLine: (value) =>
-                        const FlLine(color: _divider, strokeWidth: 1)),
+                gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: 25, getDrawingHorizontalLine: (value) => const FlLine(color: _divider, strokeWidth: 1)),
                 titlesData: FlTitlesData(
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 32,
                       interval: 25,
-                      getTitlesWidget: (val, meta) => Text("${val.toInt()}%",
-                          style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: _greyLight,
-                              fontWeight: FontWeight.w400)),
+                      getTitlesWidget: (val, meta) => Text("${val.toInt()}%", style: GoogleFonts.inter(fontSize: 11, color: _greyLight, fontWeight: FontWeight.w400)),
                     ),
                   ),
                   bottomTitles: AxisTitles(
@@ -1344,18 +1020,10 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       getTitlesWidget: (val, meta) {
                         final index = val.toInt();
                         if (index >= 0 && index < data.length) {
-                          if (data.length > 5 && index % 2 != 0) {
-                            return const SizedBox.shrink();
-                          }
+                          if (data.length > 5 && index % 2 != 0) return const SizedBox.shrink();
                           return Padding(
                             padding: const EdgeInsets.only(top: 8.0),
-                            child: Text('Day\n${data[index]['label_day']}',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.inter(
-                                    fontSize: 9,
-                                    color: _greyLight,
-                                    fontWeight: FontWeight.w400,
-                                    height: 1.2)),
+                            child: Text('Day\n${data[index]['label_day']}', textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 9, color: _greyLight, fontWeight: FontWeight.w400, height: 1.2)),
                           );
                         }
                         return const SizedBox.shrink();
@@ -1373,19 +1041,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     color: _gaBlue,
                     barWidth: 2,
                     isStrokeCapRound: true,
-                    dotData: FlDotData(
-                        show: true,
-                        getDotPainter: (spot, percent, barData, index) =>
-                            FlDotCirclePainter(
-                                radius: 3.5,
-                                color: _gaBlue,
-                                strokeWidth: 1.5,
-                                strokeColor: Colors.white)),
+                    dotData: FlDotData(show: true, getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: 3.5, color: _gaBlue, strokeWidth: 1.5, strokeColor: Colors.white)),
                     belowBarData: BarAreaData(show: false),
                   )
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Last 35 days tracking', style: GoogleFonts.inter(fontSize: 11, color: _grey, fontWeight: FontWeight.w500)),
           ),
         ],
       ),
@@ -1394,12 +1060,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   Widget _buildCohortTableCard({required double height}) {
     final cohortData = (_overview['cohortData'] as List?) ?? const [];
-
+    
     if (cohortData.isEmpty) {
-      return _ChartCardBase(
-          title: 'Landlord Activity by Cohort',
-          height: height,
-          child: _buildEmptyChartState('No cohort data available.'));
+      return _ChartCardBase(title: 'Landlord Activity by Cohort', height: height, child: _buildEmptyChartState('No cohort data available.'));
     }
 
     return _ChartCardBase(
@@ -1410,39 +1073,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           Row(
             children: [
               const SizedBox(width: 80),
-              Expanded(
-                  child: Center(
-                      child: Text('Active landlords',
-                          style: GoogleFonts.inter(
-                              fontSize: 10,
-                              color: _greyLight,
-                              fontWeight: FontWeight.w500)))),
+              Expanded(child: Center(child: Text('Active landlords', style: GoogleFonts.inter(fontSize: 10, color: _greyLight, fontWeight: FontWeight.w500)))),
             ],
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              SizedBox(
-                  width: 80,
-                  child: Text('All Users',
-                      style: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: _dark))),
-              ...List.generate(
-                  6,
-                  (i) => Expanded(
-                      child: Center(
-                          child: Text('0.0%',
-                              style: GoogleFonts.inter(
-                                  fontSize: 10,
-                                  color: _dark,
-                                  fontWeight: FontWeight.w500))))),
+              SizedBox(width: 80, child: Text('All Users', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: _dark))),
+              ...List.generate(6, (i) => Expanded(child: Center(child: Text('0.0%', style: GoogleFonts.inter(fontSize: 10, color: _dark, fontWeight: FontWeight.w500))))),
             ],
           ),
-          const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Divider(height: 1, color: _divider)),
+          const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1, color: _divider)),
           Expanded(
             child: ListView.builder(
               physics: const BouncingScrollPhysics(),
@@ -1453,20 +1094,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Row(
                     children: [
-                      SizedBox(
-                          width: 80,
-                          child: Text(cohort['cohort']?.toString() ?? 'Unknown',
-                              style: GoogleFonts.inter(
-                                  fontSize: 10,
-                                  color: _greyLight,
-                                  fontWeight: FontWeight.w500))),
-                      Expanded(
-                          child: Center(
-                              child: Text('${cohort['active_landlords'] ?? 0}',
-                                  style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: _dark)))),
+                      SizedBox(width: 80, child: Text(cohort['cohort']?.toString() ?? 'Unknown', style: GoogleFonts.inter(fontSize: 10, color: _greyLight, fontWeight: FontWeight.w500))),
+                      Expanded(child: Center(child: Text('${cohort['active_landlords'] ?? 0}', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: _dark)))),
                     ],
                   ),
                 );
@@ -1478,8 +1107,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  Widget _buildListCard(String title, Map<String, int> data,
-      {String? emptyMessage, required double height}) {
+  Widget _buildEmptyStateCard(String title, {required double height}) {
+    return _ChartCardBase(
+      title: title,
+      height: height,
+      child: _buildEmptyChartState('No data available'),
+    );
+  }
+
+  Widget _buildListCard(String title, Map<String, int> data, {String? emptyMessage, required double height}) {
     int maxVal = data.isEmpty ? 1 : data.values.reduce((a, b) => a > b ? a : b);
 
     return _ChartCardBase(
@@ -1490,63 +1126,39 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           : Column(
               children: [
                 Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('ITEM NAME',
-                          style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: _greyLight)),
-                      Text('COUNT',
-                          style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: _greyLight)),
-                    ]),
-                const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Divider(height: 1, color: _divider)),
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('ITEM NAME', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: _greyLight)),
+                    Text('COUNT', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: _greyLight)),
+                  ]
+                ),
+                const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1, color: _divider)),
                 Expanded(
                   child: ListView(
                     physics: const BouncingScrollPhysics(),
-                    children: data.entries
-                        .map((e) => Padding(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(e.key,
-                                          style: GoogleFonts.inter(
-                                              fontSize: 13,
-                                              color: _dark,
-                                              fontWeight: FontWeight.w400)),
-                                      Text(e.value.toString(),
-                                          style: GoogleFonts.inter(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                              color: _dark)),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  FractionallySizedBox(
-                                    widthFactor:
-                                        (e.value / maxVal).clamp(0.0, 1.0),
-                                    child: Container(
-                                      height: 4,
-                                      decoration: BoxDecoration(
-                                          color: _gaBlue,
-                                          borderRadius:
-                                              BorderRadius.circular(2)),
-                                    ),
-                                  )
-                                ],
-                              ),
-                            ))
-                        .toList(),
+                    children: data.entries.map((e) => Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(e.key, style: GoogleFonts.inter(fontSize: 13, color: _dark, fontWeight: FontWeight.w400)),
+                              Text(e.value.toString(), style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: _dark)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          FractionallySizedBox(
+                            widthFactor: (e.value / maxVal).clamp(0.0, 1.0),
+                            child: Container(
+                              height: 4,
+                              decoration: BoxDecoration(color: _primaryBlue, borderRadius: BorderRadius.circular(2)), 
+                            ),
+                          )
+                        ],
+                      ),
+                    )).toList(),
                   ),
                 ),
               ],
@@ -1575,11 +1187,11 @@ class _MapSummaryBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: _divider),
+        color: _surface,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: _divider, width: 1.0),
       ),
       child: Text(
         error ??
@@ -1587,7 +1199,7 @@ class _MapSummaryBadge extends StatelessWidget {
                 ? 'Loading property locations...'
                 : '$mapped of $total listings mapped'),
         style: GoogleFonts.inter(
-            fontSize: 11, fontWeight: FontWeight.w600, color: _dark),
+            fontSize: 11, fontWeight: FontWeight.w500, color: _dark),
       ),
     );
   }
@@ -1597,20 +1209,20 @@ class _MapLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: _divider),
+        color: _surface,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: _divider, width: 1.0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _legendItem(_gaGreen, 'Approved'),
-          const SizedBox(height: 6),
-          _legendItem(const Color(0xFFD99000), 'Needs review'),
-          const SizedBox(height: 6),
-          _legendItem(_greyDark, 'Other status'),
+          _legendItem(_dark, 'Approved'),
+          const SizedBox(height: 4),
+          _legendItem(_gaPink, 'Needs review'),
+          const SizedBox(height: 4),
+          _legendItem(_greyLight, 'Other status'),
         ],
       ),
     );
@@ -1620,11 +1232,8 @@ class _MapLegend extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 7),
+        Container(width: 8, height: 8, color: color, decoration: BoxDecoration(shape: BoxShape.circle)),
+        const SizedBox(width: 6),
         Text(label, style: GoogleFonts.inter(fontSize: 10, color: _greyDark)),
       ],
     );
@@ -1640,11 +1249,11 @@ class _MapUnlocatedBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     if (count == 0) return const SizedBox.shrink();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: _divider),
+        color: _surface,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: _divider, width: 1.0),
       ),
       child: Text('$count listings missing Kenya coordinates',
           style: GoogleFonts.inter(fontSize: 10, color: _greyDark)),
@@ -1658,14 +1267,16 @@ class _ChartCardBase extends StatelessWidget {
   final TextStyle? titleStyle;
   final double height;
 
-  const _ChartCardBase(
-      {required this.title,
-      required this.child,
-      this.titleStyle,
-      required this.height});
+  const _ChartCardBase({
+    required this.title,
+    required this.child,
+    this.titleStyle,
+    required this.height
+  });
 
   @override
   Widget build(BuildContext context) {
+    Color? _grey;
     return Container(
       height: height,
       padding: const EdgeInsets.all(24),
@@ -1673,6 +1284,13 @@ class _ChartCardBase extends StatelessWidget {
         color: _surface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: _divider, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1682,20 +1300,106 @@ class _ChartCardBase extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: titleStyle ??
-                    GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w400,
-                      color: _dark,
-                    ),
+                style: titleStyle ?? GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  color: _dark,
+                ),
               ),
-              const Icon(PhosphorIconsRegular.checkCircle,
-                  color: _gaGreen, size: 20),
+              Icon(PhosphorIconsRegular.dotsThree, color: _grey, size: 20),
             ],
           ),
           const SizedBox(height: 24),
           Expanded(child: child),
         ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final String trend;
+  final bool? trendPositive;
+
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.trend,
+    this.trendPositive
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _divider, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(title, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: _greyDark)),
+              Icon(icon, color: _greyLight, size: 18),
+            ],
+          ),
+          const Spacer(),
+          Text(value, style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w400, color: _dark, letterSpacing: -0.5)),
+          const SizedBox(height: 4),
+          Text(trend, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w400, color: _greyLight)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _ActionButton({required this.label, required this.icon, required this.onTap});
+
+  Color? get _grey => null;
+
+  Color? get _primaryBlue => null;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 12),
+        decoration: const BoxDecoration(
+          color: Colors.transparent,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: _grey, size: 20),
+            const SizedBox(width: 16),
+            Text(label, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: _primaryBlue)),
+            const Spacer(),
+            const Icon(PhosphorIconsRegular.caretRight, color: _greyLight, size: 16),
+          ],
+        ),
       ),
     );
   }

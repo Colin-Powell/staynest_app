@@ -39,6 +39,7 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
   Map<String, dynamic>? _selectedProperty;
 
   List<String> _audienceNotes = [];
+  Map<String, int> _audienceDiagnostics = {};
   int? _estimatedRecipients;
   bool _targetLocation = false;
   bool _targetPropertyType = false;
@@ -140,6 +141,7 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
       _selectedProperty = property;
       _estimatedRecipients = null;
       _audienceNotes = [];
+      _audienceDiagnostics = {};
       final title = property['title']?.toString() ?? 'this home';
       final city = property['city']?.toString() ?? '';
       final category = property['category']?.toString() ?? 'property';
@@ -170,6 +172,13 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
         _audienceNotes = (estimate['notes'] as List<dynamic>? ?? [])
             .map((note) => note.toString())
             .toList();
+        final diagnostics = estimate['diagnostics'];
+        _audienceDiagnostics = diagnostics is Map
+            ? diagnostics.map((key, value) => MapEntry(
+                  key.toString(),
+                  int.tryParse('$value') ?? 0,
+                ))
+            : {};
       });
     } catch (error) {
       if (mounted) {
@@ -583,6 +592,8 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  _buildEligibilityFunnel(),
                 ],
                 for (final note in _audienceNotes)
                   Padding(
@@ -595,6 +606,54 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildEligibilityFunnel() {
+    const steps = <(String, String)>[
+      ('Tenant accounts', 'eligible_tenants'),
+      ('With active FCM token', 'tenants_with_token'),
+      ('OS permission granted', 'tenants_with_permission'),
+      ('Promotional opt-in', 'promotional_opt_ins'),
+      ('Push enabled', 'eligible_before_targeting'),
+    ];
+    return Column(
+      children: [
+        for (final step in steps)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(step.$1,
+                      style: GoogleFonts.inter(fontSize: 11, color: _grey)),
+                ),
+                Text('${_audienceDiagnostics[step.$2] ?? 0}',
+                    style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _dark)),
+              ],
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.only(top: 5),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text('Match selected filters',
+                    style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _dark)),
+              ),
+              Text('$_estimatedRecipients',
+                  style: GoogleFonts.inter(
+                      fontSize: 11, fontWeight: FontWeight.w700, color: _dark)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

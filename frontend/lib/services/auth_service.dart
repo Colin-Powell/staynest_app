@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:property_app/services/fcm_service.dart';
@@ -5,6 +6,7 @@ import 'package:property_app/session/app_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:property_app/repository/http_json_client.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   static final AuthService instance = AuthService._();
@@ -22,6 +24,7 @@ class AuthService {
     final fcmToken = newToken ?? await FCMService.instance.getToken();
 
     if (fcmToken == null || userId == null) return;
+    unawaited(syncLegacyPromotionalPreference());
 
     try {
       bool? permission = notificationsAllowed;
@@ -57,6 +60,29 @@ class AuthService {
       Uri.parse('${AppSession.apiBaseUrl}/users/profile'),
       body: {'settings': settings},
     );
+  }
+
+  Future<void> syncLegacyPromotionalPreference() async {
+    if (AppSession.currentUserId == null) return;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (!preferences.containsKey('enablePromotions')) return;
+
+      final settings = await fetchNotificationSettings();
+      if (settings['promotional_push'] is bool) return;
+
+      final allNotificationsEnabled = settings['push'] is bool
+          ? settings['push'] as bool
+          : preferences.getBool('enableAllNotifications') ?? true;
+      final explicitlyOptedIn =
+          preferences.getBool('enablePromotions') == true &&
+              allNotificationsEnabled;
+      await updateNotificationSettings({
+        'promotional_push': explicitlyOptedIn,
+      });
+    } catch (error) {
+      debugPrint('Failed to migrate legacy promotional preference: $error');
+    }
   }
 
   Future<Map<String, dynamic>> fetchNotificationSettings() async {

@@ -29,11 +29,32 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    final hasLegacyPromotionChoice = prefs.containsKey('enablePromotions');
+    final legacyPromotionChoice = prefs.getBool('enablePromotions') ?? false;
+    final legacyGlobalPush = prefs.getBool('enableAllNotifications') ?? true;
     Map<String, dynamic> serverSettings = {};
     try {
       serverSettings = await AuthService.instance.fetchNotificationSettings();
     } catch (_) {
       // Local settings remain available if the account API cannot be reached.
+    }
+    if (!mounted) return;
+    final serverPromotionChoice = serverSettings['promotional_push'];
+    final canMigrateLegacyChoice =
+        serverPromotionChoice is! bool && hasLegacyPromotionChoice;
+    final promotionChoice = serverPromotionChoice is bool
+        ? serverPromotionChoice
+        : legacyPromotionChoice &&
+            legacyGlobalPush &&
+            serverSettings['push'] != false;
+    if (canMigrateLegacyChoice) {
+      try {
+        await AuthService.instance.updateNotificationSettings({
+          'promotional_push': promotionChoice,
+        });
+      } catch (_) {
+        // Keep the explicit local choice and retry syncing on the next visit.
+      }
     }
     if (!mounted) return;
     setState(() {
@@ -43,9 +64,7 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
       _enableChatNotifications =
           prefs.getBool('enableChatNotifications') ?? true;
       _enableBookingUpdates = prefs.getBool('enableBookingUpdates') ?? true;
-      _enablePromotions = serverSettings['promotional_push'] is bool
-          ? serverSettings['promotional_push'] as bool
-          : prefs.getBool('enablePromotions') ?? false;
+      _enablePromotions = promotionChoice;
     });
   }
 
