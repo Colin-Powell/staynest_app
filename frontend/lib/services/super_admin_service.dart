@@ -66,6 +66,45 @@ class SuperAdminService {
         if (search != null && search.isNotEmpty) 'search': search,
       }));
 
+  static Future<List<Map<String, dynamic>>> fetchCampaignProperties({
+    String? search,
+  }) async =>
+      _list(await _getJson('/admin/push-campaigns/properties', query: {
+        if (search != null && search.isNotEmpty) 'search': search,
+      }));
+
+  static Future<List<Map<String, dynamic>>> fetchPushCampaigns() async =>
+      _list(await _getJson('/admin/push-campaigns'));
+
+  static Future<Map<String, dynamic>> estimatePushCampaignAudience({
+    required String propertyId,
+    required Map<String, bool> audience,
+  }) async =>
+      _data(await _decode(() => _client.post(
+            _uri('/admin/push-campaigns/estimate'),
+            body: {'propertyId': propertyId, 'audience': audience},
+          )));
+
+  static Future<Map<String, dynamic>> sendPushCampaign({
+    required String propertyId,
+    required String title,
+    required String body,
+    required Map<String, bool> audience,
+    required String idempotencyKey,
+    String? name,
+  }) async =>
+      _data(await _decode(() => _client.post(
+            _uri('/admin/push-campaigns'),
+            body: {
+              'propertyId': propertyId,
+              'title': title,
+              'body': body,
+              'audience': audience,
+              'idempotencyKey': idempotencyKey,
+              if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+            },
+          )));
+
   static Future<List<Map<String, dynamic>>> fetchKyc({
     int limit = 10,
     int offset = 0,

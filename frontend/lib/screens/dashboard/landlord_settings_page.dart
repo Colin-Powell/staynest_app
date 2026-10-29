@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:property_app/session/app_session.dart';
+import 'package:property_app/services/auth_service.dart';
 import 'package:property_app/services/user_service.dart';
 import 'package:property_app/services/avatar_service.dart';
 import 'package:property_app/services/landlord_payment_methods_service.dart';
@@ -209,8 +210,10 @@ class _LandlordSettingsPageState extends State<LandlordSettingsPage> {
                             label: 'Logout',
                             isSelected: false,
                             isLogout: true,
-                            onTap: () {
+                            onTap: () async {
+                              await AuthService.instance.clearFCMToken();
                               AppSession.logout();
+                              if (!context.mounted) return;
                               Navigator.of(context, rootNavigator: true)
                                   .pushNamedAndRemoveUntil(
                                       '/login', (route) => false);
@@ -480,8 +483,10 @@ class _LandlordSettingsPageState extends State<LandlordSettingsPage> {
 
               // --- LOGOUT BUTTON ---
               GestureDetector(
-                onTap: () {
+                onTap: () async {
+                  await AuthService.instance.clearFCMToken();
                   AppSession.logout();
+                  if (!context.mounted) return;
                   Navigator.of(context, rootNavigator: true)
                       .pushNamedAndRemoveUntil('/login', (route) => false);
                 },

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:property_app/theme.dart';
 import 'package:property_app/services/fcm_service.dart';
+import 'package:property_app/services/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class NotificationSettingsView extends StatefulWidget {
@@ -28,37 +29,60 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    Map<String, dynamic> serverSettings = {};
+    try {
+      serverSettings = await AuthService.instance.fetchNotificationSettings();
+    } catch (_) {
+      // Local settings remain available if the account API cannot be reached.
+    }
+    if (!mounted) return;
     setState(() {
-      _enableAllNotifications = prefs.getBool('enableAllNotifications') ?? true;
+      _enableAllNotifications = serverSettings['push'] is bool
+          ? serverSettings['push'] as bool
+          : prefs.getBool('enableAllNotifications') ?? true;
       _enableChatNotifications =
           prefs.getBool('enableChatNotifications') ?? true;
       _enableBookingUpdates = prefs.getBool('enableBookingUpdates') ?? true;
-      _enablePromotions = prefs.getBool('enablePromotions') ?? false;
+      _enablePromotions = serverSettings['promotional_push'] is bool
+          ? serverSettings['promotional_push'] as bool
+          : prefs.getBool('enablePromotions') ?? false;
     });
   }
 
-  Future<void> _saveSetting(String key, bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, value);
-    // If global notifications are disabled, unsubscribe from all topics
-    if (key == 'enableAllNotifications' && !value) {
-      await FCMService.instance.unsubscribeFromTopic('promotions');
-      await FCMService.instance.unsubscribeFromTopic('updates');
-    }
-
-    // Apply FCM topic subscriptions based on settings
-    if (key == 'enablePromotions') {
-      if (value) {
-        FCMService.instance.subscribeToTopic('promotions');
-      } else {
-        FCMService.instance.unsubscribeFromTopic('promotions');
+  Future<bool> _saveSetting(String key, bool value) async {
+    try {
+      if (key == 'enableAllNotifications') {
+        await AuthService.instance.updateNotificationSettings({
+          'push': value,
+          if (!value) 'promotional_push': false,
+        });
+        if (!value) {
+          try {
+            await FCMService.instance.unsubscribeFromTopic('promotions');
+            await FCMService.instance.unsubscribeFromTopic('updates');
+          } catch (_) {}
+        }
+      } else if (key == 'enablePromotions') {
+        await AuthService.instance.updateNotificationSettings({
+          'promotional_push': value && _enableAllNotifications,
+        });
+        if (!value) {
+          try {
+            await FCMService.instance.unsubscribeFromTopic('promotions');
+          } catch (_) {}
+        }
       }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(key, value);
+      return true;
+    } catch (_) {
+      return false;
     }
-    // Add more topic logic here for other notification types if applicable
   }
 
   Widget _buildToggleTile(
-      String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
+      String title, String subtitle, bool value, ValueChanged<bool> onChanged,
+      {bool enabled = true}) {
     return SwitchListTile(
       title: Text(title,
           style: GoogleFonts.poppins(
@@ -68,7 +92,7 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
       subtitle: Text(subtitle,
           style: GoogleFonts.poppins(fontSize: 13, color: AppColors.gray500)),
       value: value,
-      onChanged: onChanged,
+      onChanged: enabled ? onChanged : null,
       activeThumbColor: AppColors.primary,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
     );
@@ -101,9 +125,28 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
             'Enable All Notifications',
             'Receive all types of alerts and updates.',
             _enableAllNotifications,
-            (bool newValue) {
-              setState(() => _enableAllNotifications = newValue);
-              _saveSetting('enableAllNotifications', newValue);
+            (bool newValue) async {
+              final previousAll = _enableAllNotifications;
+              final previousPromotions = _enablePromotions;
+              setState(() {
+                _enableAllNotifications = newValue;
+                if (!newValue) _enablePromotions = false;
+              });
+              final saved =
+                  await _saveSetting('enableAllNotifications', newValue);
+              if (!mounted) return;
+              if (!saved) {
+                setState(() {
+                  _enableAllNotifications = previousAll;
+                  _enablePromotions = previousPromotions;
+                });
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content:
+                          Text('Notification preference could not be saved.')),
+                );
+              }
             },
           ),
           _buildToggleTile(
@@ -128,10 +171,22 @@ class _NotificationSettingsViewState extends State<NotificationSettingsView> {
             'Promotional Offers',
             'Get updates on special deals and new features.',
             _enablePromotions,
-            (bool newValue) {
+            (bool newValue) async {
+              final previous = _enablePromotions;
               setState(() => _enablePromotions = newValue);
-              _saveSetting('enablePromotions', newValue);
+              final saved = await _saveSetting('enablePromotions', newValue);
+              if (!mounted) return;
+              if (!saved) {
+                setState(() => _enablePromotions = previous);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content:
+                          Text('Promotional preference could not be saved.')),
+                );
+              }
             },
+            enabled: _enableAllNotifications,
           ),
         ],
       ),

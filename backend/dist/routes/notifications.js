@@ -2,6 +2,28 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 const router = Router();
+router.post('/promotion-open', requireAuth, async (req, res, next) => {
+    try {
+        const campaignId = String(req.body?.campaignId ?? '');
+        const propertyId = String(req.body?.propertyId ?? '');
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidPattern.test(campaignId) || !uuidPattern.test(propertyId)) {
+            return res.status(400).json({ error: 'A valid campaign and property are required.' });
+        }
+        const result = await query(`UPDATE promotional_push_deliveries d
+       SET opened_at = COALESCE(d.opened_at, now()), updated_at = now()
+       FROM promotional_push_campaigns c
+       WHERE d.campaign_id = c.id AND d.campaign_id = $1
+         AND d.user_id = $2 AND c.property_id = $3
+       RETURNING d.id`, [campaignId, req.auth.id, propertyId]);
+        if (result.rows.length === 0)
+            return res.status(404).json({ error: 'Campaign interaction not found.' });
+        res.json({ ok: true });
+    }
+    catch (error) {
+        next(error);
+    }
+});
 // GET /api/notifications
 router.get('/', requireAuth, async (req, res, next) => {
     try {

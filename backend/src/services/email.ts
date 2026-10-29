@@ -167,7 +167,6 @@ export async function revokeOtp(email: string) {
 
 export async function queueOtpEmail(to: string, code: string) {
   const normalizedEmail = to.trim().toLowerCase();
-  console.info(`[OTP] adding email job for ${normalizedEmail}`);
   await emailQueue.add(
     "otp-email",
     { to: normalizedEmail, code },
@@ -179,6 +178,20 @@ export async function queueOtpEmail(to: string, code: string) {
       removeOnFail: { age: 24 * 60 * 60, count: 5000 },
     },
   );
+}
+
+export async function queueOtpImmediately(
+  to: string,
+): Promise<{ expiresAt: number; queued: true }> {
+  const normalizedEmail = to.trim().toLowerCase();
+  const otp = await createOtp(normalizedEmail);
+  try {
+    await queueOtpEmail(normalizedEmail, otp.code);
+  } catch (error) {
+    await revokeOtp(normalizedEmail);
+    throw error;
+  }
+  return { expiresAt: otp.expiresAt, queued: true };
 }
 
 export function buildOtpReminderEmailContent(reminderStage: number) {

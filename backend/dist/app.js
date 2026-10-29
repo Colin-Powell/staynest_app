@@ -19,6 +19,7 @@ import messagesRouter from './routes/messages.js';
 import bookingsRouter from './routes/bookings.js';
 import analyticsRouter from './routes/analytics.js';
 import adminRouter from './routes/admin.js';
+import promotionalPushCampaignsRouter from './routes/promotional_push_campaigns.js';
 import draftsRouter from './routes/drafts.js';
 import versionRouter from './routes/version.js';
 import paymentsRouter from './routes/payments.js';
@@ -64,6 +65,7 @@ app.use('/api/messages', messagesRouter);
 app.use('/api/bookings', bookingsRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/admin/push-campaigns', promotionalPushCampaignsRouter);
 app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', environment: process.env.NODE_ENV || 'development' });
 });

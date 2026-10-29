@@ -5,6 +5,7 @@ import 'package:property_app/theme.dart';
 import 'package:property_app/session/app_session.dart';
 import 'package:property_app/utils/responsive_layout.dart';
 import 'package:property_app/services/notification_api.dart';
+import 'package:property_app/services/auth_service.dart';
 import 'package:property_app/utils/date_time_format.dart';
 import 'super_admin_dashboard.dart';
 import 'super_admin_properties.dart';
@@ -12,6 +13,7 @@ import 'super_admin_users.dart';
 import 'super_admin_kyc.dart';
 import 'super_admin_settings.dart';
 import 'super_admin_withdrawals.dart';
+import 'super_admin_campaigns.dart';
 import 'super_admin_login.dart';
 
 class SuperAdminShell extends StatefulWidget {
@@ -34,6 +36,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
     _NavItem(label: 'Users', icon: PhosphorIcons.users()),
     _NavItem(label: 'Withdrawals', icon: PhosphorIcons.wallet()),
     _NavItem(label: 'Settings', icon: PhosphorIcons.gearSix()),
+    _NavItem(label: 'Push Campaigns', icon: PhosphorIcons.bellRinging()),
   ];
 
   final List<Widget> _pages = const [
@@ -43,9 +46,12 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
     SuperAdminUsersPage(),
     SuperAdminWithdrawalsPage(),
     SuperAdminSettingsPage(),
+    SuperAdminCampaignsPage(),
   ];
 
-  void _handleLogout() {
+  Future<void> _handleLogout() async {
+    await AuthService.instance.clearFCMToken();
+    if (!mounted) return;
     AppSession.logout();
     Navigator.pushAndRemoveUntil(
       context,
@@ -121,6 +127,12 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
               label: _navItems[5].label,
               selected: _selectedIndex == 5,
               onTap: () => Navigator.pop(sheetContext, 5),
+            ),
+            _MoreDestination(
+              icon: _navItems[6].icon,
+              label: _navItems[6].label,
+              selected: _selectedIndex == 6,
+              onTap: () => Navigator.pop(sheetContext, 6),
             ),
             const SizedBox(height: 12),
           ],

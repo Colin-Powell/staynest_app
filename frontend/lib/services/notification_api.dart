@@ -5,9 +5,11 @@ import 'package:property_app/session/app_session.dart';
 class NotificationApi {
   static final HttpJsonClient _client = HttpJsonClient();
 
-  static Future<Map<String, dynamic>> fetchNotifications({int limit = 50, int offset = 0}) async {
+  static Future<Map<String, dynamic>> fetchNotifications(
+      {int limit = 50, int offset = 0}) async {
     final response = await _client.get(
-      Uri.parse('${AppSession.apiBaseUrl}/notifications?limit=$limit&offset=$offset'),
+      Uri.parse(
+          '${AppSession.apiBaseUrl}/notifications?limit=$limit&offset=$offset'),
     );
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
@@ -21,6 +23,16 @@ class NotificationApi {
   static Future<void> markAllAsRead() async {
     await _client.put(
       Uri.parse('${AppSession.apiBaseUrl}/notifications/read-all'),
+    );
+  }
+
+  static Future<void> trackPromotionOpen({
+    required String campaignId,
+    required String propertyId,
+  }) async {
+    await _client.post(
+      Uri.parse('${AppSession.apiBaseUrl}/notifications/promotion-open'),
+      body: {'campaignId': campaignId, 'propertyId': propertyId},
     );
   }
 }

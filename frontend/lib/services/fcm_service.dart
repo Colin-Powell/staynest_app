@@ -1,14 +1,21 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/auth_service.dart'; // Import AuthService
 import 'package:property_app/services/message_service.dart';
+import 'package:property_app/services/notification_api.dart';
 import 'package:property_app/theme.dart';
+import 'package:property_app/utils/promotion_notification.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -16,7 +23,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // the background; read state changes only when the user opens the chat.
 }
 
-class FCMService {
+class FCMService with WidgetsBindingObserver {
   static final FCMService instance = FCMService._();
   FCMService._();
 
@@ -37,6 +44,13 @@ class FCMService {
     description: 'This channel is used for important notifications.',
     importance: Importance.max,
   );
+  static const AndroidNotificationChannel _promotionChannel =
+      AndroidNotificationChannel(
+    'promotions',
+    'Property promotions',
+    description: 'Promotional updates about StayNest listings.',
+    importance: Importance.high,
+  );
 
   // Global key or Navigator state to show modals
   GlobalKey<NavigatorState>? navigatorKey;
@@ -55,6 +69,10 @@ class FCMService {
           '[FCM] skipped because Firebase is unavailable on this platform.');
       return;
     }
+    if (!_lifecycleObserverAdded) {
+      WidgetsBinding.instance.addObserver(this);
+      _lifecycleObserverAdded = true;
+    }
 
     // ── Step 1: Register FCM listeners FIRST ─────────────────────────────────
     // Isolated so a flutter_local_notifications failure never blocks delivery.
@@ -68,24 +86,25 @@ class FCMService {
         sound: true,
       );
 
-      final settings = await _messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
+      var settings = await _messaging.getNotificationSettings();
+      if (settings.authorizationStatus == AuthorizationStatus.notDetermined) {
+        settings = await _messaging.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      }
       debugPrint('[FCM] authorization=${settings.authorizationStatus}');
+      await _messaging.unsubscribeFromTopic('promotions');
 
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         debugPrint(
             '[FCM] onMessage id=${message.messageId} title=${message.notification?.title} data=${message.data}');
         _notificationsController.add(message);
-        try {
-          _showLocalNotification(message);
-        } catch (error, stackTrace) {
-          debugPrint('[FCM] local notification failed: $error');
-          debugPrintStack(stackTrace: stackTrace);
+        unawaited(_showLocalNotification(message));
+        if (message.data['type']?.toString() != 'property_promotion') {
+          _showIncomingModal(message);
         }
-        _showIncomingModal(message);
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageAction);
@@ -101,6 +120,14 @@ class FCMService {
       final token = await getToken();
       debugPrint(
           '[FCM] token=${(token?.length ?? 0) > 20 ? token!.substring(0, 20) : token ?? "null"}...');
+      if (token != null) {
+        unawaited(AuthService.instance.syncFCMToken(
+          newToken: token,
+          notificationsAllowed: settings.authorizationStatus ==
+                  AuthorizationStatus.authorized ||
+              settings.authorizationStatus == AuthorizationStatus.provisional,
+        ));
+      }
     } catch (error, stackTrace) {
       debugPrint('[FCM] listener registration failed: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -120,6 +147,20 @@ class FCMService {
           android: androidInit,
           iOS: iosInit,
         ),
+        onDidReceiveNotificationResponse: (response) {
+          final payload = response.payload;
+          if (payload == null || payload.isEmpty) return;
+          try {
+            final data = jsonDecode(payload);
+            if (data is Map) {
+              unawaited(_handleMessageAction(RemoteMessage(
+                data: Map<String, dynamic>.from(data),
+              )));
+            }
+          } catch (error) {
+            debugPrint('[FCM] local notification payload was invalid: $error');
+          }
+        },
       );
 
       final androidImpl =
@@ -127,10 +168,10 @@ class FCMService {
               AndroidFlutterLocalNotificationsPlugin>();
       if (androidImpl != null) {
         await androidImpl.createNotificationChannel(_channel);
-        final granted = await androidImpl.requestNotificationsPermission();
-        debugPrint('[FCM] Android notification permission=$granted');
+        await androidImpl.createNotificationChannel(_promotionChannel);
       }
 
+      await _removeExpiredPromotionImages();
       debugPrint('[FCM] local notifications initialised');
     } catch (error, stackTrace) {
       debugPrint('[FCM] local notifications setup failed: $error');
@@ -163,6 +204,7 @@ class FCMService {
   }
 
   bool _isNavigatingFromNotification = false;
+  bool _lifecycleObserverAdded = false;
 
   Future<void> _handleMessageAction(RemoteMessage message) async {
     if (_isNavigatingFromNotification) return;
@@ -172,6 +214,35 @@ class FCMService {
       final chatId = message.data['chatId'];
       final senderId = message.data['senderId']?.toString();
       final conversationId = message.data['conversationId']?.toString();
+
+      final propertyRoute = promotionPropertyRoute(message.data);
+      if (propertyRoute != null) {
+        final propertyId = message.data['propertyId']?.toString() ?? '';
+
+        for (var attempt = 0;
+            attempt < 50 && navigatorKey?.currentState == null;
+            attempt += 1) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        final navigator = navigatorKey?.currentState;
+        if (navigator == null) return;
+
+        final campaignId = message.data['campaignId']?.toString() ?? '';
+        if (promotionPropertyRoute({
+              'type': 'property_promotion',
+              'propertyId': campaignId,
+            }) !=
+            null) {
+          unawaited(NotificationApi.trackPromotionOpen(
+            campaignId: campaignId,
+            propertyId: propertyId,
+          ).catchError((error) {
+            debugPrint('[FCM] campaign open tracking failed: $error');
+          }));
+        }
+        navigator.pushNamed(propertyRoute);
+        return;
+      }
 
       if (conversationId != null && conversationId.isNotEmpty) {
         await MessageService.instance.markAsRead(
@@ -183,9 +254,10 @@ class FCMService {
       }
 
       final currentContext = navigatorKey?.currentContext;
-      if (currentContext != null &&
-          MediaQuery.sizeOf(currentContext).width >= 768 &&
-          onDesktopMessageAction != null) {
+      final isDesktop = currentContext != null &&
+          currentContext.mounted &&
+          MediaQuery.sizeOf(currentContext).width >= 768;
+      if (isDesktop && onDesktopMessageAction != null) {
         await onDesktopMessageAction!(
           conversationId,
           senderId,
@@ -214,6 +286,26 @@ class FCMService {
       await Future<void>.delayed(const Duration(milliseconds: 150));
       _isNavigatingFromNotification = false;
     }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_syncNotificationAuthorization());
+    }
+  }
+
+  Future<void> _syncNotificationAuthorization() async {
+    if (kIsWeb || Firebase.apps.isEmpty) return;
+    final token = await getToken();
+    if (token == null) return;
+    final settings = await _messaging.getNotificationSettings();
+    await AuthService.instance.syncFCMToken(
+      newToken: token,
+      notificationsAllowed:
+          settings.authorizationStatus == AuthorizationStatus.authorized ||
+              settings.authorizationStatus == AuthorizationStatus.provisional,
+    );
   }
 
   IconData _notificationIcon(RemoteMessage message) {
@@ -433,29 +525,141 @@ class FCMService {
     );
   }
 
-  void _showLocalNotification(RemoteMessage message) {
+  Future<void> _showLocalNotification(RemoteMessage message) async {
     final RemoteNotification? notification = message.notification;
 
     if (notification == null) return;
 
+    final isPromotion =
+        message.data['type']?.toString() == 'property_promotion';
+    if (isPromotion && Platform.isIOS) return;
+    final imagePath = isPromotion
+        ? await _downloadPromotionImage(
+            message.data['imageUrl']?.toString() ?? '')
+        : null;
+    final channel = isPromotion ? _promotionChannel : _channel;
+
     debugPrint(
-        '[FCM] showing local notification id=${notification.hashCode} channel=${_channel.id}');
-    _localNotifications.show(
-      id: notification.hashCode,
-      title: notification.title,
-      body: notification.body,
-      notificationDetails: NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channel.id,
-          _channel.name,
-          channelDescription: _channel.description,
-          importance: _channel.importance,
-          priority: Priority.high,
-          icon: 'ic_launcher_foreground',
+        '[FCM] showing local notification id=${notification.hashCode} channel=${channel.id}');
+    try {
+      await _localNotifications.show(
+        id: notification.hashCode,
+        title: notification.title,
+        body: notification.body,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            channel.id,
+            channel.name,
+            channelDescription: channel.description,
+            importance: channel.importance,
+            priority: Priority.high,
+            icon: 'ic_launcher_foreground',
+            styleInformation: imagePath == null
+                ? null
+                : BigPictureStyleInformation(
+                    FilePathAndroidBitmap(imagePath),
+                    contentTitle: notification.title,
+                    summaryText: notification.body,
+                    hideExpandedLargeIcon: true,
+                  ),
+          ),
         ),
-      ),
-      payload: message.data['chatId']?.toString(),
-    );
+        payload: jsonEncode(message.data),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('[FCM] local notification failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (imagePath != null) {
+        try {
+          await _localNotifications.show(
+            id: notification.hashCode,
+            title: notification.title,
+            body: notification.body,
+            notificationDetails: NotificationDetails(
+              android: AndroidNotificationDetails(
+                channel.id,
+                channel.name,
+                channelDescription: channel.description,
+                importance: channel.importance,
+                priority: Priority.high,
+                icon: 'ic_launcher_foreground',
+              ),
+            ),
+            payload: jsonEncode(message.data),
+          );
+        } catch (fallbackError) {
+          debugPrint(
+              '[FCM] text-only local notification failed: $fallbackError');
+        }
+      }
+    }
+  }
+
+  Future<String?> _downloadPromotionImage(String value) async {
+    if (!isSafePromotionImageUrl(value)) return null;
+    final uri = Uri.tryParse(value);
+    if (uri == null) return null;
+
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+    try {
+      final request =
+          await client.getUrl(uri).timeout(const Duration(seconds: 8));
+      request.followRedirects = false;
+      final response =
+          await request.close().timeout(const Duration(seconds: 8));
+      final contentType = response.headers.contentType?.mimeType;
+      if (response.statusCode != HttpStatus.ok ||
+          response.contentLength > 5 * 1024 * 1024 ||
+          !const {'image/jpeg', 'image/png', 'image/webp'}
+              .contains(contentType)) {
+        return null;
+      }
+
+      final bytes = BytesBuilder(copy: false);
+      var totalBytes = 0;
+      await for (final chunk in response.timeout(const Duration(seconds: 8))) {
+        totalBytes += chunk.length;
+        if (totalBytes > 5 * 1024 * 1024) return null;
+        bytes.add(chunk);
+      }
+      if (totalBytes == 0) return null;
+
+      final extension = switch (contentType) {
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        _ => 'jpg',
+      };
+      final directory = await getTemporaryDirectory();
+      final file = File(path.join(
+        directory.path,
+        'staynest_promo_${DateTime.now().microsecondsSinceEpoch}.$extension',
+      ));
+      await file.writeAsBytes(bytes.takeBytes(), flush: true);
+      return file.path;
+    } catch (error) {
+      debugPrint('[FCM] promotion image unavailable: $error');
+      return null;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<void> _removeExpiredPromotionImages() async {
+    try {
+      final directory = await getTemporaryDirectory();
+      final cutoff = DateTime.now().subtract(const Duration(days: 1));
+      await for (final entity in Directory(directory.path).list()) {
+        if (entity is! File ||
+            !path.basename(entity.path).startsWith('staynest_promo_')) {
+          continue;
+        }
+        if ((await entity.lastModified()).isBefore(cutoff)) {
+          await entity.delete();
+        }
+      }
+    } catch (error) {
+      debugPrint('[FCM] promotion image cleanup failed: $error');
+    }
   }
 
   /// Subscribe to a topic (e.g., 'announcements' or 'city_london')

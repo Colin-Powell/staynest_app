@@ -3,6 +3,7 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { env } from '../config.js';
 import { query } from '../db.js';
 import fs from 'fs';
+import { buildPromotionalCampaignMessage } from './promotional_campaign_payload.js';
 function initFirebase() {
     if (getApps().length > 0)
         return;
@@ -109,5 +110,19 @@ export async function sendPushToTopic(topic, title, body, data) {
         console.error(`Failed to send push to topic ${topic}:`, error);
         return false;
     }
+}
+export async function sendPromotionalPushBatch(messages) {
+    if (messages.length === 0 || messages.length > 500) {
+        throw new Error('Promotional push batches must contain between 1 and 500 messages.');
+    }
+    if (getApps().length === 0) {
+        throw new Error('Firebase Admin is unavailable.');
+    }
+    const response = await getMessaging().sendEach(messages.map(buildPromotionalCampaignMessage));
+    return response.responses.map((result) => ({
+        success: result.success,
+        messageId: result.messageId,
+        errorCode: result.error?.code,
+    }));
 }
 //# sourceMappingURL=firebase.js.map

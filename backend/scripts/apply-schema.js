@@ -27,6 +27,7 @@ async function applySchema() {
       'init-db.sql',
       'add-message-conversations.sql',
       'add-message-actions.sql',
+      'add-promotional-push-campaigns.sql',
     ]) {
       const schemaPath = path.join(__dirname, schemaFile);
       const sql = fs.readFileSync(schemaPath, 'utf8');

@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { query } from '../db.js';
+import { pool, query } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import bcrypt from 'bcrypt';
 import { routeCache } from '../middleware/cache.js';
@@ -207,12 +207,47 @@ router.put('/:id/fcm-token', requireAuth, async (req: Request, res: Response, ne
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const { fcmToken } = req.body;
-    if (!fcmToken) {
-      return res.status(400).json({ error: 'fcmToken is required' });
+    const fcmToken = typeof req.body?.fcmToken === 'string' ? req.body.fcmToken.trim() : '';
+    if (!fcmToken || fcmToken.length > 4096) {
+      return res.status(400).json({ error: 'A valid fcmToken is required.' });
+    }
+    const notificationsAllowed = req.body?.notificationsAllowed;
+    if (notificationsAllowed !== undefined && typeof notificationsAllowed !== 'boolean') {
+      return res.status(400).json({ error: 'notificationsAllowed must be a boolean.' });
     }
 
-    await query('UPDATE users SET fcm_token = $1 WHERE id = $2', [fcmToken, userId]);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('UPDATE users SET fcm_token = NULL WHERE fcm_token = $1 AND id <> $2', [fcmToken, userId]);
+      await client.query(
+        `UPDATE users
+         SET fcm_token = $1,
+             settings = CASE WHEN $3::boolean IS NULL THEN COALESCE(settings, '{}'::jsonb)
+               ELSE COALESCE(settings, '{}'::jsonb) || jsonb_build_object('push_permission_granted', $3::boolean)
+             END
+         WHERE id = $2`,
+        [fcmToken, userId, typeof notificationsAllowed === 'boolean' ? notificationsAllowed : null],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:id/fcm-token', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (req.auth?.id !== req.params.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    await query('UPDATE users SET fcm_token = NULL WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
   } catch (error) {
     next(error);

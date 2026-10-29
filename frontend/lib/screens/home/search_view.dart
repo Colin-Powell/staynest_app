@@ -37,16 +37,15 @@ class SearchView extends StatefulWidget {
   final String? initialTitle;
   final Future<void> Function({VoidCallback? onAuthenticated})?
       onRequireAuthentication;
-
   const SearchView({
     super.key,
-    this.onSelectProperty,
     this.onOpenFilters,
     this.activeFilters,
-    this.onFiltersChanged,
     this.onShowMap,
+    this.onFiltersChanged,
     this.initialProperties,
     this.initialTitle,
+    this.onSelectProperty,
     this.onRequireAuthentication,
   });
 
@@ -90,6 +89,12 @@ class _SearchViewState extends State<SearchView> {
   }
 
   Future<void> _loadSavedPreferences() async {
+    if (mounted) {
+      setState(() {
+        _isLoadingSavedPreferences = true;
+        _savedPreferencesLoadFailed = false;
+      });
+    }
     if (AppSession.currentUserId == null) {
       if (mounted) setState(() => _isLoadingSavedPreferences = false);
       return;
@@ -106,6 +111,7 @@ class _SearchViewState extends State<SearchView> {
       setState(() {
         _savedPreferences = savedProfile;
         _completionSummary = completion;
+        _savedPreferencesApplied = false;
         _isLoadingSavedPreferences = false;
         _savedPreferencesLoadFailed = false;
       });
@@ -139,6 +145,38 @@ class _SearchViewState extends State<SearchView> {
         preferences['budget_max'] != null ||
         (preferences['preferred_categories'] is List &&
             (preferences['preferred_categories'] as List).isNotEmpty);
+  }
+
+  bool get _areSavedPreferencesApplied {
+    if (_savedPreferencesApplied) return true;
+    if (!_hasSavedPreferences) return false;
+    final preferences = _savedPreferences!;
+    final cities = preferences['preferred_cities'];
+    final savedCity = cities is List && cities.isNotEmpty
+        ? cities.first.toString().trim().toLowerCase()
+        : '';
+    final locationApplied =
+        savedCity.isEmpty || query.trim().toLowerCase() == savedCity;
+
+    bool matchesPrice(String field, String filter) {
+      final expected = double.tryParse(preferences[field]?.toString() ?? '');
+      if (expected == null) return true;
+      final actual = double.tryParse(_activeFilters[filter]?.toString() ?? '');
+      return actual != null && actual == expected;
+    }
+
+    final categories = preferences['preferred_categories'];
+    final savedCategory = categories is List && categories.isNotEmpty
+        ? categories.first.toString().trim().toLowerCase()
+        : '';
+    final categoryApplied = savedCategory.isEmpty ||
+        _activeFilters['propertyType']?.toString().trim().toLowerCase() ==
+            savedCategory;
+
+    return locationApplied &&
+        matchesPrice('budget_min', 'minPrice') &&
+        matchesPrice('budget_max', 'maxPrice') &&
+        categoryApplied;
   }
 
   List<String> get _missingPreferenceFields {
@@ -204,182 +242,165 @@ class _SearchViewState extends State<SearchView> {
   Widget _buildSavedPreferencesBanner() {
     final isAuthenticated = AppSession.currentUserId != null;
     final hasSaved = _hasSavedPreferences;
+    final preferencesApplied = _areSavedPreferencesApplied;
     final missing = _missingPreferenceFields;
-    final completion = _completionSummary?['preferences'];
-    final completedCount = completion is Map
-        ? (completion['completedFields'] as num?)?.toInt() ?? 0
-        : 0;
-    final totalCount = completion is Map
-        ? (completion['totalFields'] as num?)?.toInt() ?? 3
-        : 3;
-    final percent = completion is Map
-        ? (completion['completionPercentage'] as num?)?.toInt() ?? 0
-        : 0;
-    final isSearching = query.trim().isNotEmpty || _activeFilters.isNotEmpty;
+    final matchingCount = results.length;
 
-    final String title;
     final String message;
     if (_isLoadingSavedPreferences) {
-      title = 'Checking your saved preferences';
-      message = 'Your search stays available while we load them.';
+      message = 'Loading preferences';
     } else if (_savedPreferencesLoadFailed) {
-      title = 'Preferences are temporarily unavailable';
-      message = 'You can keep browsing, or try loading them again.';
+      message = 'Preferences unavailable';
     } else if (!isAuthenticated) {
-      title = 'Find homes that fit you';
-      message = 'Sign in to save a location, budget, and home type for your searches.';
-    } else if (_savedPreferencesApplied) {
-      title = 'Preferences applied';
-      message = 'We use your saved house preferences to match properties that suit you and your budget. You can still browse all available homes.';
+      message = 'Save your area and budget';
+    } else if (preferencesApplied) {
+      message = _loading
+          ? 'Updating homes for your preferences'
+          : _hasError
+              ? 'Preferences applied; homes could not load'
+              : matchingCount == 0
+                  ? 'No homes match; adjust your filters'
+                  : '$matchingCount homes match your preferences';
     } else if (hasSaved) {
-      title = isSearching ? 'Make this search fit you' : 'Your house preferences';
-      message = 'We use your saved house preferences to match properties that suit you and your budget.';
+      message = 'Use your saved area and budget';
     } else {
-      title = 'Set up your house preferences';
-      message = 'Save a preferred area, monthly budget, or home type to make future searches more useful.';
+      message = 'Set your area, budget, or home type';
     }
 
-    final actions = <Widget>[];
+    String actionLabel = '';
+    VoidCallback? onAction;
     if (_savedPreferencesLoadFailed) {
-      actions.add(OutlinedButton(
-        onPressed: _loadSavedPreferences,
-        child: const Text('Try again'),
-      ));
+      actionLabel = 'Retry';
+      onAction = _loadSavedPreferences;
     } else if (!isAuthenticated && !_isLoadingSavedPreferences) {
-      actions.add(FilledButton(
-        onPressed: _requestPreferenceSignIn,
-        style: FilledButton.styleFrom(backgroundColor: _primaryText),
-        child: const Text('Sign in'),
-      ));
+      actionLabel = 'Sign in';
+      onAction = _requestPreferenceSignIn;
     } else if (isAuthenticated && !_isLoadingSavedPreferences) {
-      if (hasSaved && !_savedPreferencesApplied) {
-        actions.add(FilledButton.icon(
-          onPressed: _applySavedPreferences,
-          style: FilledButton.styleFrom(backgroundColor: _primaryText),
-          icon: const Icon(Icons.tune, size: 17),
-          label: const Text('Apply to search'),
-        ));
-      }
-      if (missing.isNotEmpty) {
-        actions.add(OutlinedButton(
-          onPressed: _openPreferenceSetup,
-          child: Text(hasSaved ? 'Complete preferences' : 'Set preferences'),
-        ));
+      if (hasSaved && !preferencesApplied) {
+        actionLabel = missing.isNotEmpty ? 'Apply' : 'Apply';
+        onAction = _applySavedPreferences;
+      } else if (missing.isNotEmpty) {
+        actionLabel = 'Set up';
+        onAction = _openPreferenceSetup;
       } else if (hasSaved) {
-        actions.add(OutlinedButton(
-          onPressed: _openPreferenceSetup,
-          child: const Text('Edit preferences'),
-        ));
+        actionLabel = 'Edit';
+        onAction = _openPreferenceSetup;
       } else {
-        actions.add(FilledButton(
-          onPressed: _openPreferenceSetup,
-          style: FilledButton.styleFrom(backgroundColor: _primaryText),
-          child: const Text('Set preferences'),
-        ));
+        actionLabel = 'Set up';
+        onAction = _openPreferenceSetup;
       }
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 14),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final compact = constraints.maxWidth < 620;
-          return Container(
-            padding: EdgeInsets.all(compact ? 14 : 18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: _border),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          final compact = constraints.maxWidth < 440;
+          final messageWidth = compact ? 76.0 : 180.0;
+          final statePill = _isLoadingSavedPreferences
+              ? 'LOADING'
+              : _savedPreferencesLoadFailed
+                  ? 'OFFLINE'
+                  : !isAuthenticated
+                      ? 'ACCOUNT'
+                      : preferencesApplied
+                          ? 'APPLIED'
+                          : hasSaved
+                              ? 'SAVED'
+                              : 'SET UP';
+          return Center(
+            child: ConstrainedBox(
+              constraints:
+                  BoxConstraints(maxWidth: math.min(560, constraints.maxWidth)),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 10 : 14,
+                  vertical: compact ? 8 : 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F8FA),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Image.asset(
                       'assets/images/preference.gif',
-                      width: compact ? 52 : 64,
-                      height: compact ? 52 : 64,
+                      width: compact ? 32 : 36,
+                      height: compact ? 32 : 36,
                       fit: BoxFit.contain,
                       excludeFromSemantics: true,
                     ),
-                    SizedBox(width: compact ? 12 : 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            style: GoogleFonts.poppins(
-                              color: _dark,
-                              fontSize: compact ? 14 : 16,
-                              fontWeight: FontWeight.w600,
-                            ),
+                    SizedBox(width: compact ? 6 : 8),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: compact ? 6 : 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        statePill,
+                        style: GoogleFonts.poppins(
+                          color: const Color(0xFF596273),
+                          fontSize: compact ? 8 : 9,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: compact ? 5 : 8),
+                    Flexible(
+                      child: SizedBox(
+                        width: messageWidth,
+                        child: Text(
+                          message,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            color: _dark,
+                            fontSize: compact ? 11 : 12,
+                            fontWeight: FontWeight.w500,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            message,
-                            style: GoogleFonts.poppins(
-                              color: const Color(0xFF6B7280),
-                              fontSize: compact ? 12 : 13,
-                              height: 1.4,
-                            ),
-                          ),
-                          if (isAuthenticated &&
-                              !_isLoadingSavedPreferences &&
-                              !_savedPreferencesLoadFailed &&
-                              completion is Map) ...[
-                            const SizedBox(height: 8),
-                            Semantics(
-                              label:
-                                  '$completedCount of $totalCount house preferences complete',
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(3),
-                                child: LinearProgressIndicator(
-                                  value: (percent / 100).clamp(0.0, 1.0),
-                                  minHeight: 5,
-                                  color: _primaryText,
-                                  backgroundColor: const Color(0xFFE5E7EB),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '$completedCount of $totalCount preferences set',
-                              style: GoogleFonts.poppins(
-                                color: const Color(0xFF6B7280),
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ],
+                        ),
                       ),
                     ),
                     if (_isLoadingSavedPreferences) ...[
-                      const SizedBox(width: 12),
-                      const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: compact ? 14 : 16,
+                        height: compact ? 14 : 16,
+                        child: const CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ],
+                    if (actionLabel.isNotEmpty) ...[
+                      SizedBox(width: compact ? 2 : 8),
+                      TextButton(
+                        onPressed: onAction,
+                        style: TextButton.styleFrom(
+                          minimumSize: Size.zero,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 8,
+                          ),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          foregroundColor: _primaryText,
+                        ),
+                        child: Text(
+                          actionLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: compact ? 11 : 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ],
                   ],
                 ),
-                if (actions.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: compact
-                        ? Alignment.centerLeft
-                        : Alignment.centerRight,
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: actions,
-                    ),
-                  ),
-                ],
-              ],
+              ),
             ),
           );
         },
@@ -393,6 +414,7 @@ class _SearchViewState extends State<SearchView> {
     if (widget.activeFilters != oldWidget.activeFilters) {
       setState(() {
         _activeFilters = Map.from(widget.activeFilters ?? {});
+        _savedPreferencesApplied = false;
       });
     }
   }
