@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS promotional_push_campaigns (
   property_id uuid REFERENCES properties(id) ON DELETE SET NULL,
   title varchar(80) NOT NULL,
   body varchar(180) NOT NULL,
-  image_url text NOT NULL,
+  image_url text,
   audience jsonb NOT NULL DEFAULT '{}'::jsonb,
   status text NOT NULL DEFAULT 'queued',
   eligible_count integer NOT NULL DEFAULT 0,
@@ -53,6 +53,8 @@ CREATE INDEX IF NOT EXISTS promotional_push_campaigns_created_idx
   ON promotional_push_campaigns(created_at DESC);
 CREATE INDEX IF NOT EXISTS promotional_push_campaigns_status_idx
   ON promotional_push_campaigns(status, created_at);
+
+ALTER TABLE promotional_push_campaigns ALTER COLUMN image_url DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS promotional_push_deliveries (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

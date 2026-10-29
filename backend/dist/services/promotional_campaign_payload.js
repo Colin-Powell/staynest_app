@@ -4,13 +4,13 @@ export function buildPromotionalCampaignMessage(input) {
         notification: {
             title: input.title,
             body: input.body,
-            imageUrl: input.imageUrl,
+            ...(input.imageUrl ? { imageUrl: input.imageUrl } : {}),
         },
         android: {
             priority: 'high',
             notification: {
                 channelId: 'promotions',
-                imageUrl: input.imageUrl,
+                ...(input.imageUrl ? { imageUrl: input.imageUrl } : {}),
             },
         },
         data: {
@@ -18,7 +18,7 @@ export function buildPromotionalCampaignMessage(input) {
             campaignId: input.campaignId,
             propertyId: input.propertyId,
             route: `/properties/${input.propertyId}`,
-            imageUrl: input.imageUrl,
+            imageUrl: input.imageUrl ?? '',
         },
     };
 }

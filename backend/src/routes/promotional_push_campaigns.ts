@@ -6,8 +6,8 @@ import { recordAdminAudit } from '../services/audit_service.js';
 import {
   buildCampaignRecipientQuery,
   hasCampaignAdminRole,
-  isApprovedCampaignImage,
   isEligibleCampaignAvailability,
+  normalizeCampaignImageUrl,
   normalizeCampaignAudience,
 } from '../services/promotional_campaign_policy.js';
 
@@ -62,10 +62,14 @@ router.get('/properties', requireCurrentAdmin, async (req, res, next) => {
        LIMIT 50`,
       [search],
     );
-    res.json({ data: result.rows.map((property) => ({
-      ...property,
-      image_valid: isApprovedCampaignImage(property.image_url),
-    })) });
+    res.json({ data: result.rows.map((property) => {
+      const campaignImageUrl = normalizeCampaignImageUrl(property.image_url);
+      return {
+        ...property,
+        campaign_image_url: campaignImageUrl,
+        image_valid: campaignImageUrl !== null,
+      };
+    }) });
   } catch (error) { next(error); }
 });
 
@@ -78,9 +82,6 @@ router.post('/estimate', requireCurrentAdmin, async (req, res, next) => {
     }
     const property = await loadEligibleProperty(propertyId);
     if (!property) return res.status(404).json({ error: 'This property is not eligible for a campaign.' });
-    if (!isApprovedCampaignImage(property.image_url)) {
-      return res.status(422).json({ error: 'The listing does not have a valid public Cloudinary image.' });
-    }
     const count = await estimateAudience(property, audience);
     res.json({ data: {
       estimatedRecipients: count,
@@ -157,8 +158,7 @@ router.post('/', requireCurrentAdmin, async (req, res, next) => {
     const propertyResult = await client.query(
       `SELECT p.id, p.title, p.category, p.city, p.availability_status, p.image_url
        FROM properties p WHERE p.id = $1 AND p.status = 'approved'
-         AND lower(coalesce(p.availability_status, 'unknown')) NOT IN
-           ('rented', 'fully_booked', 'maintenance', 'inactive', 'archived', 'expired', 'deleted', 'unavailable')
+         AND lower(coalesce(p.availability_status, '')) IN ('available', 'pending_booking')
        FOR SHARE`,
       [propertyId],
     );
@@ -167,10 +167,7 @@ router.post('/', requireCurrentAdmin, async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(409).json({ error: 'This property is no longer eligible for a campaign.' });
     }
-    if (!isApprovedCampaignImage(property.image_url)) {
-      await client.query('ROLLBACK');
-      return res.status(422).json({ error: 'The listing does not have a valid public Cloudinary image.' });
-    }
+    const imageUrl = normalizeCampaignImageUrl(property.image_url);
 
     const recipientQuery = buildCampaignRecipientQuery(property, audience);
     const recipientCountResult = await client.query(
@@ -188,7 +185,7 @@ router.post('/', requireCurrentAdmin, async (req, res, next) => {
          (name, admin_id, property_id, title, body, image_url, audience, eligible_count, idempotency_key)
        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
        RETURNING id, status, eligible_count, created_at`,
-      [name || null, req.auth!.id, property.id, title, body, property.image_url, JSON.stringify(audience), eligibleCount, idempotencyKey],
+      [name || null, req.auth!.id, property.id, title, body, imageUrl, JSON.stringify(audience), eligibleCount, idempotencyKey],
     );
     const campaign = campaignResult.rows[0];
     await client.query(

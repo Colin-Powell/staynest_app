@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/super_admin_service.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -27,7 +29,10 @@ class SuperAdminDashboard extends StatefulWidget {
 
 class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   Map<String, dynamic> _overview = {};
+  Map<String, dynamic> _propertyMap = {};
   bool _loading = true;
+  bool _mapLoading = true;
+  String? _mapError;
 
   @override
   void initState() {
@@ -48,6 +53,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+
+    try {
+      final data = await SuperAdminService.fetchPropertyMap();
+      if (mounted) setState(() => _propertyMap = data);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _mapError = 'Property locations could not be loaded.');
+      }
+    } finally {
+      if (mounted) setState(() => _mapLoading = false);
+    }
   }
 
   double _number(dynamic value) {
@@ -62,6 +78,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
       for (final row in rows.whereType<Map>())
         row['label']?.toString() ?? 'Unknown': _number(row['value']).toInt(),
     };
+  }
+
+  List<Map<String, dynamic>> get _mapProperties {
+    final properties = _propertyMap['properties'];
+    if (properties is! List) return const [];
+    return properties
+        .whereType<Map>()
+        .map((property) => Map<String, dynamic>.from(property))
+        .toList();
+  }
+
+  Map<String, dynamic> get _mapSummary {
+    final summary = _propertyMap['summary'];
+    return summary is Map ? Map<String, dynamic>.from(summary) : const {};
   }
 
   // Helper to wrap horizontally scrolling areas with a fade + indicator
@@ -106,7 +136,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       gradient: LinearGradient(
                         begin: Alignment.centerRight,
                         end: Alignment.centerLeft,
-                        colors: [_bg, _bg.withOpacity(0.0)],
+                        colors: [_bg, _bg.withValues(alpha: 0.0)],
                       ),
                     ),
                   ),
@@ -135,7 +165,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Firebase overview',
+                    'StayNest operations',
                     style: GoogleFonts.inter(
                       fontSize: 22,
                       fontWeight: FontWeight.w400,
@@ -144,24 +174,16 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                     ),
                   ),
                   const SizedBox(height: 24),
-
-                  // 1. STATS ROW
+                  _buildPropertyMap(),
+                  const SizedBox(height: 16),
                   _buildStatsGrid(context),
                   const SizedBox(height: 16),
-
-                  // 2. MAIN ANALYTICS
                   _buildAnalyticsGrid1(context),
                   const SizedBox(height: 16),
-
-                  // 3. RETENTION & COHORTS
                   _buildAnalyticsGrid2(context),
                   const SizedBox(height: 16),
-
-                  // 4. LISTS
                   _buildListsGrid(context),
                   const SizedBox(height: 16),
-
-                  // 5. MAIN CONTENT AREA
                   _buildMainContentArea(context),
                 ],
               ),
@@ -177,53 +199,272 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   // ---------------------------------------------------------------------------
   Widget _buildStatsGrid(BuildContext context) {
     final monthlyRevenue = _number(_overview['monthlyRevenue']);
-    final stats = [
-      _StatCard(
-          title: 'Total Users',
-          value: _loading ? '...' : '${_overview['totalUsers'] ?? 0}',
-          trend: 'All registered accounts'),
-      _StatCard(
-          title: 'Total Properties',
-          value: _loading ? '...' : '${_overview['totalProperties'] ?? 0}',
-          trend: 'Submitted listings'),
-      _StatCard(
-          title: 'Pending Operations',
-          value: _loading ? '...' : '${_overview['pendingVerifications'] ?? 0}',
-          trend: 'KYC reviews waiting'),
-      _StatCard(
-          title: '30-Day Revenue',
-          value: _loading ? '...' : 'KSh ${monthlyRevenue.toStringAsFixed(0)}',
-          trend: 'Completed bookings'),
+    final metrics = [
+      (
+        'Registered users',
+        _loading ? '...' : '${_overview['totalUsers'] ?? 0}',
+        '+${_overview['newUsersThisWeek'] ?? 0} this week',
+        _gaBlue
+      ),
+      (
+        'Approved listings',
+        _loading ? '...' : '${_overview['activeListings'] ?? 0}',
+        '${_overview['pendingProperties'] ?? 0} awaiting review',
+        _gaGreen
+      ),
+      (
+        'Pending bookings',
+        _loading ? '...' : '${_overview['pendingBookings'] ?? 0}',
+        '${_overview['pendingVerifications'] ?? 0} KYC reviews',
+        _gaPink
+      ),
+      (
+        'Revenue · 30 days',
+        _loading ? '...' : 'KSh ${monthlyRevenue.toStringAsFixed(0)}',
+        '${_overview['weeklyConfirmedBookings'] ?? 0} bookings confirmed this week',
+        _greyDark
+      ),
     ];
 
     return LayoutBuilder(builder: (context, constraints) {
-      if (constraints.maxWidth >= 1024) {
-        return Row(
-          children: stats
-              .map((stat) => Expanded(
-                    child: Padding(
-                        padding:
-                            EdgeInsets.only(right: stat == stats.last ? 0 : 16),
-                        child: stat),
+      final columns = constraints.maxWidth >= 900
+          ? 4
+          : constraints.maxWidth >= 520
+              ? 2
+              : 1;
+      final itemWidth = (constraints.maxWidth - (columns - 1) * 20) / columns;
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _divider),
+        ),
+        child: Wrap(
+          spacing: 20,
+          runSpacing: 18,
+          children: metrics
+              .map((metric) => SizedBox(
+                    width: itemWidth,
+                    child: _buildMetricCell(
+                      metric.$1,
+                      metric.$2,
+                      metric.$3,
+                      metric.$4,
+                    ),
                   ))
               .toList(),
-        );
-      } else {
-        return _buildScrollableWithIndicator(
-          height: 120,
-          child: Row(
-            children: stats
-                .map((stat) => SizedBox(
-                      width: 240,
-                      child: Padding(
-                          padding: const EdgeInsets.only(right: 16),
-                          child: stat),
-                    ))
-                .toList(),
-          ),
-        );
-      }
+        ),
+      );
     });
+  }
+
+  Widget _buildMetricCell(
+      String title, String value, String detail, Color color) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 3,
+          height: 48,
+          margin: const EdgeInsets.only(right: 12, top: 2),
+          decoration: BoxDecoration(
+              color: color, borderRadius: BorderRadius.circular(2)),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: GoogleFonts.inter(fontSize: 12, color: _greyLight)),
+              const SizedBox(height: 4),
+              Text(value,
+                  style: GoogleFonts.inter(
+                      fontSize: 21, fontWeight: FontWeight.w600, color: _dark)),
+              const SizedBox(height: 3),
+              Text(detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(fontSize: 11, color: _greyLight)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPropertyMap() {
+    final summary = _mapSummary;
+    final properties = _mapProperties;
+    return _ChartCardBase(
+      title: 'Property locations across Kenya',
+      height: 500,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            FlutterMap(
+              options: const MapOptions(
+                initialCenter: LatLng(-0.4, 37.8),
+                initialZoom: 6.1,
+                minZoom: 4.5,
+                maxZoom: 17,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.rashoti.staynest',
+                ),
+                MarkerLayer(markers: _buildPropertyMarkers(properties)),
+                const RichAttributionWidget(
+                  attributions: [
+                    TextSourceAttribution('OpenStreetMap contributors')
+                  ],
+                ),
+              ],
+            ),
+            Positioned(
+              top: 12,
+              left: 12,
+              child: _MapSummaryBadge(
+                mapped: _number(summary['mapped_properties']).toInt(),
+                total: _number(summary['total_properties']).toInt(),
+                loading: _mapLoading,
+                error: _mapError,
+              ),
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: _MapLegend(),
+            ),
+            if (!_mapLoading && properties.isEmpty)
+              Center(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.94),
+                      borderRadius: BorderRadius.circular(6)),
+                  child: Text(
+                      _mapError ?? 'No property coordinates in Kenya yet.',
+                      style: GoogleFonts.inter(fontSize: 12, color: _greyDark)),
+                ),
+              ),
+            Positioned(
+              bottom: 10,
+              left: 10,
+              child: _MapUnlocatedBadge(
+                count: _number(summary['unmapped_properties']).toInt(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Marker> _buildPropertyMarkers(List<Map<String, dynamic>> properties) {
+    final buckets = <String, List<Map<String, dynamic>>>{};
+    for (final property in properties) {
+      final latitude = double.tryParse('${property['lat']}');
+      final longitude = double.tryParse('${property['lng']}');
+      if (latitude == null || longitude == null) continue;
+      final key = '${(latitude / 0.22).round()}_${(longitude / 0.22).round()}';
+      (buckets[key] ??= []).add(property);
+    }
+
+    return buckets.values.map((bucket) {
+      final latitude = bucket
+              .map((property) => double.parse('${property['lat']}'))
+              .reduce((a, b) => a + b) /
+          bucket.length;
+      final longitude = bucket
+              .map((property) => double.parse('${property['lng']}'))
+              .reduce((a, b) => a + b) /
+          bucket.length;
+      final color = _clusterColor(bucket);
+      final size = bucket.length == 1 ? 18.0 : 40.0;
+      return Marker(
+        point: LatLng(latitude, longitude),
+        width: size,
+        height: size,
+        child: GestureDetector(
+          onTap: () => _showPropertyCluster(bucket),
+          child: Container(
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: bucket.length == 1 ? 0.88 : 0.94),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
+              boxShadow: const [
+                BoxShadow(color: Color(0x33000000), blurRadius: 5)
+              ],
+            ),
+            alignment: Alignment.center,
+            child: bucket.length == 1
+                ? const SizedBox.shrink()
+                : Text('${bucket.length}',
+                    style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700)),
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  Color _clusterColor(List<Map<String, dynamic>> properties) {
+    if (properties.any((property) => property['status'] == 'pending_review')) {
+      return const Color(0xFFD99000);
+    }
+    if (properties.every((property) => property['status'] == 'approved')) {
+      return _gaGreen;
+    }
+    return _greyDark;
+  }
+
+  void _showPropertyCluster(List<Map<String, dynamic>> properties) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: SizedBox(
+          height: 320,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: Text('${properties.length} mapped properties',
+                    style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: _dark)),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: properties.length,
+                  itemBuilder: (context, index) {
+                    final property = properties[index];
+                    return ListTile(
+                      title: Text(
+                          property['title']?.toString() ?? 'Untitled listing'),
+                      subtitle: Text(
+                          '${property['city'] ?? property['town'] ?? 'Kenya'} · ${property['status'] ?? 'unknown'}'),
+                      leading: Icon(Icons.location_on_outlined,
+                          color: _clusterColor([property])),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -311,9 +552,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
             const SizedBox(width: 16),
             Expanded(child: _buildCohortTableCard(height: 340)),
             const SizedBox(width: 16),
-            Expanded(
-                child: _buildEmptyStateCard('Flagged Properties Impact',
-                    height: 340)),
+            Expanded(child: _buildOperationsBreakdownCard(height: 340)),
           ],
         );
       } else {
@@ -328,13 +567,73 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
               const SizedBox(width: 16),
               SizedBox(
                   width: 320,
-                  child: _buildEmptyStateCard('Flagged Properties Impact',
-                      height: 320)),
+                  child: _buildOperationsBreakdownCard(height: 320)),
             ],
           ),
         );
       }
     });
+  }
+
+  Widget _buildOperationsBreakdownCard({required double height}) {
+    final funnel = _overview['verificationFunnel'] is Map
+        ? Map<String, dynamic>.from(_overview['verificationFunnel'] as Map)
+        : const <String, dynamic>{};
+    return _ChartCardBase(
+      title: 'Moderation & verification queue',
+      height: height,
+      child: Column(
+        children: [
+          _buildAdminQueueRow(
+            'Listings awaiting review',
+            _overview['pendingProperties'],
+            const Color(0xFFD99000),
+          ),
+          const Divider(height: 1, color: _divider),
+          _buildAdminQueueRow(
+            'KYC submitted',
+            funnel['submitted'],
+            _gaBlue,
+          ),
+          const Divider(height: 1, color: _divider),
+          _buildAdminQueueRow(
+            'KYC under review',
+            funnel['under_review'],
+            _gaPink,
+          ),
+          const Divider(height: 1, color: _divider),
+          _buildAdminQueueRow(
+            'Pending bookings',
+            _overview['pendingBookings'],
+            _gaGreen,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdminQueueRow(String title, dynamic count, Color color) {
+    return Expanded(
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(fontSize: 12, color: _greyDark)),
+          ),
+          Text(_loading ? '...' : '${count ?? 0}',
+              style: GoogleFonts.inter(
+                  fontSize: 15, fontWeight: FontWeight.w600, color: _dark)),
+        ],
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -398,7 +697,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           children: [
             Expanded(flex: 2, child: _buildLiveSummarySection()),
             const SizedBox(width: 16),
-            Expanded(flex: 1, child: _buildQuickActionsSection()),
+            Expanded(flex: 1, child: _buildAttentionSection()),
           ],
         );
       } else {
@@ -407,7 +706,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           children: [
             _buildLiveSummarySection(),
             const SizedBox(height: 16),
-            _buildQuickActionsSection(),
+            _buildAttentionSection(),
           ],
         );
       }
@@ -434,18 +733,24 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  Widget _buildQuickActionsSection() {
+  Widget _buildAttentionSection() {
     return _ChartCardBase(
-      title: 'Quick Actions',
+      title: 'Requires attention',
       height: 300,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ActionButton(label: 'Verify Listings', onTap: () {}),
-          const SizedBox(height: 8),
-          _ActionButton(label: 'Review KYC', onTap: () {}),
-          const SizedBox(height: 8),
-          _ActionButton(label: 'Moderation Queue', onTap: () {}),
+          _buildAdminQueueRow('Listings awaiting review',
+              _overview['pendingProperties'], const Color(0xFFD99000)),
+          const Divider(height: 1, color: _divider),
+          _buildAdminQueueRow('KYC reviews waiting',
+              _overview['pendingVerifications'], _gaPink),
+          const Divider(height: 1, color: _divider),
+          _buildAdminQueueRow(
+              'Pending bookings', _overview['pendingBookings'], _gaBlue),
+          const Divider(height: 1, color: _divider),
+          _buildAdminQueueRow('Listings without Kenya coordinates',
+              _mapSummary['unmapped_properties'], _greyDark),
         ],
       ),
     );
@@ -481,7 +786,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(PhosphorIconsRegular.chartLineDown,
-              size: 32, color: _greyLight.withOpacity(0.5)),
+              size: 32, color: _greyLight.withValues(alpha: 0.5)),
           const SizedBox(height: 16),
           Text(message,
               style: GoogleFonts.inter(fontSize: 13, color: _greyLight)),
@@ -792,8 +1097,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 gridData: const FlGridData(show: false),
                 borderData: FlBorderData(
                     show: true,
-                    border:
-                        const Border(bottom: BorderSide(color: _divider, width: 1))),
+                    border: const Border(
+                        bottom: BorderSide(color: _divider, width: 1))),
                 barGroups: List.generate(
                   backlogData.length,
                   (i) => BarChartGroupData(x: i, barRods: [
@@ -1173,14 +1478,6 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     );
   }
 
-  Widget _buildEmptyStateCard(String title, {required double height}) {
-    return _ChartCardBase(
-      title: title,
-      height: height,
-      child: _buildEmptyChartState('No data available'),
-    );
-  }
-
   Widget _buildListCard(String title, Map<String, int> data,
       {String? emptyMessage, required double height}) {
     int maxVal = data.isEmpty ? 1 : data.values.reduce((a, b) => a > b ? a : b);
@@ -1262,6 +1559,99 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 // HELPER CLASSES
 // ---------------------------------------------------------------------------
 
+class _MapSummaryBadge extends StatelessWidget {
+  const _MapSummaryBadge({
+    required this.mapped,
+    required this.total,
+    required this.loading,
+    this.error,
+  });
+
+  final int mapped;
+  final int total;
+  final bool loading;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: _divider),
+      ),
+      child: Text(
+        error ??
+            (loading
+                ? 'Loading property locations...'
+                : '$mapped of $total listings mapped'),
+        style: GoogleFonts.inter(
+            fontSize: 11, fontWeight: FontWeight.w600, color: _dark),
+      ),
+    );
+  }
+}
+
+class _MapLegend extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: _divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _legendItem(_gaGreen, 'Approved'),
+          const SizedBox(height: 6),
+          _legendItem(const Color(0xFFD99000), 'Needs review'),
+          const SizedBox(height: 6),
+          _legendItem(_greyDark, 'Other status'),
+        ],
+      ),
+    );
+  }
+
+  Widget _legendItem(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 7),
+        Text(label, style: GoogleFonts.inter(fontSize: 10, color: _greyDark)),
+      ],
+    );
+  }
+}
+
+class _MapUnlocatedBadge extends StatelessWidget {
+  const _MapUnlocatedBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    if (count == 0) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: _divider),
+      ),
+      child: Text('$count listings missing Kenya coordinates',
+          style: GoogleFonts.inter(fontSize: 10, color: _greyDark)),
+    );
+  }
+}
+
 class _ChartCardBase extends StatelessWidget {
   final String title;
   final Widget child;
@@ -1306,80 +1696,6 @@ class _ChartCardBase extends StatelessWidget {
           const SizedBox(height: 24),
           Expanded(child: child),
         ],
-      ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final String trend;
-
-  const _StatCard({
-    required this.title,
-    required this.value,
-    required this.trend,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _divider, width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(title,
-              style: GoogleFonts.inter(
-                  fontSize: 13, fontWeight: FontWeight.w500, color: _greyDark)),
-          Text(value,
-              style: GoogleFonts.inter(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w400,
-                  color: _dark,
-                  letterSpacing: -0.5)),
-          Text(trend,
-              style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: _greyLight)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-
-  const _ActionButton({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 12),
-        decoration: const BoxDecoration(
-          color: Colors.transparent,
-        ),
-        child: Row(
-          children: [
-            Text(label,
-                style: GoogleFonts.inter(
-                    fontSize: 14, fontWeight: FontWeight.w500, color: _gaBlue)),
-            const Spacer(),
-            const Icon(PhosphorIconsRegular.arrowRight, color: _gaBlue, size: 16),
-          ],
-        ),
       ),
     );
   }

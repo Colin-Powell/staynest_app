@@ -5,6 +5,7 @@ import {
   hasCampaignAdminRole,
   isApprovedCampaignImage,
   isEligibleCampaignAvailability,
+  normalizeCampaignImageUrl,
   normalizeCampaignAudience,
 } from '../services/promotional_campaign_policy.js';
 import { buildPromotionalCampaignMessage } from '../services/promotional_campaign_payload.js';
@@ -86,7 +87,22 @@ test('campaign FCM payload includes only the approved image and exact property r
   assert.equal(JSON.stringify(message.data).includes('private-device-token'), false);
 });
 
-test('campaign property images must come from the configured Cloudinary image path over HTTPS', () => {
+test('campaign FCM payload falls back to text when a listing has no image', () => {
+  const message = buildPromotionalCampaignMessage({
+    token: 'private-device-token',
+    title: 'Find a home in Kilifi',
+    body: 'Explore this approved listing.',
+    imageUrl: null,
+    campaignId: '123e4567-e89b-42d3-a456-426614174001',
+    propertyId: '123e4567-e89b-42d3-a456-426614174000',
+  });
+
+  assert.equal('imageUrl' in message.notification, false);
+  assert.equal('imageUrl' in message.android.notification, false);
+  assert.equal(message.data.imageUrl, '');
+});
+
+test('campaign property images normalize Cloudinary URLs and relative public IDs safely', () => {
   assert.equal(
     isApprovedCampaignImage(
       'https://res.cloudinary.com/staynest/image/upload/v1/listing.jpg',
@@ -99,7 +115,11 @@ test('campaign property images must come from the configured Cloudinary image pa
       'http://res.cloudinary.com/staynest/image/upload/listing.jpg',
       'staynest',
     ),
-    false,
+    true,
+  );
+  assert.equal(
+    normalizeCampaignImageUrl('staynest/listing', 'staynest'),
+    'https://res.cloudinary.com/staynest/image/upload/staynest/listing.jpg',
   );
   assert.equal(
     isApprovedCampaignImage(

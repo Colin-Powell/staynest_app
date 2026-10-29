@@ -20,18 +20,32 @@ export function normalizeCampaignAudience(value) {
 export function isEligibleCampaignAvailability(value) {
     return new Set(['available', 'pending_booking']).has(String(value ?? '').trim().toLowerCase());
 }
-export function isApprovedCampaignImage(value, cloudName = env.cloudinaryCloudName) {
-    if (typeof value !== 'string' || value.length > 2048 || !cloudName)
-        return false;
+export function normalizeCampaignImageUrl(value, cloudName = env.cloudinaryCloudName) {
+    if (typeof value !== 'string' || value.trim().length === 0 || value.length > 2048)
+        return null;
+    const image = value.trim();
     try {
-        const url = new URL(value);
-        return url.protocol === 'https:' &&
+        const url = new URL(image);
+        if (cloudName &&
+            (url.protocol === 'https:' || url.protocol === 'http:') &&
             url.hostname === 'res.cloudinary.com' &&
-            url.pathname.startsWith(`/${cloudName}/image/upload/`);
+            url.pathname.startsWith(`/${cloudName}/image/upload/`)) {
+            url.protocol = 'https:';
+            return url.toString();
+        }
+        return null;
     }
     catch {
-        return false;
+        if (!cloudName || image.startsWith('/') || image.includes('..') ||
+            !/^[A-Za-z0-9_./-]+$/.test(image) || !image.includes('/')) {
+            return null;
+        }
+        const publicId = image.includes('.') ? image : `${image}.jpg`;
+        return `https://res.cloudinary.com/${cloudName}/image/upload/${publicId}`;
     }
+}
+export function isApprovedCampaignImage(value, cloudName = env.cloudinaryCloudName) {
+    return normalizeCampaignImageUrl(value, cloudName) !== null;
 }
 export function buildCampaignRecipientQuery(property, audience) {
     const conditions = [

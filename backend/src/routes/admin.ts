@@ -331,6 +331,47 @@ router.get('/properties', requireAuth, authorize('admin'), async (req: Request, 
   }
 });
 
+router.get('/property-map', requireAuth, authorize('admin'), async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [propertiesRes, summaryRes] = await Promise.all([
+      query(`
+        SELECT id, title, category, city, town, lat, lng, status, availability_status
+        FROM properties
+        WHERE lat IS NOT NULL AND lng IS NOT NULL
+          AND lat BETWEEN -5.0 AND 5.5
+          AND lng BETWEEN 33.5 AND 42.5
+        ORDER BY created_at DESC
+      `),
+      query(`
+        SELECT COUNT(*)::int AS total_properties,
+               COUNT(*) FILTER (
+                 WHERE lat IS NOT NULL AND lng IS NOT NULL
+                   AND lat BETWEEN -5.0 AND 5.5 AND lng BETWEEN 33.5 AND 42.5
+               )::int AS mapped_properties,
+               COUNT(*) FILTER (WHERE COALESCE(status, 'pending_review') = 'approved')::int AS approved,
+               COUNT(*) FILTER (WHERE COALESCE(status, 'pending_review') = 'pending_review')::int AS pending_review,
+               COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected
+        FROM properties
+      `),
+    ]);
+    const summary = summaryRes.rows[0] ?? {};
+    res.json({
+      data: {
+        properties: propertiesRes.rows,
+        summary: {
+          ...summary,
+          unmapped_properties: Math.max(
+            0,
+            Number(summary.total_properties ?? 0) - Number(summary.mapped_properties ?? 0),
+          ),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /admin/kyc - List KYC verifications for review with metadata
 router.get('/kyc', requireAuth, authorize('admin'), async (req: Request, res: Response, next: NextFunction) => {
   try {

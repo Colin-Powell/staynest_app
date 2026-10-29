@@ -2,7 +2,7 @@ export interface PromotionalCampaignPayloadInput {
   token: string;
   title: string;
   body: string;
-  imageUrl: string;
+  imageUrl: string | null;
   campaignId: string;
   propertyId: string;
 }
@@ -13,13 +13,13 @@ export function buildPromotionalCampaignMessage(input: PromotionalCampaignPayloa
     notification: {
       title: input.title,
       body: input.body,
-      imageUrl: input.imageUrl,
+      ...(input.imageUrl ? { imageUrl: input.imageUrl } : {}),
     },
     android: {
       priority: 'high' as const,
       notification: {
         channelId: 'promotions',
-        imageUrl: input.imageUrl,
+        ...(input.imageUrl ? { imageUrl: input.imageUrl } : {}),
       },
     },
     data: {
@@ -27,7 +27,7 @@ export function buildPromotionalCampaignMessage(input: PromotionalCampaignPayloa
       campaignId: input.campaignId,
       propertyId: input.propertyId,
       route: `/properties/${input.propertyId}`,
-      imageUrl: input.imageUrl,
+      imageUrl: input.imageUrl ?? '',
     },
   };
 }

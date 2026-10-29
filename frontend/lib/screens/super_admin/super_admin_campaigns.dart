@@ -1,10 +1,21 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:property_app/services/super_admin_service.dart';
-import 'package:property_app/theme.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:uuid/uuid.dart';
+
+import 'package:property_app/services/super_admin_service.dart';
+import 'package:property_app/widgets/property_image.dart';
+
+// ─── Google Analytics / Firebase Design System Constants ──────────────────────
+const Color _bg = Color(0xFFF3F4F6); // Soft GA background
+const Color _dark = Color(0xFF111827);
+const Color _grey = Color(0xFF6B7280);
+const Color _greyLight = Color(0xFF9CA3AF);
+const Color _surface = Colors.white;
+const Color _divider = Color(0xFFE5E7EB);
+const Color _primaryBlue = Color(0xFF1A73E8); // Google Blue
+const Color _successGreen = Color(0xFF1E8E3E); // Google Green
 
 class SuperAdminCampaignsPage extends StatefulWidget {
   const SuperAdminCampaignsPage({super.key});
@@ -19,21 +30,28 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
   final _nameController = TextEditingController();
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
+
   Timer? _searchTimer;
   Timer? _progressTimer;
+
   List<Map<String, dynamic>> _properties = [];
   List<Map<String, dynamic>> _campaigns = [];
   Map<String, dynamic>? _selectedProperty;
+
   List<String> _audienceNotes = [];
   int? _estimatedRecipients;
   bool _targetLocation = false;
   bool _targetPropertyType = false;
+
   bool _loadingProperties = true;
   bool _loadingCampaigns = false;
   bool _estimating = false;
   bool _sending = false;
   String? _error;
   String? _pendingIdempotencyKey;
+
+  // Firebase-style stepper state
+  int _currentStep = 0;
 
   Map<String, bool> get _audience => {
         'location': _targetLocation,
@@ -80,12 +98,13 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
     super.dispose();
   }
 
+  // ─── Logic Methods (Preserved completely) ───────────────────────────────────
+
   Future<void> _loadProperties({String? search}) async {
     setState(() => _loadingProperties = true);
     try {
-      final properties = await SuperAdminService.fetchCampaignProperties(
-        search: search,
-      );
+      final properties =
+          await SuperAdminService.fetchCampaignProperties(search: search);
       if (mounted) setState(() => _properties = properties);
     } catch (error) {
       if (mounted) {
@@ -128,6 +147,9 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
           city.isEmpty ? 'Explore your next home' : 'Find a home in $city';
       _bodyController.text =
           'Explore this $category, "$title", on StayNest. View the photos and listing details.';
+
+      // Auto-advance to Compose Step
+      _currentStep = 1;
     });
     await _estimateAudience();
   }
@@ -164,47 +186,48 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
   Future<void> _confirmAndSend() async {
     final property = _selectedProperty;
     if (property == null || !_canSend) return;
+
+    // Quick confirmation modal
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Send promotional campaign?'),
-        content: SizedBox(
-          width: 440,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _PropertyImage(url: property['image_url']?.toString(), size: 96),
-              const SizedBox(height: 12),
-              Text(property['title']?.toString() ?? 'Selected listing',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              Text(
-                  'Status: ${property['status']} / ${property['availability_status']}'),
-              const SizedBox(height: 8),
-              Text(_titleController.text.trim()),
-              const SizedBox(height: 4),
-              Text(_bodyController.text.trim()),
-              const SizedBox(height: 12),
-              Text('Audience: $_audienceSummary'),
-              Text(
-                  'Estimated opted-in tenant recipients: $_estimatedRecipients'),
-              const Text('Category: Promotional property notification'),
-            ],
-          ),
+        backgroundColor: _surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Send Campaign?',
+            style:
+                GoogleFonts.inter(fontWeight: FontWeight.w700, color: _dark)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This push notification will be sent to approximately $_estimatedRecipients tenants.',
+              style: GoogleFonts.inter(color: _grey),
+            ),
+            const SizedBox(height: 8),
+            Text('Property: ${property['title'] ?? 'Selected listing'}'),
+            Text('Audience: $_audienceSummary'),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel',
+                style: GoogleFonts.inter(
+                    color: _dark, fontWeight: FontWeight.w600)),
           ),
-          FilledButton.icon(
+          ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            icon: const Icon(Icons.send, size: 18),
-            label: const Text('Send campaign'),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryBlue, elevation: 0),
+            child: Text('Send Campaign',
+                style: GoogleFonts.inter(
+                    color: Colors.white, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
     );
+
     if (confirmed != true || !mounted) return;
 
     setState(() => _sending = true);
@@ -219,14 +242,28 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
       );
       _pendingIdempotencyKey = null;
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Campaign accepted for processing.')),
+        SnackBar(
+          content: Text('Campaign processing initiated.',
+              style: GoogleFonts.inter(color: Colors.white)),
+          backgroundColor: _dark,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
+
+      setState(() {
+        _currentStep = 0; // Reset
+        _selectedProperty = null;
+      });
       await _loadCampaigns();
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Campaign could not be submitted.')),
+          SnackBar(
+              content: Text('Campaign submission failed.',
+                  style: GoogleFonts.inter(color: Colors.white)),
+              backgroundColor: Colors.redAccent),
         );
       }
     } finally {
@@ -238,7 +275,6 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
     return !_sending &&
         !_estimating &&
         _selectedProperty != null &&
-        _selectedProperty?['image_valid'] == true &&
         (_estimatedRecipients ?? 0) > 0 &&
         _titleController.text.trim().isNotEmpty &&
         _titleController.text.trim().length <= 80 &&
@@ -254,214 +290,466 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
         : 'KSh ${value.toStringAsFixed(0)}';
   }
 
+  // ─── UI Layouts ─────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.gray50,
+      backgroundColor: _bg,
       body: SafeArea(
         child: RefreshIndicator(
+          color: _primaryBlue,
           onRefresh: () async {
             await Future.wait([_loadProperties(), _loadCampaigns()]);
           },
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1120),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Push campaigns',
-                          style: GoogleFonts.inter(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.gray900,
-                          )),
-                      const SizedBox(height: 20),
-                      if (_error != null) ...[
-                        _InlineError(message: _error!),
-                        const SizedBox(height: 12),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isDesktop = constraints.maxWidth >= 900;
+
+              return SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1440),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                  color: _primaryBlue.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8)),
+                              child: const Icon(PhosphorIconsFill.megaphone,
+                                  color: _primaryBlue, size: 24),
+                            ),
+                            const SizedBox(width: 16),
+                            Text(
+                              'Push Campaigns',
+                              style: GoogleFonts.inter(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w600,
+                                  color: _dark,
+                                  letterSpacing: -0.5),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 32),
+
+                        if (_error != null) ...[
+                          _InlineError(message: _error!),
+                          const SizedBox(height: 24),
+                        ],
+
+                        if (isDesktop)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 6,
+                                child: Column(
+                                  children: [
+                                    _buildFirebaseStepper(),
+                                    const SizedBox(height: 48),
+                                    _buildCampaignHistory(),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 48),
+                              Expanded(
+                                flex: 4,
+                                child: _buildStickyPreviewPanel(),
+                              ),
+                            ],
+                          )
+                        else
+                          Column(
+                            children: [
+                              _buildFirebaseStepper(),
+                              const SizedBox(height: 32),
+                              _buildMobilePreviewPanel(),
+                              const SizedBox(height: 48),
+                              _buildCampaignHistory(),
+                            ],
+                          ),
+
+                        const SizedBox(height: 64),
                       ],
-                      _CampaignSection(
-                        title: '1. Select an approved property',
-                        child: Column(
-                          children: [
-                            TextField(
-                              controller: _searchController,
-                              onChanged: _searchProperties,
-                              decoration: const InputDecoration(
-                                prefixIcon: Icon(Icons.search),
-                                hintText: 'Search title or location',
-                                border: OutlineInputBorder(),
-                                isDense: true,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            if (_selectedProperty != null)
-                              _selectedPropertyView(_selectedProperty!)
-                            else
-                              _propertyResults(),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      _CampaignSection(
-                        title: '2. Compose the message',
-                        child: Column(
-                          children: [
-                            TextField(
-                              controller: _nameController,
-                              maxLength: 100,
-                              decoration: const InputDecoration(
-                                labelText: 'Internal campaign name (optional)',
-                                border: OutlineInputBorder(),
-                                isDense: true,
-                              ),
-                            ),
-                            TextField(
-                              controller: _titleController,
-                              maxLength: 80,
-                              onChanged: (_) => setState(() {}),
-                              decoration: const InputDecoration(
-                                labelText: 'Notification title',
-                                border: OutlineInputBorder(),
-                                isDense: true,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            TextField(
-                              controller: _bodyController,
-                              maxLength: 180,
-                              minLines: 2,
-                              maxLines: 3,
-                              onChanged: (_) => setState(() {}),
-                              decoration: const InputDecoration(
-                                labelText: 'Notification message',
-                                border: OutlineInputBorder(),
-                                alignLabelWithHint: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      _CampaignSection(
-                        title: '3. Choose opted-in tenants',
-                        child: Column(
-                          children: [
-                            CheckboxListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title:
-                                  const Text('All eligible opted-in tenants'),
-                              subtitle: const Text(
-                                  'Includes tenants with a valid active device token.'),
-                              value: !_targetLocation && !_targetPropertyType,
-                              onChanged: (_) => setState(() {
-                                _targetLocation = false;
-                                _targetPropertyType = false;
-                                _estimatedRecipients = null;
-                              }),
-                            ),
-                            CheckboxListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(
-                                  'Saved location matches ${_selectedProperty?['city'] ?? 'property city'}'),
-                              value: _targetLocation,
-                              onChanged: _selectedProperty == null
-                                  ? null
-                                  : (value) => setState(() {
-                                        _targetLocation = value ?? false;
-                                        _estimatedRecipients = null;
-                                      }),
-                            ),
-                            CheckboxListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(
-                                  'Preferred property type matches ${_selectedProperty?['category'] ?? 'property type'}'),
-                              value: _targetPropertyType,
-                              onChanged: _selectedProperty == null
-                                  ? null
-                                  : (value) => setState(() {
-                                        _targetPropertyType = value ?? false;
-                                        _estimatedRecipients = null;
-                                      }),
-                            ),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: OutlinedButton.icon(
-                                onPressed:
-                                    _selectedProperty == null || _estimating
-                                        ? null
-                                        : _estimateAudience,
-                                icon: _estimating
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2),
-                                      )
-                                    : const Icon(Icons.refresh, size: 18),
-                                label: Text(_estimatedRecipients == null
-                                    ? 'Estimate audience'
-                                    : 'Refresh estimate'),
-                              ),
-                            ),
-                            if (_estimatedRecipients != null)
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Text(
-                                    'Estimated recipients: $_estimatedRecipients',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w700),
-                                  ),
-                                ),
-                              ),
-                            for (final note in _audienceNotes)
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(note,
-                                      style: const TextStyle(
-                                          color: AppColors.gray600,
-                                          fontSize: 12)),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      _CampaignSection(
-                        title: '4. Preview',
-                        child: _notificationPreview(),
-                      ),
-                      const SizedBox(height: 16),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: FilledButton.icon(
-                          onPressed: _canSend ? _confirmAndSend : null,
-                          icon: _sending
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.send, size: 18),
-                          label: Text(
-                              _sending ? 'Submitting...' : 'Review and send'),
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      _campaignHistory(),
-                    ],
+                    ),
                   ),
                 ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Firebase Style Stepper ──────────────────────────────────────────────────
+
+  Widget _buildFirebaseStepper() {
+    return Container(
+      decoration: BoxDecoration(
+        color: _surface,
+        border: Border.all(color: _divider),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          _buildStep(
+            index: 0,
+            title: 'Property Selection',
+            isCompleted: _selectedProperty != null && _currentStep > 0,
+            isActive: _currentStep == 0,
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Select an approved property to promote.',
+                    style: GoogleFonts.inter(color: _grey, fontSize: 13)),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _searchController,
+                  onChanged: _searchProperties,
+                  style: GoogleFonts.inter(fontSize: 14),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(PhosphorIconsRegular.magnifyingGlass,
+                        color: _grey, size: 20),
+                    hintText: 'Search title or location',
+                    hintStyle: GoogleFonts.inter(color: _grey, fontSize: 14),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: _divider)),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: _divider)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide:
+                            const BorderSide(color: _primaryBlue, width: 2)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_selectedProperty != null)
+                  _selectedPropertyView(_selectedProperty!)
+                else
+                  _propertyResults(),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: _divider),
+          _buildStep(
+            index: 1,
+            title: 'Compose Message',
+            isCompleted: _titleController.text.isNotEmpty &&
+                _bodyController.text.isNotEmpty &&
+                _currentStep > 1,
+            isActive: _currentStep == 1,
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Draft the push notification content.',
+                    style: GoogleFonts.inter(color: _grey, fontSize: 13)),
+                const SizedBox(height: 16),
+                _buildInputField(
+                    label: 'Campaign Name (Internal)',
+                    controller: _nameController,
+                    hint: 'e.g. Summer Promo - Nairobi'),
+                _buildInputField(
+                    label: 'Notification Title',
+                    controller: _titleController,
+                    maxLength: 80,
+                    onChanged: (_) => setState(() {})),
+                _buildInputField(
+                    label: 'Notification Body',
+                    controller: _bodyController,
+                    maxLength: 180,
+                    maxLines: 3,
+                    onChanged: (_) => setState(() {})),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: (_titleController.text.isNotEmpty &&
+                          _bodyController.text.isNotEmpty)
+                      ? () => setState(() => _currentStep = 2)
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: _primaryBlue,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 16)),
+                  child: Text('Next',
+                      style: GoogleFonts.inter(
+                          color: Colors.white, fontWeight: FontWeight.w600)),
+                )
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: _divider),
+          _buildStep(
+            index: 2,
+            title: 'Target Audience',
+            isCompleted: _estimatedRecipients != null && _currentStep > 2,
+            isActive: _currentStep == 2,
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Select the user segments to receive this campaign.',
+                    style: GoogleFonts.inter(color: _grey, fontSize: 13)),
+                const SizedBox(height: 16),
+                _buildTargetCheckbox(
+                    'All eligible opted-in tenants',
+                    'Includes tenants with a valid active device token.',
+                    !_targetLocation && !_targetPropertyType, (v) {
+                  setState(() {
+                    _targetLocation = false;
+                    _targetPropertyType = false;
+                    _estimatedRecipients = null;
+                  });
+                }),
+                _buildTargetCheckbox(
+                    'Location matches ${_selectedProperty?['city'] ?? 'property city'}',
+                    'Targets users looking in this area.',
+                    _targetLocation,
+                    _selectedProperty == null
+                        ? null
+                        : (v) {
+                            setState(() {
+                              _targetLocation = v ?? false;
+                              _estimatedRecipients = null;
+                            });
+                          }),
+                _buildTargetCheckbox(
+                    'Preference matches ${_selectedProperty?['category'] ?? 'property type'}',
+                    'Targets users seeking this property type.',
+                    _targetPropertyType,
+                    _selectedProperty == null
+                        ? null
+                        : (v) {
+                            setState(() {
+                              _targetPropertyType = v ?? false;
+                              _estimatedRecipients = null;
+                            });
+                          }),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: _selectedProperty == null || _estimating
+                      ? null
+                      : _estimateAudience,
+                  icon: _estimating
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: _primaryBlue))
+                      : const Icon(PhosphorIconsRegular.users, size: 18),
+                  label: Text(_estimatedRecipients == null
+                      ? 'Calculate Audience'
+                      : 'Recalculate'),
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: _primaryBlue,
+                      side: const BorderSide(color: _divider),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 14)),
+                ),
+                if (_estimatedRecipients != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                        color: _primaryBlue.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Row(
+                      children: [
+                        const Icon(PhosphorIconsFill.info,
+                            color: _primaryBlue, size: 20),
+                        const SizedBox(width: 12),
+                        Text(
+                            'Estimated delivery to $_estimatedRecipients users.',
+                            style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w600,
+                                color: _primaryBlue,
+                                fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                ],
+                for (final note in _audienceNotes)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text('• $note',
+                        style: GoogleFonts.inter(color: _grey, fontSize: 12)),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStep(
+      {required int index,
+      required String title,
+      required bool isCompleted,
+      required bool isActive,
+      required Widget content}) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+            left: BorderSide(
+                color: isActive ? _primaryBlue : Colors.transparent, width: 4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _currentStep = index),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: isCompleted
+                          ? _successGreen
+                          : (isActive ? _primaryBlue : _greyLight),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: isCompleted
+                          ? const Icon(Icons.check,
+                              color: Colors.white, size: 16)
+                          : Text('${index + 1}',
+                              style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: isActive || isCompleted
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                        color: isActive || isCompleted ? _dark : _grey),
+                  ),
+                ],
               ),
+            ),
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 300),
+            crossFadeState:
+                isActive ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+            firstChild: Padding(
+              padding: const EdgeInsets.only(left: 60, right: 24, bottom: 24),
+              child: content,
+            ),
+            secondChild: const SizedBox(width: double.infinity),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputField(
+      {required String label,
+      required TextEditingController controller,
+      int maxLines = 1,
+      int? maxLength,
+      String? hint,
+      Function(String)? onChanged}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: GoogleFonts.inter(
+                  fontSize: 13, fontWeight: FontWeight.w600, color: _dark)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: controller,
+            maxLines: maxLines,
+            maxLength: maxLength,
+            onChanged: onChanged,
+            style: GoogleFonts.inter(fontSize: 14),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: GoogleFonts.inter(color: _grey, fontSize: 14),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: _divider)),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: _divider)),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: _primaryBlue, width: 2)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              isDense: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTargetCheckbox(
+      String title, String subtitle, bool value, Function(bool?)? onChanged) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: onChanged == null ? null : () => onChanged(!value),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: value,
+                  onChanged: onChanged,
+                  activeColor: _primaryBlue,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: _dark)),
+                    Text(subtitle,
+                        style: GoogleFonts.inter(fontSize: 12, color: _grey)),
+                  ],
+                ),
+              )
             ],
           ),
         ),
@@ -469,41 +757,54 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
     );
   }
 
+  // ─── Property Selection ──────────────────────────────────────────────────────
+
   Widget _propertyResults() {
     if (_loadingProperties) {
       return const Padding(
         padding: EdgeInsets.all(20),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: CircularProgressIndicator(color: _primaryBlue)),
       );
     }
     if (_properties.isEmpty) {
-      return const ListTile(title: Text('No eligible properties found.'));
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text('No eligible properties found.',
+            style: GoogleFonts.inter(color: _grey)),
+      );
     }
-    return ConstrainedBox(
+    return Container(
       constraints: const BoxConstraints(maxHeight: 300),
+      decoration: BoxDecoration(
+          border: Border.all(color: _divider),
+          borderRadius: BorderRadius.circular(8)),
       child: ListView.separated(
         shrinkWrap: true,
         itemCount: _properties.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
+        separatorBuilder: (_, __) => const Divider(height: 1, color: _divider),
         itemBuilder: (context, index) {
           final property = _properties[index];
-          final imageValid = property['image_valid'] == true;
           return ListTile(
-            contentPadding: const EdgeInsets.symmetric(vertical: 4),
+            contentPadding: const EdgeInsets.all(12),
             leading: _PropertyImage(
-                url: property['image_url']?.toString(), size: 58),
+                url: property['image_url']?.toString(), size: 48),
             title: Text(property['title']?.toString() ?? 'Untitled property',
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                    fontSize: 13, fontWeight: FontWeight.w600)),
             subtitle: Text(
               '${property['city'] ?? property['town'] ?? 'Location unavailable'}  ·  ${_currency(property['price'])}\n${property['status']} / ${property['availability_status']}',
               maxLines: 2,
+              style: GoogleFonts.inter(fontSize: 11, color: _grey),
             ),
             trailing: IconButton(
-              tooltip: imageValid
+              tooltip: property['image_valid'] == true
                   ? 'Select property'
-                  : 'A valid listing image is required',
-              onPressed: imageValid ? () => _selectProperty(property) : null,
-              icon: const Icon(Icons.arrow_forward),
+                  : 'Select property; image unavailable',
+              onPressed: () => _selectProperty(property),
+              icon: const Icon(PhosphorIconsRegular.checkCircle,
+                  color: _primaryBlue),
             ),
           );
         },
@@ -512,184 +813,344 @@ class _SuperAdminCampaignsPageState extends State<SuperAdminCampaignsPage> {
   }
 
   Widget _selectedPropertyView(Map<String, dynamic> property) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _PropertyImage(url: property['image_url']?.toString(), size: 88),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(property['title']?.toString() ?? 'Selected property',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(
-                  '${property['city'] ?? property['town'] ?? 'Location unavailable'}  ·  ${_currency(property['price'])}'),
-              Text(
-                  '${property['status']} / ${property['availability_status']}'),
-              TextButton.icon(
-                onPressed: () => setState(() {
-                  _selectedProperty = null;
-                  _estimatedRecipients = null;
-                }),
-                icon: const Icon(Icons.swap_horiz, size: 16),
-                label: const Text('Choose another'),
-              ),
-            ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: _bg,
+          border: Border.all(color: _divider),
+          borderRadius: BorderRadius.circular(8)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _PropertyImage(url: property['image_url']?.toString(), size: 64),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(property['title']?.toString() ?? 'Selected property',
+                    style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w600,
+                        color: _dark,
+                        fontSize: 14)),
+                const SizedBox(height: 4),
+                Text(
+                    '${property['city'] ?? property['town'] ?? 'Location unavailable'}  ·  ${_currency(property['price'])}',
+                    style: GoogleFonts.inter(fontSize: 12, color: _grey)),
+                Text(
+                    '${property['status']} / ${property['availability_status']}',
+                    style: GoogleFonts.inter(fontSize: 12, color: _grey)),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () => setState(() {
+                    _selectedProperty = null;
+                    _estimatedRecipients = null;
+                  }),
+                  child: Text('Change Property',
+                      style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _primaryBlue)),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _notificationPreview() {
-    final property = _selectedProperty;
-    final isDesktop = MediaQuery.sizeOf(context).width >= 700;
+  // ─── Live Phone Preview ──────────────────────────────────────────────────────
+
+  Widget _buildStickyPreviewPanel() {
     return Container(
-      constraints: BoxConstraints(maxWidth: isDesktop ? 480 : double.infinity),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F5F2),
-        border: Border.all(color: StayNestColors.outlineLight),
-        borderRadius: BorderRadius.circular(8),
+        color: _surface,
+        border: Border.all(color: _divider),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text('Device Preview',
+              style: GoogleFonts.inter(
+                  fontSize: 16, fontWeight: FontWeight.w600, color: _dark)),
+          const SizedBox(height: 8),
+          Text('How it looks on user devices',
+              style: GoogleFonts.inter(fontSize: 13, color: _grey)),
+          const SizedBox(height: 32),
+
+          // Phone Mockup Frame
+          Container(
+            width: 280,
+            height: 560,
+            decoration: BoxDecoration(
+              color: Colors.black, // Phone bezel
+              borderRadius: BorderRadius.circular(36),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10))
+              ],
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 6),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(30),
+              child: Stack(
+                children: [
+                  // Mock Wallpaper
+                  Positioned.fill(
+                    child: Image.network(
+                      'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  // Mock Status Bar
+                  Positioned(
+                    top: 12,
+                    left: 24,
+                    right: 24,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('9:41',
+                            style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600)),
+                        const Row(
+                          children: [
+                            Icon(PhosphorIconsFill.cellSignalFull,
+                                color: Colors.white, size: 14),
+                            SizedBox(width: 4),
+                            Icon(PhosphorIconsFill.wifiHigh,
+                                color: Colors.white, size: 14),
+                            SizedBox(width: 4),
+                            Icon(PhosphorIconsFill.batteryFull,
+                                color: Colors.white, size: 16),
+                          ],
+                        )
+                      ],
+                    ),
+                  ),
+                  // Notification Bubble
+                  Positioned(
+                    top: 60,
+                    left: 12,
+                    right: 12,
+                    child: _notificationPreviewBubble(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _canSend ? _confirmAndSend : null,
+              icon: _sending
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(PhosphorIconsFill.paperPlaneRight, size: 18),
+              label: Text(_sending ? 'Sending...' : 'Review & Send',
+                  style: GoogleFonts.inter(
+                      fontSize: 14, fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryBlue,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: _grey.withValues(alpha: 0.2),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
+              ),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobilePreviewPanel() {
+    return _buildStickyPreviewPanel(); // Reuse same layout, it constraints itself
+  }
+
+  Widget _notificationPreviewBubble() {
+    final property = _selectedProperty;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.home_work_outlined, size: 18),
-              SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                    color: Color(0xFF3F37C9),
+                    shape: BoxShape.circle), // StayNest Blue Logo mock
+                child: const Icon(PhosphorIconsFill.house,
+                    color: Colors.white, size: 10),
+              ),
+              const SizedBox(width: 8),
               Expanded(
-                  child: Text('StayNest',
-                      style: TextStyle(fontWeight: FontWeight.w700))),
+                  child: Text('STAYNEST',
+                      style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: _greyLight,
+                          letterSpacing: 0.5))),
               Text('now',
-                  style: TextStyle(fontSize: 11, color: AppColors.gray600)),
+                  style: GoogleFonts.inter(fontSize: 11, color: _greyLight)),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-              _titleController.text.isEmpty
-                  ? 'Notification title'
-                  : _titleController.text,
-              style: const TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 3),
-          Text(_bodyController.text.isEmpty
-              ? 'Promotional message preview'
-              : _bodyController.text),
+            _titleController.text.isEmpty
+                ? 'Notification title'
+                : _titleController.text,
+            style: GoogleFonts.inter(
+                fontSize: 14, fontWeight: FontWeight.w700, color: _dark),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            _bodyController.text.isEmpty
+                ? 'Promotional message preview'
+                : _bodyController.text,
+            style: GoogleFonts.inter(fontSize: 13, color: _dark),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
           if (property != null) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             ClipRRect(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8),
               child: AspectRatio(
-                aspectRatio: 16 / 8,
-                child: Image.network(
-                  property['image_url']?.toString() ?? '',
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const ColoredBox(
-                    color: Color(0xFFE7EAE5),
-                    child: Center(child: Icon(Icons.broken_image_outlined)),
-                  ),
-                ),
+                aspectRatio: 16 / 9,
+                child: buildPropertyImage(
+                    property['image_url']?.toString() ?? '',
+                    fit: BoxFit.cover),
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-                '${_currency(property['price'])}  ·  ${property['city'] ?? property['town'] ?? ''}',
-                style: const TextStyle(fontSize: 12, color: AppColors.gray700)),
           ],
-          const SizedBox(height: 10),
-          const Text(
-              'Android and iOS may display this differently; image display depends on device support and network conditions.',
-              style: TextStyle(fontSize: 11, color: AppColors.gray600)),
         ],
       ),
     );
   }
 
-  Widget _campaignHistory() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text('Campaign history',
-                  style: GoogleFonts.inter(
-                      fontSize: 18, fontWeight: FontWeight.w600)),
-            ),
-            IconButton(
-              tooltip: 'Refresh campaign history',
-              onPressed: _loadCampaigns,
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
-        ),
-        const Divider(),
-        if (_loadingCampaigns)
-          const Center(child: CircularProgressIndicator())
-        else if (_campaigns.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 20),
-            child: Text('No campaigns have been sent.'),
-          )
-        else
-          for (final campaign in _campaigns)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: _PropertyImage(
-                url: campaign['image_url']?.toString(),
-                size: 48,
-              ),
-              title: Text(campaign['name']?.toString().isNotEmpty == true
-                  ? campaign['name'].toString()
-                  : campaign['property_title']?.toString() ??
-                      'Property campaign'),
-              subtitle: Text(
-                '${campaign['created_at'] ?? ''}  ·  ${campaign['submitted_count'] ?? 0} submitted  ·  ${campaign['failed_count'] ?? 0} errors  ·  ${campaign['skipped_count'] ?? 0} skipped  ·  ${campaign['opened_count'] ?? 0} opens',
-              ),
-              trailing: _StatusLabel(
-                  status: campaign['status']?.toString() ?? 'queued'),
-            ),
-      ],
-    );
-  }
-}
+  // ─── Campaign History Data Table ─────────────────────────────────────────────
 
-class _CampaignSection extends StatelessWidget {
-  const _CampaignSection({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildCampaignHistory() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: StayNestColors.outlineLight),
-        borderRadius: BorderRadius.circular(8),
+        color: _surface,
+        border: Border.all(color: _divider),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style:
-                  GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 14),
-          child,
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Campaign History',
+                    style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: _dark)),
+                IconButton(
+                  tooltip: 'Refresh history',
+                  icon: const Icon(PhosphorIconsRegular.arrowsClockwise,
+                      size: 20),
+                  onPressed: _loadCampaigns,
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: _divider),
+          if (_loadingCampaigns)
+            const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(
+                    child: CircularProgressIndicator(color: _primaryBlue)))
+          else if (_campaigns.isEmpty)
+            Padding(
+                padding: const EdgeInsets.all(32),
+                child: Center(
+                    child: Text('No campaigns have been sent.',
+                        style: GoogleFonts.inter(color: _grey))))
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _campaigns.length,
+              separatorBuilder: (_, __) =>
+                  const Divider(height: 1, color: _divider),
+              itemBuilder: (context, index) {
+                final campaign = _campaigns[index];
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      _PropertyImage(
+                        url: campaign['image_url']?.toString() ??
+                            campaign['current_image_url']?.toString(),
+                        size: 48,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              campaign['name']?.toString().isNotEmpty == true
+                                  ? campaign['name'].toString()
+                                  : campaign['property_title']?.toString() ??
+                                      'Property campaign',
+                              style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: _dark),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${campaign['created_at'] ?? ''} • ${campaign['submitted_count'] ?? 0} sent • ${campaign['opened_count'] ?? 0} opens',
+                              style:
+                                  GoogleFonts.inter(fontSize: 12, color: _grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _StatusLabel(
+                          status: campaign['status']?.toString() ?? 'queued'),
+                    ],
+                  ),
+                );
+              },
+            ),
         ],
       ),
     );
   }
 }
 
+// ─── Shared Components ───────────────────────────────────────────────────────
+
 class _PropertyImage extends StatelessWidget {
   const _PropertyImage({required this.url, required this.size});
-
   final String? url;
   final double size;
 
@@ -699,19 +1160,14 @@ class _PropertyImage extends StatelessWidget {
       borderRadius: BorderRadius.circular(6),
       child: SizedBox.square(
         dimension: size,
-        child: url == null || url!.isEmpty
-            ? const ColoredBox(
-                color: Color(0xFFE7EAE5),
-                child: Icon(Icons.image_not_supported_outlined),
-              )
-            : Image.network(
-                url!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const ColoredBox(
-                  color: Color(0xFFE7EAE5),
-                  child: Icon(Icons.broken_image_outlined),
-                ),
-              ),
+        child: buildPropertyImage(url ?? '',
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorPlaceholder: Container(
+                color: _divider,
+                child:
+                    const Icon(PhosphorIconsRegular.image, color: _greyLight))),
       ),
     );
   }
@@ -719,26 +1175,36 @@ class _PropertyImage extends StatelessWidget {
 
 class _StatusLabel extends StatelessWidget {
   const _StatusLabel({required this.status});
-
   final String status;
 
   @override
   Widget build(BuildContext context) {
     final color = switch (status) {
-      'completed' => const Color(0xFF2E7D32),
+      'completed' => _successGreen,
       'completed_with_errors' || 'failed' => const Color(0xFFC62828),
-      'processing' => const Color(0xFF1565C0),
-      _ => const Color(0xFF616161),
+      'processing' => _primaryBlue,
+      _ => _greyLight,
     };
-    return Text(status.replaceAll('_', ' '),
-        style:
-            TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600));
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(4)),
+      child: Text(
+        status.replaceAll('_', ' ').toUpperCase(),
+        style: GoogleFonts.inter(
+            color: color,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5),
+      ),
+    );
   }
 }
 
 class _InlineError extends StatelessWidget {
   const _InlineError({required this.message});
-
   final String message;
 
   @override
@@ -747,11 +1213,22 @@ class _InlineError extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF1F0),
-        border: Border.all(color: const Color(0xFFE6A5A0)),
-        borderRadius: BorderRadius.circular(6),
+          color: const Color(0xFFFEF2F2),
+          border: Border.all(color: const Color(0xFFFCA5A5)),
+          borderRadius: BorderRadius.circular(8)),
+      child: Row(
+        children: [
+          const Icon(PhosphorIconsFill.warningCircle,
+              color: Color(0xFFEF4444), size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+              child: Text(message,
+                  style: GoogleFonts.inter(
+                      color: const Color(0xFF991B1B),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500))),
+        ],
       ),
-      child: Text(message, style: const TextStyle(color: Color(0xFF9B1C16))),
     );
   }
 }

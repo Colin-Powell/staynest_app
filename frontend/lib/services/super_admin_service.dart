@@ -40,6 +40,9 @@ class SuperAdminService {
   static Future<Map<String, dynamic>> fetchOverview() async =>
       _data(await _getJson('/admin/overview'));
 
+  static Future<Map<String, dynamic>> fetchPropertyMap() async =>
+      _data(await _getJson('/admin/property-map'));
+
   static Future<List<Map<String, dynamic>>> fetchUsers({
     int limit = 10,
     int offset = 0,
