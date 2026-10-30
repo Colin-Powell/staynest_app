@@ -130,6 +130,7 @@ const PROPERTY_SELECT = `p.id,
               u.name AS landlord_name,
               u.email AS landlord_email,
               u.avatar AS landlord_avatar,
+              u.role AS landlord_role,
               u.verified AS landlord_verified,
               u.business_name AS landlord_business_name,
               u.business_description AS landlord_business_description,
@@ -1369,4 +1370,3 @@ router.all('/_unused_property_update_dummy', async (req: Request, res: Response,
 });
 
 export default router;
-

@@ -2057,9 +2057,19 @@ class _AddListingFlowState extends State<AddListingFlow> {
     if (!widget.isEditing && !{'free', 'paid'}.contains(_viewingFeeType)) {
       return 'Choose free viewing or a required viewing fee before publishing.';
     }
+    final feeText = _viewingFeeAmount.text.trim();
+    final amount = feeText.isEmpty ? null : double.tryParse(feeText);
+    if (feeText.isNotEmpty &&
+        (amount == null || !amount.isFinite || amount < 0)) {
+      return 'Enter 0 for free viewing or a positive viewing fee amount.';
+    }
+    if (_viewingFeeType == 'free') {
+      if (amount != null && amount != 0) {
+        return 'Enter 0 for free viewing or choose a paid viewing fee.';
+      }
+      return null;
+    }
     if (_viewingFeeType != 'paid') return null;
-
-    final amount = double.tryParse(_viewingFeeAmount.text.trim());
     if (amount == null || !amount.isFinite || amount <= 0) {
       return 'Enter a positive viewing fee amount in KSh.';
     }
@@ -2148,33 +2158,54 @@ class _AddListingFlowState extends State<AddListingFlow> {
             style: GoogleFonts.poppins(color: _grey, fontSize: 12),
           ),
         ],
-        if (_viewingFeeType == 'paid') ...[
-          const SizedBox(height: 16),
-          _buildLabel('Viewing fee amount (KSh.)'),
-          TextFormField(
-            controller: _viewingFeeAmount,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              hintText: '200',
-              filled: true,
-              fillColor: _surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: _grey.withValues(alpha: 0.2)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: _grey.withValues(alpha: 0.2)),
-              ),
+        const SizedBox(height: 16),
+        _buildLabel('Viewing fee amount (KSh.)'),
+        TextFormField(
+          controller: _viewingFeeAmount,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            hintText: '0 for free',
+            helperText: 'Enter 0 for free viewing.',
+            filled: true,
+            fillColor: _surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: _grey.withValues(alpha: 0.2)),
             ),
-            validator: (value) {
-              if (_viewingFeeType != 'paid') return null;
-              final amount = double.tryParse(value?.trim() ?? '');
-              return amount != null && amount.isFinite && amount > 0
-                  ? null
-                  : 'Enter an amount greater than zero';
-            },
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: _grey.withValues(alpha: 0.2)),
+            ),
           ),
+          onChanged: (value) {
+            final enteredAmount = double.tryParse(value.trim());
+            if (enteredAmount != null &&
+                enteredAmount.isFinite &&
+                enteredAmount >= 0) {
+              setState(() {
+                if (enteredAmount == 0) {
+                  _viewingFeeType = 'free';
+                  _viewingFeeCollector = null;
+                } else {
+                  _viewingFeeType = 'paid';
+                  _viewingFeeCollector ??= collector;
+                }
+              });
+            }
+            _scheduleDraftSave();
+          },
+          validator: (value) {
+            final text = value?.trim() ?? '';
+            if (text.isEmpty) return null;
+            final enteredAmount = double.tryParse(text);
+            return enteredAmount != null &&
+                    enteredAmount.isFinite &&
+                    enteredAmount >= 0
+                ? null
+                : 'Enter 0 for free viewing or a positive amount';
+          },
+        ),
+        if (_viewingFeeType == 'paid') ...[
           const SizedBox(height: 12),
           _buildLabel('Who collects the viewing fee?'),
           if (collector == null)

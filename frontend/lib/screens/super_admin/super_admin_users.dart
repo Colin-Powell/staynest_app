@@ -88,6 +88,121 @@ class _SuperAdminUsersPageState extends State<SuperAdminUsersPage> {
     }
   }
 
+  bool _canEditRole(Map<String, dynamic> user) {
+    final role = user['role']?.toString().toLowerCase();
+    final roles = user['roles'];
+    return role == 'landlord' ||
+        role == 'agent' ||
+        (roles is List &&
+            roles.any((accountRole) => {'landlord', 'agent'}
+                .contains(accountRole.toString().toLowerCase())));
+  }
+
+  Future<void> _editUserRole(Map<String, dynamic> user) async {
+    final id = user['id']?.toString() ?? '';
+    final currentRole = user['role']?.toString().toLowerCase();
+    final roles = user['roles'];
+    final initialRole = {'landlord', 'agent'}.contains(currentRole)
+        ? currentRole!
+        : roles is List &&
+                roles.any((accountRole) =>
+                    accountRole.toString().toLowerCase() == 'agent')
+            ? 'agent'
+            : 'landlord';
+    var selectedRole = initialRole;
+    final role = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Edit user'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(user['name']?.toString() ?? 'User'),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: selectedRole,
+                decoration: const InputDecoration(labelText: 'Account role'),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'landlord',
+                    child: Text('Landlord'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'agent',
+                    child: Text('Agent'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setDialogState(() => selectedRole = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Agent accounts are identified as agents on property badges and host details. Existing landlord access is retained.',
+                style:
+                    GoogleFonts.inter(fontSize: 12, color: AppColors.gray500),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, selectedRole),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || role == null || role == initialRole || id.isEmpty) return;
+
+    setState(() => _processingIds.add(id));
+    try {
+      final updated = await SuperAdminService.updateUserRole(id, role: role);
+      if (!mounted) return;
+      setState(() {
+        final index = _users.indexWhere((candidate) => candidate['id'] == id);
+        if (index != -1) {
+          _users[index] = {
+            ..._users[index],
+            'role': updated['role'] ?? role,
+            'roles': updated['roles'] ?? _users[index]['roles'],
+          };
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.gray900,
+          content: Text(
+            'User role updated successfully.',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.gray900,
+            content: Text(
+              'Failed to update user role: $error',
+              style: GoogleFonts.inter(color: Colors.white),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processingIds.remove(id));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredUsers = _users.where((user) {
@@ -336,7 +451,7 @@ class _SuperAdminUsersPageState extends State<SuperAdminUsersPage> {
                             PhosphorIcons.calendarBlank()),
                         _buildMetaItem(
                             'Properties',
-                            role == 'LANDLORD'
+                            {'LANDLORD', 'AGENT'}.contains(role)
                                 ? '$propertyCount total / $activePropertyCount active'
                                 : 'N/A',
                             PhosphorIcons.buildingApartment()),
@@ -360,6 +475,21 @@ class _SuperAdminUsersPageState extends State<SuperAdminUsersPage> {
                       spacing: 12,
                       runSpacing: 12,
                       children: [
+                        if (_canEditRole(user))
+                          OutlinedButton(
+                            onPressed:
+                                isProcessing ? null : () => _editUserRole(user),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.gray900,
+                              side: const BorderSide(color: AppColors.gray400),
+                              shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.zero),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 16),
+                            ),
+                            child: const Text('Edit User'),
+                          ),
+                        if (_canEditRole(user)) const SizedBox(width: 12),
                         // Suspend / Reactivate Action
                         OutlinedButton(
                           onPressed: isProcessing

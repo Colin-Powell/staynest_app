@@ -188,7 +188,8 @@ export class FeedService {
       params.push(radiusKm, limit);
       filters.push(`${distance} <= $${params.length - 1}`);
       const result = await query(
-        `SELECT p.* FROM properties p
+        `SELECT p.*, u.role AS landlord_role FROM properties p
+         LEFT JOIN users u ON u.id = p.landlord_id
          WHERE ${filters.join(' AND ')}
          ORDER BY ${distance} ASC, p.created_at DESC, p.id
          LIMIT $${params.length}`,
@@ -206,7 +207,8 @@ export class FeedService {
         );
         nearestParams.push(limit);
         const nearestResult = await query(
-          `SELECT p.* FROM properties p
+          `SELECT p.*, u.role AS landlord_role FROM properties p
+           LEFT JOIN users u ON u.id = p.landlord_id
            WHERE ${nearestFilters.join(' AND ')}
            ORDER BY ${nearestDistance} ASC, p.created_at DESC, p.id
            LIMIT $${nearestParams.length}`,
@@ -238,7 +240,8 @@ export class FeedService {
       const filters = filtersFor(resolved, params, []);
       params.push(limit);
       const result = await query(
-        `SELECT p.* FROM properties p
+        `SELECT p.*, u.role AS landlord_role FROM properties p
+         LEFT JOIN users u ON u.id = p.landlord_id
          WHERE ${filters.join(' AND ')}
            AND p.published_at IS NOT NULL
            AND p.published_at >= NOW() - INTERVAL '${NEW_LISTING_WINDOW_DAYS} days'
@@ -289,8 +292,9 @@ export class FeedService {
       );
       const result = await query(
         `WITH eligible AS (
-           SELECT p.*, ${location} AS feed_location
+           SELECT p.*, ${location} AS feed_location, u.role AS landlord_role
            FROM properties p
+           LEFT JOIN users u ON u.id = p.landlord_id
            WHERE ${filters.join(' AND ')}
          ), locations AS (
            SELECT LOWER(BTRIM(feed_location)) AS location_key,
@@ -361,7 +365,8 @@ export class FeedService {
       let filters = filtersFor(resolved, params, []);
       params.push(limit);
       let result = await query(
-        `SELECT p.* FROM properties p
+        `SELECT p.*, u.role AS landlord_role FROM properties p
+         LEFT JOIN users u ON u.id = p.landlord_id
          WHERE ${filters.join(' AND ')}
          ORDER BY p.created_at DESC, p.id
          LIMIT $${params.length}`,
@@ -375,7 +380,8 @@ export class FeedService {
         filters = filtersFor(resolved, fallbackParams, [], false);
         fallbackParams.push(limit);
         result = await query(
-          `SELECT p.* FROM properties p
+          `SELECT p.*, u.role AS landlord_role FROM properties p
+           LEFT JOIN users u ON u.id = p.landlord_id
            WHERE ${filters.join(' AND ')}
            ORDER BY p.created_at DESC, p.id
            LIMIT $${fallbackParams.length}`,

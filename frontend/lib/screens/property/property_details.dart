@@ -1946,9 +1946,13 @@ class _PropertyDetailsState extends State<PropertyDetails>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      agent.verified
-                          ? 'Superhost · Verified Landlord'
-                          : 'Landlord',
+                      agent.isAgent
+                          ? agent.verified
+                              ? 'Verified Agent'
+                              : 'Agent'
+                          : agent.verified
+                              ? 'Superhost · Verified Landlord'
+                              : 'Landlord',
                       style: GoogleFonts.poppins(fontSize: 14, color: _grey),
                     ),
                   ],

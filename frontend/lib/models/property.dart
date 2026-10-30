@@ -89,6 +89,7 @@ class Agent {
   final String name;
   final String avatar;
   final bool verified;
+  final bool isAgent;
   final String? email;
   final String? businessName;
   final String? businessDescription;
@@ -101,6 +102,7 @@ class Agent {
     required this.name,
     required this.avatar,
     this.verified = false,
+    this.isAgent = false,
     this.email,
     this.businessName,
     this.businessDescription,
@@ -266,6 +268,7 @@ class Property {
         name: (json['landlord_name'] ?? 'Unknown').toString(),
         avatar: (json['landlord_avatar'] ?? '').toString(),
         verified: json['landlord_verified'] == true,
+        isAgent: json['landlord_role']?.toString().toLowerCase() == 'agent',
         email: json['landlord_email']?.toString(),
         businessName: json['landlord_business_name']?.toString(),
         businessDescription: json['landlord_business_description']?.toString(),

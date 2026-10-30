@@ -32,16 +32,22 @@ class PropertyTransparencyBadges extends StatelessWidget {
   }
 
   Widget? _managementBadge() {
+    final managementType = property.agent.isAgent &&
+            {'landlord', 'unspecified'}.contains(property.managementType)
+        ? 'agent'
+        : property.managementType;
     final (
       String label,
       IconData icon,
+      String? imageAsset,
       Color foreground,
       Color background,
       String description
-    )? data = switch (property.managementType) {
+    )? data = switch (managementType) {
       'landlord' => (
           'Landlord managed',
           Icons.home_work_outlined,
+          'assets/images/landlord_owned.gif',
           const Color(0xFF167447),
           const Color(0xFFEAF7EF),
           'The landlord manages this property and tenant inquiries.',
@@ -49,6 +55,7 @@ class PropertyTransparencyBadges extends StatelessWidget {
       'agent' => (
           'Agent managed',
           Icons.business_center_outlined,
+          null,
           const Color(0xFF176B87),
           const Color(0xFFEAF6FA),
           'An assigned property agent manages this listing.',
@@ -56,6 +63,7 @@ class PropertyTransparencyBadges extends StatelessWidget {
       'staynest' => (
           'StayNest managed',
           Icons.shield_outlined,
+          'assets/images/staynest_owned.gif',
           const Color(0xFF176D50),
           const Color(0xFFE7F5EE),
           'This property is directly managed by StayNest.',
@@ -64,6 +72,7 @@ class PropertyTransparencyBadges extends StatelessWidget {
           ? (
               'Management not specified',
               Icons.help_outline_rounded,
+              null,
               const Color(0xFF596273),
               const Color(0xFFF3F4F6),
               'The property manager has not been specified.',
@@ -71,13 +80,14 @@ class PropertyTransparencyBadges extends StatelessWidget {
           : null,
     };
     if (data == null) return null;
-    return _badge(data.$1, data.$2, data.$3, data.$4, data.$5);
+    return _badge(data.$1, data.$2, data.$3, data.$4, data.$5, data.$6);
   }
 
   Widget? _viewingFeeBadge() {
     final (
       String label,
       IconData icon,
+      String? imageAsset,
       Color foreground,
       Color background,
       String description
@@ -85,6 +95,7 @@ class PropertyTransparencyBadges extends StatelessWidget {
       'free' => (
           'Free viewing',
           Icons.check_circle_outline_rounded,
+          'assets/images/free.gif',
           const Color(0xFF167447),
           const Color(0xFFEAF7EF),
           'No viewing fee is charged for visiting this property.',
@@ -92,6 +103,7 @@ class PropertyTransparencyBadges extends StatelessWidget {
       'paid' when property.viewingFeeAmount != null => (
           'Viewing fee: KSh ${NumberFormat('#,##0.##').format(property.viewingFeeAmount)}',
           Icons.account_balance_wallet_outlined,
+          'assets/images/fee.gif',
           const Color(0xFF9A5A00),
           const Color(0xFFFFF3D9),
           'Viewing fee collected by ${property.viewingFeeCollector ?? 'the property manager'}.${property.viewingFeeNotes?.isNotEmpty == true ? ' ${property.viewingFeeNotes}' : ''}',
@@ -99,6 +111,7 @@ class PropertyTransparencyBadges extends StatelessWidget {
       'paid' => (
           'Viewing fee details unavailable',
           Icons.help_outline_rounded,
+          'assets/images/fee.gif',
           const Color(0xFF596273),
           const Color(0xFFF3F4F6),
           'A viewing fee is required, but the amount has not been provided.',
@@ -107,6 +120,7 @@ class PropertyTransparencyBadges extends StatelessWidget {
           ? (
               'Viewing fee not specified',
               Icons.help_outline_rounded,
+              null,
               const Color(0xFF596273),
               const Color(0xFFF3F4F6),
               'The viewing fee has not been specified. Confirm with the manager before visiting.',
@@ -120,12 +134,14 @@ class PropertyTransparencyBadges extends StatelessWidget {
       data.$3,
       data.$4,
       data.$5,
+      data.$6,
     );
   }
 
   Widget _badge(
     String label,
     IconData icon,
+    String? imageAsset,
     Color foreground,
     Color background,
     String description,
@@ -145,7 +161,16 @@ class PropertyTransparencyBadges extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: compact ? 12 : 14, color: foreground),
+            if (imageAsset != null)
+              Image.asset(
+                imageAsset,
+                width: compact ? 14 : 18,
+                height: compact ? 14 : 18,
+                fit: BoxFit.contain,
+                excludeFromSemantics: true,
+              )
+            else
+              Icon(icon, size: compact ? 12 : 14, color: foreground),
             const SizedBox(width: 4),
             Text(
               label,

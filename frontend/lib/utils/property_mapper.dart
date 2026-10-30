@@ -58,6 +58,7 @@ Property mapApiProperty(Map<String, dynamic> json) {
           : json['landlord_avatar']?.toString() ?? '',
     ),
     verified: json['landlord_verified'] == true,
+    isAgent: json['landlord_role']?.toString().toLowerCase() == 'agent',
     email: json['landlord_email']?.toString(),
     businessName: json['landlord_business_name']?.toString(),
     businessDescription: json['landlord_business_description']?.toString(),
