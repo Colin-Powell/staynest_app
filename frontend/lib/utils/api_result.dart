@@ -28,7 +28,16 @@ class ApiResult<T> {
   /// Maps raw exceptions or technical error strings into user-friendly messages.
   /// This prevents leaking server details like URLs or stack traces to the UI.
   static String mapError(Object err) {
-    if (err is ApiException) return err.userMessage;
+    if (err is ApiException) {
+      if (err.statusCode == 400 || err.statusCode == 422) {
+        final message = err.message.trim();
+        if (message.isNotEmpty &&
+            message != 'Request failed with status ${err.statusCode}') {
+          return message;
+        }
+      }
+      return err.userMessage;
+    }
     if (err is TimeoutException) {
       return 'The request timed out. Check your connection and try again.';
     }

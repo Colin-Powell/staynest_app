@@ -34,6 +34,15 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
     'Other'
   ];
 
+  String _applicantRole(Map<String, dynamic> item) {
+    final propertyData = item['property_data'];
+    if (propertyData is Map &&
+        propertyData['applicant_role']?.toString().toLowerCase() == 'agent') {
+      return 'Agent application';
+    }
+    return 'Landlord application';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -430,7 +439,7 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
                               fontWeight: FontWeight.w600,
                               color: AppColors.gray900)),
                       const SizedBox(height: 4),
-                      Text('Submitted Document',
+                      Text(_applicantRole(item),
                           style: GoogleFonts.inter(
                               fontSize: 12, color: AppColors.gray500)),
                     ],
@@ -512,7 +521,7 @@ class _SuperAdminKycPageState extends State<SuperAdminKycPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Document Details',
+                    Text(_applicantRole(item),
                         style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,

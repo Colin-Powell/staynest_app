@@ -32,6 +32,17 @@ export interface PropertyClassificationInput {
   viewingFeeCollector?: unknown;
 }
 
+export function inferPropertyManagementType(
+  managementType: unknown,
+  isOwner: boolean,
+  hasAssignedManager: boolean,
+): string {
+  const normalizedType = String(managementType ?? 'unspecified').toLowerCase();
+  return isOwner && normalizedType === 'unspecified' && !hasAssignedManager
+    ? 'landlord'
+    : normalizedType;
+}
+
 export function validatePropertyClassification(
   input: PropertyClassificationInput,
   requireExplicitViewingFee = false,

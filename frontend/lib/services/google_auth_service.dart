@@ -155,6 +155,9 @@ class GoogleAuthService {
       AppSession.apiToken =
           data['token']?.toString() ?? data['accessToken']?.toString();
       final isNewUser = data['isNewUser'] == true;
+      AppSession.pendingApplicationRole = isNewUser
+          ? data['application_role']?.toString()
+          : null;
       AnalyticsService.logAuthEvent(
         isNewUser ? AnalyticsEvents.signUp : AnalyticsEvents.login,
         method: 'google',

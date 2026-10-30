@@ -33,7 +33,9 @@ router.post('/', async (req, res, next) => {
     const email = payload.email.toLowerCase();
     const name = payload.name || '';
     const avatar = payload.picture || null;
-    const requestedRole = role?.toLowerCase() === 'landlord' ? 'landlord' : 'tenant';
+    const requestedRole = ['landlord', 'agent'].includes(role?.toLowerCase() ?? '')
+      ? role!.toLowerCase()
+      : 'tenant';
 
     // Upsert user
     const exists = await query(
@@ -45,22 +47,20 @@ router.post('/', async (req, res, next) => {
     if (!user) {
       const result = await query(
         `INSERT INTO users (name, email, avatar, verified, password_hash, role)
-         VALUES ($1, $2, $3, true, '*', $4)
+         VALUES ($1, $2, $3, true, '*', 'tenant')
          RETURNING id, name, email, phone, role, roles, landlord_verified, verified, avatar`,
-        [name, email, avatar, requestedRole]
+        [name, email, avatar]
       );
       user = result.rows[0];
     } else {
       // Google identity initializes empty account details without replacing user edits.
-      const newRole = (requestedRole === 'landlord' && user.role === 'tenant') ? 'landlord' : user.role;
       const updateRes = await query(
         `UPDATE users
         SET name = COALESCE(NULLIF(name, ''), NULLIF($1, ''), name),
-             avatar = COALESCE(avatar, $2),
-             role = $4
+             avatar = COALESCE(avatar, $2)
          WHERE id = $3
          RETURNING id, name, email, phone, role, roles, landlord_verified, verified, avatar`,
-        [name, avatar, user.id, newRole]
+        [name, avatar, user.id]
       );
       user = updateRes.rows[0];
     }
@@ -79,7 +79,19 @@ router.post('/', async (req, res, next) => {
     );
     const refreshToken = jwt.sign({ id: user.id }, env.jwtSecret, { expiresIn: '30d' });
 
-    return res.json({ data: { token: accessToken, accessToken, refreshToken, user, isNewUser } });
+    return res.json({
+      data: {
+        token: accessToken,
+        accessToken,
+        refreshToken,
+        user,
+        isNewUser,
+        application_role:
+          isNewUser && (requestedRole === 'landlord' || requestedRole === 'agent')
+            ? requestedRole
+            : null,
+      },
+    });
   } catch (err) {
     next(err);
   }

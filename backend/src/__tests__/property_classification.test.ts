@@ -1,11 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { validatePropertyClassification } from '../services/property_classification.js';
+import {
+  inferPropertyManagementType,
+  validatePropertyClassification,
+} from '../services/property_classification.js';
 
 const validLandlordFree = {
   managementType: 'landlord',
   viewingFeeType: 'free',
 };
+
+test('infers landlord management for an owner editing a legacy unspecified listing', () => {
+  assert.equal(inferPropertyManagementType('unspecified', true, false), 'landlord');
+});
+
+test('does not infer landlord management for non-owners or assigned listings', () => {
+  assert.equal(inferPropertyManagementType('unspecified', false, false), 'unspecified');
+  assert.equal(inferPropertyManagementType('unspecified', true, true), 'unspecified');
+});
 
 test('accepts landlord-managed free viewing', () => {
   assert.equal(validatePropertyClassification(validLandlordFree, true), null);

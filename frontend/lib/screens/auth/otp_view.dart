@@ -259,17 +259,24 @@ class _OtpViewState extends State<OtpView>
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
-      if (AppSession.isLandlord) {
+      if (AppSession.isPropertyManagerApplicant) {
         try {
           final status = await VerificationApi.getVerificationStatus();
           final isApproved = status?['status']?.toString().toLowerCase() == 'approved';
-          final target = isApproved || AppSession.currentUserVerified ? '/landlord' : '/verification_center';
+          if (isApproved) {
+            final user = await RemoteDatabaseRepository().loadCurrentUser();
+            AppSession.updateCurrentUser(user);
+            await AppSession.persistSession();
+          }
+          final target =
+              isApproved && AppSession.hasLandlordAccess
+                  ? '/landlord'
+                  : '/verification_center';
           if (!mounted) return;
           Navigator.pushReplacementNamed(context, target);
         } catch (_) {
-          final fallback = AppSession.currentUserVerified ? '/landlord' : '/verification_center';
           if (!mounted) return;
-          Navigator.pushReplacementNamed(context, fallback);
+          Navigator.pushReplacementNamed(context, '/verification_center');
         }
       } else {
         Navigator.pushReplacementNamed(context, '/home');

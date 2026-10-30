@@ -193,7 +193,9 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
   Future<void> _switchActivePortal(String portal) async {
     if (portal == 'landlord' && !AppSession.hasLandlordAccess) return;
     final target = portal == 'landlord' ? '/landlord' : '/home';
-    AppSession.setRole(portal);
+    AppSession.setRole(
+      portal == 'landlord' ? AppSession.propertyManagerPortalRole : portal,
+    );
     await AppSession.persistSession();
     navigatorKey.currentState?.pushNamedAndRemoveUntil<void>(
       target,
@@ -206,7 +208,7 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
       if (!mounted || !AppSession.hasLandlordAccess || AppSession.isLandlord) {
         return;
       }
-      AppSession.setRole('landlord');
+      AppSession.setRole(AppSession.propertyManagerPortalRole);
       unawaited(AppSession.persistSession());
     });
   }
@@ -278,10 +280,19 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
         return;
       }
 
-      if (AppSession.isLandlord) {
+      if (AppSession.hasPendingManagerApplication) {
+        _closeLoginModal(dialogContext, routeName: '/verification_center');
+        return;
+      }
+
+      if (AppSession.hasLandlordAccess) {
         final target = await _resolveLandlordRoute();
         if (!mounted || !dialogContext.mounted) return;
         _closeLoginModal(dialogContext, routeName: target);
+        return;
+      }
+      if (AppSession.isPropertyManagerApplicant) {
+        _closeLoginModal(dialogContext, routeName: '/verification_center');
         return;
       }
 
@@ -324,10 +335,18 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
       Navigator.pushReplacementNamed(context, '/super_admin');
       return;
     }
-    if (AppSession.isLandlord) {
+    if (AppSession.hasPendingManagerApplication) {
+      Navigator.pushReplacementNamed(context, '/verification_center');
+      return;
+    }
+    if (AppSession.hasLandlordAccess) {
       final target = await _resolveLandlordRoute();
       if (!context.mounted) return;
       Navigator.pushReplacementNamed(context, target);
+      return;
+    }
+    if (AppSession.isPropertyManagerApplicant) {
+      Navigator.pushReplacementNamed(context, '/verification_center');
       return;
     }
 
@@ -1083,8 +1102,11 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
         );
       case '/register':
         return RoleSelectionView(
+          includeAgent: true,
           onBack: () => Navigator.pop(context),
           onSelect: (role) {
+            AppSession.pendingApplicationRole =
+                role == 'landlord' || role == 'agent' ? role : null;
             AppSession.setRole(role);
             Navigator.pushReplacementNamed(
               context,
@@ -1111,6 +1133,7 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
         );
       case '/role':
         return RoleSelectionView(
+          includeAgent: AppSession.accountRoles.contains('agent'),
           onBack: () => Navigator.pushReplacementNamed(context, '/'),
           onSelect: AppSession.setRole,
         );

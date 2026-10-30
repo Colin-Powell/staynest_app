@@ -24,6 +24,7 @@ class AppSession {
   static String get role => currentRole;
   static String activePortal = 'tenant';
   static List<String> accountRoles = ['tenant'];
+  static String? pendingApplicationRole;
   static bool landlordVerified = false;
   static final ValueNotifier<String> currentRoleNotifier =
       ValueNotifier(currentRole);
@@ -285,6 +286,7 @@ class AppSession {
   }
 
   static Map<String, dynamic> toSessionSnapshot() => {
+        'pending_application_role': pendingApplicationRole,
         'user': {
           'id': currentUserId,
           'name': currentUserName,
@@ -364,6 +366,8 @@ class AppSession {
 
       final user = decoded['user'];
       final tokens = decoded['tokens'];
+      pendingApplicationRole =
+          decoded['pending_application_role']?.toString();
       if (user is Map) {
         updateCurrentUser(Map<String, dynamic>.from(user as Map));
       }
@@ -416,6 +420,8 @@ class AppSession {
   static void applySessionSnapshot(Map<String, dynamic> snapshot) {
     final user = snapshot['user'];
     final tokens = snapshot['tokens'];
+    pendingApplicationRole =
+        snapshot['pending_application_role']?.toString();
     if (user is Map) {
       updateCurrentUser(Map<String, dynamic>.from(user));
     }
@@ -441,6 +447,11 @@ class AppSession {
       accountRoles = [userRole];
     }
     landlordVerified = user['landlord_verified'] == true;
+    if (landlordVerified &&
+        pendingApplicationRole != null &&
+        accountRoles.contains(pendingApplicationRole)) {
+      pendingApplicationRole = null;
+    }
     final requestedPortal = user['active_portal']?.toString() ??
         (isSameUser && accountRoles.contains(activePortal)
             ? activePortal
@@ -469,11 +480,33 @@ class AppSession {
   static bool get isEmailVerified => emailVerified;
 
   static bool get isLandlord =>
-      currentRole == 'landlord' || currentRole == 'host';
+      hasLandlordAccess &&
+      (currentRole == 'landlord' ||
+          currentRole == 'host' ||
+          currentRole == 'agent');
+
+  static bool get hasPendingManagerApplication =>
+      pendingApplicationRole == 'landlord' ||
+      pendingApplicationRole == 'agent';
+
+  static bool get isPropertyManagerApplicant =>
+      hasPendingManagerApplication ||
+      currentRole == 'landlord' ||
+      currentRole == 'host' ||
+      currentRole == 'agent' ||
+      accountRoles.any((role) =>
+          role == 'landlord' || role == 'host' || role == 'agent');
 
   static bool get hasLandlordAccess =>
       landlordVerified &&
-      accountRoles.any((role) => role == 'landlord' || role == 'host');
+      accountRoles.any(
+          (role) => role == 'landlord' || role == 'host' || role == 'agent');
+
+  static String get propertyManagerPortalRole =>
+      accountRoles.contains('agent') &&
+          !accountRoles.any((role) => role == 'landlord' || role == 'host')
+      ? 'agent'
+      : 'landlord';
 
   static bool get isAdmin {
     final normalized = currentRole.toLowerCase();
@@ -490,6 +523,7 @@ class AppSession {
     currentRole = 'tenant';
     activePortal = 'tenant';
     accountRoles = ['tenant'];
+    pendingApplicationRole = null;
     landlordVerified = false;
     currentRoleNotifier.value = currentRole;
     notifyHostApplicationChanged();

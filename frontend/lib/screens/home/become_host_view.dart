@@ -177,7 +177,7 @@ class _BecomeHostViewState extends State<BecomeHostView> {
       if (widget.onSwitchToLandlord != null) {
         widget.onSwitchToLandlord!();
       } else if (AppSession.hasLandlordAccess) {
-        AppSession.setRole('landlord');
+        AppSession.setRole(AppSession.propertyManagerPortalRole);
         await AppSession.persistSession();
         if (mounted) {
           Navigator.pushNamedAndRemoveUntil(

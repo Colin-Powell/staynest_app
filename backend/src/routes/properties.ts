@@ -12,7 +12,10 @@ import {
 } from '../services/property_availability.js';
 import { getLandlordResponseMetrics } from '../services/landlord_response_metrics.js';
 import { recordAdminAudit } from '../services/audit_service.js';
-import { validatePropertyClassification } from '../services/property_classification.js';
+import {
+  inferPropertyManagementType,
+  validatePropertyClassification,
+} from '../services/property_classification.js';
 
 async function getCache<T>(key: string): Promise<T | null> {
   const raw = await cache.get(`cache:${key}`);
@@ -1137,9 +1140,18 @@ const handleUpdateProperty = async (req: Request, res: Response, next: NextFunct
     const transparencyChanged = transparencyFields.some(
       (field) => req.body[field] !== undefined,
     );
-    let updatedManagementType = String(currentProp.management_type ?? 'unspecified');
+    const storedManagementType = String(
+      currentProp.management_type ?? 'unspecified',
+    ).toLowerCase();
     let updatedAgentId = currentProp.assigned_agent_id ?? null;
     let updatedManagerId = currentProp.assigned_manager_id ?? null;
+    let updatedManagementType = inferPropertyManagementType(
+      storedManagementType,
+      isOwner,
+      Boolean(updatedAgentId || updatedManagerId),
+    );
+    const defaultLegacyOwnerManagement =
+      updatedManagementType !== storedManagementType;
 
     if (managementFieldsSupplied) {
       updatedManagementType = String(
@@ -1262,7 +1274,7 @@ const handleUpdateProperty = async (req: Request, res: Response, next: NextFunct
     }
 
     if (transparencyChanged) {
-      if (managementFieldsSupplied) {
+      if (managementFieldsSupplied || defaultLegacyOwnerManagement) {
         values.push(updatedManagementType);
         updates.push(`management_type = $${values.length}`);
         values.push(updatedAgentId);

@@ -97,13 +97,13 @@ class _SplashViewState extends State<SplashView> {
       return;
     }
 
-    // Landlords: verified → portal, unverified → verification center
-    if (AppSession.isLandlord) {
-      if (AppSession.currentUserVerified) {
-        Navigator.pushReplacementNamed(context, '/portal');
-      } else {
-        Navigator.pushReplacementNamed(context, '/verification_center');
-      }
+    if (AppSession.hasLandlordAccess) {
+      Navigator.pushReplacementNamed(context, '/portal');
+      return;
+    }
+
+    if (AppSession.isPropertyManagerApplicant) {
+      Navigator.pushReplacementNamed(context, '/verification_center');
       return;
     }
 

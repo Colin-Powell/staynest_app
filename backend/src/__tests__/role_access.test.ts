@@ -52,3 +52,35 @@ test('approval flag without the persisted landlord role is insufficient', () => 
     false,
   );
 });
+
+test('approved agent can access manager APIs without changing existing tenant membership', () => {
+  const account = {
+    role: 'agent',
+    roles: ['tenant', 'agent'],
+    landlord_verified: true,
+  };
+
+  assert.equal(hasPersistedRoleAccess(account, ['agent']), true);
+  assert.equal(hasPersistedRoleAccess(account, ['landlord']), true);
+  assert.equal(hasPersistedRoleAccess(account, ['tenant']), true);
+});
+
+test('pending agent application cannot access manager APIs before approval', () => {
+  assert.equal(
+    hasPersistedRoleAccess(
+      { role: 'tenant', roles: ['tenant'], landlord_verified: false },
+      ['agent', 'landlord'],
+    ),
+    false,
+  );
+});
+
+test('an unverified account with an agent role cannot access agent APIs', () => {
+  assert.equal(
+    hasPersistedRoleAccess(
+      { role: 'agent', roles: ['tenant', 'agent'], landlord_verified: false },
+      ['agent'],
+    ),
+    false,
+  );
+});

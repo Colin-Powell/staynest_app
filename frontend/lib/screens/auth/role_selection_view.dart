@@ -14,7 +14,7 @@ const Curve _curveEnter = Curves.easeOutCubic;
 
 // ─── Role model ──────────────────────────────────────────────────────────────
 
-enum StayNestRole { tenant, landlord }
+enum StayNestRole { tenant, landlord, agent }
 
 extension StayNestRoleX on StayNestRole {
   String get key {
@@ -23,6 +23,8 @@ extension StayNestRoleX on StayNestRole {
         return 'tenant';
       case StayNestRole.landlord:
         return 'landlord';
+      case StayNestRole.agent:
+        return 'agent';
     }
   }
 
@@ -31,7 +33,9 @@ extension StayNestRoleX on StayNestRole {
       case StayNestRole.tenant:
         return "I'm looking for a place";
       case StayNestRole.landlord:
-        return "I'm a Landlord/Agent";
+        return "I'm a Landlord";
+      case StayNestRole.agent:
+        return "I'm a Property Agent";
     }
   }
 
@@ -40,7 +44,9 @@ extension StayNestRoleX on StayNestRole {
       case StayNestRole.tenant:
         return '(Tenant)';
       case StayNestRole.landlord:
-        return '(Landlord/Agent)';
+        return '(List and manage my properties)';
+      case StayNestRole.agent:
+        return '(Apply to manage properties; approval required)';
     }
   }
 
@@ -51,6 +57,8 @@ extension StayNestRoleX on StayNestRole {
         return 'assets/images/tenant.webp';
       case StayNestRole.landlord:
         return 'assets/images/landlord.webp';
+      case StayNestRole.agent:
+        return 'assets/images/landlord.webp';
     }
   }
 }
@@ -60,11 +68,13 @@ extension StayNestRoleX on StayNestRole {
 class RoleSelectionView extends StatefulWidget {
   final VoidCallback? onBack;
   final void Function(String role) onSelect;
+  final bool includeAgent;
 
   const RoleSelectionView({
     super.key,
     this.onBack,
     required this.onSelect,
+    this.includeAgent = false,
   });
 
   @override
@@ -78,7 +88,9 @@ class _RoleSelectionViewState extends State<RoleSelectionView>
   late final AnimationController _entranceCtrl;
   late final List<Animation<double>> _cardAnims;
 
-  static const _roles = StayNestRole.values;
+  List<StayNestRole> get _roles => widget.includeAgent
+      ? StayNestRole.values
+      : const [StayNestRole.tenant, StayNestRole.landlord];
 
   @override
   void initState() {

@@ -47,7 +47,9 @@ class _RegisterViewState extends State<RegisterView>
   bool _isLoading = false;
   bool _isGoogleSigningIn = false;
 
-  bool get _isLandlord => AppSession.isLandlord;
+  bool get _isManagerApplicant =>
+      AppSession.pendingApplicationRole == 'landlord' ||
+      AppSession.pendingApplicationRole == 'agent';
 
   // ── Animation controllers ─────────────────────────────────────────────────
   late final AnimationController _entranceCtrl;
@@ -111,13 +113,16 @@ class _RegisterViewState extends State<RegisterView>
         phone,
         email,
         password,
-        AppSession.currentRole,
+        AppSession.pendingApplicationRole ?? AppSession.currentRole,
         referralCode: _referralController.text,
-        businessFields: _isLandlord
+        businessFields: _isManagerApplicant
             ? {
                 'business_name': '$name Properties',
                 'business_type': 'Individual',
-                'business_description': 'Independent Landlord/Agent',
+                'business_description':
+                    AppSession.pendingApplicationRole == 'agent'
+                        ? 'Property Agent'
+                        : 'Independent Landlord',
                 'tax_id': '',
                 'years_in_business': 0,
               }
@@ -140,6 +145,9 @@ class _RegisterViewState extends State<RegisterView>
       }
 
       // Registration succeeded
+      AppSession.pendingApplicationRole =
+          user['application_role']?.toString() ??
+              AppSession.pendingApplicationRole;
       AppSession.updateCurrentUser(user);
       AnalyticsService.logAuthEvent(AnalyticsEvents.signUp, method: 'email');
       AppSession.apiToken = user['token']?.toString() ?? AppSession.apiToken;
@@ -147,7 +155,7 @@ class _RegisterViewState extends State<RegisterView>
 
       if (mounted) {
         setState(() => _isLoading = false);
-        if (AppSession.isLandlord) {
+        if (AppSession.hasPendingManagerApplication) {
           Navigator.pushReplacementNamed(context, '/otp');
         } else {
           Navigator.pushReplacementNamed(context, '/survey');

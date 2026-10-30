@@ -56,15 +56,6 @@ class SuperAdminService {
         if (role != null && role.isNotEmpty) 'role': role,
       }));
 
-  static Future<Map<String, dynamic>> updateUserRole(
-    String id, {
-    required String role,
-  }) async =>
-      _data(await _decode(() => _client.patch(
-            _uri('/admin/users/$id/role'),
-            body: {'role': role},
-          )));
-
   static Future<List<Map<String, dynamic>>> fetchProperties({
     int limit = 10,
     int offset = 0,

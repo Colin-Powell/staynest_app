@@ -187,7 +187,7 @@ class _VerificationCenterState extends State<VerificationCenter> {
       );
     }
 
-    if (!AppSession.isLandlord) {
+    if (!AppSession.isPropertyManagerApplicant) {
       return _ResponsiveWrapper(
         child: Scaffold(
           backgroundColor: _bg,
@@ -213,7 +213,7 @@ class _VerificationCenterState extends State<VerificationCenter> {
                       size: 64, color: _grey),
                   const SizedBox(height: 16),
                   Text(
-                    'Verification center is available for landlords only.',
+                    'Verification center is available to landlord and agent applicants.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(fontSize: 16, color: _grey),
                   ),
@@ -611,7 +611,10 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
     try {
       await VerificationApi.saveDraft({
         'documents': widget.session.toDocumentsMap(),
-        'property': <String, dynamic>{},
+        'property': <String, dynamic>{
+          if (AppSession.pendingApplicationRole != null)
+            'applicant_role': AppSession.pendingApplicationRole,
+        },
       });
     } catch (_) {
       // Keep in-memory progress if the draft endpoint is temporarily unavailable.
@@ -644,7 +647,10 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
     try {
       final payload = {
         'documents': widget.session.toDocumentsMap(),
-        'property': {},
+        'property': <String, dynamic>{
+          if (AppSession.pendingApplicationRole != null)
+            'applicant_role': AppSession.pendingApplicationRole,
+        },
       };
       final resp = await VerificationApi.submitVerification(
         payload,
@@ -841,12 +847,12 @@ class _VerificationStepFlowState extends State<VerificationStepFlow> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Prove ownership or permission to host',
+          Text('Prove ownership or permission to manage properties',
               style: GoogleFonts.poppins(
                   fontSize: 20, fontWeight: FontWeight.w700, color: _dark)),
           const SizedBox(height: 8),
           Text(
-              'Upload a lease, title document, or signed authorization from the property owner. This is required before StayNest can approve your host application.',
+              'Upload a lease, title document, or signed authorization from the property owner. This is required before StayNest can approve your landlord or agent application.',
               style:
                   GoogleFonts.poppins(color: _grey, fontSize: 14, height: 1.5)),
           const SizedBox(height: 24),

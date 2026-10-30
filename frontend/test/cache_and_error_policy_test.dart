@@ -84,6 +84,20 @@ void main() {
   });
 
   group('user-facing error mapping', () {
+    test('shows server validation messages for bad requests', () {
+      expect(
+        ApiResult.mapError(
+          ApiException(
+              400, 'Viewing fee collector must match the property manager.'),
+        ),
+        'Viewing fee collector must match the property manager.',
+      );
+      expect(
+        ApiResult.mapError(ApiException(400, 'Request failed with status 400')),
+        'Please check the information and try again.',
+      );
+    });
+
     test('does not expose server response details', () {
       final message = ApiResult.mapError(
         ApiException(

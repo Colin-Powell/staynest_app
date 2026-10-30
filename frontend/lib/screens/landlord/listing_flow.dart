@@ -237,7 +237,13 @@ class _AddListingFlowState extends State<AddListingFlow> {
       _rentPrice.text = existing['price']?.toString() ?? '';
       _serviceCharges.text = existing['service_charges']?.toString() ?? '';
       _securityDeposit.text = existing['security_deposit']?.toString() ?? '';
-      _managementType = existing['management_type']?.toString() ?? 'landlord';
+      final existingManagementType =
+          existing['management_type']?.toString().toLowerCase();
+      _managementType = existingManagementType == null ||
+              existingManagementType.isEmpty ||
+              existingManagementType == 'unspecified'
+          ? 'landlord'
+          : existingManagementType;
       _viewingFeeType =
           existing['viewing_fee_type']?.toString() ?? 'unspecified';
       _viewingFeeAmount.text = existing['viewing_fee_amount']?.toString() ?? '';
