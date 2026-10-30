@@ -1,3 +1,5 @@
+import { env } from '../config.js';
+
 export const PROPERTY_MANAGEMENT_TYPES = [
   'landlord',
   'agent',
@@ -14,6 +16,7 @@ export const PROPERTY_VIEWING_FEE_TYPES = [
 export const PROPERTY_VIEWING_FEE_COLLECTORS = [
   'landlord',
   'agent',
+  'staynest',
 ] as const;
 
 export type PropertyManagementType =
@@ -22,6 +25,26 @@ export type PropertyViewingFeeType =
   (typeof PROPERTY_VIEWING_FEE_TYPES)[number];
 export type PropertyViewingFeeCollector =
   (typeof PROPERTY_VIEWING_FEE_COLLECTORS)[number];
+
+export function isDesignatedStayNestManager(userId: unknown): boolean {
+  return String(userId ?? '').toLowerCase() ===
+    env.stayNestManagerAccountId;
+}
+
+export function isAuthorizedStayNestManager(
+  userId: unknown,
+  role?: string | null,
+  roles?: string[] | null,
+): boolean {
+  const adminRoles = ['admin', 'super_admin', 'administrator'];
+  return (
+    isDesignatedStayNestManager(userId) ||
+    adminRoles.includes(role?.toLowerCase() ?? '') ||
+    (roles ?? []).some((candidate) =>
+      adminRoles.includes(candidate.toLowerCase()),
+    )
+  );
+}
 
 export interface PropertyClassificationInput {
   managementType: unknown;
@@ -36,8 +59,17 @@ export function inferPropertyManagementType(
   managementType: unknown,
   isOwner: boolean,
   hasAssignedManager: boolean,
+  ownerId?: unknown,
 ): string {
   const normalizedType = String(managementType ?? 'unspecified').toLowerCase();
+  if (
+    isOwner &&
+    isDesignatedStayNestManager(ownerId) &&
+    normalizedType === 'unspecified' &&
+    !hasAssignedManager
+  ) {
+    return 'staynest';
+  }
   return isOwner && normalizedType === 'unspecified' && !hasAssignedManager
     ? 'landlord'
     : normalizedType;
@@ -80,9 +112,7 @@ export function validatePropertyClassification(
     if (amount == null || !Number.isFinite(amount) || amount <= 0) {
       return 'A paid viewing fee must be a positive amount.';
     }
-    const expectedCollector = managementType === 'staynest'
-      ? 'landlord'
-      : managementType;
+    const expectedCollector = managementType;
     if (collector !== expectedCollector) {
       return 'Viewing fee collector must match the property manager.';
     }

@@ -29,6 +29,7 @@ async function applySchema() {
       'add-message-actions.sql',
       'add-promotional-push-campaigns.sql',
       'add-property-transparency.sql',
+      'add-staynest-viewing-fee-recipient.sql',
     ]) {
       const schemaPath = path.join(__dirname, schemaFile);
       const sql = fs.readFileSync(schemaPath, 'utf8');

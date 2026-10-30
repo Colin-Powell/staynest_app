@@ -16,6 +16,12 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 class AppSession {
+  static const String stayNestManagerAccountId =
+      '4e38b356-8cc8-428c-b005-123d61a42f7b';
+
+  static bool get isDesignatedStayNestManager =>
+      currentUserId?.toLowerCase() == stayNestManagerAccountId;
+
   static String currentAppVersion = '1.0.0';
   static String currentAppBuildNumber = '0';
   static const String _prefsKey = 'staynest.session';

@@ -6,7 +6,10 @@ import { finalizeVerificationDecision } from './verifications.js';
 import { pool } from '../db.js';
 import { initiateB2CPayout } from '../services/mpesa.js';
 import { recordAdminAudit } from '../services/audit_service.js';
-import { validatePropertyClassification } from '../services/property_classification.js';
+import {
+  isAuthorizedStayNestManager,
+  validatePropertyClassification,
+} from '../services/property_classification.js';
 import { queueUserPush } from '../services/queue.js';
 import {
   defaultPlatformSettings,
@@ -399,13 +402,12 @@ router.patch('/properties/:id/transparency', requireAuth, authorize('admin'), as
       const managerRoles = Array.isArray(manager?.roles)
         ? manager.roles.map((role) => role.toLowerCase())
         : [];
-      const isAdmin =
-        ['admin', 'super_admin', 'administrator'].includes(
-          manager?.role?.toLowerCase() ?? '',
-        ) || managerRoles.some((role) =>
-          ['admin', 'super_admin', 'administrator'].includes(role),
-        );
-      if (!manager || !isAdmin) {
+      const isAuthorizedManager = isAuthorizedStayNestManager(
+        manager?.id,
+        manager?.role,
+        managerRoles,
+      );
+      if (!manager || !isAuthorizedManager) {
         return res.status(400).json({ error: 'Select an authorized StayNest administrator.' });
       }
     }

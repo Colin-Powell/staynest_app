@@ -1,34 +1,34 @@
-import { Router } from 'express';
-import { pool, query } from '../db.js';
-import { requireAuth, authorize } from '../middleware/auth.js';
-import { queueUserPush } from '../services/queue.js';
-import { sendAlertEmail, sendLandlordVerificationDecisionEmail } from '../services/email.js';
+import { Router } from "express";
+import { pool, query } from "../db.js";
+import { requireAuth, authorize } from "../middleware/auth.js";
+import { queueUserPush } from "../services/queue.js";
+import { sendAlertEmail, sendLandlordVerificationDecisionEmail, } from "../services/email.js";
 const router = Router();
 export const REQUIRED_VERIFICATION_DOCUMENTS = [
-    'id_photo_front',
-    'id_photo_back',
-    'selfie',
-    'lease_agreement',
+    "id_photo_front",
+    "id_photo_back",
+    "selfie",
+    "lease_agreement",
 ];
 const DOCUMENT_ALIASES = {
-    id_photo_front: ['id_photo_front', 'idPhotoFront'],
-    id_photo_back: ['id_photo_back', 'idPhotoBack'],
-    selfie: ['selfie', 'selfieUrl'],
-    lease_agreement: ['lease_agreement', 'leaseAgreement', 'leaseAgreementUrl'],
-    proof_of_address: ['proof_of_address', 'proofOfAddressUrl'],
-    utility_bill: ['utility_bill', 'utilityBillUrl'],
+    id_photo_front: ["id_photo_front", "idPhotoFront"],
+    id_photo_back: ["id_photo_back", "idPhotoBack"],
+    selfie: ["selfie", "selfieUrl"],
+    lease_agreement: ["lease_agreement", "leaseAgreement", "leaseAgreementUrl"],
+    proof_of_address: ["proof_of_address", "proofOfAddressUrl"],
+    utility_bill: ["utility_bill", "utilityBillUrl"],
 };
 const normalizeVerificationDocuments = (documents) => {
     const normalized = {};
-    if (!documents || typeof documents !== 'object') {
+    if (!documents || typeof documents !== "object") {
         return normalized;
     }
     const raw = documents;
     for (const [canonicalKey, aliases] of Object.entries(DOCUMENT_ALIASES)) {
         const value = aliases
             .map((key) => raw[key])
-            .find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0);
-        if (typeof value === 'string' && value.trim().length > 0) {
+            .find((candidate) => typeof candidate === "string" && candidate.trim().length > 0);
+        if (typeof value === "string" && value.trim().length > 0) {
             normalized[canonicalKey] = value.trim();
         }
     }
@@ -36,7 +36,8 @@ const normalizeVerificationDocuments = (documents) => {
 };
 export const hasRequiredVerificationDocuments = (documents) => {
     const normalizedDocuments = normalizeVerificationDocuments(documents);
-    return REQUIRED_VERIFICATION_DOCUMENTS.every((key) => typeof normalizedDocuments[key] === 'string' && normalizedDocuments[key].trim().length > 0);
+    return REQUIRED_VERIFICATION_DOCUMENTS.every((key) => typeof normalizedDocuments[key] === "string" &&
+        normalizedDocuments[key].trim().length > 0);
 };
 export async function finalizeVerificationDecision({ verificationId, userId, status, adminNotes, adminId, }) {
     const client = await pool.connect();
@@ -44,37 +45,44 @@ export async function finalizeVerificationDecision({ verificationId, userId, sta
     let user;
     let didTransition = false;
     try {
-        await client.query('BEGIN');
-        const accountResult = await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
+        await client.query("BEGIN");
+        const accountResult = await client.query("SELECT id FROM users WHERE id = $1 FOR UPDATE", [userId]);
         if (!accountResult.rows[0]) {
-            throw Object.assign(new Error('Account not found.'), { statusCode: 404 });
+            throw Object.assign(new Error("Account not found."), { statusCode: 404 });
         }
-        const currentResult = await client.query(`SELECT id, user_id, status, documents FROM verifications WHERE id = $1 FOR UPDATE`, [verificationId]);
+        const currentResult = await client.query(`SELECT id, user_id, status, documents, property_data
+       FROM verifications WHERE id = $1 FOR UPDATE`, [verificationId]);
         const current = currentResult.rows[0];
         if (!current || current.user_id !== userId) {
-            throw Object.assign(new Error('Verification record not found.'), {
+            throw Object.assign(new Error("Verification record not found."), {
                 statusCode: 404,
             });
         }
-        if (current.status === 'cancelled') {
-            throw Object.assign(new Error('Cancelled applications cannot be approved or rejected.'), { statusCode: 409 });
+        if (current.status === "cancelled") {
+            throw Object.assign(new Error("Cancelled applications cannot be approved or rejected."), { statusCode: 409 });
         }
-        if (status === 'approved' &&
+        if (status === "approved" &&
             !hasRequiredVerificationDocuments(current.documents)) {
-            throw Object.assign(new Error('Required identity and ownership documents must be present before approval.'), { statusCode: 409 });
+            throw Object.assign(new Error("Required identity and ownership or authorization documents must be present before approval."), { statusCode: 409 });
         }
         if (current.status === status) {
             const existing = await client.query(`SELECT id, user_id, status, documents, property_data, admin_notes,
                 created_at, updated_at, submitted_at, cancelled_at
          FROM verifications WHERE id = $1`, [verificationId]);
             verification = existing.rows[0];
-            const existingUser = await client.query('SELECT id, name, email FROM users WHERE id = $1', [userId]);
+            const existingUser = await client.query("SELECT id, name, email FROM users WHERE id = $1", [userId]);
             user = existingUser.rows[0];
-            await client.query('COMMIT');
+            await client.query("COMMIT");
         }
         else {
             didTransition = true;
-            if (!['submitted', 'under_review', 'pending_review', 'manual_review', 'more_info_required'].includes(current.status)) {
+            if (![
+                "submitted",
+                "under_review",
+                "pending_review",
+                "manual_review",
+                "more_info_required",
+            ].includes(current.status)) {
                 throw Object.assign(new Error(`Application in ${current.status} state cannot be ${status}.`), { statusCode: 409 });
             }
             const verificationResult = await client.query(`UPDATE verifications
@@ -83,26 +91,35 @@ export async function finalizeVerificationDecision({ verificationId, userId, sta
          RETURNING id, user_id, status, documents, property_data, admin_notes,
                    created_at, updated_at, submitted_at, cancelled_at`, [status, adminNotes ?? null, verificationId]);
             verification = verificationResult.rows[0];
-            if (status === 'approved') {
+            if (status === "approved") {
+                const propertyData = current.property_data;
+                const applicantRole = propertyData?.applicant_role === "agent" ? "agent" : "landlord";
                 await client.query(`UPDATE users
-           SET landlord_verified = true,
+           SET role = $2,
+               landlord_verified = true,
                roles = CASE
-                 WHEN 'landlord' = ANY(roles) THEN roles
-                 ELSE array_append(roles, 'landlord')
+                 WHEN $2 = ANY(COALESCE(roles, ARRAY[]::text[]))
+                   THEN COALESCE(roles, ARRAY[]::text[])
+                 ELSE array_append(COALESCE(roles, ARRAY[]::text[]), $2)
                END
-           WHERE id = $1`, [userId]);
+           WHERE id = $1`, [userId, applicantRole]);
             }
-            const userResult = await client.query('SELECT id, name, email FROM users WHERE id = $1 LIMIT 1', [userId]);
+            const userResult = await client.query("SELECT id, name, email FROM users WHERE id = $1 LIMIT 1", [userId]);
             user = userResult.rows[0];
             if (adminId) {
                 await client.query(`INSERT INTO admin_audit_logs (admin_id, action, entity_type, entity_id, metadata)
-           VALUES ($1, $2, 'landlord_verification', $3, $4::jsonb)`, [adminId, `verification_${status}`, verificationId, JSON.stringify({ userId, adminNotes: adminNotes ?? null })]);
+           VALUES ($1, $2, 'landlord_verification', $3, $4::jsonb)`, [
+                    adminId,
+                    `verification_${status}`,
+                    verificationId,
+                    JSON.stringify({ userId, adminNotes: adminNotes ?? null }),
+                ]);
             }
-            await client.query('COMMIT');
+            await client.query("COMMIT");
         }
     }
     catch (error) {
-        await client.query('ROLLBACK');
+        await client.query("ROLLBACK");
         throw error;
     }
     finally {
@@ -113,66 +130,92 @@ export async function finalizeVerificationDecision({ verificationId, userId, sta
             await sendLandlordVerificationDecisionEmail(user.email, status, user.name, adminNotes ?? undefined);
         }
         catch (emailError) {
-            console.error('Failed to send landlord verification email:', emailError);
+            console.error("Failed to send landlord verification email:", emailError);
         }
     }
     try {
-        if (status === 'approved') {
-            await queueUserPush(userId, 'Verification Approved', 'Your host verification was approved. You can now switch to the landlord portal and list properties.', { type: 'verification_approved', verificationId });
+        if (status === "approved") {
+            await queueUserPush(userId, "Verification Approved", "Your host verification was approved. You can now switch to the landlord portal and list properties.", { type: "verification_approved", verificationId });
         }
         else {
-            await queueUserPush(userId, 'Verification Update', adminNotes || 'Your host application was not approved. Review the reason and reapply if permitted.', { type: 'verification_rejected', verificationId });
+            await queueUserPush(userId, "Verification Update", adminNotes ||
+                "Your host application was not approved. Review the reason and reapply if permitted.", { type: "verification_rejected", verificationId });
         }
     }
     catch (notificationError) {
-        console.error('Failed to queue landlord verification notification:', notificationError);
+        console.error("Failed to queue landlord verification notification:", notificationError);
     }
     return verification;
 }
 export const createVerificationHandler = async (req, res, next) => {
     try {
-        const account = await query('SELECT verified, landlord_verified FROM users WHERE id = $1 LIMIT 1', [req.auth.id]);
+        const account = await query("SELECT verified, landlord_verified FROM users WHERE id = $1 LIMIT 1", [req.auth.id]);
         if (account.rows[0]?.verified !== true) {
-            return res.status(403).json({ error: 'Verify your email before submitting a host application.' });
+            return res
+                .status(403)
+                .json({
+                error: "Verify your email before submitting a host application.",
+            });
         }
         if (account.rows[0]?.landlord_verified === true) {
-            return res.status(409).json({ error: 'Your host application is already approved.' });
+            return res
+                .status(409)
+                .json({ error: "Your host application is already approved." });
         }
         const body = (req.body ?? {});
         const documentsInput = body.documents ?? body.property_data?.documents ?? {};
-        const propertyInput = body.property ?? body.property_data ?? {};
+        const rawPropertyInput = body.property ?? body.property_data ?? {};
+        const propertyInput = rawPropertyInput && typeof rawPropertyInput === "object"
+            ? { ...rawPropertyInput }
+            : {};
+        const applicantRole = String(propertyInput.applicant_role ?? "landlord").toLowerCase();
+        if (!["landlord", "agent"].includes(applicantRole)) {
+            return res
+                .status(400)
+                .json({ error: "Choose landlord or agent for this application." });
+        }
+        propertyInput.applicant_role = applicantRole;
         const documents = normalizeVerificationDocuments(documentsInput);
         if (!documents || Object.keys(documents).length === 0) {
-            return res.status(400).json({ error: 'Verification documents are required.' });
+            return res
+                .status(400)
+                .json({ error: "Verification documents are required." });
         }
-        const missingDocuments = REQUIRED_VERIFICATION_DOCUMENTS.filter((key) => typeof documents[key] !== 'string' || documents[key].trim().length === 0);
+        const missingDocuments = REQUIRED_VERIFICATION_DOCUMENTS.filter((key) => typeof documents[key] !== "string" ||
+            documents[key].trim().length === 0);
         if (missingDocuments.length > 0) {
             return res.status(400).json({
-                error: 'All required verification documents must be uploaded before submission.',
+                error: "All required verification documents must be uploaded before submission.",
                 missing_documents: missingDocuments,
             });
         }
         const client = await pool.connect();
         let resultRow;
         try {
-            await client.query('BEGIN');
-            const lockedAccount = await client.query('SELECT verified, landlord_verified FROM users WHERE id = $1 FOR UPDATE', [req.auth.id]);
+            await client.query("BEGIN");
+            const lockedAccount = await client.query("SELECT verified, landlord_verified FROM users WHERE id = $1 FOR UPDATE", [req.auth.id]);
             if (lockedAccount.rows[0]?.verified !== true) {
-                await client.query('ROLLBACK');
-                return res.status(403).json({ error: 'Verify your email before submitting a host application.' });
+                await client.query("ROLLBACK");
+                return res
+                    .status(403)
+                    .json({
+                    error: "Verify your email before submitting a host application.",
+                });
             }
             if (lockedAccount.rows[0]?.landlord_verified === true) {
-                await client.query('ROLLBACK');
-                return res.status(409).json({ error: 'Your host application is already approved.' });
+                await client.query("ROLLBACK");
+                return res
+                    .status(409)
+                    .json({ error: "Your host application is already approved." });
             }
             const activeVerification = await client.query(`SELECT id, status FROM verifications
          WHERE user_id = $1
            AND status IN ('submitted', 'under_review', 'pending_review', 'manual_review')
          ORDER BY created_at DESC LIMIT 1 FOR UPDATE`, [req.auth.id]);
             if (activeVerification.rows[0]) {
-                await client.query('ROLLBACK');
+                await client.query("ROLLBACK");
                 return res.status(409).json({
-                    error: 'You already have an active host application.',
+                    error: "You already have an active host application.",
                     current_status: activeVerification.rows[0].status,
                     verification_id: activeVerification.rows[0].id,
                 });
@@ -193,13 +236,21 @@ export const createVerificationHandler = async (req, res, next) => {
              VALUES ($3, 'submitted', $1::jsonb, $2::jsonb, now(), 2)
              RETURNING id, user_id, status, documents, property_data, admin_notes,
                        created_at, updated_at, submitted_at, cancelled_at`, draftRecord
-                ? [JSON.stringify(documents), JSON.stringify(propertyInput), draftRecord.id]
-                : [JSON.stringify(documents), JSON.stringify(propertyInput), req.auth.id]);
+                ? [
+                    JSON.stringify(documents),
+                    JSON.stringify(propertyInput),
+                    draftRecord.id,
+                ]
+                : [
+                    JSON.stringify(documents),
+                    JSON.stringify(propertyInput),
+                    req.auth.id,
+                ]);
             resultRow = submitted.rows[0];
-            await client.query('COMMIT');
+            await client.query("COMMIT");
         }
         catch (error) {
-            await client.query('ROLLBACK');
+            await client.query("ROLLBACK");
             throw error;
         }
         finally {
@@ -209,17 +260,17 @@ export const createVerificationHandler = async (req, res, next) => {
         const user = userResult.rows[0];
         if (user?.email) {
             try {
-                await sendAlertEmail(user.email, 'StayNest landlord verification submitted', `Hi ${user.name || 'Landlord'},\n\nYour landlord verification documents have been submitted successfully. Our team will review them shortly and notify you once a decision is made.\n\nWarm regards,\nThe StayNest Team`, `<p>Hi ${user.name || 'Landlord'},</p><p>Your landlord verification documents have been submitted successfully.</p><p>Our team will review them shortly and notify you once a decision is made.</p><p>Warm regards,<br>The StayNest Team</p>`);
+                await sendAlertEmail(user.email, "StayNest landlord verification submitted", `Hi ${user.name || "Landlord"},\n\nYour landlord verification documents have been submitted successfully. Our team will review them shortly and notify you once a decision is made.\n\nWarm regards,\nThe StayNest Team`, `<p>Hi ${user.name || "Landlord"},</p><p>Your landlord verification documents have been submitted successfully.</p><p>Our team will review them shortly and notify you once a decision is made.</p><p>Warm regards,<br>The StayNest Team</p>`);
             }
             catch (emailError) {
-                console.error('Failed to send landlord verification submission email:', emailError);
+                console.error("Failed to send landlord verification submission email:", emailError);
             }
         }
         try {
-            await queueUserPush(req.auth.id, 'Host application submitted', 'Your verification is submitted and awaiting review. We will notify you when its status changes.', { type: 'host_application_submitted', verificationId: resultRow.id });
+            await queueUserPush(req.auth.id, "Host application submitted", "Your verification is submitted and awaiting review. We will notify you when its status changes.", { type: "host_application_submitted", verificationId: resultRow.id });
         }
         catch (notificationError) {
-            console.error('Failed to queue host application submission notification:', notificationError);
+            console.error("Failed to queue host application submission notification:", notificationError);
         }
         return res.status(201).json({ data: resultRow });
     }
@@ -227,30 +278,46 @@ export const createVerificationHandler = async (req, res, next) => {
         next(error);
     }
 };
-router.post('/', requireAuth, createVerificationHandler);
-router.post('/draft', requireAuth, async (req, res, next) => {
+router.post("/", requireAuth, createVerificationHandler);
+router.post("/draft", requireAuth, async (req, res, next) => {
     const client = await pool.connect();
     try {
         const body = (req.body ?? {});
         const documents = normalizeVerificationDocuments(body.documents ?? {});
-        const propertyData = body.property ?? {};
-        await client.query('BEGIN');
-        const account = await client.query('SELECT verified, landlord_verified FROM users WHERE id = $1 FOR UPDATE', [req.auth.id]);
+        const rawPropertyData = body.property ?? {};
+        const propertyData = rawPropertyData && typeof rawPropertyData === "object"
+            ? { ...rawPropertyData }
+            : {};
+        const applicantRole = String(propertyData.applicant_role ?? "landlord").toLowerCase();
+        if (!["landlord", "agent"].includes(applicantRole)) {
+            return res
+                .status(400)
+                .json({ error: "Choose landlord or agent for this application." });
+        }
+        propertyData.applicant_role = applicantRole;
+        await client.query("BEGIN");
+        const account = await client.query("SELECT verified, landlord_verified FROM users WHERE id = $1 FOR UPDATE", [req.auth.id]);
         if (account.rows[0]?.verified !== true) {
-            await client.query('ROLLBACK');
-            return res.status(403).json({ error: 'Verify your email before starting a host application.' });
+            await client.query("ROLLBACK");
+            return res
+                .status(403)
+                .json({
+                error: "Verify your email before starting a host application.",
+            });
         }
         if (account.rows[0]?.landlord_verified === true) {
-            await client.query('ROLLBACK');
-            return res.status(409).json({ error: 'Your host application is already approved.' });
+            await client.query("ROLLBACK");
+            return res
+                .status(409)
+                .json({ error: "Your host application is already approved." });
         }
         const active = await client.query(`SELECT id, status FROM verifications
       WHERE user_id = $1 AND status IN ('submitted', 'under_review', 'pending_review', 'manual_review')
        ORDER BY created_at DESC LIMIT 1`, [req.auth.id]);
         if (active.rows[0]) {
-            await client.query('ROLLBACK');
+            await client.query("ROLLBACK");
             return res.status(409).json({
-                error: 'Your host application is already awaiting review.',
+                error: "Your host application is already awaiting review.",
                 current_status: active.rows[0].status,
                 verification_id: active.rows[0].id,
             });
@@ -266,23 +333,31 @@ router.post('/draft', requireAuth, async (req, res, next) => {
                updated_at = now(), reminder_stage = 0, reminder_sent_at = NULL
            WHERE id = $3
            RETURNING id, user_id, status, documents, property_data, admin_notes,
-                     created_at, updated_at, submitted_at, cancelled_at, reminder_stage`, [JSON.stringify(documents), JSON.stringify(propertyData), current.id])
+                     created_at, updated_at, submitted_at, cancelled_at, reminder_stage`, [
+                JSON.stringify(documents),
+                JSON.stringify(propertyData),
+                current.id,
+            ])
             : await client.query(`INSERT INTO verifications (user_id, status, documents, property_data)
            VALUES ($1, 'draft', $2::jsonb, $3::jsonb)
            RETURNING id, user_id, status, documents, property_data, admin_notes,
-                     created_at, updated_at, submitted_at, cancelled_at, reminder_stage`, [req.auth.id, JSON.stringify(documents), JSON.stringify(propertyData)]);
-        await client.query('COMMIT');
+                     created_at, updated_at, submitted_at, cancelled_at, reminder_stage`, [
+                req.auth.id,
+                JSON.stringify(documents),
+                JSON.stringify(propertyData),
+            ]);
+        await client.query("COMMIT");
         return res.json({ data: result.rows[0] });
     }
     catch (error) {
-        await client.query('ROLLBACK');
+        await client.query("ROLLBACK");
         return next(error);
     }
     finally {
         client.release();
     }
 });
-router.post('/cancel', requireAuth, async (req, res, next) => {
+router.post("/cancel", requireAuth, async (req, res, next) => {
     try {
         const result = await query(`UPDATE verifications
        SET status = 'cancelled', cancelled_at = now(), updated_at = now()
@@ -293,14 +368,16 @@ router.post('/cancel', requireAuth, async (req, res, next) => {
        )
        RETURNING id, user_id, status, admin_notes, created_at, updated_at, submitted_at, cancelled_at`, [req.auth.id]);
         if (!result.rows[0])
-            return res.status(404).json({ error: 'No active host application found.' });
+            return res
+                .status(404)
+                .json({ error: "No active host application found." });
         return res.json({ data: result.rows[0] });
     }
     catch (error) {
         return next(error);
     }
 });
-router.post('/dismiss-reminder', requireAuth, async (req, res, next) => {
+router.post("/dismiss-reminder", requireAuth, async (req, res, next) => {
     try {
         const result = await query(`UPDATE verifications
        SET reminder_stage = 2, reminder_sent_at = now(), updated_at = now()
@@ -311,7 +388,9 @@ router.post('/dismiss-reminder', requireAuth, async (req, res, next) => {
        )
        RETURNING id, status, reminder_stage, updated_at`, [req.auth.id]);
         if (!result.rows[0])
-            return res.status(404).json({ error: 'No incomplete host application found.' });
+            return res
+                .status(404)
+                .json({ error: "No incomplete host application found." });
         return res.json({ data: result.rows[0] });
     }
     catch (error) {
@@ -319,7 +398,7 @@ router.post('/dismiss-reminder', requireAuth, async (req, res, next) => {
     }
 });
 // Get current user's latest verification
-router.get('/me', requireAuth, async (req, res, next) => {
+router.get("/me", requireAuth, async (req, res, next) => {
     try {
         const result = await query(`SELECT id, user_id, status, documents, property_data, admin_notes, created_at, updated_at,
               submitted_at, cancelled_at, reminder_stage
@@ -337,9 +416,11 @@ router.get('/me', requireAuth, async (req, res, next) => {
     }
 });
 // Admin: Get all verifications with optional status filter
-router.get('/admin/all', requireAuth, authorize('admin'), async (req, res, next) => {
+router.get("/admin/all", requireAuth, authorize("admin"), async (req, res, next) => {
     try {
-        const status = typeof req.query.status === 'string' ? req.query.status.trim() : undefined;
+        const status = typeof req.query.status === "string"
+            ? req.query.status.trim()
+            : undefined;
         const offset = parseInt(req.query.offset) || 0;
         const limit = Math.min(parseInt(req.query.limit) || 50, 100);
         const conditions = [];
@@ -348,28 +429,37 @@ router.get('/admin/all', requireAuth, authorize('admin'), async (req, res, next)
             params.push(status);
             conditions.push(`v.status = $${params.length}`);
         }
-        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
         const result = await query(`SELECT v.id, v.user_id, v.status, v.documents, v.property_data, v.admin_notes, v.created_at, v.updated_at,
               u.name AS user_name, u.email AS user_email, u.phone AS user_phone
        FROM verifications v LEFT JOIN users u ON u.id = v.user_id ${whereClause}
        ORDER BY v.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
         const countRes = await query(`SELECT COUNT(*) as total FROM verifications v ${whereClause}`, params);
-        return res.json({ data: result.rows, total: countRes.rows[0]?.total || 0, offset, limit });
+        return res.json({
+            data: result.rows,
+            total: countRes.rows[0]?.total || 0,
+            offset,
+            limit,
+        });
     }
     catch (error) {
         next(error);
     }
 });
 // Admin: Approve or reject verification
-router.put('/:id', requireAuth, authorize('admin'), async (req, res, next) => {
+router.put("/:id", requireAuth, authorize("admin"), async (req, res, next) => {
     try {
         const { status, admin_notes } = req.body;
-        if (!status || !['approved', 'rejected'].includes(status)) {
-            return res.status(400).json({ error: 'Status must be "approved" or "rejected".' });
+        if (!status || !["approved", "rejected"].includes(status)) {
+            return res
+                .status(400)
+                .json({ error: 'Status must be "approved" or "rejected".' });
         }
         const verificationRecord = await query(`SELECT id, user_id FROM verifications WHERE id = $1 LIMIT 1`, [req.params.id]);
         if (verificationRecord.rowCount === 0) {
-            return res.status(404).json({ error: 'Verification record not found.' });
+            return res
+                .status(404)
+                .json({ error: "Verification record not found." });
         }
         const payload = await finalizeVerificationDecision({
             verificationId: verificationRecord.rows[0].id,

@@ -106,8 +106,9 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
     );
 
     String? feeCollectorFor(String type) => switch (type) {
-          'landlord' || 'staynest' => 'landlord',
+          'landlord' => 'landlord',
           'agent' => 'agent',
+          'staynest' => 'staynest',
           _ => null,
         };
 
@@ -162,9 +163,9 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
                     TextField(
                       controller: managerIdController,
                       decoration: const InputDecoration(
-                        labelText: 'Assigned administrator user ID',
+                        labelText: 'Assigned StayNest manager user ID',
                         helperText:
-                            'Must belong to an authorized StayNest admin account.',
+                            'May be an authorized administrator or the designated StayNest manager account.',
                       ),
                     ),
                   ],
@@ -210,17 +211,21 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
                             case final String collector)
                           DropdownMenuItem(
                             value: collector,
-                            child: Text(collector == 'agent'
-                                ? 'Assigned agent'
-                                : 'Landlord'),
+                            child: Text(switch (collector) {
+                              'agent' => 'Assigned agent',
+                              'staynest' => 'StayNest',
+                              _ => 'Landlord',
+                            }),
                           ),
                       ],
                       onChanged: (value) =>
                           setDialogState(() => viewingFeeCollector = value),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'StayNest does not collect viewing fees or process visit payments.',
+                    Text(
+                      managementType == 'staynest'
+                          ? 'Fees are attributed to StayNest and arranged directly with the property manager; payments are not processed in the app.'
+                          : 'Fees are arranged directly with the property manager; payments are not processed in the app.',
                     ),
                   ],
                   const SizedBox(height: 12),
@@ -600,13 +605,18 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
                       ),
                     if (property['assigned_manager_id'] != null)
                       _buildTextRow(
-                        'Assigned administrator ID:',
+                        'Assigned StayNest manager ID:',
                         property['assigned_manager_id'].toString(),
                       ),
                     _buildTextRow(
                       'Viewing fee:',
                       property['viewing_fee_type'] == 'paid'
-                          ? 'KSh ${property['viewing_fee_amount'] ?? 'Amount missing'} • ${property['viewing_fee_collector'] ?? 'Collector missing'}'
+                          ? 'KSh ${property['viewing_fee_amount'] ?? 'Amount missing'} • ${switch (property['viewing_fee_collector']) {
+                              'staynest' => 'StayNest',
+                              'agent' => 'Assigned agent',
+                              'landlord' => 'Landlord',
+                              _ => 'Collector missing',
+                            }}'
                           : (property['viewing_fee_type']?.toString() ??
                                   'unspecified')
                               .replaceAll('_', ' '),

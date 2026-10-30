@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  isAuthorizedStayNestManager,
   inferPropertyManagementType,
   validatePropertyClassification,
 } from '../services/property_classification.js';
@@ -17,6 +18,27 @@ test('infers landlord management for an owner editing a legacy unspecified listi
 test('does not infer landlord management for non-owners or assigned listings', () => {
   assert.equal(inferPropertyManagementType('unspecified', false, false), 'unspecified');
   assert.equal(inferPropertyManagementType('unspecified', true, true), 'unspecified');
+});
+
+test('infers StayNest management for the designated account', () => {
+  assert.equal(
+    inferPropertyManagementType(
+      'unspecified',
+      true,
+      false,
+      '4e38b356-8cc8-428c-b005-123d61a42f7b',
+    ),
+    'staynest',
+  );
+});
+
+test('authorizes the designated StayNest manager without changing the user role', () => {
+  assert.equal(
+    isAuthorizedStayNestManager('4e38b356-8cc8-428c-b005-123d61a42f7b', 'landlord'),
+    true,
+  );
+  assert.equal(isAuthorizedStayNestManager('other-user-id', 'landlord'), false);
+  assert.equal(isAuthorizedStayNestManager('admin-user-id', 'admin'), true);
 });
 
 test('accepts landlord-managed free viewing', () => {
@@ -141,14 +163,14 @@ test('requires a separate assigned administrator for StayNest management', () =>
   );
 });
 
-test('StayNest never collects viewing fees through the platform', () => {
+test('StayNest-managed listings attribute paid viewing fees to StayNest', () => {
   assert.equal(
     validatePropertyClassification({
       managementType: 'staynest',
       assignedManagerId: 'admin-user-id',
       viewingFeeType: 'paid',
       viewingFeeAmount: 200,
-      viewingFeeCollector: 'landlord',
+      viewingFeeCollector: 'staynest',
     }),
     null,
   );
@@ -158,7 +180,7 @@ test('StayNest never collects viewing fees through the platform', () => {
       assignedManagerId: 'admin-user-id',
       viewingFeeType: 'paid',
       viewingFeeAmount: 200,
-      viewingFeeCollector: 'staynest',
+      viewingFeeCollector: 'landlord',
     }),
     null,
   );

@@ -1,3 +1,4 @@
+import { env } from '../config.js';
 export const PROPERTY_MANAGEMENT_TYPES = [
     'landlord',
     'agent',
@@ -12,7 +13,30 @@ export const PROPERTY_VIEWING_FEE_TYPES = [
 export const PROPERTY_VIEWING_FEE_COLLECTORS = [
     'landlord',
     'agent',
+    'staynest',
 ];
+export function isDesignatedStayNestManager(userId) {
+    return String(userId ?? '').toLowerCase() ===
+        env.stayNestManagerAccountId;
+}
+export function isAuthorizedStayNestManager(userId, role, roles) {
+    const adminRoles = ['admin', 'super_admin', 'administrator'];
+    return (isDesignatedStayNestManager(userId) ||
+        adminRoles.includes(role?.toLowerCase() ?? '') ||
+        (roles ?? []).some((candidate) => adminRoles.includes(candidate.toLowerCase())));
+}
+export function inferPropertyManagementType(managementType, isOwner, hasAssignedManager, ownerId) {
+    const normalizedType = String(managementType ?? 'unspecified').toLowerCase();
+    if (isOwner &&
+        isDesignatedStayNestManager(ownerId) &&
+        normalizedType === 'unspecified' &&
+        !hasAssignedManager) {
+        return 'staynest';
+    }
+    return isOwner && normalizedType === 'unspecified' && !hasAssignedManager
+        ? 'landlord'
+        : normalizedType;
+}
 export function validatePropertyClassification(input, requireExplicitViewingFee = false) {
     const managementType = String(input.managementType ?? '').toLowerCase();
     const feeType = String(input.viewingFeeType ?? '').toLowerCase();
@@ -44,9 +68,7 @@ export function validatePropertyClassification(input, requireExplicitViewingFee 
         if (amount == null || !Number.isFinite(amount) || amount <= 0) {
             return 'A paid viewing fee must be a positive amount.';
         }
-        const expectedCollector = managementType === 'staynest'
-            ? 'landlord'
-            : managementType;
+        const expectedCollector = managementType;
         if (collector !== expectedCollector) {
             return 'Viewing fee collector must match the property manager.';
         }

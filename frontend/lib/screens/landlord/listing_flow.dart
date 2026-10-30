@@ -142,7 +142,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
   final _securityDeposit = TextEditingController();
   final _viewingFeeAmount = TextEditingController();
   final _viewingFeeNotes = TextEditingController();
-  String _managementType = 'landlord';
+  String _managementType =
+      AppSession.isDesignatedStayNestManager ? 'staynest' : 'landlord';
   String _viewingFeeType = 'unspecified';
   String? _viewingFeeCollector;
   String _minimumStay = '6 Months';
@@ -239,11 +240,13 @@ class _AddListingFlowState extends State<AddListingFlow> {
       _securityDeposit.text = existing['security_deposit']?.toString() ?? '';
       final existingManagementType =
           existing['management_type']?.toString().toLowerCase();
-      _managementType = existingManagementType == null ||
+      _managementType = AppSession.isDesignatedStayNestManager
+          ? 'staynest'
+          : existingManagementType == null ||
               existingManagementType.isEmpty ||
               existingManagementType == 'unspecified'
-          ? 'landlord'
-          : existingManagementType;
+              ? 'landlord'
+              : existingManagementType;
       _viewingFeeType =
           existing['viewing_fee_type']?.toString() ?? 'unspecified';
       _viewingFeeAmount.text = existing['viewing_fee_amount']?.toString() ?? '';
@@ -471,7 +474,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
       'viewing_fee_amount':
           _viewingFeeType == 'paid' ? _viewingFeeAmount.text.trim() : null,
       'viewing_fee_collector':
-          _viewingFeeType == 'paid' ? _viewingFeeCollector : null,
+          _viewingFeeType == 'paid' ? _expectedViewingFeeCollector : null,
       'viewing_fee_notes': _viewingFeeNotes.text.trim(),
       'minimum_stay': _minimumStay,
       'available_from': _availableFrom?.toIso8601String().split('T').first,
@@ -750,7 +753,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'viewing_fee_amount':
             _viewingFeeType == 'paid' ? _viewingFeeAmount.text.trim() : null,
         'viewing_fee_collector':
-            _viewingFeeType == 'paid' ? _viewingFeeCollector : null,
+            _viewingFeeType == 'paid' ? _expectedViewingFeeCollector : null,
         'viewing_fee_notes': _viewingFeeNotes.text.trim(),
         'minimum_stay': _minimumStay,
         'available_from': _availableFrom?.toIso8601String().split('T').first,
@@ -2059,6 +2062,13 @@ class _AddListingFlowState extends State<AddListingFlow> {
     );
   }
 
+  String? get _expectedViewingFeeCollector => switch (_managementType) {
+        'agent' => 'agent',
+        'landlord' => 'landlord',
+        'staynest' => 'staynest',
+        _ => null,
+      };
+
   String? _viewingFeeValidationError() {
     if (!widget.isEditing && !{'free', 'paid'}.contains(_viewingFeeType)) {
       return 'Choose free viewing or a required viewing fee before publishing.';
@@ -2079,13 +2089,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
     if (amount == null || !amount.isFinite || amount <= 0) {
       return 'Enter a positive viewing fee amount in KSh.';
     }
-    final expectedCollector = switch (_managementType) {
-      'agent' => 'agent',
-      'landlord' || 'staynest' => 'landlord',
-      _ => null,
-    };
-    if (expectedCollector == null ||
-        _viewingFeeCollector != expectedCollector) {
+    if (_expectedViewingFeeCollector == null) {
       return 'The viewing fee collector must match the property manager.';
     }
     return null;
@@ -2098,11 +2102,7 @@ class _AddListingFlowState extends State<AddListingFlow> {
       'staynest' => 'StayNest managed',
       _ => 'Management not specified',
     };
-    final collector = switch (_managementType) {
-      'agent' => 'agent',
-      'landlord' || 'staynest' => 'landlord',
-      _ => null,
-    };
+    final collector = _expectedViewingFeeCollector;
     final amount = double.tryParse(_viewingFeeAmount.text.trim());
     final preview = switch (_viewingFeeType) {
       'free' => 'Free viewing',
@@ -2226,7 +2226,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
                 DropdownMenuItem(
                   value: collector,
                   child: Text(
-                      collector == 'agent' ? 'Assigned agent' : 'Landlord'),
+                      switch (collector) {
+                        'agent' => 'Assigned agent',
+                        'staynest' => 'StayNest',
+                        _ => 'Landlord',
+                      }),
                 ),
               ],
               onChanged: (value) => setState(() {
@@ -2259,7 +2263,9 @@ class _AddListingFlowState extends State<AddListingFlow> {
           ),
           const SizedBox(height: 8),
           Text(
-            'StayNest does not collect viewing fees or process payments for visits.',
+            _managementType == 'staynest'
+                ? 'Viewing fees are attributed to StayNest and arranged directly with the property manager; payments are not processed in the app.'
+                : 'Viewing fees are arranged directly with the property manager; payments are not processed in the app.',
             style: GoogleFonts.poppins(color: _grey, fontSize: 12),
           ),
         ],

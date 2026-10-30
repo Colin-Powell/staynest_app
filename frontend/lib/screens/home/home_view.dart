@@ -1126,9 +1126,6 @@ class _HomeViewState extends State<HomeView> {
     const gap = 16.0;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isDesktop = screenWidth >= _desktopBreakpoint;
-    final appCardWidth = isDesktop
-        ? math.min(560.0, screenWidth - hPad * 2)
-        : screenWidth - hPad * 2;
     final services = <_ServicePromoData>[
       const _ServicePromoData(
         title: 'Rehani',
@@ -1164,26 +1161,36 @@ class _HomeViewState extends State<HomeView> {
       ),
     ];
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 32),
-      child: SizedBox(
-        height: 280,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: services.length + 1,
-          separatorBuilder: (_, __) => const SizedBox(width: gap),
-          itemBuilder: (context, index) => index == 0
-              ? _DownloadAppPromoCard(
-                  width: appCardWidth,
-                  height: 260,
-                  onTap: () => launchAndroidAppDownload(context),
-                )
-              : _ServicePromoCard(
-                  width: cardWidth,
-                  data: services[index - 1],
-                ),
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = (constraints.maxWidth - hPad * 2)
+            .clamp(0.0, double.infinity)
+            .toDouble();
+        final appCardWidth =
+            (isDesktop ? math.min(560.0, availableWidth) : availableWidth)
+                .toDouble();
+        return Padding(
+          padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 32),
+          child: SizedBox(
+            height: 280,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: services.length + 1,
+              separatorBuilder: (_, __) => const SizedBox(width: gap),
+              itemBuilder: (context, index) => index == 0
+                  ? _DownloadAppPromoCard(
+                      width: appCardWidth,
+                      height: 260,
+                      onTap: () => launchAndroidAppDownload(context),
+                    )
+                  : _ServicePromoCard(
+                      width: cardWidth,
+                      data: services[index - 1],
+                    ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

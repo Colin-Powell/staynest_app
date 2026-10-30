@@ -165,8 +165,8 @@ class PropertyConversationHeader extends StatelessWidget {
                           Tooltip(
                             message: property.viewingFeeNotes?.isNotEmpty ==
                                     true
-                                ? '${property.viewingFeeCollector ?? 'The manager'} collects this fee. ${property.viewingFeeNotes}'
-                                : 'Fee collected independently by ${property.viewingFeeCollector ?? 'the property manager'}.',
+                                ? '${_feeCollectorLabel(property.viewingFeeCollector)} collects this fee. ${property.viewingFeeNotes}'
+                                : 'Fee collected independently by ${_feeCollectorLabel(property.viewingFeeCollector)}.',
                             child: Text(
                               feeLabel,
                               style: GoogleFonts.poppins(
@@ -202,4 +202,11 @@ class PropertyConversationHeader extends StatelessWidget {
       ),
     );
   }
+
+  String _feeCollectorLabel(String? collector) => switch (collector) {
+        'agent' => 'The assigned agent',
+        'landlord' => 'The landlord',
+        'staynest' => 'StayNest',
+        _ => 'The property manager',
+      };
 }

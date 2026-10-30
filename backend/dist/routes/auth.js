@@ -24,9 +24,13 @@ const accessTokenTtlForRole = (role) => {
 // Register new user
 router.post('/register', async (req, res, next) => {
     try {
-        const { name, email, password, phone, referralCode } = req.body;
+        const { name, email, password, phone, referralCode, role } = req.body;
         if (!name || !email || !password || !phone) {
             return res.status(400).json({ error: 'Name, email, phone and password are required.' });
+        }
+        const requestedRole = String(role ?? 'tenant').toLowerCase();
+        if (!['tenant', 'landlord', 'agent'].includes(requestedRole)) {
+            return res.status(400).json({ error: 'Choose a valid account role.' });
         }
         const normalizedEmail = email.trim().toLowerCase();
         const normalizedPhone = phone.trim();
@@ -70,7 +74,20 @@ router.post('/register', async (req, res, next) => {
         }, env.jwtSecret, { expiresIn: accessTokenTtlForRole(created.role) });
         const refreshToken = jwt.sign({ id: created.id }, env.jwtSecret, { expiresIn: '30d' });
         // The OTP screen sends the code on entry, avoiding a duplicate request.
-        return res.status(201).json({ data: { token: accessToken, accessToken, refreshToken, user: created, otpSent: false } });
+        return res.status(201).json({
+            data: {
+                token: accessToken,
+                accessToken,
+                refreshToken,
+                user: {
+                    ...created,
+                    application_role: requestedRole === 'agent' || requestedRole === 'landlord'
+                        ? requestedRole
+                        : null,
+                },
+                otpSent: false,
+            },
+        });
     }
     catch (error) {
         next(error);

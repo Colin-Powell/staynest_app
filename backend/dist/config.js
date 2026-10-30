@@ -42,6 +42,7 @@ export const env = {
     rateLimitWindowMs: parseIntOrDefault(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
     rateLimitMax: parseIntOrDefault(process.env.RATE_LIMIT_MAX, 120),
     messageDeleteForEveryoneWindowMinutes: Math.min(Math.max(parseIntOrDefault(process.env.MESSAGE_DELETE_FOR_EVERYONE_MINUTES, 15), 1), 1440),
+    stayNestManagerAccountId: '4e38b356-8cc8-428c-b005-123d61a42f7b',
     cloudinaryCloudName: cloudinaryConfig.cloudinaryCloudName,
     cloudinaryApiKey: cloudinaryConfig.cloudinaryApiKey,
     cloudinaryApiSecret: cloudinaryConfig.cloudinaryApiSecret,

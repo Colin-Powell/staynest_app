@@ -620,6 +620,7 @@ class _PropertyDetailsState extends State<PropertyDetails>
     final collector = switch (widget.property.viewingFeeCollector) {
       'agent' => 'the assigned agent',
       'landlord' => 'the landlord',
+      'staynest' => 'StayNest',
       _ => 'the property manager',
     };
     final message = amount == null
@@ -1268,7 +1269,9 @@ class _PropertyDetailsState extends State<PropertyDetails>
                             label: 'Location',
                             onTap: () => _scrollToKey(_locationKey)),
                         _StickyTab(
-                            label: 'Landlord',
+                            label: widget.property.managementType == 'staynest'
+                                ? 'Management'
+                                : 'Landlord',
                             onTap: () => _scrollToKey(_landlordKey)),
                       ],
                     ),
@@ -1884,6 +1887,7 @@ class _PropertyDetailsState extends State<PropertyDetails>
 
   Widget _buildHostSection({bool isDesktop = false}) {
     final agent = widget.property.agent;
+    final isStayNestManaged = widget.property.managementType == 'staynest';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1924,7 +1928,9 @@ class _PropertyDetailsState extends State<PropertyDetails>
                       children: [
                         Flexible(
                           child: Text(
-                            'Hosted by ${agent.name}',
+                            isStayNestManaged
+                                ? 'Hosted by StayNest'
+                                : 'Hosted by ${agent.name}',
                             style: GoogleFonts.poppins(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -1946,13 +1952,15 @@ class _PropertyDetailsState extends State<PropertyDetails>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      agent.isAgent
-                          ? agent.verified
-                              ? 'Verified Agent'
-                              : 'Agent'
-                          : agent.verified
-                              ? 'Superhost · Verified Landlord'
-                              : 'Landlord',
+                      isStayNestManaged
+                          ? 'StayNest management team'
+                          : agent.isAgent
+                              ? agent.verified
+                                  ? 'Verified Agent'
+                                  : 'Agent'
+                              : agent.verified
+                                  ? 'Superhost · Verified Landlord'
+                                  : 'Landlord',
                       style: GoogleFonts.poppins(fontSize: 14, color: _grey),
                     ),
                   ],
@@ -2203,6 +2211,7 @@ class _PropertyDetailsState extends State<PropertyDetails>
 
   Widget _buildLandlordSection({bool isDesktop = false}) {
     final agent = widget.property.agent;
+    final isStayNestManaged = widget.property.managementType == 'staynest';
     final listingCount = agent.propertyCount > 0
         ? agent.propertyCount
         : _landlordProperties.length + 1;
@@ -2290,7 +2299,7 @@ class _PropertyDetailsState extends State<PropertyDetails>
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  agent.name,
+                  isStayNestManaged ? 'StayNest' : agent.name,
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -2311,7 +2320,11 @@ class _PropertyDetailsState extends State<PropertyDetails>
                     ],
                     Flexible(
                       child: Text(
-                        agent.verified ? 'Verified host' : 'StayNest host',
+                        isStayNestManaged
+                            ? 'StayNest management team'
+                            : agent.verified
+                                ? 'Verified host'
+                                : 'StayNest host',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.poppins(fontSize: 11, color: _grey),
@@ -2351,9 +2364,11 @@ class _PropertyDetailsState extends State<PropertyDetails>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          agent.businessName?.trim().isNotEmpty == true
-              ? agent.businessName!.trim()
-              : 'About ${agent.name}',
+          isStayNestManaged
+              ? 'About StayNest'
+              : agent.businessName?.trim().isNotEmpty == true
+                  ? agent.businessName!.trim()
+                  : 'About ${agent.name}',
           style: GoogleFonts.poppins(
             fontSize: 19,
             fontWeight: FontWeight.w600,

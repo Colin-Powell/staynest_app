@@ -13,6 +13,7 @@ import {
 import { getLandlordResponseMetrics } from '../services/landlord_response_metrics.js';
 import { recordAdminAudit } from '../services/audit_service.js';
 import {
+  isAuthorizedStayNestManager,
   inferPropertyManagementType,
   validatePropertyClassification,
 } from '../services/property_classification.js';
@@ -928,6 +929,9 @@ function createPropertyInsertArgs(body: Record<string, unknown>) {
     viewing_fee_amount,
     viewing_fee_collector,
     viewing_fee_notes,
+    __managementType,
+    __assignedManagerId,
+    __viewingFeeCollector,
   } = body;
 
   const imageList = Array.isArray(images) && images.length > 0 ? images : [image_url];
@@ -970,14 +974,14 @@ function createPropertyInsertArgs(body: Record<string, unknown>) {
     lng != null ? Number(lng) : null,
     (body as any).__userId,
     'pending_review',
-    'landlord',
+    __managementType ?? 'landlord',
     null,
-    null,
+    __assignedManagerId ?? null,
     viewing_fee_type,
     viewing_fee_amount == null || viewing_fee_amount === ''
       ? null
       : Number(viewing_fee_amount),
-    viewing_fee_collector,
+    __viewingFeeCollector ?? viewing_fee_collector,
     typeof viewing_fee_notes === 'string' && viewing_fee_notes.trim()
       ? viewing_fee_notes.trim()
       : null,
@@ -1028,11 +1032,20 @@ async function handleCreateProperty(req: Request, res: Response, next: NextFunct
       return res.status(400).json({ error: 'All property fields are required.', missing });
     }
 
+    const isStayNestManagedAccount =
+      userId === env.stayNestManagerAccountId;
+    const managementType = isStayNestManagedAccount ? 'staynest' : 'landlord';
+    const assignedManagerId = isStayNestManagedAccount ? userId : null;
+    const viewingFeeCollector =
+      body.viewing_fee_type === 'paid' && isStayNestManagedAccount
+        ? 'staynest'
+        : body.viewing_fee_collector;
     const classificationError = validatePropertyClassification({
-      managementType: 'landlord',
+      managementType,
+      assignedManagerId,
       viewingFeeType: body.viewing_fee_type,
       viewingFeeAmount: body.viewing_fee_amount,
-      viewingFeeCollector: body.viewing_fee_collector,
+      viewingFeeCollector,
     }, true);
     if (classificationError) {
       return res.status(400).json({ error: classificationError });
@@ -1050,7 +1063,13 @@ async function handleCreateProperty(req: Request, res: Response, next: NextFunct
       console.log(`${logPrefix} firstImagePreview=${typeof first === 'string' ? first.slice(0, 80) : typeof first}`);
     }
 
-    const insertArgs = createPropertyInsertArgs({ ...body, __userId: userId });
+    const insertArgs = createPropertyInsertArgs({
+      ...body,
+      __userId: userId,
+      __managementType: managementType,
+      __assignedManagerId: assignedManagerId,
+      __viewingFeeCollector: viewingFeeCollector,
+    });
 
     console.log(
       `${logPrefix} inserting userId=${userId} lat=${body.lat ?? null} lng=${body.lng ?? null} price=${Number(body.price)} area=${Number(body.area)}`,
@@ -1149,7 +1168,15 @@ const handleUpdateProperty = async (req: Request, res: Response, next: NextFunct
       storedManagementType,
       isOwner,
       Boolean(updatedAgentId || updatedManagerId),
+      currentProp.landlord_id,
     );
+    if (
+      isOwner &&
+      updatedManagementType === 'staynest' &&
+      !updatedManagerId
+    ) {
+      updatedManagerId = currentProp.landlord_id;
+    }
     const defaultLegacyOwnerManagement =
       updatedManagementType !== storedManagementType;
 
@@ -1186,13 +1213,12 @@ const handleUpdateProperty = async (req: Request, res: Response, next: NextFunct
         const managerRoles = Array.isArray(managerRow?.roles)
           ? managerRow.roles.map((role) => role.toLowerCase())
           : [];
-        const isStayNestAdmin =
-          ['admin', 'super_admin', 'administrator'].includes(
-            managerRow?.role?.toLowerCase() ?? '',
-          ) || managerRoles.some((role) =>
-            ['admin', 'super_admin', 'administrator'].includes(role),
-          );
-        if (!managerRow || !isStayNestAdmin) {
+        const isAuthorizedManager = isAuthorizedStayNestManager(
+          managerRow?.id,
+          managerRow?.role,
+          managerRoles,
+        );
+        if (!managerRow || !isAuthorizedManager) {
           return res.status(400).json({ error: 'Select an authorized StayNest administrator.' });
         }
       }

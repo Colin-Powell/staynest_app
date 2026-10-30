@@ -6,7 +6,7 @@ import { finalizeVerificationDecision } from './verifications.js';
 import { pool } from '../db.js';
 import { initiateB2CPayout } from '../services/mpesa.js';
 import { recordAdminAudit } from '../services/audit_service.js';
-import { validatePropertyClassification } from '../services/property_classification.js';
+import { isAuthorizedStayNestManager, validatePropertyClassification, } from '../services/property_classification.js';
 import { queueUserPush } from '../services/queue.js';
 import { defaultPlatformSettings, ensurePlatformSettings, } from '../services/platform_settings_service.js';
 const router = Router();
@@ -163,66 +163,6 @@ router.put('/settings/:key', requireAuth, authorize('admin'), async (req, res, n
     }
 });
 // GET /admin/users - List all users with metadata
-router.patch('/users/:id/role', requireAuth, authorize('admin'), async (req, res, next) => {
-    try {
-        const role = String(req.body?.role ?? '').trim().toLowerCase();
-        if (!['landlord', 'agent'].includes(role)) {
-            return res.status(400).json({ error: 'Role must be landlord or agent.' });
-        }
-        const currentResult = await query('SELECT id, role, roles FROM users WHERE id = $1 LIMIT 1', [req.params.id]);
-        const current = currentResult.rows[0];
-        if (!current)
-            return res.status(404).json({ error: 'User not found.' });
-        const currentRoles = Array.isArray(current.roles)
-            ? current.roles.map((accountRole) => accountRole.toLowerCase())
-            : [];
-        if (!['landlord', 'agent'].includes(current.role?.toLowerCase() ?? '') &&
-            !currentRoles.some((accountRole) => ['landlord', 'agent'].includes(accountRole))) {
-            return res.status(400).json({
-                error: 'Only landlord and agent accounts can be edited here.',
-            });
-        }
-        const updated = await query(`UPDATE users
-       SET role = $1,
-           roles = CASE
-             WHEN $1 = 'agent' THEN
-               CASE
-                 WHEN 'agent' = ANY(COALESCE(roles, ARRAY[]::text[]))
-                   THEN CASE
-                     WHEN 'landlord' = ANY(COALESCE(roles, ARRAY[]::text[]))
-                       THEN COALESCE(roles, ARRAY[]::text[])
-                     ELSE array_append(COALESCE(roles, ARRAY[]::text[]), 'landlord')
-                   END
-                 ELSE array_append(
-                   CASE
-                     WHEN 'landlord' = ANY(COALESCE(roles, ARRAY[]::text[]))
-                       THEN COALESCE(roles, ARRAY[]::text[])
-                     ELSE array_append(COALESCE(roles, ARRAY[]::text[]), 'landlord')
-                   END,
-                   'agent'
-                 )
-               END
-             WHEN 'landlord' = ANY(COALESCE(roles, ARRAY[]::text[]))
-               THEN array_remove(COALESCE(roles, ARRAY[]::text[]), 'agent')
-             ELSE array_append(
-               array_remove(COALESCE(roles, ARRAY[]::text[]), 'agent'),
-               'landlord'
-             )
-           END
-       WHERE id = $2
-       RETURNING id, role, roles`, [role, req.params.id]);
-        await recordAdminAudit(req, 'user_role_updated', 'user', req.params.id, {
-            previousRole: current.role,
-            role,
-        });
-        await cache.del('cache:properties*');
-        await cache.del('cache:/api/properties*');
-        return res.json({ data: updated.rows[0] });
-    }
-    catch (err) {
-        next(err);
-    }
-});
 router.get('/users', requireAuth, authorize('admin'), async (req, res, next) => {
     try {
         const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
@@ -421,8 +361,8 @@ router.patch('/properties/:id/transparency', requireAuth, authorize('admin'), as
             const managerRoles = Array.isArray(manager?.roles)
                 ? manager.roles.map((role) => role.toLowerCase())
                 : [];
-            const isAdmin = ['admin', 'super_admin', 'administrator'].includes(manager?.role?.toLowerCase() ?? '') || managerRoles.some((role) => ['admin', 'super_admin', 'administrator'].includes(role));
-            if (!manager || !isAdmin) {
+            const isAuthorizedManager = isAuthorizedStayNestManager(manager?.id, manager?.role, managerRoles);
+            if (!manager || !isAuthorizedManager) {
                 return res.status(400).json({ error: 'Select an authorized StayNest administrator.' });
             }
         }

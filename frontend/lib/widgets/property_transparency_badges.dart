@@ -84,6 +84,12 @@ class PropertyTransparencyBadges extends StatelessWidget {
   }
 
   Widget? _viewingFeeBadge() {
+    final collector = switch (property.viewingFeeCollector) {
+      'landlord' => 'the landlord',
+      'agent' => 'the assigned agent',
+      'staynest' => 'StayNest',
+      _ => 'the property manager',
+    };
     final (
       String label,
       IconData icon,
@@ -106,7 +112,7 @@ class PropertyTransparencyBadges extends StatelessWidget {
           'assets/images/fee.gif',
           const Color(0xFF9A5A00),
           const Color(0xFFFFF3D9),
-          'Viewing fee collected by ${property.viewingFeeCollector ?? 'the property manager'}.${property.viewingFeeNotes?.isNotEmpty == true ? ' ${property.viewingFeeNotes}' : ''}',
+          'Viewing fee collected by $collector.${property.viewingFeeNotes?.isNotEmpty == true ? ' ${property.viewingFeeNotes}' : ''}',
         ),
       'paid' => (
           'Viewing fee details unavailable',
