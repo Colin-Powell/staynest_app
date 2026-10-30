@@ -248,15 +248,19 @@ class _HomeViewState extends State<HomeView> {
         constraints: const BoxConstraints(minHeight: 148),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFFF0F8F3),
+          color: const Color(0xFFF7F8FA),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFD8EBDD)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.home_work_outlined,
-                color: Color(0xFF167447), size: 28),
+            Image.asset(
+              'assets/images/preference.gif',
+              width: 44,
+              height: 44,
+              fit: BoxFit.contain,
+              excludeFromSemantics: true,
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -281,8 +285,8 @@ class _HomeViewState extends State<HomeView> {
                       child: LinearProgressIndicator(
                         value: percent / 100,
                         minHeight: 6,
-                        backgroundColor: const Color(0xFFDCE9E0),
-                        color: const Color(0xFF167447),
+                        backgroundColor: const Color(0xFFE5E7EB),
+                        color: _primaryText,
                       ),
                     ),
                   ),
@@ -299,7 +303,7 @@ class _HomeViewState extends State<HomeView> {
                       FilledButton(
                         onPressed: _openTenantOnboarding,
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF167447),
+                          backgroundColor: _primaryText,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 10),

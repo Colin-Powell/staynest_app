@@ -8,6 +8,8 @@ import { env } from '../config.js';
 import { queueUserPush } from '../services/queue.js';
 import { isPropertyAvailabilityStatus, PROPERTY_AVAILABILITY_STATUSES, } from '../services/property_availability.js';
 import { getLandlordResponseMetrics } from '../services/landlord_response_metrics.js';
+import { recordAdminAudit } from '../services/audit_service.js';
+import { validatePropertyClassification } from '../services/property_classification.js';
 async function getCache(key) {
     const raw = await cache.get(`cache:${key}`);
     if (!raw)
@@ -32,6 +34,8 @@ function normalizePropertyRow(property) {
     if (!property.status) {
         property.status = 'pending_review';
     }
+    property.management_type ?? (property.management_type = 'unspecified');
+    property.viewing_fee_type ?? (property.viewing_fee_type = 'unspecified');
     const availabilityStatus = String(property.availability_status ?? '').toLowerCase();
     if (!availabilityStatus || availabilityStatus === 'unknown') {
         property.availability_status = isPropertyAvailabilityStatus(String(property.status).toLowerCase())
@@ -104,6 +108,15 @@ const PROPERTY_SELECT = `p.id,
               p.lng,
               p.status,
               p.availability_status,
+              p.management_type,
+              p.assigned_agent_id,
+              p.assigned_manager_id,
+              p.viewing_fee_type,
+              p.viewing_fee_amount,
+              p.viewing_fee_collector,
+              p.viewing_fee_notes,
+              p.transparency_updated_at,
+              p.transparency_updated_by,
               p.published_at,
               u.id AS landlord_id,
               u.name AS landlord_name,
@@ -296,7 +309,7 @@ router.get('/recommendations', async (req, res, next) => {
     }
 });
 // Get current user's (landlord) properties
-router.get('/me', requireAuth, authorize('landlord', 'host'), async (req, res, next) => {
+router.get('/me', requireAuth, authorize('landlord', 'host', 'agent'), async (req, res, next) => {
     try {
         const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit ?? '20'), 10) || 20, 1), 50);
         const offset = Math.max(Number.parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
@@ -305,7 +318,7 @@ router.get('/me', requireAuth, authorize('landlord', 'host'), async (req, res, n
               p.created_at AS updated_at
        FROM properties p
        LEFT JOIN users u ON u.id = p.landlord_id
-       WHERE p.landlord_id = $1
+      WHERE p.landlord_id = $1 OR p.assigned_agent_id = $1
        ORDER BY p.created_at DESC
        LIMIT $2 OFFSET $3`, [req.auth?.id, limit + 1, offset]);
         res.json({
@@ -715,7 +728,7 @@ router.post('/reviews/:id/report', requireAuth, async (req, res, next) => {
     }
 });
 function createPropertyInsertArgs(body) {
-    const { title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, service_charges, security_deposit, minimum_stay, available_from, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, } = body;
+    const { title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, service_charges, security_deposit, minimum_stay, available_from, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, viewing_fee_type, viewing_fee_amount, viewing_fee_collector, viewing_fee_notes, } = body;
     const imageList = Array.isArray(images) && images.length > 0 ? images : [image_url];
     const amenityList = Array.isArray(amenities) ? amenities : [];
     return [
@@ -755,6 +768,18 @@ function createPropertyInsertArgs(body) {
         lng != null ? Number(lng) : null,
         body.__userId,
         'pending_review',
+        'landlord',
+        null,
+        null,
+        viewing_fee_type,
+        viewing_fee_amount == null || viewing_fee_amount === ''
+            ? null
+            : Number(viewing_fee_amount),
+        viewing_fee_collector,
+        typeof viewing_fee_notes === 'string' && viewing_fee_notes.trim()
+            ? viewing_fee_notes.trim()
+            : null,
+        body.__userId,
     ];
 }
 function validatePropertyCreateBody(body) {
@@ -793,6 +818,15 @@ async function handleCreateProperty(req, res, next, logRouteName) {
             console.warn(`${logPrefix} missingFields userId=${userId} missing=${missing.join(',')}`);
             return res.status(400).json({ error: 'All property fields are required.', missing });
         }
+        const classificationError = validatePropertyClassification({
+            managementType: 'landlord',
+            viewingFeeType: body.viewing_fee_type,
+            viewingFeeAmount: body.viewing_fee_amount,
+            viewingFeeCollector: body.viewing_fee_collector,
+        }, true);
+        if (classificationError) {
+            return res.status(400).json({ error: classificationError });
+        }
         const imageList = Array.isArray(body.images) && body.images.length > 0 ? body.images : [body.image_url];
         const amenityList = Array.isArray(body.amenities) ? body.amenities : [];
         console.log(`${logPrefix} image_urlType=${typeof body.image_url} imagesIsArray=${Array.isArray(body.images)} imageCount=${Array.isArray(imageList) ? imageList.length : 0} amenitiesIsArray=${Array.isArray(body.amenities)} amenityCount=${Array.isArray(amenityList) ? amenityList.length : 0}`);
@@ -802,9 +836,9 @@ async function handleCreateProperty(req, res, next, logRouteName) {
         }
         const insertArgs = createPropertyInsertArgs({ ...body, __userId: userId });
         console.log(`${logPrefix} inserting userId=${userId} lat=${body.lat ?? null} lng=${body.lng ?? null} price=${Number(body.price)} area=${Number(body.area)}`);
-        const result = await query(`INSERT INTO properties (title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, service_charges, security_deposit, minimum_stay, available_from, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, landlord_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb, $25, $26::jsonb, $27, $28, $29, $30)
-       RETURNING id, title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, service_charges, security_deposit, minimum_stay, available_from, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, status, availability_status`, insertArgs);
+        const result = await query(`INSERT INTO properties (title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, service_charges, security_deposit, minimum_stay, available_from, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, landlord_id, status, management_type, assigned_agent_id, assigned_manager_id, viewing_fee_type, viewing_fee_amount, viewing_fee_collector, viewing_fee_notes, transparency_updated_at, transparency_updated_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb, $25, $26::jsonb, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, NOW(), $38)
+       RETURNING id, title, description, category, city, address, country, county, sub_county, ward, town, neighborhood, estate_village, road, landmark, price, service_charges, security_deposit, minimum_stay, available_from, bedrooms, bathrooms, area, image_url, images, video_url, amenities, lat, lng, status, availability_status, management_type, assigned_agent_id, assigned_manager_id, viewing_fee_type, viewing_fee_amount, viewing_fee_collector, viewing_fee_notes, transparency_updated_at, transparency_updated_by`, insertArgs);
         console.log(`${logPrefix} success userId=${userId} propertyId=${result.rows[0]?.id}`);
         // The listing remains pending-review until an admin approves it.
         // Do not surface it to tenants before approval.
@@ -840,9 +874,76 @@ const handleUpdateProperty = async (req, res, next) => {
         }
         const currentProp = propRes.rows[0];
         const isOwner = currentProp.landlord_id === req.auth?.id;
-        const isAdmin = req.auth?.role === 'admin' || req.auth?.role === 'super_admin';
-        if (!isOwner && !isAdmin) {
+        const isAdmin = ['admin', 'super_admin', 'administrator'].includes(req.auth?.role?.toLowerCase() ?? '');
+        const isAssignedAgent = currentProp.assigned_agent_id === req.auth?.id;
+        if (!isOwner && !isAssignedAgent && !isAdmin) {
             return res.status(403).json({ error: 'You are not authorized to edit this property.' });
+        }
+        const managementFieldsSupplied = req.body.management_type !== undefined ||
+            req.body.assigned_agent_id !== undefined ||
+            req.body.assigned_manager_id !== undefined;
+        if (managementFieldsSupplied && !isAdmin) {
+            return res.status(403).json({ error: 'Only an administrator can change property management.' });
+        }
+        const transparencyFields = [
+            'management_type',
+            'assigned_agent_id',
+            'viewing_fee_type',
+            'viewing_fee_amount',
+            'viewing_fee_collector',
+            'viewing_fee_notes',
+        ];
+        const transparencyChanged = transparencyFields.some((field) => req.body[field] !== undefined);
+        let updatedManagementType = String(currentProp.management_type ?? 'unspecified');
+        let updatedAgentId = currentProp.assigned_agent_id ?? null;
+        let updatedManagerId = currentProp.assigned_manager_id ?? null;
+        if (managementFieldsSupplied) {
+            updatedManagementType = String(req.body.management_type ?? currentProp.management_type ?? 'unspecified').toLowerCase();
+            updatedAgentId = req.body.assigned_agent_id ?? null;
+            updatedManagerId = req.body.assigned_manager_id ?? null;
+            if (updatedManagementType === 'agent') {
+                const agent = await query('SELECT id, role, roles FROM users WHERE id = $1 LIMIT 1', [updatedAgentId]);
+                const agentRow = agent.rows[0];
+                const agentRoles = Array.isArray(agentRow?.roles)
+                    ? agentRow.roles.map((role) => role.toLowerCase())
+                    : [];
+                if (!agentRow ||
+                    (agentRow.role?.toLowerCase() !== 'agent' &&
+                        !agentRoles.includes('agent'))) {
+                    return res.status(400).json({ error: 'Select a valid agent account.' });
+                }
+            }
+            else if (updatedManagementType === 'staynest') {
+                const manager = await query('SELECT id, role, roles FROM users WHERE id = $1 LIMIT 1', [updatedManagerId]);
+                const managerRow = manager.rows[0];
+                const managerRoles = Array.isArray(managerRow?.roles)
+                    ? managerRow.roles.map((role) => role.toLowerCase())
+                    : [];
+                const isStayNestAdmin = ['admin', 'super_admin', 'administrator'].includes(managerRow?.role?.toLowerCase() ?? '') || managerRoles.some((role) => ['admin', 'super_admin', 'administrator'].includes(role));
+                if (!managerRow || !isStayNestAdmin) {
+                    return res.status(400).json({ error: 'Select an authorized StayNest administrator.' });
+                }
+            }
+        }
+        const updatedViewingFeeType = req.body.viewing_fee_type ?? currentProp.viewing_fee_type ?? 'unspecified';
+        const updatedViewingFeeAmount = req.body.viewing_fee_amount !== undefined
+            ? req.body.viewing_fee_amount
+            : currentProp.viewing_fee_amount;
+        const updatedViewingFeeCollector = req.body.viewing_fee_collector !== undefined
+            ? req.body.viewing_fee_collector
+            : currentProp.viewing_fee_collector;
+        if (transparencyChanged) {
+            const classificationError = validatePropertyClassification({
+                managementType: updatedManagementType,
+                assignedAgentId: updatedAgentId,
+                assignedManagerId: updatedManagerId,
+                viewingFeeType: updatedViewingFeeType,
+                viewingFeeAmount: updatedViewingFeeAmount,
+                viewingFeeCollector: updatedViewingFeeCollector,
+            });
+            if (classificationError) {
+                return res.status(400).json({ error: classificationError });
+            }
         }
         const numericFields = ['price', 'service_charges', 'security_deposit', 'bedrooms', 'bathrooms', 'area', 'lat', 'lng'];
         const stringFields = [
@@ -889,6 +990,39 @@ const handleUpdateProperty = async (req, res, next) => {
                 updates.push(`availability_status = $${values.length}`);
             }
         }
+        if (transparencyChanged) {
+            if (managementFieldsSupplied) {
+                values.push(updatedManagementType);
+                updates.push(`management_type = $${values.length}`);
+                values.push(updatedAgentId);
+                updates.push(`assigned_agent_id = $${values.length}`);
+                values.push(updatedManagerId);
+                updates.push(`assigned_manager_id = $${values.length}`);
+            }
+            if (req.body.viewing_fee_type !== undefined) {
+                values.push(updatedViewingFeeType);
+                updates.push(`viewing_fee_type = $${values.length}`);
+            }
+            if (req.body.viewing_fee_amount !== undefined || req.body.viewing_fee_type !== undefined) {
+                values.push(updatedViewingFeeAmount == null || updatedViewingFeeAmount === ''
+                    ? null
+                    : Number(updatedViewingFeeAmount));
+                updates.push(`viewing_fee_amount = $${values.length}`);
+            }
+            if (req.body.viewing_fee_collector !== undefined || req.body.viewing_fee_type !== undefined) {
+                values.push(updatedViewingFeeCollector || null);
+                updates.push(`viewing_fee_collector = $${values.length}`);
+            }
+            if (req.body.viewing_fee_notes !== undefined) {
+                values.push(typeof req.body.viewing_fee_notes === 'string' && req.body.viewing_fee_notes.trim()
+                    ? req.body.viewing_fee_notes.trim()
+                    : null);
+                updates.push(`viewing_fee_notes = $${values.length}`);
+            }
+            values.push(req.auth.id);
+            updates.push(`transparency_updated_by = $${values.length}`);
+            updates.push('transparency_updated_at = NOW()');
+        }
         if (isAdmin && req.body.status !== undefined) {
             const allowedStatus = ['approved', 'pending_review', 'rejected', 'suspended'];
             if (allowedStatus.includes(req.body.status)) {
@@ -902,6 +1036,20 @@ const handleUpdateProperty = async (req, res, next) => {
         updates.push('updated_at = NOW()');
         values.push(req.params.id);
         const result = await query(`UPDATE properties SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`, values);
+        if (isAdmin && transparencyChanged) {
+            try {
+                await recordAdminAudit(req, 'property_transparency_updated', 'property', req.params.id, {
+                    previousManagementType: currentProp.management_type ?? 'unspecified',
+                    managementType: updatedManagementType,
+                    viewingFeeType: updatedViewingFeeType,
+                    viewingFeeAmount: updatedViewingFeeAmount ?? null,
+                    viewingFeeCollector: updatedViewingFeeCollector ?? null,
+                });
+            }
+            catch (auditError) {
+                console.error('[PropertyTransparency] audit write failed:', auditError);
+            }
+        }
         clearCachePattern('properties.');
         clearCachePattern('/api/properties');
         clearCachePattern('/properties');
@@ -912,8 +1060,8 @@ const handleUpdateProperty = async (req, res, next) => {
         next(error);
     }
 };
-router.put('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host', 'admin', 'super_admin'), handleUpdateProperty);
-router.patch('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host', 'admin', 'super_admin'), handleUpdateProperty);
+router.put('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host', 'agent', 'admin', 'super_admin'), handleUpdateProperty);
+router.patch('/:id([0-9a-fA-F-]{36})', requireAuth, authorize('landlord', 'host', 'agent', 'admin', 'super_admin'), handleUpdateProperty);
 router.all('/_unused_property_update_dummy', async (req, res, next) => {
     try {
         const fields = ['title', 'description', 'category', 'city', 'address', 'country', 'county', 'sub_county', 'ward', 'town', 'neighborhood', 'estate_village', 'road', 'landmark', 'price', 'service_charges', 'security_deposit', 'minimum_stay', 'available_from', 'bedrooms', 'bathrooms', 'area', 'image_url', 'images', 'video_url', 'amenities', 'lat', 'lng'];

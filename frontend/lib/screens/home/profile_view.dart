@@ -697,95 +697,113 @@ class _ProfileViewState extends State<ProfileView>
     return Container(
       width: double.infinity,
       constraints: BoxConstraints(minHeight: compact ? 0 : 260),
-      padding: EdgeInsets.all(compact ? 18 : 28),
+      padding: EdgeInsets.all(compact ? 16 : 28),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _dividerColor),
       ),
-      child: Row(
-        children: [
-          Image.asset(
-            'assets/images/profile_complete.gif',
-            width: compact ? 68 : 92,
-            height: compact ? 68 : 92,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final image = Image.asset(
+            isComplete
+                ? 'assets/images/profile_complete.gif'
+                : 'assets/images/preference.gif',
+            width: compact ? 52 : 92,
+            height: compact ? 52 : 92,
             fit: BoxFit.contain,
             excludeFromSemantics: true,
-          ),
-          SizedBox(width: compact ? 12 : 18),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'House preferences',
-                  style: GoogleFonts.poppins(
-                    color: _textDark,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w700,
+          );
+          final details = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'House preferences',
+                style: GoogleFonts.poppins(
+                  color: _textDark,
+                  fontSize: compact ? 16 : 19,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                isComplete
+                    ? 'Your location, budget, and home type preferences are set.'
+                    : 'Choose a location, monthly budget, and home type to make browsing more useful.',
+                style: GoogleFonts.poppins(
+                  color: _textLight,
+                  fontSize: compact ? 12 : 13,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_isProfileCompletionLoading)
+                const LinearProgressIndicator(
+                  minHeight: 6,
+                  color: _airbnbPink,
+                  backgroundColor: Color(0xFFF1F1F1),
+                )
+              else ...[
+                Semantics(
+                  label: 'House preferences $percent percent complete',
+                  child: _buildStrokeProgressBar(
+                    percent: percent,
+                    color: _airbnbPink,
+                    compact: compact,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 5),
                 Text(
-                  isComplete
-                      ? 'Your location, budget, and home type preferences are set.'
-                      : 'Choose a location, monthly budget, and home type to make browsing more useful.',
+                  '$completedFields of $totalFields housing details completed',
                   style: GoogleFonts.poppins(
                     color: _textLight,
-                    fontSize: 13,
-                    height: 1.45,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (_isProfileCompletionLoading)
-                  const LinearProgressIndicator(
-                    minHeight: 6,
-                    color: _airbnbPink,
-                    backgroundColor: Color(0xFFF1F1F1),
-                  )
-                else ...[
-                  Semantics(
-                    label: 'House preferences $percent percent complete',
-                    child: _buildStrokeProgressBar(
-                      percent: percent,
-                      color: _airbnbPink,
-                      compact: compact,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    '$completedFields of $totalFields housing details completed',
-                    style: GoogleFonts.poppins(
-                      color: _textLight,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: widget.onMyProfile,
-                  icon: const Icon(Icons.tune, size: 18),
-                  label: Text(compact
-                      ? (isComplete ? 'Edit preferences' : 'Set preferences')
-                      : (isComplete
-                          ? 'Edit preferences'
-                          : 'Complete preferences')),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _airbnbPink,
-                    side: const BorderSide(color: _dividerColor),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: compact ? 12 : 16,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    fontSize: 12,
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: widget.onMyProfile,
+                icon: const Icon(Icons.tune, size: 18),
+                label: Text(compact
+                    ? (isComplete ? 'Edit preferences' : 'Set preferences')
+                    : (isComplete
+                        ? 'Edit preferences'
+                        : 'Complete preferences')),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _airbnbPink,
+                  side: const BorderSide(color: _dividerColor),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 12 : 16,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          );
+
+          if (compact && constraints.maxWidth < 280) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Align(alignment: Alignment.centerLeft, child: image),
+                const SizedBox(height: 8),
+                details,
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              image,
+              SizedBox(width: compact ? 10 : 18),
+              Expanded(child: details),
+            ],
+          );
+        },
       ),
     );
   }
@@ -885,10 +903,102 @@ class _ProfileViewState extends State<ProfileView>
     final date = submittedAt == null
         ? null
         : DateTime.tryParse(submittedAt.toString())?.toLocal();
+    final VoidCallback? onTap = isApproved
+        ? widget.onSwitchRole
+        : widget.onBecomeHost ??
+            () => Navigator.pushNamed(context, '/become_host');
+
+    if (!isDesktop) {
+      return InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Row(
+            children: [
+              Image.asset(
+                'assets/images/host.png',
+                width: 52,
+                height: 52,
+                fit: BoxFit.contain,
+                excludeFromSemantics: true,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            cardTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.poppins(
+                              color: _textDark,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                        if (status != 'not_started') ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            constraints: const BoxConstraints(maxWidth: 112),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: accent.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.poppins(
+                                color: accent,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        color: _textLight,
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                    if (date != null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        'Submitted ${formatReadableDate(date)}',
+                        style: GoogleFonts.poppins(
+                            color: _textLight, fontSize: 10),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 24, color: Color(0xFFD1D5DB)),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Container(
       width: double.infinity,
-      margin: EdgeInsets.symmetric(horizontal: isDesktop ? 0 : 24),
+      margin: EdgeInsets.symmetric(horizontal: isDesktop ? 0 : 16),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -947,10 +1057,7 @@ class _ProfileViewState extends State<ProfileView>
           ],
           const SizedBox(height: 12),
           OutlinedButton(
-            onPressed: isApproved
-                ? widget.onSwitchRole
-                : widget.onBecomeHost ??
-                    () => Navigator.pushNamed(context, '/become_host'),
+            onPressed: onTap,
             style: OutlinedButton.styleFrom(
               foregroundColor: accent,
               side: BorderSide(color: accent.withOpacity(0.45)),
@@ -1082,6 +1189,7 @@ class _ProfileViewState extends State<ProfileView>
                       child: _buildHousingPreferencesSection(compact: true),
                     ),
                   ),
+                  const SizedBox(height: 16),
 
                   // Menu Items
                   _buildStaggered(

@@ -12,6 +12,7 @@ import 'package:property_app/services/analytics/analytics_service.dart';
 import 'package:property_app/services/properties_api.dart';
 import 'package:property_app/utils/property_links.dart';
 import 'package:visibility_detector/visibility_detector.dart';
+import 'package:property_app/widgets/property_transparency_badges.dart';
 
 class PropertyCard extends StatefulWidget {
   final Property property;
@@ -321,6 +322,12 @@ class _PropertyCardState extends State<PropertyCard> {
                 ],
               ),
           ],
+        ),
+        const SizedBox(height: 6),
+        PropertyTransparencyBadges(
+          property: property,
+          compact: true,
+          showUnspecified: false,
         ),
         if (!widget.titleFirst) const SizedBox(height: 2),
         if (!widget.titleFirst) title,

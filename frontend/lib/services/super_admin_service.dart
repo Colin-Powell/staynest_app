@@ -139,6 +139,16 @@ class SuperAdminService {
           () => _client.patch(_uri('/admin/properties/$id/status'), body: {
                 'status': status,
               })));
+
+  static Future<Map<String, dynamic>> updatePropertyTransparency(
+    String id, {
+    required Map<String, dynamic> transparency,
+  }) async =>
+      _data(await _decode(() => _client.patch(
+            _uri('/admin/properties/$id/transparency'),
+            body: transparency,
+          )));
+
   static String formatCurrency(dynamic amount) {
     final value =
         amount is num ? amount.toDouble() : double.tryParse('$amount') ?? 0;

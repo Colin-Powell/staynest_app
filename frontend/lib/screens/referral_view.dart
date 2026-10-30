@@ -9,23 +9,8 @@ class ReferralView extends StatelessWidget {
 
   const ReferralView({super.key, this.onBack});
 
-  // Original Logic: Preserved exactly as requested
-  String get _referralCode {
-    if (AppSession.referralCode != null &&
-        AppSession.referralCode!.trim().isNotEmpty) {
-      return AppSession.referralCode!.trim().toUpperCase();
-    }
-    final userId = AppSession.currentUserId ?? '';
-    if (userId.length >= 6) {
-      return userId.replaceAll('-', '').substring(0, 6).toUpperCase();
-    }
-    final name = (AppSession.currentUserName ?? 'GUEST')
-        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')
-        .toUpperCase();
-    return name.length >= 4
-        ? '${name.substring(0, 4)}${DateTime.now().year % 100}'
-        : 'SN${DateTime.now().millisecondsSinceEpoch % 9999}';
-  }
+  String get _referralCode =>
+      AppSession.referralCode?.trim().toUpperCase() ?? '';
 
   @override
   Widget build(BuildContext context) {
@@ -117,22 +102,25 @@ class ReferralView extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      code,
-                      style: const TextStyle(
+                      code.isEmpty ? 'Unavailable' : code,
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: accentBlue,
+                        color: code.isEmpty ? Colors.black54 : accentBlue,
                       ),
                     ),
                     const SizedBox(width: 8),
                     GestureDetector(
-                      onTap: () {
-                        // Original Logic: Copy to clipboard
-                        Clipboard.setData(ClipboardData(text: code));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Referral code copied')),
-                        );
-                      },
+                      onTap: code.isEmpty
+                          ? null
+                          : () {
+                              // Original Logic: Copy to clipboard
+                              Clipboard.setData(ClipboardData(text: code));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Referral code copied')),
+                              );
+                            },
                       child: const Icon(
                         Icons.copy_outlined,
                         size: 20,
@@ -149,8 +137,10 @@ class ReferralView extends StatelessWidget {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () => Share.share(
-                      'Join StayNest with my referral code $code. https://staynest.top/register?ref=$code'),
+                  onPressed: code.isEmpty
+                      ? null
+                      : () => Share.share(
+                          'Join StayNest with my referral code $code. https://staynest.top/register?ref=$code'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: accentBlue,
                     foregroundColor: Colors.white,

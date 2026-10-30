@@ -6,6 +6,7 @@ import { finalizeVerificationDecision } from './verifications.js';
 import { pool } from '../db.js';
 import { initiateB2CPayout } from '../services/mpesa.js';
 import { recordAdminAudit } from '../services/audit_service.js';
+import { validatePropertyClassification } from '../services/property_classification.js';
 import { queueUserPush } from '../services/queue.js';
 import { defaultPlatformSettings, ensurePlatformSettings, } from '../services/platform_settings_service.js';
 const router = Router();
@@ -259,6 +260,15 @@ router.get('/properties', requireAuth, authorize('admin'), async (req, res, next
         p.images,
         p.image_url,
         p.status,
+        p.management_type,
+        p.assigned_agent_id,
+        p.assigned_manager_id,
+        p.viewing_fee_type,
+        p.viewing_fee_amount,
+        p.viewing_fee_collector,
+        p.viewing_fee_notes,
+        p.transparency_updated_at,
+        p.transparency_updated_by,
         p.created_at,
         p.created_at as updated_at,
         u.id as landlord_id,
@@ -298,6 +308,15 @@ router.get('/properties', requireAuth, authorize('admin'), async (req, res, next
                 booking_count: row.booking_count,
                 total_revenue: parseFloat(row.total_revenue) || 0,
                 status: row.status,
+                management_type: row.management_type ?? 'unspecified',
+                assigned_agent_id: row.assigned_agent_id,
+                assigned_manager_id: row.assigned_manager_id,
+                viewing_fee_type: row.viewing_fee_type ?? 'unspecified',
+                viewing_fee_amount: row.viewing_fee_amount,
+                viewing_fee_collector: row.viewing_fee_collector,
+                viewing_fee_notes: row.viewing_fee_notes,
+                transparency_updated_at: row.transparency_updated_at,
+                transparency_updated_by: row.transparency_updated_by,
                 created_at: row.created_at,
                 landlord_id: row.landlord_id,
                 landlord_name: row.landlord_name,
@@ -308,6 +327,110 @@ router.get('/properties', requireAuth, authorize('admin'), async (req, res, next
     }
     catch (err) {
         next(err);
+    }
+});
+router.patch('/properties/:id/transparency', requireAuth, authorize('admin'), async (req, res, next) => {
+    try {
+        const currentResult = await query('SELECT * FROM properties WHERE id = $1 LIMIT 1', [req.params.id]);
+        const current = currentResult.rows[0];
+        if (!current)
+            return res.status(404).json({ error: 'Property not found.' });
+        const managementType = String(req.body.management_type ?? current.management_type ?? 'unspecified').toLowerCase();
+        const assignedAgentId = req.body.assigned_agent_id !== undefined
+            ? req.body.assigned_agent_id
+            : current.assigned_agent_id;
+        const assignedManagerId = req.body.assigned_manager_id !== undefined
+            ? req.body.assigned_manager_id
+            : current.assigned_manager_id;
+        if (managementType === 'agent') {
+            const agentResult = await query('SELECT id, role, roles FROM users WHERE id = $1 LIMIT 1', [assignedAgentId]);
+            const agent = agentResult.rows[0];
+            const agentRoles = Array.isArray(agent?.roles)
+                ? agent.roles.map((role) => role.toLowerCase())
+                : [];
+            if (!agent ||
+                (agent.role?.toLowerCase() !== 'agent' &&
+                    !agentRoles.includes('agent'))) {
+                return res.status(400).json({ error: 'Select a valid agent account.' });
+            }
+        }
+        else if (managementType === 'staynest') {
+            const managerResult = await query('SELECT id, role, roles FROM users WHERE id = $1 LIMIT 1', [assignedManagerId]);
+            const manager = managerResult.rows[0];
+            const managerRoles = Array.isArray(manager?.roles)
+                ? manager.roles.map((role) => role.toLowerCase())
+                : [];
+            const isAdmin = ['admin', 'super_admin', 'administrator'].includes(manager?.role?.toLowerCase() ?? '') || managerRoles.some((role) => ['admin', 'super_admin', 'administrator'].includes(role));
+            if (!manager || !isAdmin) {
+                return res.status(400).json({ error: 'Select an authorized StayNest administrator.' });
+            }
+        }
+        const viewingFeeType = req.body.viewing_fee_type ?? current.viewing_fee_type ?? 'unspecified';
+        const viewingFeeAmount = req.body.viewing_fee_amount !== undefined
+            ? req.body.viewing_fee_amount
+            : current.viewing_fee_amount;
+        const viewingFeeCollector = req.body.viewing_fee_collector !== undefined
+            ? req.body.viewing_fee_collector
+            : current.viewing_fee_collector;
+        const validationError = validatePropertyClassification({
+            managementType,
+            assignedAgentId,
+            assignedManagerId,
+            viewingFeeType,
+            viewingFeeAmount,
+            viewingFeeCollector,
+        });
+        if (validationError)
+            return res.status(400).json({ error: validationError });
+        const updates = [];
+        const values = [];
+        const addUpdate = (column, value) => {
+            values.push(value);
+            updates.push(`${column} = $${values.length}`);
+        };
+        if (req.body.management_type !== undefined) {
+            addUpdate('management_type', managementType);
+        }
+        if (req.body.assigned_agent_id !== undefined || req.body.management_type !== undefined) {
+            addUpdate('assigned_agent_id', managementType === 'agent' ? assignedAgentId : null);
+            addUpdate('assigned_manager_id', managementType === 'staynest' ? assignedManagerId : null);
+        }
+        if (req.body.viewing_fee_type !== undefined) {
+            addUpdate('viewing_fee_type', viewingFeeType);
+        }
+        if (req.body.viewing_fee_amount !== undefined || req.body.viewing_fee_type !== undefined) {
+            addUpdate('viewing_fee_amount', viewingFeeAmount == null || viewingFeeAmount === ''
+                ? null
+                : Number(viewingFeeAmount));
+        }
+        if (req.body.viewing_fee_collector !== undefined || req.body.viewing_fee_type !== undefined) {
+            addUpdate('viewing_fee_collector', viewingFeeCollector || null);
+        }
+        if (req.body.viewing_fee_notes !== undefined) {
+            addUpdate('viewing_fee_notes', typeof req.body.viewing_fee_notes === 'string' && req.body.viewing_fee_notes.trim()
+                ? req.body.viewing_fee_notes.trim()
+                : null);
+        }
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No transparency fields supplied.' });
+        }
+        addUpdate('transparency_updated_by', req.auth.id);
+        updates.push('transparency_updated_at = NOW()');
+        values.push(req.params.id);
+        const updated = await query(`UPDATE properties SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING management_type, assigned_agent_id, assigned_manager_id, viewing_fee_type, viewing_fee_amount, viewing_fee_collector, viewing_fee_notes, transparency_updated_at, transparency_updated_by`, values);
+        await recordAdminAudit(req, 'property_transparency_updated', 'property', req.params.id, {
+            previousManagementType: current.management_type ?? 'unspecified',
+            managementType,
+            assignedAgentId: assignedAgentId ?? null,
+            assignedManagerId: assignedManagerId ?? null,
+            viewingFeeType,
+            viewingFeeAmount: viewingFeeAmount ?? null,
+            viewingFeeCollector: viewingFeeCollector ?? null,
+        });
+        res.json({ data: updated.rows[0] });
+    }
+    catch (error) {
+        next(error);
     }
 });
 router.get('/property-map', requireAuth, authorize('admin'), async (_req, res, next) => {

@@ -957,7 +957,11 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
       '/role',
       '/super_admin/login',
     };
-    if (!authRoutes.contains(settings.name)) return null;
+    final routeUri = Uri.tryParse(settings.name ?? '');
+    final route = routeUri?.path;
+    if (route == null || !authRoutes.contains(route)) return null;
+    final initialReferralCode = routeUri?.queryParameters['ref'] ??
+        (settings.arguments is String ? settings.arguments as String : null);
 
     final navigatorContext = navigatorKey.currentContext;
     final isDesktop = navigatorContext != null &&
@@ -966,9 +970,10 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
       return MaterialPageRoute<void>(
         settings: settings,
         builder: (context) => _buildAuthScreen(
-          settings.name!,
+          route,
           context,
           false,
+          initialReferralCode: initialReferralCode,
           onAuthenticated: settings.arguments is VoidCallback
               ? settings.arguments as VoidCallback
               : null,
@@ -983,9 +988,10 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
       barrierColor: Colors.black.withValues(alpha: 0.4),
       pageBuilder: (context, animation, secondaryAnimation) {
         final screen = _buildAuthScreen(
-          settings.name!,
+          route,
           context,
           true,
+          initialReferralCode: initialReferralCode,
           onAuthenticated: settings.arguments is VoidCallback
               ? settings.arguments as VoidCallback
               : null,
@@ -1059,6 +1065,7 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
     String route,
     BuildContext context,
     bool isDesktop, {
+    String? initialReferralCode,
     VoidCallback? onAuthenticated,
   }) {
     switch (route) {
@@ -1079,11 +1086,16 @@ class _PropertyAppState extends State<PropertyApp> with WidgetsBindingObserver {
           onBack: () => Navigator.pop(context),
           onSelect: (role) {
             AppSession.setRole(role);
-            Navigator.pushReplacementNamed(context, '/register_form');
+            Navigator.pushReplacementNamed(
+              context,
+              '/register_form',
+              arguments: initialReferralCode,
+            );
           },
         );
       case '/register_form':
         return RegisterView(
+          initialReferralCode: initialReferralCode,
           onGoogleSignIn: () => _completeGoogleSignIn(
             context,
             isDesktopModal: isDesktop,

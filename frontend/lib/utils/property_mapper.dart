@@ -114,6 +114,18 @@ Property mapApiProperty(Map<String, dynamic> json) {
       json['availability_status'],
       json['status'],
     ),
+    managementType:
+        json['management_type']?.toString().toLowerCase() ?? 'unspecified',
+    assignedAgentId: json['assigned_agent_id']?.toString(),
+    assignedManagerId: json['assigned_manager_id']?.toString(),
+    viewingFeeType:
+        json['viewing_fee_type']?.toString().toLowerCase() ?? 'unspecified',
+    viewingFeeAmount: _toDouble(json['viewing_fee_amount']) == 0 &&
+            json['viewing_fee_amount'] == null
+        ? null
+        : _toDouble(json['viewing_fee_amount']),
+    viewingFeeCollector: json['viewing_fee_collector']?.toString(),
+    viewingFeeNotes: json['viewing_fee_notes']?.toString(),
     viewedAt: json['viewed_at'] != null
         ? DateTime.tryParse(json['viewed_at'].toString())
         : null,

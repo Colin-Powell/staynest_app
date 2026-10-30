@@ -6,6 +6,7 @@ import 'package:property_app/utils/responsive_modal_sheet.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -139,6 +140,11 @@ class _AddListingFlowState extends State<AddListingFlow> {
   final _rentPrice = TextEditingController();
   final _serviceCharges = TextEditingController();
   final _securityDeposit = TextEditingController();
+  final _viewingFeeAmount = TextEditingController();
+  final _viewingFeeNotes = TextEditingController();
+  String _managementType = 'landlord';
+  String _viewingFeeType = 'unspecified';
+  String? _viewingFeeCollector;
   String _minimumStay = '6 Months';
   DateTime? _availableFrom;
 
@@ -173,6 +179,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
     _rentPrice.dispose();
     _serviceCharges.dispose();
     _securityDeposit.dispose();
+    _viewingFeeAmount.dispose();
+    _viewingFeeNotes.dispose();
     _videoThumbnailController?.dispose();
     super.dispose();
   }
@@ -189,6 +197,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
       _rentPrice,
       _serviceCharges,
       _securityDeposit,
+      _viewingFeeAmount,
+      _viewingFeeNotes,
     ]) {
       controller.addListener(_scheduleDraftSave);
     }
@@ -227,6 +237,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
       _rentPrice.text = existing['price']?.toString() ?? '';
       _serviceCharges.text = existing['service_charges']?.toString() ?? '';
       _securityDeposit.text = existing['security_deposit']?.toString() ?? '';
+      _managementType = existing['management_type']?.toString() ?? 'landlord';
+      _viewingFeeType =
+          existing['viewing_fee_type']?.toString() ?? 'unspecified';
+      _viewingFeeAmount.text = existing['viewing_fee_amount']?.toString() ?? '';
+      _viewingFeeCollector = existing['viewing_fee_collector']?.toString();
+      _viewingFeeNotes.text = existing['viewing_fee_notes']?.toString() ?? '';
       _minimumStay = existing['minimum_stay']?.toString() ?? _minimumStay;
       _availableFrom =
           DateTime.tryParse(existing['available_from']?.toString() ?? '');
@@ -353,6 +369,10 @@ class _AddListingFlowState extends State<AddListingFlow> {
         _rentPrice.text = data['price']?.toString() ?? '';
         _serviceCharges.text = data['service_charges']?.toString() ?? '';
         _securityDeposit.text = data['security_deposit']?.toString() ?? '';
+        _viewingFeeType = data['viewing_fee_type']?.toString() ?? 'unspecified';
+        _viewingFeeAmount.text = data['viewing_fee_amount']?.toString() ?? '';
+        _viewingFeeCollector = data['viewing_fee_collector']?.toString();
+        _viewingFeeNotes.text = data['viewing_fee_notes']?.toString() ?? '';
         _minimumStay = data['minimum_stay']?.toString() ?? _minimumStay;
         _availableFrom =
             DateTime.tryParse(data['available_from']?.toString() ?? '');
@@ -441,6 +461,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
       'security_deposit': _securityDeposit.text.trim().isEmpty
           ? null
           : _securityDeposit.text.trim(),
+      'viewing_fee_type': _viewingFeeType,
+      'viewing_fee_amount':
+          _viewingFeeType == 'paid' ? _viewingFeeAmount.text.trim() : null,
+      'viewing_fee_collector':
+          _viewingFeeType == 'paid' ? _viewingFeeCollector : null,
+      'viewing_fee_notes': _viewingFeeNotes.text.trim(),
       'minimum_stay': _minimumStay,
       'available_from': _availableFrom?.toIso8601String().split('T').first,
       'custom_feature_input': _customFeatureController.text,
@@ -601,6 +627,17 @@ class _AddListingFlowState extends State<AddListingFlow> {
 
   Future<void> _publishListing() async {
     if (_submitting) return;
+    final viewingFeeError = _viewingFeeValidationError();
+    if (viewingFeeError != null) {
+      setState(() => _currentStep = 5);
+      _pageController.animateToPage(
+        4,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+      ModalUtils.showError(context, 'Viewing fee required', viewingFeeError);
+      return;
+    }
     setState(() => _submitting = true);
 
     Map<String, dynamic>? verificationStatus;
@@ -703,6 +740,12 @@ class _AddListingFlowState extends State<AddListingFlow> {
         'security_deposit': _securityDeposit.text.trim().isEmpty
             ? null
             : _securityDeposit.text.trim(),
+        'viewing_fee_type': _viewingFeeType,
+        'viewing_fee_amount':
+            _viewingFeeType == 'paid' ? _viewingFeeAmount.text.trim() : null,
+        'viewing_fee_collector':
+            _viewingFeeType == 'paid' ? _viewingFeeCollector : null,
+        'viewing_fee_notes': _viewingFeeNotes.text.trim(),
         'minimum_stay': _minimumStay,
         'available_from': _availableFrom?.toIso8601String().split('T').first,
         'image_url': uploadedUrls.first,
@@ -1959,6 +2002,8 @@ class _AddListingFlowState extends State<AddListingFlow> {
             _buildLabel('Security Deposit (Ksh.)'),
             _buildPricingField(_securityDeposit, '12000', '/month'),
             const SizedBox(height: 20),
+            _buildViewingFeeSection(),
+            const SizedBox(height: 20),
             _buildLabel('Minimum Stay'),
             _buildDropdown(
               value: _minimumStay,
@@ -2005,6 +2050,203 @@ class _AddListingFlowState extends State<AddListingFlow> {
           ],
         ),
       ),
+    );
+  }
+
+  String? _viewingFeeValidationError() {
+    if (!widget.isEditing && !{'free', 'paid'}.contains(_viewingFeeType)) {
+      return 'Choose free viewing or a required viewing fee before publishing.';
+    }
+    if (_viewingFeeType != 'paid') return null;
+
+    final amount = double.tryParse(_viewingFeeAmount.text.trim());
+    if (amount == null || !amount.isFinite || amount <= 0) {
+      return 'Enter a positive viewing fee amount in KSh.';
+    }
+    final expectedCollector = switch (_managementType) {
+      'agent' => 'agent',
+      'landlord' || 'staynest' => 'landlord',
+      _ => null,
+    };
+    if (expectedCollector == null ||
+        _viewingFeeCollector != expectedCollector) {
+      return 'The viewing fee collector must match the property manager.';
+    }
+    return null;
+  }
+
+  Widget _buildViewingFeeSection() {
+    final managementLabel = switch (_managementType) {
+      'landlord' => 'Landlord managed',
+      'agent' => 'Agent managed',
+      'staynest' => 'StayNest managed',
+      _ => 'Management not specified',
+    };
+    final collector = switch (_managementType) {
+      'agent' => 'agent',
+      'landlord' || 'staynest' => 'landlord',
+      _ => null,
+    };
+    final amount = double.tryParse(_viewingFeeAmount.text.trim());
+    final preview = switch (_viewingFeeType) {
+      'free' => 'Free viewing',
+      'paid' when amount != null && amount > 0 =>
+        'Viewing Fee: KSh ${NumberFormat('#,##0.##').format(amount)}',
+      'paid' => 'Viewing fee required',
+      _ => 'Viewing fee not specified',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLabel('Property management'),
+        Text(
+          '$managementLabel. This is assigned from the property relationship; StayNest approval is a separate review.',
+          style: GoogleFonts.poppins(color: _grey, fontSize: 13),
+        ),
+        const SizedBox(height: 20),
+        _buildLabel('Viewing fee'),
+        Text(
+          'Let tenants know whether they need to pay to visit this property.',
+          style: GoogleFonts.poppins(color: _grey, fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+        SegmentedButton<String>(
+          emptySelectionAllowed: true,
+          segments: const [
+            ButtonSegment(
+              value: 'free',
+              label: Text('Free viewing'),
+              icon: Icon(Icons.check_circle_outline_rounded),
+            ),
+            ButtonSegment(
+              value: 'paid',
+              label: Text('Fee required'),
+              icon: Icon(Icons.account_balance_wallet_outlined),
+            ),
+          ],
+          selected: {'free', 'paid'}.contains(_viewingFeeType)
+              ? {_viewingFeeType}
+              : const <String>{},
+          onSelectionChanged: (selection) {
+            if (selection.isEmpty) return;
+            setState(() {
+              _viewingFeeType = selection.first;
+              if (_viewingFeeType == 'free') {
+                _viewingFeeAmount.clear();
+                _viewingFeeCollector = null;
+              } else {
+                _viewingFeeCollector ??= collector;
+              }
+              _scheduleDraftSave();
+            });
+          },
+        ),
+        if (_viewingFeeType == 'unspecified') ...[
+          const SizedBox(height: 8),
+          Text(
+            'This listing has no viewing-fee information yet. It will not be shown as free.',
+            style: GoogleFonts.poppins(color: _grey, fontSize: 12),
+          ),
+        ],
+        if (_viewingFeeType == 'paid') ...[
+          const SizedBox(height: 16),
+          _buildLabel('Viewing fee amount (KSh.)'),
+          TextFormField(
+            controller: _viewingFeeAmount,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              hintText: '200',
+              filled: true,
+              fillColor: _surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: _grey.withValues(alpha: 0.2)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: _grey.withValues(alpha: 0.2)),
+              ),
+            ),
+            validator: (value) {
+              if (_viewingFeeType != 'paid') return null;
+              final amount = double.tryParse(value?.trim() ?? '');
+              return amount != null && amount.isFinite && amount > 0
+                  ? null
+                  : 'Enter an amount greater than zero';
+            },
+          ),
+          const SizedBox(height: 12),
+          _buildLabel('Who collects the viewing fee?'),
+          if (collector == null)
+            Text(
+              'An administrator must assign a property manager before a viewing fee can be set.',
+              style: GoogleFonts.poppins(color: _grey, fontSize: 12),
+            )
+          else
+            DropdownButtonFormField<String>(
+              initialValue: collector,
+              items: [
+                DropdownMenuItem(
+                  value: collector,
+                  child: Text(
+                      collector == 'agent' ? 'Assigned agent' : 'Landlord'),
+                ),
+              ],
+              onChanged: (value) => setState(() {
+                _viewingFeeCollector = value;
+                _scheduleDraftSave();
+              }),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: _surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: _grey.withOpacity(0.2)),
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+          _buildLabel('Payment timing or clarification (optional)'),
+          TextFormField(
+            controller: _viewingFeeNotes,
+            maxLines: 2,
+            decoration: InputDecoration(
+              hintText: 'Explain when and how the manager collects this fee.',
+              filled: true,
+              fillColor: _surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: _grey.withOpacity(0.2)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'StayNest does not collect viewing fees or process payments for visits.',
+            style: GoogleFonts.poppins(color: _grey, fontSize: 12),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: _viewingFeeType == 'free'
+                ? const Color(0xFFEAF7EF)
+                : _viewingFeeType == 'paid'
+                    ? const Color(0xFFFFF3D9)
+                    : _greyLight,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            preview,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _dark,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

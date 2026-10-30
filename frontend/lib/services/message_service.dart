@@ -65,6 +65,11 @@ class PropertyConversationContext {
   final String? imageUrl;
   final int? price;
   final String? availabilityStatus;
+  final String managementType;
+  final String viewingFeeType;
+  final double? viewingFeeAmount;
+  final String? viewingFeeCollector;
+  final String? viewingFeeNotes;
 
   const PropertyConversationContext({
     required this.id,
@@ -73,6 +78,11 @@ class PropertyConversationContext {
     this.imageUrl,
     this.price,
     this.availabilityStatus,
+    this.managementType = 'unspecified',
+    this.viewingFeeType = 'unspecified',
+    this.viewingFeeAmount,
+    this.viewingFeeCollector,
+    this.viewingFeeNotes,
   });
 
   factory PropertyConversationContext.fromJson(Map<String, dynamic> json) {
@@ -89,6 +99,13 @@ class PropertyConversationContext {
       imageUrl: json['image_url']?.toString() ?? firstImage,
       price: int.tryParse(json['price']?.toString() ?? ''),
       availabilityStatus: json['availability_status']?.toString(),
+      managementType: json['management_type']?.toString() ?? 'unspecified',
+      viewingFeeType: json['viewing_fee_type']?.toString() ?? 'unspecified',
+      viewingFeeAmount: json['viewing_fee_amount'] == null
+          ? null
+          : double.tryParse(json['viewing_fee_amount'].toString()),
+      viewingFeeCollector: json['viewing_fee_collector']?.toString(),
+      viewingFeeNotes: json['viewing_fee_notes']?.toString(),
     );
   }
 }
@@ -170,6 +187,12 @@ class ConversationModel {
                   'availability_status': json['property_availability_status'],
                   'image_url': json['property_image_url'],
                   'images': json['property_images'],
+                  'management_type': json['property_management_type'],
+                  'viewing_fee_type': json['property_viewing_fee_type'],
+                  'viewing_fee_amount': json['property_viewing_fee_amount'],
+                  'viewing_fee_collector':
+                      json['property_viewing_fee_collector'],
+                  'viewing_fee_notes': json['property_viewing_fee_notes'],
                 }),
     );
   }

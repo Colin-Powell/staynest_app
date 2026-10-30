@@ -148,6 +148,13 @@ class Property {
   final String moderationStatus;
   final DateTime? publishedAt;
   final String availabilityStatus;
+  final String managementType;
+  final String? assignedAgentId;
+  final String? assignedManagerId;
+  final String viewingFeeType;
+  final double? viewingFeeAmount;
+  final String? viewingFeeCollector;
+  final String? viewingFeeNotes;
 
   const Property({
     required this.id,
@@ -171,6 +178,13 @@ class Property {
     this.moderationStatus = 'unknown',
     this.publishedAt,
     this.availabilityStatus = 'unknown',
+    this.managementType = 'unspecified',
+    this.assignedAgentId,
+    this.assignedManagerId,
+    this.viewingFeeType = 'unspecified',
+    this.viewingFeeAmount,
+    this.viewingFeeCollector,
+    this.viewingFeeNotes,
   }) : images = images ?? const [];
 
   bool get isAvailableForBooking => const {'available', 'pending_booking'}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:property_app/services/message_service.dart';
 import 'package:property_app/services/property_service.dart';
@@ -42,6 +43,19 @@ class PropertyConversationHeader extends StatelessWidget {
                 ? part
                 : '${part[0].toUpperCase()}${part.substring(1)}')
             .join(' ');
+    final managementLabel = switch (property.managementType) {
+      'landlord' => 'Landlord managed',
+      'agent' => 'Agent managed',
+      'staynest' => 'StayNest managed',
+      _ => 'Management not specified',
+    };
+    final feeLabel = switch (property.viewingFeeType) {
+      'free' => 'Free viewing',
+      'paid' when property.viewingFeeAmount != null =>
+        'Viewing fee KSh ${NumberFormat('#,##0.##').format(property.viewingFeeAmount)}',
+      'paid' => 'Viewing fee amount unavailable',
+      _ => 'Viewing fee not specified',
+    };
 
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -70,12 +84,12 @@ class PropertyConversationHeader extends StatelessWidget {
           bottomRight: Radius.circular(8),
         ),
         child: SizedBox(
-          height: 84,
+          height: 100,
           child: Row(
             children: [
               SizedBox(
                 width: 76,
-                height: 84,
+                height: 100,
                 child: property.imageUrl == null || property.imageUrl!.isEmpty
                     ? const ColoredBox(
                         color: Color(0xFFE2E8F0),
@@ -141,6 +155,26 @@ class PropertyConversationHeader extends StatelessWidget {
                                 color: const Color(0xFF64748B),
                               ),
                             ),
+                          Text(
+                            managementLabel,
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                          Tooltip(
+                            message: property.viewingFeeNotes?.isNotEmpty ==
+                                    true
+                                ? '${property.viewingFeeCollector ?? 'The manager'} collects this fee. ${property.viewingFeeNotes}'
+                                : 'Fee collected independently by ${property.viewingFeeCollector ?? 'the property manager'}.',
+                            child: Text(
+                              feeLabel,
+                              style: GoogleFonts.poppins(
+                                fontSize: 10,
+                                color: const Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ],

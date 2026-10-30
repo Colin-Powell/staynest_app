@@ -14,8 +14,13 @@ import 'package:property_app/utils/auth_validators.dart';
 
 class RegisterView extends StatefulWidget {
   final Future<void> Function()? onGoogleSignIn;
+  final String? initialReferralCode;
 
-  const RegisterView({super.key, this.onGoogleSignIn});
+  const RegisterView({
+    super.key,
+    this.onGoogleSignIn,
+    this.initialReferralCode,
+  });
 
   @override
   State<RegisterView> createState() => _RegisterViewState();
@@ -52,6 +57,8 @@ class _RegisterViewState extends State<RegisterView>
   @override
   void initState() {
     super.initState();
+    _referralController.text =
+        widget.initialReferralCode?.trim().toUpperCase() ?? '';
 
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,

@@ -85,6 +85,208 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
     }
   }
 
+  Future<void> _editTransparency(Map<String, dynamic> property) async {
+    final id = property['id']?.toString() ?? '';
+    var managementType =
+        property['management_type']?.toString() ?? 'unspecified';
+    var viewingFeeType =
+        property['viewing_fee_type']?.toString() ?? 'unspecified';
+    var viewingFeeCollector = property['viewing_fee_collector']?.toString();
+    final agentIdController = TextEditingController(
+      text: property['assigned_agent_id']?.toString() ?? '',
+    );
+    final managerIdController = TextEditingController(
+      text: property['assigned_manager_id']?.toString() ?? '',
+    );
+    final amountController = TextEditingController(
+      text: property['viewing_fee_amount']?.toString() ?? '',
+    );
+    final notesController = TextEditingController(
+      text: property['viewing_fee_notes']?.toString() ?? '',
+    );
+
+    String? feeCollectorFor(String type) => switch (type) {
+          'landlord' || 'staynest' => 'landlord',
+          'agent' => 'agent',
+          _ => null,
+        };
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Property transparency'),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Management is separate from StayNest approval status.',
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: managementType,
+                    decoration:
+                        const InputDecoration(labelText: 'Management type'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'unspecified', child: Text('Not specified')),
+                      DropdownMenuItem(
+                          value: 'landlord', child: Text('Landlord managed')),
+                      DropdownMenuItem(
+                          value: 'agent', child: Text('Agent managed')),
+                      DropdownMenuItem(
+                          value: 'staynest', child: Text('StayNest managed')),
+                    ],
+                    onChanged: (value) => setDialogState(() {
+                      managementType = value ?? 'unspecified';
+                      viewingFeeCollector = feeCollectorFor(managementType);
+                    }),
+                  ),
+                  if (managementType == 'agent') ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: agentIdController,
+                      decoration: const InputDecoration(
+                        labelText: 'Assigned agent user ID',
+                        helperText:
+                            'Must belong to an account with the agent role.',
+                      ),
+                    ),
+                  ],
+                  if (managementType == 'staynest') ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: managerIdController,
+                      decoration: const InputDecoration(
+                        labelText: 'Assigned administrator user ID',
+                        helperText:
+                            'Must belong to an authorized StayNest admin account.',
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: viewingFeeType,
+                    decoration: const InputDecoration(labelText: 'Viewing fee'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'unspecified', child: Text('Not specified')),
+                      DropdownMenuItem(
+                          value: 'free', child: Text('Free viewing')),
+                      DropdownMenuItem(
+                          value: 'paid', child: Text('Viewing fee required')),
+                    ],
+                    onChanged: (value) => setDialogState(() {
+                      viewingFeeType = value ?? 'unspecified';
+                      if (viewingFeeType != 'paid') {
+                        amountController.clear();
+                        viewingFeeCollector = null;
+                      } else {
+                        viewingFeeCollector ??= feeCollectorFor(managementType);
+                      }
+                    }),
+                  ),
+                  if (viewingFeeType == 'paid') ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: amountController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Amount (KSh)',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: viewingFeeCollector,
+                      decoration: const InputDecoration(
+                          labelText: 'Fee collected independently by'),
+                      items: [
+                        if (feeCollectorFor(managementType)
+                            case final String collector)
+                          DropdownMenuItem(
+                            value: collector,
+                            child: Text(collector == 'agent'
+                                ? 'Assigned agent'
+                                : 'Landlord'),
+                          ),
+                      ],
+                      onChanged: (value) =>
+                          setDialogState(() => viewingFeeCollector = value),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'StayNest does not collect viewing fees or process visit payments.',
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notesController,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Viewing fee notes (optional)',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, {
+                'management_type': managementType,
+                'assigned_agent_id': managementType == 'agent'
+                    ? agentIdController.text.trim()
+                    : null,
+                'assigned_manager_id': managementType == 'staynest'
+                    ? managerIdController.text.trim()
+                    : null,
+                'viewing_fee_type': viewingFeeType,
+                'viewing_fee_amount': viewingFeeType == 'paid'
+                    ? double.tryParse(amountController.text.trim())
+                    : null,
+                'viewing_fee_collector':
+                    viewingFeeType == 'paid' ? viewingFeeCollector : null,
+                'viewing_fee_notes': notesController.text.trim(),
+              }),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    agentIdController.dispose();
+    managerIdController.dispose();
+    amountController.dispose();
+    notesController.dispose();
+    if (result == null || id.isEmpty) return;
+
+    setState(() => _processingIds.add(id));
+    try {
+      await SuperAdminService.updatePropertyTransparency(
+        id,
+        transparency: result,
+      );
+      await _loadProperties();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to update transparency: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processingIds.remove(id));
+    }
+  }
+
   Widget _buildTab(String label, String value) {
     final isActive = _statusFilter == value;
     return InkWell(
@@ -385,6 +587,50 @@ class _SuperAdminPropertiesPageState extends State<SuperAdminPropertiesPage> {
                     const SizedBox(height: 6),
                     _buildTextRow(
                         'Landlord:', '$landlordName • $landlordEmail'),
+                    const SizedBox(height: 6),
+                    _buildTextRow(
+                      'Management:',
+                      (property['management_type']?.toString() ?? 'unspecified')
+                          .replaceAll('_', ' '),
+                    ),
+                    if (property['assigned_agent_id'] != null)
+                      _buildTextRow(
+                        'Assigned agent ID:',
+                        property['assigned_agent_id'].toString(),
+                      ),
+                    if (property['assigned_manager_id'] != null)
+                      _buildTextRow(
+                        'Assigned administrator ID:',
+                        property['assigned_manager_id'].toString(),
+                      ),
+                    _buildTextRow(
+                      'Viewing fee:',
+                      property['viewing_fee_type'] == 'paid'
+                          ? 'KSh ${property['viewing_fee_amount'] ?? 'Amount missing'} • ${property['viewing_fee_collector'] ?? 'Collector missing'}'
+                          : (property['viewing_fee_type']?.toString() ??
+                                  'unspecified')
+                              .replaceAll('_', ' '),
+                    ),
+                    if (property['transparency_updated_at'] != null)
+                      _buildTextRow(
+                        'Transparency updated:',
+                        property['transparency_updated_at'].toString(),
+                      ),
+                    if (property['transparency_updated_by'] != null)
+                      _buildTextRow(
+                        'Updated by user ID:',
+                        property['transparency_updated_by'].toString(),
+                      ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: isProcessing
+                            ? null
+                            : () => _editTransparency(property),
+                        icon: const Icon(Icons.tune_rounded, size: 16),
+                        label: const Text('Edit transparency'),
+                      ),
+                    ),
 
                     // Action Buttons (Only if pending)
                     if (status == 'pending_review' || status == 'pending') ...[

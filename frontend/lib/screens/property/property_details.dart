@@ -21,6 +21,7 @@ import 'package:property_app/utils/property_links.dart';
 import 'package:property_app/utils/date_time_format.dart';
 import 'package:property_app/widgets/property_image.dart';
 import 'package:property_app/widgets/response_badge_animation.dart';
+import 'package:property_app/widgets/property_transparency_badges.dart';
 
 import 'amenities_view.dart';
 import 'booking_view.dart';
@@ -65,6 +66,7 @@ class PropertyDetails extends StatefulWidget {
 class _PropertyDetailsState extends State<PropertyDetails>
     with SingleTickerProviderStateMixin {
   late final ScrollController _scrollController;
+  late final PageController _mobileImageController;
   late final AnimationController _responseEntranceController;
   late final Animation<double> _responseCardFade;
   late final Animation<Offset> _responseCardSlide;
@@ -81,6 +83,7 @@ class _PropertyDetailsState extends State<PropertyDetails>
   GlobalKey get _mainBookingCardKey => _bookingCardKey ??= GlobalKey();
 
   bool _showAllReviews = false;
+  int _mobileImageIndex = 0;
   bool _showLandlordDetails = false;
   bool _isDesktopScrolled = false;
   bool _loadingReviews = true;
@@ -103,6 +106,7 @@ class _PropertyDetailsState extends State<PropertyDetails>
   void initState() {
     super.initState();
     _scrollController = ScrollController()..addListener(_handleScroll);
+    _mobileImageController = PageController();
     _responseEntranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 650),
@@ -130,6 +134,19 @@ class _PropertyDetailsState extends State<PropertyDetails>
     _fetchLandlordProperties();
     _checkBookingEligibility();
     _fetchResponseMetrics();
+  }
+
+  @override
+  void didUpdateWidget(covariant PropertyDetails oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.property.id != widget.property.id) {
+      _mobileImageIndex = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _mobileImageController.hasClients) {
+          _mobileImageController.jumpToPage(0);
+        }
+      });
+    }
   }
 
   Future<void> _fetchResponseMetrics() async {
@@ -582,17 +599,51 @@ class _PropertyDetailsState extends State<PropertyDetails>
 
   Future<void> _handleMessageTap() async {
     if (_startingConversation) return;
+    if (!await _confirmViewingFee()) return;
     AnalyticsService.logListingInteraction(
       AnalyticsEvents.listingContact,
       listingId: widget.property.id,
       source: 'chat',
     );
     if (AppSession.isGuest) {
-      widget.onRequireAuthentication
-          ?.call(onAuthenticated: _startPropertyConversation);
+      widget.onRequireAuthentication?.call(
+          onAuthenticated: () => unawaited(_startPropertyConversation()));
       return;
     }
     await _startPropertyConversation();
+  }
+
+  Future<bool> _confirmViewingFee() async {
+    if (widget.property.viewingFeeType != 'paid') return true;
+
+    final amount = widget.property.viewingFeeAmount;
+    final collector = switch (widget.property.viewingFeeCollector) {
+      'agent' => 'the assigned agent',
+      'landlord' => 'the landlord',
+      _ => 'the property manager',
+    };
+    final message = amount == null
+        ? 'A viewing fee is required, but the amount has not been specified. Confirm the amount with the property manager before arranging a visit. Continue to message the manager?'
+        : 'This property has a viewing fee of KSh ${NumberFormat('#,##0.##').format(amount)}, collected by $collector. Do you understand and wish to continue?';
+
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Viewing fee applies'),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   Future<void> _startPropertyConversation() async {
@@ -701,6 +752,7 @@ class _PropertyDetailsState extends State<PropertyDetails>
       }
     }
     _scrollController.dispose();
+    _mobileImageController.dispose();
     _responseEntranceController.dispose();
     super.dispose();
   }
@@ -845,9 +897,10 @@ class _PropertyDetailsState extends State<PropertyDetails>
   }
 
   Widget _buildMobileLayout(BoxConstraints constraints) {
-    final image = widget.property.images.isNotEmpty
-        ? widget.property.images.first
-        : widget.property.image;
+    final images = widget.property.images.isNotEmpty
+        ? widget.property.images
+        : [widget.property.image];
+    final isMobile = constraints.maxWidth < 768;
     final heroHeight = constraints.maxHeight * 0.5;
     final bottomPadding = MediaQuery.of(context).padding.bottom + 150;
 
@@ -872,11 +925,51 @@ class _PropertyDetailsState extends State<PropertyDetails>
           height: heroHeight,
           child: GestureDetector(
             onTap: widget.onViewGallery,
-            child: buildPropertyImage(
-              image,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (isMobile)
+                  PageView.builder(
+                    controller: _mobileImageController,
+                    itemCount: images.length,
+                    onPageChanged: (index) =>
+                        setState(() => _mobileImageIndex = index),
+                    itemBuilder: (context, index) => buildPropertyImage(
+                      images[index],
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                    ),
+                  )
+                else
+                  buildPropertyImage(
+                    images.first,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
+                if (isMobile && images.length > 1)
+                  Positioned(
+                    left: 16,
+                    bottom: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 11, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.62),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${_mobileImageIndex + 1} / ${images.length}',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
@@ -1021,6 +1114,11 @@ class _PropertyDetailsState extends State<PropertyDetails>
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 14),
+                      PropertyTransparencyBadges(
+                        property: widget.property,
+                        compact: true,
                       ),
                       const SizedBox(height: 14),
                       Wrap(
@@ -1259,6 +1357,15 @@ class _PropertyDetailsState extends State<PropertyDetails>
                       ],
                     )
                   ],
+                ),
+              ),
+            ),
+
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: PropertyTransparencyBadges(
+                  property: widget.property,
                 ),
               ),
             ),

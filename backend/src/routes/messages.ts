@@ -43,17 +43,31 @@ const CONVERSATION_CONTEXT_SELECT = `
          c.context_type,
          c.property_id,
          p.landlord_id AS property_landlord_id,
+         CASE p.management_type
+           WHEN 'agent' THEN p.assigned_agent_id
+           WHEN 'staynest' THEN p.assigned_manager_id
+           ELSE p.landlord_id
+         END AS property_manager_id,
          p.title AS property_title,
          COALESCE(NULLIF(p.address, ''), NULLIF(p.town, ''),
                   NULLIF(p.city, ''), NULLIF(p.county, ''), '') AS property_location,
          p.price AS property_price,
          p.availability_status AS property_availability_status,
          p.image_url AS property_image_url,
-         p.images AS property_images
+         p.images AS property_images,
+         p.management_type AS property_management_type,
+         p.viewing_fee_type AS property_viewing_fee_type,
+         p.viewing_fee_amount AS property_viewing_fee_amount,
+         p.viewing_fee_collector AS property_viewing_fee_collector,
+         p.viewing_fee_notes AS property_viewing_fee_notes
     FROM message_conversations c
     LEFT JOIN properties p
       ON p.id = c.property_id
-     AND p.landlord_id IN (c.participant_one_id, c.participant_two_id)`;
+     AND (
+       p.landlord_id IN (c.participant_one_id, c.participant_two_id)
+       OR p.assigned_agent_id IN (c.participant_one_id, c.participant_two_id)
+       OR p.assigned_manager_id IN (c.participant_one_id, c.participant_two_id)
+     )`;
 
 function propertyContext(row: Record<string, unknown>) {
   if (!row.property_id) return null;
@@ -65,6 +79,11 @@ function propertyContext(row: Record<string, unknown>) {
     availability_status: row.property_availability_status,
     image_url: row.property_image_url,
     images: row.property_images,
+    management_type: row.property_management_type ?? 'unspecified',
+    viewing_fee_type: row.property_viewing_fee_type ?? 'unspecified',
+    viewing_fee_amount: row.property_viewing_fee_amount,
+    viewing_fee_collector: row.property_viewing_fee_collector,
+    viewing_fee_notes: row.property_viewing_fee_notes,
   };
 }
 
@@ -132,8 +151,11 @@ router.post(
         id: string;
         landlord_id: string;
         status: string | null;
+        management_type: string | null;
+        assigned_agent_id: string | null;
+        assigned_manager_id: string | null;
       }>(
-        `SELECT id, landlord_id, status
+        `SELECT id, landlord_id, status, management_type, assigned_agent_id, assigned_manager_id
          FROM properties
         WHERE id = $1
         LIMIT 1`,
@@ -145,14 +167,22 @@ router.post(
       }
 
       const tenantId = req.auth!.id;
-      if (property.landlord_id === tenantId) {
+      const managerId = property.management_type === 'agent'
+        ? property.assigned_agent_id
+        : property.management_type === 'staynest'
+          ? property.assigned_manager_id
+          : property.landlord_id;
+      if (!managerId) {
+        return res.status(409).json({ error: 'The property manager is not assigned yet.' });
+      }
+      if (managerId === tenantId) {
         return res
           .status(403)
           .json({ error: "You cannot message yourself about this property." });
       }
 
       const [participantOneId, participantTwoId] =
-        orderConversationParticipants(tenantId, property.landlord_id);
+        orderConversationParticipants(tenantId, managerId);
       const conversationResult = await query(
         `INSERT INTO message_conversations (
          participant_one_id, participant_two_id, property_id, context_type
@@ -409,11 +439,11 @@ router.post("/", requireAuth, async (req, res, next) => {
       property: propertyContext(conversationContext),
     };
 
-    const isLandlordPropertyReply =
+    const isPropertyManagerReply =
       conversationContext.context_type === "property" &&
-      conversationContext.property_landlord_id === from_user_id &&
+      conversationContext.property_manager_id === from_user_id &&
       text.trim().length > 0;
-    if (isLandlordPropertyReply && conversationContext.property_id) {
+    if (isPropertyManagerReply && conversationContext.property_id) {
       try {
         await query(
           `INSERT INTO engagement_events (user_id, property_id, event_type, metadata)
